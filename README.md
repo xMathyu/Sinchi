@@ -79,6 +79,7 @@ la cola offline.
   decisiones.md      qué se decidió y por qué; desviaciones del diseño
   api.md             rutas, autenticación, idempotencia, aislamiento por tenant
   autenticacion.md   Google vía Firebase, vinculación con el padrón, PIN de turno
+  probar-en-dispositivo.md  por qué Expo Go no sirve; dev build con EAS
   decisiones-repo.md un repo o varios; CI/CD sin secretos en GitHub
   despliegue.md      Cloud Run: costo, el cron que no corre, cómo redesplegar
 ```

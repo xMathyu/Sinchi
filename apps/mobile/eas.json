@@ -1,0 +1,76 @@
+{
+  "$schema": "https://raw.githubusercontent.com/expo/eas-cli/main/schema/eas.schema.json",
+  "cli": {
+    "version": ">= 22.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "//": [
+      "Tres perfiles con tres propósitos distintos.",
+      "",
+      "El monorepo obliga a una cosa que no es obvia: EAS sube el contexto desde",
+      "la RAÍZ del repositorio, no desde apps/mobile, porque la app depende de",
+      "@sinchi/shared y @sinchi/ui — paquetes del workspace que hay que compilar",
+      "antes del bundle. Sin `prebuildCommand` el build falla con",
+      "'Cannot find module @sinchi/shared', que es el error clásico de",
+      "construir un monorepo en un servicio remoto."
+    ],
+
+    "development": {
+      "//": [
+        "Para el iPhone del equipo. Trae el dev client, así que se conecta a un",
+        "Metro local (o por túnel) y recarga sin reconstruir.",
+        "",
+        "`internal` usa un perfil ad-hoc: hay que registrar cada dispositivo con",
+        "`eas device:create` antes del primer build. Es el precio de no pasar por",
+        "TestFlight, y a cambio la instalación es un enlace."
+      ],
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://sinchi-api-961173851857.us-east4.run.app/v1"
+      }
+    },
+
+    "preview": {
+      "//": [
+        "Build de prueba SIN dev client: se comporta como la app publicada, pero",
+        "se distribuye internamente. Es donde se prueba el rendimiento real, que",
+        "en un dev build siempre engaña por el bundle en desarrollo."
+      ],
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://sinchi-api-961173851857.us-east4.run.app/v1"
+      }
+    },
+
+    "production": {
+      "//": [
+        "TestFlight y App Store. `autoIncrement` evita el rechazo por número de",
+        "build repetido, que es el error más tonto y más frecuente al subir."
+      ],
+      "channel": "production",
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://sinchi-api-961173851857.us-east4.run.app/v1"
+      }
+    }
+  },
+
+  "submit": {
+    "production": {}
+  }
+}
