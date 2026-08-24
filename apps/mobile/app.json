@@ -18,8 +18,12 @@
     "android": {
       "package": "pe.sinchi.app",
       "edgeToEdgeEnabled": true,
-      "adaptiveIcon": { "backgroundColor": "#08080A" },
-      "permissions": ["android.permission.CAMERA"]
+      "adaptiveIcon": {
+        "backgroundColor": "#08080A"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -30,8 +34,11 @@
         {
           "cameraPermission": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

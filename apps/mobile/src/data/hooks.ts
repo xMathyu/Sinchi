@@ -15,7 +15,7 @@ import {
   TOTP_PERIOD_SECONDS,
   type PlainDate,
 } from '@sinchi/shared';
-import { hmacSha256, loadOrCreateSecret } from './crypto';
+import { hmacSha256, loadSecret } from './crypto';
 import {
   getState,
   previewCheckIn,
@@ -100,6 +100,14 @@ export interface AccessCode {
   readonly secondsLeft: number;
   readonly periodSeconds: number;
   readonly ready: boolean;
+  /**
+   * `true` cuando no hay secreto guardado y hay que vincular el dispositivo.
+   *
+   * Se distingue de `ready: false` a proposito: uno es "espera un momento" y el
+   * otro es "hay que hacer algo". Sin la diferencia, la pantalla del QR se queda
+   * cargando para siempre y nadie sabe por que.
+   */
+  readonly needsLink: boolean;
 }
 
 /**
@@ -112,12 +120,15 @@ export interface AccessCode {
 export function useAccessCode(): AccessCode {
   const userId = useStore((s) => s.user.id);
   const [secret, setSecret] = useState<Uint8Array | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [tick, setTick] = useState(() => new Date());
 
   useEffect(() => {
     let cancelled = false;
-    void loadOrCreateSecret().then((value) => {
-      if (!cancelled) setSecret(value);
+    void loadSecret().then((value) => {
+      if (cancelled) return;
+      setSecret(value);
+      setLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -140,5 +151,6 @@ export function useAccessCode(): AccessCode {
     secondsLeft: secondsUntilRotation(tick),
     periodSeconds: TOTP_PERIOD_SECONDS,
     ready: code !== null,
+    needsLink: loaded && secret === null,
   };
 }

@@ -12,7 +12,6 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as SecureStore from 'expo-secure-store';
-import { getRandomValues } from 'expo-crypto';
 import type { HmacFn } from '@sinchi/shared';
 
 /**
@@ -25,6 +24,7 @@ import type { HmacFn } from '@sinchi/shared';
 export const hmacSha256: HmacFn = (key, message) => hmac(sha256, key, message);
 
 const SECRET_KEY = 'sinchi.totp.secret.v1';
+/** Lo que emite la api. Ver `generateTotpSecret` en apps/api. */
 const SECRET_BYTES = 32;
 
 function toBase64(bytes: Uint8Array): string {
@@ -41,24 +41,46 @@ function fromBase64(value: string): Uint8Array {
 }
 
 /**
- * Secreto TOTP del dispositivo.
+ * Secreto TOTP del alumno.
  *
- * En produccion lo entrega el servidor al vincular la cuenta, para que el
- * mismo secreto valga en cualquier gimnasio de la red. Mientras la api no
- * existe se genera local, que es suficiente para ejercitar el flujo completo.
+ * LO ENTREGA EL SERVIDOR al vincular la cuenta (`POST /me/device`), y esto es lo
+ * unico que puede pasar: el servidor guarda su propia copia cifrada y verifica el
+ * codigo contra ella. Un secreto inventado en el telefono produce un QR
+ * perfectamente valido... que la puerta rechaza, porque no coincide con ninguno.
+ *
+ * Es global, no por gimnasio: un solo codigo identifica al alumno en cualquier
+ * local de la red (MD 4.6).
+ *
+ * Vive en el llavero con `WHEN_UNLOCKED_THIS_DEVICE_ONLY`: no viaja en las copias
+ * de seguridad ni se sincroniza a otro dispositivo. Cambiar de telefono exige
+ * volver a vincular, que es lo correcto — el QR es una credencial de acceso.
  */
-export async function loadOrCreateSecret(): Promise<Uint8Array> {
+export async function loadSecret(): Promise<Uint8Array | null> {
   const stored = await SecureStore.getItemAsync(SECRET_KEY);
-  if (stored !== null) return fromBase64(stored);
-
-  const fresh = getRandomValues(new Uint8Array(SECRET_BYTES));
-  await SecureStore.setItemAsync(SECRET_KEY, toBase64(fresh), {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
-  return fresh;
+  return stored === null ? null : fromBase64(stored);
 }
 
-/** Se llama al cerrar sesion: el secreto no debe sobrevivir al usuario. */
-export async function clearSecret(): Promise<void> {
+/** Adopta el secreto que sembro la api. Llega en base64. */
+export async function storeSecret(secretBase64: string): Promise<void> {
+  // Se valida el tamano antes de guardarlo: un secreto corto generaria codigos
+  // que la api rechaza, y el sintoma seria "mi QR no funciona" sin mas pistas.
+  const bytes = fromBase64(secretBase64);
+  if (bytes.length !== SECRET_BYTES) {
+    throw new Error(
+      `El secreto de acceso debe ser de ${SECRET_BYTES} bytes; llegaron ${bytes.length}.`,
+    );
+  }
+  await SecureStore.setItemAsync(SECRET_KEY, secretBase64, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
+}
+
+/**
+ * Se llama al cerrar sesion del alumno.
+ *
+ * El secreto no debe sobrevivir a su dueno: si presta el telefono, el siguiente
+ * no puede quedarse generando su QR.
+ */
+export async function forgetSecret(): Promise<void> {
   await SecureStore.deleteItemAsync(SECRET_KEY);
 }

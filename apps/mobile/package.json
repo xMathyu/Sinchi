@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "prebuild": "expo prebuild --clean"
+    "prebuild": "expo prebuild --clean",
+    "test": "vitest run"
   },
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
@@ -17,6 +18,7 @@
     "@sinchi/shared": "*",
     "@sinchi/ui": "*",
     "expo": "^57.0.15",
+    "expo-auth-session": "~57.0.9",
     "expo-blur": "~57.0.2",
     "expo-camera": "~57.0.4",
     "expo-constants": "~57.0.13",
@@ -27,6 +29,7 @@
     "expo-router": "~57.0.15",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-web-browser": "~57.0.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
@@ -35,5 +38,8 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
   }
 }

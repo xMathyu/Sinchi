@@ -1,0 +1,180 @@
+/**
+ * Sesión: el token de Sinchi y quién es su dueño.
+ *
+ * Va en el llavero del dispositivo (Keychain en iOS, Keystore en Android), no en
+ * `AsyncStorage`. Con ese token cualquiera lee el historial de pagos del alumno y
+ * genera su QR; guardarlo en almacenamiento plano lo deja legible para cualquier
+ * copia de seguridad sin cifrar del teléfono.
+ *
+ * El estado vive fuera de React, igual que el store, y se notifica por
+ * suscripción. Así el enrutado por rol no depende de que un contexto esté montado.
+ */
+import * as SecureStore from 'expo-secure-store';
+import type { AppRole } from '@sinchi/shared';
+
+const TOKEN_KEY = 'sinchi.session.token.v1';
+const META_KEY = 'sinchi.session.meta.v1';
+/** Token del equipo del mostrador. Sobrevive a los cambios de turno. */
+const DEVICE_KEY = 'sinchi.device.token.v1';
+
+export interface Session {
+  readonly accessToken: string;
+  readonly role: AppRole;
+  readonly userId: string;
+  readonly tenantId: string | null;
+  /** Cuándo caduca, para no mandar un token muerto y comerse un 401. */
+  readonly expiresAt: number;
+}
+
+export type SessionState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'signed_out' }
+  /**
+   * La cuenta de Google es válida pero no está vinculada a ninguna ficha del
+   * padrón. No es un error: es el estado normal del alumno nuevo, y lo resuelve
+   * la recepcionista confirmando el código.
+   */
+  | { readonly status: 'unlinked'; readonly code: string; readonly expiresAt: number }
+  | { readonly status: 'signed_in'; readonly session: Session };
+
+let state: SessionState = { status: 'loading' };
+const listeners = new Set<() => void>();
+
+function emit(next: SessionState): void {
+  state = next;
+  for (const listener of listeners) listener();
+}
+
+export function subscribeSession(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export const getSessionState = (): SessionState => state;
+
+/** El token, o `null`. Es lo que consume el cliente HTTP. */
+export function currentToken(): string | null {
+  if (state.status !== 'signed_in') return null;
+  // Un token vencido no se manda: el 401 obligaría a distinguir "expiró" de
+  // "el servidor lo rechazó", y son dos problemas distintos.
+  if (state.session.expiresAt <= Date.now()) return null;
+  return state.session.accessToken;
+}
+
+export const currentSession = (): Session | null =>
+  state.status === 'signed_in' ? state.session : null;
+
+// ---------------------------------------------------------------------------
+// Persistencia
+// ---------------------------------------------------------------------------
+
+interface StoredMeta {
+  readonly role: AppRole;
+  readonly userId: string;
+  readonly tenantId: string | null;
+  readonly expiresAt: number;
+}
+
+/**
+ * Recupera la sesión al abrir la app.
+ *
+ * Si el token venció, se descarta en silencio y la app muestra el login. No se
+ * intenta renovar: no hay refresh token porque el de Google se puede volver a
+ * pedir sin fricción, y guardar uno más solo suma superficie que proteger.
+ */
+export async function restoreSession(): Promise<void> {
+  try {
+    const [token, rawMeta] = await Promise.all([
+      SecureStore.getItemAsync(TOKEN_KEY),
+      SecureStore.getItemAsync(META_KEY),
+    ]);
+
+    if (token === null || rawMeta === null) {
+      emit({ status: 'signed_out' });
+      return;
+    }
+
+    const meta = JSON.parse(rawMeta) as StoredMeta;
+    if (meta.expiresAt <= Date.now()) {
+      await clearSession();
+      return;
+    }
+
+    emit({
+      status: 'signed_in',
+      session: {
+        accessToken: token,
+        role: meta.role,
+        userId: meta.userId,
+        tenantId: meta.tenantId,
+        expiresAt: meta.expiresAt,
+      },
+    });
+  } catch {
+    // Un llavero ilegible (dispositivo recién restaurado, permisos raros) no
+    // debe dejar la app en `loading` para siempre.
+    emit({ status: 'signed_out' });
+  }
+}
+
+export async function saveSession(input: {
+  readonly accessToken: string;
+  readonly expiresInSeconds: number;
+  readonly role: AppRole;
+  readonly userId: string;
+  readonly tenantId: string | null;
+}): Promise<void> {
+  const expiresAt = Date.now() + input.expiresInSeconds * 1000;
+  const meta: StoredMeta = {
+    role: input.role,
+    userId: input.userId,
+    tenantId: input.tenantId,
+    expiresAt,
+  };
+
+  await Promise.all([
+    SecureStore.setItemAsync(TOKEN_KEY, input.accessToken),
+    SecureStore.setItemAsync(META_KEY, JSON.stringify(meta)),
+  ]);
+
+  // `meta` primero: ya lleva `expiresAt`, y ponerlo dos veces deja al lector
+  // adivinando cual gana.
+  emit({
+    status: 'signed_in',
+    session: { ...meta, accessToken: input.accessToken },
+  });
+}
+
+export function setUnlinked(code: string, expiresAt: number): void {
+  // No se persiste: el código dura diez minutos y el servidor devuelve el mismo
+  // mientras siga vivo, así que volver a entrar lo recupera.
+  emit({ status: 'unlinked', code, expiresAt });
+}
+
+export async function clearSession(): Promise<void> {
+  await Promise.all([
+    SecureStore.deleteItemAsync(TOKEN_KEY),
+    SecureStore.deleteItemAsync(META_KEY),
+  ]);
+  emit({ status: 'signed_out' });
+}
+
+// ---------------------------------------------------------------------------
+// Token del equipo del mostrador
+// ---------------------------------------------------------------------------
+
+/**
+ * El token del equipo NO se borra al cerrar turno.
+ *
+ * Es del aparato, no de la persona: la tablet sigue siendo la tablet del dojo
+ * cuando Ana se va y entra Carlos. Solo lo borra revocar el equipo desde el
+ * panel del dueño.
+ */
+export const getDeviceToken = (): Promise<string | null> =>
+  SecureStore.getItemAsync(DEVICE_KEY);
+
+export const saveDeviceToken = (token: string): Promise<void> =>
+  SecureStore.setItemAsync(DEVICE_KEY, token);
+
+export const forgetDeviceToken = (): Promise<void> =>
+  SecureStore.deleteItemAsync(DEVICE_KEY);
