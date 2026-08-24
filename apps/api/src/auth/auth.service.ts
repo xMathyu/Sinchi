@@ -1,11 +1,10 @@
 /**
  * Emisión de sesiones.
  *
- * PENDIENTE: la autenticación de verdad es por SMS (el alumno se identifica con
- * su celular, que es único en `users`). No está implementada porque exige elegir
- * proveedor y presupuesto de mensajes, y eso no se ha decidido.
+ * La autenticación real es Google vía Firebase (`signInWithGoogle`) para alumnos
+ * y dueños, y token de equipo más PIN (`openShift`) para el staff del mostrador.
  *
- * Mientras tanto hay una sola puerta, `devLogin`, que:
+ * Queda además `devLogin`, que:
  *  - solo funciona con `ALLOW_DEV_LOGIN=true`;
  *  - se niega a arrancar con esa bandera en producción (ver `config/env.ts`);
  *  - no verifica NADA: si conoces el celular, entras.
@@ -430,7 +429,8 @@ export class AuthService {
   async devLogin(phone: string): Promise<IssuedSession> {
     if (!loadEnv().ALLOW_DEV_LOGIN) {
       throw new ServiceUnavailableException(
-        'El login de desarrollo está desactivado. La autenticación por SMS todavía no existe.',
+        'El login de desarrollo está desactivado en este servidor. Entra con Google, ' +
+          'o apunta la app a una api local con ALLOW_DEV_LOGIN=true.',
       );
     }
 
