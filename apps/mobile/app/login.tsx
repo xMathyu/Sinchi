@@ -135,6 +135,16 @@ export default function LoginScreen() {
               Soy staff — abrir turno
             </Text>
           </Pressable>
+
+          {/* Solo en desarrollo. En un build de produccion `__DEV__` es false y
+              este bloque no se renderiza. */}
+          {__DEV__ && (
+            <Pressable onPress={() => router.push('/dev')} hitSlop={14}>
+              <Text variant="captionSmall" color={theme.semaphore.warn}>
+                Probar sin Google (desarrollo)
+              </Text>
+            </Pressable>
+          )}
         </Stack>
       </Stack>
     </Screen>

@@ -69,6 +69,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="login" options={{ animation: 'fade' }} />
           <Stack.Screen name="link" options={{ animation: 'fade' }} />
+          <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
           <Stack.Screen name="student" />
           <Stack.Screen name="staff" />
           <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
@@ -115,6 +116,15 @@ function SessionRouter() {
 
     if (state.status === 'unlinked') {
       if (primero !== 'link') router.replace('/link');
+      return;
+    }
+
+    if (state.status === 'demo') {
+      // Sin sesión real: el rol lo decide el store de demostración, y las dos
+      // zonas quedan accesibles para poder recorrer la app entera.
+      if (enLogin || primero === undefined || primero === 'index' || primero === 'dev') {
+        router.replace('/');
+      }
       return;
     }
 

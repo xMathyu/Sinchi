@@ -35,7 +35,16 @@ export type SessionState =
    * la recepcionista confirmando el código.
    */
   | { readonly status: 'unlinked'; readonly code: string; readonly expiresAt: number }
-  | { readonly status: 'signed_in'; readonly session: Session };
+  | { readonly status: 'signed_in'; readonly session: Session }
+  /**
+   * Recorrer la app sin api ni sesión, contra los datos de demostración.
+   *
+   * Solo existe en desarrollo (`__DEV__`), y `enterDemoMode` lo comprueba: en un
+   * build de producción `__DEV__` es `false` y esta rama es inalcanzable. Sirve
+   * para revisar las pantallas en un teléfono real sin depender de que la
+   * autenticación con Google esté configurada.
+   */
+  | { readonly status: 'demo' };
 
 let state: SessionState = { status: 'loading' };
 const listeners = new Set<() => void>();
@@ -143,6 +152,21 @@ export async function saveSession(input: {
     status: 'signed_in',
     session: { ...meta, accessToken: input.accessToken },
   });
+}
+
+/**
+ * Entra en modo demostración.
+ *
+ * La comprobación de `__DEV__` no es decorativa: sin ella, un fallo de enrutado en
+ * producción podría dejar a alguien dentro de la app sin sesión, viendo datos
+ * inventados como si fueran suyos.
+ */
+export function enterDemoMode(): void {
+  if (!__DEV__) {
+    console.warn('El modo demostración no existe fuera de desarrollo.');
+    return;
+  }
+  emit({ status: 'demo' });
 }
 
 export function setUnlinked(code: string, expiresAt: number): void {
