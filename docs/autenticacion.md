@@ -277,3 +277,82 @@ inválida o expirada"*. El mensaje acusaba al token de un fallo del despliegue, 
 es exactamente lo que la inicialización perezosa pretendía evitar. Y el detalle
 iba a `logger.debug`, que Cloud Run no muestra: los logs salían vacíos. Ahora
 `getApp()` va fuera del `try` y el rechazo se registra como `warn`.
+
+---
+
+## Invitación por enlace
+
+El código de 6 dígitos funciona, pero tiene un coste real: alguien tiene que
+pedirlo, dictarlo y confirmarlo. La invitación adelanta esa decisión al momento
+de invitar — el staff elige ficha y plan, manda el enlace por WhatsApp, y quien
+lo abre **entra ya inscrito**.
+
+```
+POST /staff/invites          staff   -> devuelve el token UNA vez
+GET  /invites/:token         público -> qué gimnasio, qué plan, cuánto
+POST /invites/:token/claim   público -> { idToken } -> sesión ya inscrita
+```
+
+### Lo que cambia, y conviene decirlo
+
+**Quien autoriza pasa a ser la posesión del enlace.** Es el mismo trato que hace
+GitHub o Slack al invitar a una organización, y el riesgo concreto es que el
+enlace se reenvíe por WhatsApp y lo abra otra persona. Se acota:
+
+| Cota | Por qué |
+|---|---|
+| Token de 32 bytes | No se adivina. Los 6 dígitos podían permitírselo solo porque los confirmaba una persona. |
+| Un solo uso | El segundo intento, aunque venga con otra cuenta, encuentra la puerta cerrada. |
+| Caduca (7 días) | Un enlace olvidado en un chat deja de valer solo. |
+| Revocable | Corta al instante sin tocar la base. |
+| Auditable | Queda quién invitó y quién lo reclamó. |
+
+Y una asimetría deliberada: invitar a una ficha **nueva** solo puede crear una
+cuenta; invitar a una **existente**, con su historial de pagos, es lo único que
+un enlace filtrado podría robar. Por eso `membership_id` es opcional y el caso
+normal es `null`.
+
+### Detalles que no son obvios
+
+- **La vista previa no consume.** Quien recibe el enlace tiene derecho a ver a
+  qué le invitan antes de decidir. Si mirar lo quemara, abrirlo por curiosidad
+  dejaría a la persona fuera.
+- **Primero se verifica Firebase, después se consume.** Al revés, mandar basura
+  al endpoint inutilizaría invitaciones ajenas.
+- **El precio se congela al invitar.** Si el gimnasio sube tarifas entre el envío
+  y la apertura, se respeta lo que el staff prometió.
+- **El DNI viaja en la invitación.** `users.document_id` es NOT NULL y el staff
+  está creando la ficha igual; pedírselo después a la persona sería volver al
+  problema que el código evitaba — que cualquiera escriba un DNI ajeno.
+- **Los cargos nacen pendientes.** El enlace inscribe, no cobra: quien cobra es
+  el mostrador. Marcarlos pagados inventaría un ingreso que nadie recibió.
+- **Un mismo mensaje** para caducada, consumida, revocada e inexistente.
+  Distinguirlas le diría a quien prueba enlaces al azar si acertó con uno que
+  existió.
+
+### El RLS que costó encontrar
+
+La consulta de la vista previa empezó siendo un `JOIN` con `tenants` y `plans`, y
+devolvía **siempre vacío**. La invitación sí se ve —el token abre esa fila por
+excepción de política, igual que el token de equipo—, pero las tablas vecinas
+tienen su propio aislamiento por gimnasio y sin contexto no devuelven nada.
+
+Se resolvió en dos pasos: el token abre la invitación, la invitación dice a qué
+gimnasio apunta, y entonces se adopta ese contexto a mitad de transacción
+(`adoptTenant`). Lo mismo hacía falta en `claim`, donde si no los `INSERT`
+fallaban su `WITH CHECK`.
+
+### Probado
+
+`src/invites.e2e.test.ts` — 11 pruebas contra Postgres real con un rol **sin**
+`BYPASSRLS`; con él, las pruebas de aislamiento pasarían sin probar nada.
+
+Dos fallos que encontraron esas pruebas y que no se veían leyendo el código:
+
+1. **El `set_config` del token nunca se escribió.** El campo del tipo y la
+   función `withInviteToken` sí entraron, pero la línea que fija el GUC no. Todo
+   compilaba; simplemente ninguna invitación era visible.
+2. **La suite se contaminaba a sí misma.** Las cuentas que crea un `claim`
+   sobreviven al `reset` de la siembra —solo se borra lo que ella sembró—, así
+   que un contador de DNI que empieza en cero cada vez chocaba con la corrida
+   anterior. Pasaba una vez y fallaba la siguiente sin que nada hubiera cambiado.

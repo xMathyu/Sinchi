@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { DbModule } from './db/db.module';
 import { AccountsController } from './modules/accounts.controller';
+import { InvitesController } from './modules/invites.controller';
 import { JobsController } from './jobs/jobs.controller';
 import { RefreshDelinquencyJob } from './jobs/refresh-delinquency.job';
 import { BillingService } from './modules/billing/billing.service';
@@ -31,6 +32,7 @@ import { StudentController } from './modules/student.controller';
     StudentController,
     StaffController,
     AccountsController,
+    InvitesController,
     JobsController,
   ],
   providers: [

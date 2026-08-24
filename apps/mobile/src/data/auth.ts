@@ -15,7 +15,13 @@
  * del alumno que acaba de instalar la app, y lo resuelve la recepcionista.
  */
 import * as SecureStore from 'expo-secure-store';
-import { openShift, signInWithGoogle, staffForDevice, type ShiftCandidate } from './api';
+import {
+  claimInvite,
+  openShift,
+  signInWithGoogle,
+  staffForDevice,
+  type ShiftCandidate,
+} from './api';
 import { exchangeGoogleToken, signInWithEmail } from './firebase';
 import {
   clearSession,
@@ -91,6 +97,33 @@ async function exchangeForSinchiSession(firebaseIdToken: string): Promise<SignIn
   });
 
   return { kind: 'signed_in' };
+}
+
+/**
+ * Acepta una invitacion: entra y queda inscrito de una vez.
+ *
+ * No pasa por `exchangeForSinchiSession` porque no hay nada que vincular — el
+ * enlace ya dice a que ficha y a que plan va. De ahi que el unico resultado
+ * posible sea `signed_in`: aqui no existe el estado "falta que recepcion lo
+ * confirme", que es justo lo que la invitacion vino a quitar.
+ */
+export async function acceptInvite(
+  inviteToken: string,
+  firebaseIdToken: string,
+): Promise<SignInOutcome> {
+  try {
+    const result = await claimInvite(inviteToken, firebaseIdToken);
+    await saveSession({
+      accessToken: result.accessToken,
+      expiresInSeconds: result.expiresInSeconds,
+      role: result.role,
+      userId: result.userId,
+      tenantId: result.tenantId,
+    });
+    return { kind: 'signed_in' };
+  } catch (error) {
+    return { kind: 'error', message: describe(error) };
+  }
 }
 
 // ---------------------------------------------------------------------------

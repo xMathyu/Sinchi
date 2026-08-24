@@ -178,6 +178,8 @@ export const tenants = pgTable(
       .notNull()
       .default('block'),
     dropInPriceCents: integer('drop_in_price_cents'),
+    /** Matricula: se cobra una vez al inscribirse. 0 = el gimnasio no cobra. */
+    enrollmentFeeCents: integer('enrollment_fee_cents').notNull().default(0),
     status: tenantStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -576,3 +578,49 @@ export const TENANT_SCOPED_TABLES = [
   'checkin_devices',
   'tenant_gateway',
 ] as const;
+
+/**
+ * Invitaciones por enlace.
+ *
+ * El codigo de 6 digitos lo confirma la recepcionista con el alumno delante;
+ * la invitacion adelanta esa decision al momento de invitar, y quien autoriza
+ * pasa a ser la posesion del enlace. Los detalles del compromiso —y por que
+ * `membershipId` es opcional— estan en la migracion 0004.
+ */
+export const invites = pgTable(
+  'invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    /** sha256 del token de 32 bytes. Hay que buscar por el, asi que no lleva sal. */
+    tokenHash: text('token_hash').notNull(),
+    fullName: text('full_name').notNull(),
+    /** `users.document_id` es NOT NULL: el staff lo aporta al invitar. */
+    documentId: text('document_id').notNull(),
+    phone: text('phone').notNull(),
+    planId: uuid('plan_id')
+      .notNull()
+      .references(() => plans.id, { onDelete: 'cascade' }),
+    /** Congelado al invitar: se respeta el precio que el staff prometio. */
+    priceCents: integer('price_cents').notNull(),
+    enrollmentFeeCents: integer('enrollment_fee_cents').notNull().default(0),
+    /** `null` = crear ficha nueva al reclamar. */
+    membershipId: uuid('membership_id').references(() => memberships.id, {
+      onDelete: 'cascade',
+    }),
+    createdBy: uuid('created_by').references(() => staff.id, { onDelete: 'set null' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    consumedBy: uuid('consumed_by').references(() => users.id, { onDelete: 'set null' }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('invites_active_token')
+      .on(t.tokenHash)
+      .where(sql`consumed_at is null and revoked_at is null`),
+    index('invites_tenant_idx').on(t.tenantId),
+  ],
+);

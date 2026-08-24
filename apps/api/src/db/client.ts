@@ -84,6 +84,7 @@ export interface QueryContext {
    * cuyo secreto tienes en la mano.
    */
   readonly deviceTokenHash?: string;
+  readonly inviteTokenHash?: string;
 }
 
 /**
@@ -106,6 +107,9 @@ export async function withContext<T>(
     await tx.execute(sql`select set_config('app.current_user', ${context.userId ?? ''}, true)`);
     await tx.execute(
       sql`select set_config('app.device_token_hash', ${context.deviceTokenHash ?? ''}, true)`,
+    );
+    await tx.execute(
+      sql`select set_config('app.invite_token_hash', ${context.inviteTokenHash ?? ''}, true)`,
     );
     return run(tx);
   });
@@ -132,6 +136,37 @@ export function withDeviceToken<T>(
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   return withContext(db, { deviceTokenHash: tokenHash }, run);
+}
+
+/**
+ * Adopta un gimnasio a mitad de transaccion.
+ *
+ * Existe para el unico caso donde el tenant no se sabe al abrirla: quien
+ * presenta una invitacion. Se entra con el token, se lee a que gimnasio apunta,
+ * y a partir de ahi hace falta contexto normal — sin el, las tablas vecinas
+ * (`tenants`, `plans`) no devuelven nada y los INSERT fallan su WITH CHECK.
+ *
+ * `set_config(..., true)` es local a la transaccion, asi que esto no se escapa
+ * de aqui: al terminar, el contexto vuelve a estar vacio.
+ */
+export async function adoptTenant(tx: Tx, tenantId: string): Promise<void> {
+  await tx.execute(sql`select set_config('app.current_tenant', ${tenantId}, true)`);
+}
+
+/**
+ * Contexto de quien presenta una invitacion.
+ *
+ * Igual que el token de equipo, y por la misma razon: quien abre un enlace de
+ * invitacion todavia no tiene gimnasio —es justo lo que el enlace va a decidir—,
+ * asi que sin este contexto la consulta que busca la invitacion no veria
+ * ninguna fila. Presentar el token abre exactamente esa.
+ */
+export function withInviteToken<T>(
+  db: Database,
+  tokenHash: string,
+  run: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return withContext(db, { inviteTokenHash: tokenHash }, run);
 }
 
 /**

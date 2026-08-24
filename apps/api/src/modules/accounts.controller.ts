@@ -12,6 +12,7 @@ import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
 import { AccountLinkService } from '../auth/account-link.service';
 import { AuthService } from '../auth/auth.service';
+import { InviteService } from '../auth/invite.service';
 import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from '../auth/secrets';
 
 const confirmSchema = z.object({
@@ -31,13 +32,55 @@ const deviceSchema = z.object({
   name: z.string().min(2).max(60),
 });
 
+const inviteSchema = z.object({
+  fullName: z.string().min(2).max(120),
+  /** DNI peruano: 8 digitos. CE y pasaporte no caben aqui todavia. */
+  documentId: z.string().regex(/^\d{8}$/),
+  phone: z.string().min(6).max(20),
+  planId: z.string().uuid(),
+  /** Ficha existente. Sin esto se crea una nueva al aceptar. */
+  membershipId: z.string().uuid().optional(),
+  ttlDays: z.number().int().min(1).max(30).optional(),
+});
+
 @StaffOnly()
 @Controller('staff')
 export class AccountsController {
   constructor(
     private readonly accountLink: AccountLinkService,
     private readonly auth: AuthService,
+    private readonly invites: InviteService,
   ) {}
+
+  // -------------------------------------------------------------------------
+  // Invitar por enlace
+  // -------------------------------------------------------------------------
+
+  /**
+   * Crea la invitacion y devuelve el token **una vez**.
+   *
+   * Es la alternativa al codigo de 6 digitos: en vez de que el alumno lo dicte
+   * en el mostrador, el staff decide ficha y plan aqui y manda el enlace. El
+   * token no vuelve a estar disponible — si se pierde, se revoca y se invita
+   * otra vez.
+   */
+  @Post('invites')
+  async createInvite(
+    @CurrentSession() session: Session,
+    @Body(parseWith(inviteSchema)) body: z.infer<typeof inviteSchema>,
+  ) {
+    const staff = assertStaffSession(session);
+    return this.invites.create({
+      tenantId: staff.tenantId,
+      staffId: staff.staffId,
+      planId: body.planId,
+      fullName: body.fullName,
+      documentId: body.documentId,
+      phone: body.phone,
+      membershipId: body.membershipId ?? null,
+      ttlDays: body.ttlDays,
+    });
+  }
 
   // -------------------------------------------------------------------------
   // Vincular cuentas

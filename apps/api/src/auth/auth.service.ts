@@ -393,6 +393,18 @@ export class AuthService {
   // -------------------------------------------------------------------------
 
   /** Sesion para una ficha del padron ya vinculada. */
+  /**
+   * Emite sesion para un usuario ya vinculado.
+   *
+   * Publica porque la invitacion tambien termina en una sesion: vincula por otro
+   * camino, pero lo que emite despues tiene que ser identico — mismo rol, mismo
+   * gimnasio, misma caducidad. Duplicar esa logica seria la forma segura de que
+   * un dia diverjan.
+   */
+  issueForLinkedUser(userId: string): Promise<IssuedSession> {
+    return this.issueForUser(userId);
+  }
+
   private async issueForUser(userId: string): Promise<IssuedSession> {
     const [staffRow] = await withUser(this.db, userId, (tx) =>
       tx

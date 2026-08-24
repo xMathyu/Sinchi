@@ -216,6 +216,32 @@ export interface ShiftCandidate {
   readonly hasPin: boolean;
 }
 
+/**
+ * Que gimnasio y que plan hay detras de un enlace de invitacion.
+ *
+ * Anonima: quien abre el enlace todavia no tiene sesion — es justo lo que el
+ * enlace va a producir. Mirar no consume la invitacion.
+ */
+export interface InvitePreviewDto {
+  readonly gymName: string;
+  readonly fullName: string;
+  readonly planName: string;
+  readonly priceCents: number;
+  readonly enrollmentFeeCents: number;
+  readonly expiresAt: string;
+}
+
+export const fetchInvite = (token: string): Promise<InvitePreviewDto> =>
+  request(`/invites/${encodeURIComponent(token)}`, { anonymous: true });
+
+/** Acepta la invitacion. Devuelve sesion ya inscrita. */
+export const claimInvite = (token: string, idToken: string): Promise<IssuedSessionDto> =>
+  request(`/invites/${encodeURIComponent(token)}/claim`, {
+    method: 'POST',
+    body: { idToken },
+    anonymous: true,
+  });
+
 export const staffForDevice = (): Promise<readonly ShiftCandidate[]> =>
   request('/auth/shift/staff', { anonymous: true, withDeviceToken: true });
 

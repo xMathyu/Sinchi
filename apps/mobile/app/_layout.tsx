@@ -112,9 +112,13 @@ function SessionRouter() {
     // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
     // devolvia a /login en el mismo instante — se veia como que no pasaba nada.
     const enDev = __DEV__ && primero === 'dev';
+    // La invitacion se abre SIN sesion —es lo que viene a crear— y por eso entra
+    // en la lista. Es la misma trampa que ya se pago con /dev: sin esto, el
+    // enlace navegaba y este efecto lo devolvia a /login en el mismo instante.
+    const enInvitacion = primero === 'invite';
 
     if (state.status === 'signed_out') {
-      if (!enLogin && !enTurno && !enDev) router.replace('/login');
+      if (!enLogin && !enTurno && !enDev && !enInvitacion) router.replace('/login');
       return;
     }
 
