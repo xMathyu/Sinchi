@@ -22,5 +22,9 @@
     "eas-cli": "^22.3.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "overrides": {
+    "react-native-reanimated": "4.5.3",
+    "react-native-worklets": "0.10.4"
   }
 }

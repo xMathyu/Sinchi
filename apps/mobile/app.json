@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "pe.sinchi.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta."
+        "NSCameraUsageDescription": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
