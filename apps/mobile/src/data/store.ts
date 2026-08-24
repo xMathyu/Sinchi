@@ -69,6 +69,8 @@ export interface State extends DemoData {
   /** Gimnasio activo en el selector de "Mi QR". */
   readonly activeTenantId: string;
   readonly online: boolean;
+  /** Hay una carga desde la api en curso. */
+  readonly hidratando: boolean;
   readonly queue: readonly QueuedItem[];
   readonly lastSyncAt: Date | null;
 }
@@ -80,6 +82,7 @@ function initialState(): State {
     role: 'student',
     activeTenantId: demo.tenants[0]?.id ?? '',
     online: true,
+    hidratando: false,
     queue: [],
     lastSyncAt: new Date(),
   };
@@ -99,6 +102,50 @@ export function subscribe(listener: () => void): () => void {
 }
 
 export const getState = (): State => state;
+
+/**
+ * Lo que la api puede llenar del estado.
+ *
+ * No es todo: `staff`, `schedules` y la cola de sincronizacion no vienen de
+ * `/me`, y el rol lo dicta la sesion. Se enumera en vez de aceptar un `State`
+ * parcial para que anadir un campo al store obligue a decidir si la api lo trae
+ * — un `Partial<State>` dejaria campos de demostracion vivos sin que nadie lo
+ * note.
+ */
+export interface RemoteData {
+  readonly user: State['user'];
+  readonly users: State['users'];
+  readonly tenants: State['tenants'];
+  readonly memberships: State['memberships'];
+  readonly subscriptions: State['subscriptions'];
+  readonly plans: State['plans'];
+  readonly charges: State['charges'];
+  readonly attendances: State['attendances'];
+  readonly activeTenantId: string;
+}
+
+/**
+ * Sustituye los datos de demostracion por los de verdad.
+ *
+ * Sustituye, no mezcla: si se fusionaran, un gimnasio inventado sobreviviria a
+ * la primera carga y el alumno veria su membresia real junto a tres que no
+ * existen. Es exactamente el sintoma que hizo falta perseguir.
+ */
+export function marcarHidratando(valor: boolean): void {
+  setState({ ...state, hidratando: valor });
+}
+
+export function applyRemoteData(data: RemoteData): void {
+  setState({
+    ...state,
+    ...data,
+    // Sin datos de demostracion detras: el staff y los horarios llegaran cuando
+    // haya endpoints que los sirvan, y hasta entonces vacios es la verdad.
+    schedules: [],
+    queue: [],
+    lastSyncAt: new Date(),
+  });
+}
 
 /** Solo para desarrollo: vuelve a los datos de demostracion. */
 export function resetState(): void {

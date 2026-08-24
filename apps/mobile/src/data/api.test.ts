@@ -174,6 +174,49 @@ suite('rutas del alumno', () => {
   });
 });
 
+suite('hidratacion del store', () => {
+  it('los datos salen del servidor, no de demo.ts', async () => {
+    const { loadFromApi } = await import('./hydrate');
+    const { buildDemoData } = await import('./demo');
+
+    const datos = await loadFromApi();
+    const demo = buildDemoData();
+
+    // La comprobacion que importa, y no se puede hacer por nombre: la base de
+    // pruebas tiene su propio "Mathyu Quispe", igual que demo.ts. Lo que
+    // distingue un origen del otro son los ids — los de demo.ts son constantes
+    // escritas a mano.
+    //
+    // Esto es lo que se persiguio media tarde: la app mostraba tres gimnasios
+    // inventados aunque la sesion fuera real, porque ninguna pantalla de
+    // contenido preguntaba al servidor.
+    expect(datos.user.id).not.toBe(demo.user.id);
+    const idsDemo = new Set(demo.tenants.map((t) => t.id));
+    for (const tenant of datos.tenants) {
+      expect(idsDemo.has(tenant.id)).toBe(false);
+    }
+
+    // Y coincide con lo que la api dice por su cuenta.
+    const me = await fetchMe();
+    expect(datos.user.id).toBe(me.user.id);
+    expect(datos.memberships).toHaveLength(me.wallet.length);
+
+    // La forma tiene que servir tal cual al store.
+    expect(datos.users).toHaveLength(1);
+    expect(datos.memberships.length).toBe(datos.subscriptions.length);
+    expect(datos.activeTenantId).toBe(datos.tenants[0]!.id);
+
+    // Sin gimnasios repetidos: dos membresias del mismo local traen el mismo
+    // tenant, y duplicarlo saldria en el selector de "Mi QR".
+    const ids = datos.tenants.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    for (const cargo of datos.charges) {
+      expect(Number.isInteger(cargo.amountCents)).toBe(true);
+    }
+  });
+});
+
 suite('rutas del staff', () => {
   beforeAll(() => {
     active = 'staff';

@@ -24,6 +24,8 @@ import { ThemeProvider } from '../src/design/theme';
 import { setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { useSession } from '../src/data/session-hooks';
+import { hydrate } from '../src/data/hydrate';
+import { marcarHidratando } from '../src/data/store';
 
 /**
  * El cliente HTTP toma sus credenciales de aqui.
@@ -60,6 +62,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <StatusBar style="light" />
         <SessionRouter />
+        <DataLoader />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -93,6 +96,46 @@ export default function RootLayout() {
  * necesitan estar DENTRO del arbol del Stack: llamarlos en el layout, antes de
  * que el Stack exista, lanza "Couldn't find a navigation object".
  */
+/**
+ * Trae los datos de verdad en cuanto hay sesion.
+ *
+ * Va aparte del enrutado porque son dos preguntas distintas: una es "a que
+ * pantalla toca ir", la otra "con que datos se pinta". Mezclarlas hacia que
+ * navegar volviera a pedir la billetera.
+ *
+ * Mientras no responda, las pantallas siguen mostrando lo que hubiera en el
+ * store — que en un arranque limpio es la demostracion. Por eso se marca
+ * `hidratando` y las pantallas lo pueden usar para no ensenar datos falsos como
+ * si fueran del servidor.
+ */
+function DataLoader() {
+  const state = useSession();
+
+  useEffect(() => {
+    if (state.status !== 'signed_in') return;
+
+    let cancelado = false;
+    marcarHidratando(true);
+
+    void hydrate()
+      .catch((error: unknown) => {
+        // Sin conexion no se borra lo que ya habia: el alumno en la puerta del
+        // gimnasio prefiere ver su ultimo estado conocido a una pantalla vacia.
+        console.warn('No se pudieron cargar los datos:', error);
+      })
+      .finally(() => {
+        if (!cancelado) marcarHidratando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+    // Se rehidrata al cambiar de persona, no en cada render.
+  }, [state.status, state.status === 'signed_in' ? state.session.userId : null]);
+
+  return null;
+}
+
 function SessionRouter() {
   const state = useSession();
   const router = useRouter();
