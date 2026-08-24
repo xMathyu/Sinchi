@@ -163,6 +163,42 @@ para ese proyecto. El resto de la cadena ya está desplegada y verificada.
 Después hay que registrar las apps (iOS/Android/Web) en el proyecto para obtener
 los client ID que consume `expo-auth-session`.
 
+### La `apiKey` de Firebase no es un secreto (y GitHub la marca igual)
+
+El escáner de secretos de GitHub la detecta como "Google API Key filtrada". Es un
+falso positivo, y conviene entender por qué antes de rotar nada:
+
+- En Firebase la `apiKey` **identifica el proyecto**, como un id de cliente OAuth.
+  No autoriza nada por sí sola.
+- Viaja dentro de `google-services.json`, de `GoogleService-Info.plist` y del
+  binario publicado. Cualquiera la extrae de un APK descargado de la tienda.
+- **Rotarla no cambia nada de eso**: la nueva sería igual de pública.
+
+Lo que sí protege es **restringirla**. Firebase la creó habilitada para 27 APIs
+—incluidas Firestore, Storage, Vertex AI y `sqladmin`—, y eso sí era superficie
+innecesaria. Quedó reducida a las dos que la app usa:
+
+```bash
+gcloud services api-keys update <UID> --project=sinchi-a95913   --api-target=service=identitytoolkit.googleapis.com   --api-target=service=securetoken.googleapis.com
+```
+
+Y no va escrita en el repositorio, por dos razones prácticas —ninguna de
+seguridad—: el escáner la marcaría en cada commit, y un aviso que siempre es
+falso entrena a ignorar los avisos de verdad; y desarrollo y producción deberían
+apuntar a proyectos distintos, cosa que un valor por defecto en el código vuelve
+fácil de equivocar.
+
+Se obtiene del proyecto cuando hace falta:
+
+```bash
+gcloud --project sinchi-a95913 services api-keys list   --format="value(uid,displayName)"
+gcloud --project sinchi-a95913 services api-keys get-key-string <UID>   --format="value(keyString)"
+```
+
+**La alerta de GitHub se cierra como falso positivo.** No se reescribe la
+historia: sería un force-push que rompe los clones de todo el mundo a cambio de
+ocultar un identificador público.
+
 **Nota para iOS:** si la app ofrece Google Sign-In, la guía 4.8 del App Store
 puede exigir también Sign in with Apple. Firebase soporta ese proveedor, así que
 es configuración más una cuenta de Apple Developer — pero conviene verificarlo

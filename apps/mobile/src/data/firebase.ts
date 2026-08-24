@@ -5,11 +5,24 @@
  * completo son varios megabytes en el bundle para usar exactamente un endpoint —
  * y ese endpoint está documentado y es estable.
  *
- * La `apiKey` va en claro y eso es correcto: en Firebase **no es un secreto**.
- * Identifica el proyecto, igual que un id de cliente OAuth, y no autoriza nada
- * por sí sola. La seguridad la dan los proveedores habilitados y las reglas del
- * proyecto. Guardarla en un secreto daría una falsa sensación de protección y
- * rompería los builds de quien clone el repo.
+ * SOBRE LA `apiKey`. En Firebase **no es un secreto**: identifica el proyecto,
+ * igual que un id de cliente OAuth, y no autoriza nada por sí sola. Viaja dentro
+ * de `google-services.json`, de `GoogleService-Info.plist` y del binario
+ * publicado — cualquiera la extrae de un APK descargado. Rotarla no cambiaría eso.
+ *
+ * Lo que sí protege es **restringirla**, y está restringida a las dos únicas APIs
+ * que la app usa: `identitytoolkit` (el intercambio de abajo) y `securetoken`.
+ * Venía de Firebase habilitada para 27, incluidas Firestore, Storage y
+ * `sqladmin`; eso sí era una superficie innecesaria.
+ *
+ * Aun así no va escrita aquí, por dos razones prácticas:
+ *
+ *  · el escáner de secretos de GitHub la marca en cada commit, y un aviso que
+ *    siempre es falso entrena a ignorar los avisos;
+ *  · desarrollo y producción deberían usar proyectos de Firebase distintos, y un
+ *    valor por defecto en el código hace fácil publicar apuntando al equivocado.
+ *
+ * Los valores están en `.env.example`. No son secretos: se pueden copiar tal cual.
  */
 
 export interface FirebaseConfig {
@@ -19,10 +32,14 @@ export interface FirebaseConfig {
 }
 
 export const firebaseConfig: FirebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? 'AIzaSyBAH9Bs9KGkRRh9xOb_yMgyc6s4NVMbZ54',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'sinchi-a95913',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? 'sinchi-a95913.firebaseapp.com',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? '',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? '',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? '',
 };
+
+/** `true` cuando hay configuración de Firebase con la que trabajar. */
+export const firebaseConfigured = (): boolean =>
+  firebaseConfig.apiKey.length > 0 && firebaseConfig.projectId.length > 0;
 
 /**
  * Ids de cliente OAuth de Google.
@@ -39,6 +56,7 @@ export const googleClientIds = {
 } as const;
 
 export const googleAuthReady = (): boolean =>
+  firebaseConfigured() &&
   Object.values(googleClientIds).some((id) => typeof id === 'string' && id.length > 0);
 
 export class FirebaseAuthError extends Error {
@@ -64,6 +82,13 @@ interface SignInWithIdpResponse {
  * paso, `/auth/google` rechazaría el token con 401 — el `aud` no coincidiría.
  */
 export async function exchangeGoogleToken(googleIdToken: string): Promise<string> {
+  if (!firebaseConfigured()) {
+    throw new FirebaseAuthError(
+      'Falta la configuración de Firebase en este build (ver .env.example).',
+      'SIN_CONFIGURAR',
+    );
+  }
+
   const url =
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' +
     encodeURIComponent(firebaseConfig.apiKey);
