@@ -6,7 +6,6 @@
     "scheme": "sinchi",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "backgroundColor": "#08080A",
     "ios": {
       "supportsTablet": true,
@@ -17,7 +16,6 @@
     },
     "android": {
       "package": "pe.sinchi.app",
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#08080A"
       },

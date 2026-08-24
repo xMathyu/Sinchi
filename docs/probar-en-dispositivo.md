@@ -88,6 +88,10 @@ teléfono sí ve la laptop, `--lan` es más rápido.
 bundle va en modo desarrollo, sin minificar y con comprobaciones extra. Lo que se
 siente lento ahí puede ir bien publicado, y al revés.
 
+`eas.json` no lleva comentarios porque no puede: su esquema rechaza cualquier
+clave que no reconozca, incluidas las `"//"` que se usan a veces para comentar
+JSON. Un `eas.json` con comentarios falla antes de empezar el build.
+
 ---
 
 ## Lo que el monorepo obliga a hacer
@@ -111,6 +115,31 @@ monorepo en un servicio remoto.
 
 `metro.config.js` ya declara `packages/*` como código del proyecto; sin eso Metro
 no recompila al tocar el dominio.
+
+---
+
+## Antes del primer build: `expo-doctor`
+
+Un build de iOS en la cola gratuita tarda entre 10 y 40 minutos. Fallar ahí y
+volver a encolar cuesta una tarde, así que conviene gastar treinta segundos:
+
+```bash
+cd apps/mobile
+npx expo-doctor          # 21 comprobaciones
+npx eas config --profile development --platform ios   # valida eas.json
+```
+
+En esta configuración `expo-doctor` encontró dos cosas que habrían dado problemas:
+
+- **`newArchEnabled` y `android.edgeToEdgeEnabled` en `app.json`.** En SDK 57 la
+  nueva arquitectura es el comportamiento por defecto y esas claves se
+  eliminaron; dejarlas es un error de esquema.
+- **`resolver.disableHierarchicalLookup = true` en `metro.config.js`.** Con las
+  versiones actuales **rompe** la resolución en vez de arreglarla: impide subir
+  por el árbol de `node_modules`, que es exactamente como se resuelve un paquete
+  hoisteado a la raíz del monorepo. `expo/metro-config` ya detecta el workspace
+  solo, así que lo único que hay que conservar es `watchFolders` — para que tocar
+  `@sinchi/shared` recompile la app.
 
 ---
 
