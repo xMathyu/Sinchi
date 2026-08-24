@@ -292,12 +292,64 @@ export interface MeDto {
   readonly wallet: readonly MembershipViewDto[];
 }
 
-export const fetchMe = (): Promise<MeDto> => request('/me');
+/**
+ * JSON no sabe de fechas, y los tipos de arriba dicen que sí.
+ *
+ * `Charge.createdAt` está declarado como `Date`, pero lo que llega por la red es
+ * la cadena ISO que produjo `JSON.stringify` en el servidor. El tipo mentía, y
+ * la mentira no explota aquí sino donde alguien confía en él: el store ordena
+ * los cargos con `b.createdAt.getTime()` y la app se cae con "undefined is not a
+ * function" a tres saltos de distancia del origen.
+ *
+ * Se revive aquí y no en quien consume porque este módulo es la única salida a
+ * la red. Arreglarlo en un consumidor dejaría a los demás con el mismo campo
+ * roto y sin forma de saberlo.
+ *
+ * `PlainDate` no necesita nada: es `{ year, month, day }`, un objeto plano que
+ * sobrevive al viaje intacto. Esa fue exactamente la razón de elegirlo sobre
+ * `Date` para las fechas civiles.
+ */
+const fecha = (valor: unknown): Date => new Date(valor as string);
+const fechaOpcional = (valor: unknown): Date | null =>
+  valor === null || valor === undefined ? null : new Date(valor as string);
 
-export const fetchWallet = (): Promise<readonly MembershipViewDto[]> => request('/me/wallet');
+const reviveUser = (u: User): User => ({ ...u, createdAt: fecha(u.createdAt) });
 
-export const fetchMembership = (membershipId: string): Promise<MembershipDetailDto> =>
-  request(`/me/memberships/${membershipId}`);
+const reviveSubscription = (s: Subscription): Subscription => ({
+  ...s,
+  canceledAt: fechaOpcional(s.canceledAt),
+});
+
+const reviveCharge = (c: Charge): Charge => ({ ...c, createdAt: fecha(c.createdAt) });
+
+const reviveAttendance = (a: Attendance): Attendance => ({
+  ...a,
+  checkedInAt: fecha(a.checkedInAt),
+  syncedAt: fechaOpcional(a.syncedAt),
+});
+
+const reviveView = <T extends MembershipViewDto>(v: T): T => ({
+  ...v,
+  user: reviveUser(v.user),
+  subscription: reviveSubscription(v.subscription),
+});
+
+const reviveDetail = (d: MembershipDetailDto): MembershipDetailDto => ({
+  ...reviveView(d),
+  charges: d.charges.map(reviveCharge),
+  attendances: d.attendances.map(reviveAttendance),
+});
+
+export const fetchMe = async (): Promise<MeDto> => {
+  const me = await request<MeDto>('/me');
+  return { user: reviveUser(me.user), wallet: me.wallet.map(reviveView) };
+};
+
+export const fetchWallet = async (): Promise<readonly MembershipViewDto[]> =>
+  (await request<readonly MembershipViewDto[]>('/me/wallet')).map(reviveView);
+
+export const fetchMembership = async (membershipId: string): Promise<MembershipDetailDto> =>
+  reviveDetail(await request<MembershipDetailDto>(`/me/memberships/${membershipId}`));
 
 export interface CheckInPreviewDto {
   readonly result: CheckInResult;

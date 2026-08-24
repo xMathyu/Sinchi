@@ -214,6 +214,35 @@ suite('hidratacion del store', () => {
     for (const cargo of datos.charges) {
       expect(Number.isInteger(cargo.amountCents)).toBe(true);
     }
+
+    // Sin esto las comprobaciones de abajo serian vacias: un bucle sobre un
+    // array vacio no afirma nada y el test pasaria sin mirar ni una fecha.
+    expect(datos.charges.length).toBeGreaterThan(0);
+    expect(datos.attendances.length).toBeGreaterThan(0);
+
+    // Lo que se cayo en el telefono: `Charge.createdAt` esta declarado como
+    // `Date`, pero JSON entrega la cadena ISO. El tipo mentia, y la mentira no
+    // explotaba aqui sino en el store, ordenando con `b.createdAt.getTime()` —
+    // "undefined is not a function" a tres saltos del origen.
+    for (const cargo of datos.charges) {
+      expect(cargo.createdAt).toBeInstanceOf(Date);
+      expect(Number.isNaN(cargo.createdAt.getTime())).toBe(false);
+    }
+    for (const asistencia of datos.attendances) {
+      expect(asistencia.checkedInAt).toBeInstanceOf(Date);
+      if (asistencia.syncedAt !== null) expect(asistencia.syncedAt).toBeInstanceOf(Date);
+    }
+    expect(datos.user.createdAt).toBeInstanceOf(Date);
+    for (const sub of datos.subscriptions) {
+      if (sub.canceledAt !== null) expect(sub.canceledAt).toBeInstanceOf(Date);
+    }
+
+    // Y las fechas civiles siguen siendo objetos: PlainDate se eligio
+    // precisamente para sobrevivir al viaje sin revivir nada.
+    for (const sub of datos.subscriptions) {
+      expect(typeof sub.nextBillingDate).toBe('object');
+      expect(sub.nextBillingDate).toHaveProperty('year');
+    }
   });
 });
 
