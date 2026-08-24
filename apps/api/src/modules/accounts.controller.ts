@@ -82,6 +82,22 @@ export class AccountsController {
     });
   }
 
+  /** Invitaciones vigentes. Sin el token: no se guarda en claro. */
+  @Get('invites')
+  pendingInvites(@CurrentSession() session: Session) {
+    return this.invites.listPending(assertStaffSession(session).tenantId);
+  }
+
+  /** Revoca una invitación: corta el enlace al instante. */
+  @Delete('invites/:inviteId')
+  async revokeInvite(
+    @CurrentSession() session: Session,
+    @Param('inviteId', ParseUUIDPipe) inviteId: string,
+  ) {
+    await this.invites.revoke(assertStaffSession(session).tenantId, inviteId);
+    return { revoked: true };
+  }
+
   // -------------------------------------------------------------------------
   // Vincular cuentas
   // -------------------------------------------------------------------------

@@ -262,6 +262,67 @@ export class InviteService {
     });
   }
 
+  /**
+   * Las invitaciones vivas del gimnasio.
+   *
+   * Sin el token, que no se guarda en claro: sirve para saber a quien se invito
+   * y decidir cual revocar, no para recuperar un enlace perdido. Si se pierde,
+   * se revoca y se manda otro.
+   */
+  async listPending(tenantId: string): Promise<
+    readonly {
+      readonly id: string;
+      readonly fullName: string;
+      readonly phone: string;
+      readonly expiresAt: string;
+    }[]
+  > {
+    const rows = await withTenant(this.db, tenantId, (tx) =>
+      tx
+        .select({
+          id: schema.invites.id,
+          fullName: schema.invites.fullName,
+          phone: schema.invites.phone,
+          expiresAt: schema.invites.expiresAt,
+        })
+        .from(schema.invites)
+        .where(and(isNull(schema.invites.consumedAt), isNull(schema.invites.revokedAt))),
+    );
+
+    return rows
+      .filter((row) => row.expiresAt.getTime() > Date.now())
+      .map((row) => ({ ...row, expiresAt: row.expiresAt.toISOString() }));
+  }
+
+  /**
+   * Revoca una invitacion.
+   *
+   * Marca en vez de borrar: una invitacion revocada sigue diciendo a quien se
+   * invito y quien lo hizo, y esa es justamente la traza que hace falta cuando
+   * alguien revoca porque el enlace se filtro.
+   */
+  async revoke(tenantId: string, inviteId: string): Promise<void> {
+    const revoked = await withTenant(this.db, tenantId, (tx) =>
+      tx
+        .update(schema.invites)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(schema.invites.id, inviteId),
+            isNull(schema.invites.consumedAt),
+            isNull(schema.invites.revokedAt),
+          ),
+        )
+        .returning({ id: schema.invites.id }),
+    );
+
+    // Una ya consumida no se puede "desconsumir": para eso esta desvincular la
+    // cuenta, que es otra operacion y con otras consecuencias.
+    if (revoked.length === 0) {
+      throw new NotFoundException('Esa invitación no existe o ya no está vigente.');
+    }
+  }
+
   private async assertNotAlreadyInGym(tx: Tx, userId: string, tenantId: string): Promise<void> {
     const [existing] = await tx
       .select({ id: schema.memberships.id })

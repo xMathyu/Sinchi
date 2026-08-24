@@ -317,6 +317,58 @@ suite('invitaciones', () => {
     expect(status).toBe(400);
   });
 
+  it('revocar corta el enlace al instante', async () => {
+    const { body: invite } = await createInvite(frontDesk, { fullName: 'Se Revoca' });
+    await http.get(`/v1/invites/${invite.token}`).expect(200);
+
+    const { body: pendientes } = await http
+      .get('/v1/staff/invites')
+      .set(auth(frontDesk))
+      .expect(200);
+    const fila = (pendientes as { id: string; fullName: string }[]).find(
+      (row) => row.fullName === 'Se Revoca',
+    );
+    expect(fila).toBeDefined();
+
+    await http.delete(`/v1/staff/invites/${fila!.id}`).set(auth(frontDesk)).expect(200);
+
+    await http.get(`/v1/invites/${invite.token}`).expect(404);
+    await http
+      .post(`/v1/invites/${invite.token}/claim`)
+      .send({ idToken: declareIdentity(`uid-revocado-${Date.now()}`) })
+      .expect(404);
+  });
+
+  it('la lista de invitaciones NO devuelve el token', async () => {
+    await createInvite(frontDesk, { fullName: 'Sin Token Visible' });
+
+    const { body } = await http.get('/v1/staff/invites').set(auth(frontDesk)).expect(200);
+    const fila = (body as Record<string, unknown>[]).find(
+      (row) => row.fullName === 'Sin Token Visible',
+    );
+
+    // Si la lista lo devolviera, la base seria una copia de todos los enlaces
+    // vivos y perder el acceso al panel valdria por perderlos todos.
+    expect(fila).toBeDefined();
+    expect(Object.keys(fila!)).not.toContain('token');
+    expect(Object.keys(fila!)).not.toContain('tokenHash');
+  });
+
+  it('no se puede revocar una invitacion de otro gimnasio', async () => {
+    const { body: invite } = await createInvite(frontDesk, { fullName: 'Ajena' });
+    const { body: pendientes } = await http
+      .get('/v1/staff/invites')
+      .set(auth(frontDesk))
+      .expect(200);
+    const fila = (pendientes as { id: string; fullName: string }[]).find(
+      (row) => row.fullName === 'Ajena',
+    )!;
+
+    await http.delete(`/v1/staff/invites/${fila.id}`).set(auth(otherGym)).expect(404);
+    // Y sigue sirviendo: el intento fallido no puede tener efectos.
+    await http.get(`/v1/invites/${invite.token}`).expect(200);
+  });
+
   it('sin sesion de staff no se puede crear una invitacion', async () => {
     await http
       .post('/v1/staff/invites')

@@ -10,13 +10,19 @@
  * quedaria produciendo invitaciones sutilmente distintas a las de la app.
  *
  *   npx tsx src/db/invite-cli.ts <slug> <plan> <nombre> <dni> <telefono>
+ *   npx tsx src/db/invite-cli.ts revoke <slug> <nombre>
  */
 import 'dotenv/config';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { createDatabase, createPool, schema, withTenant, withoutTenantIsolation } from './client';
 import { InviteService } from '../auth/invite.service';
 
 async function main(): Promise<void> {
+  if (process.argv[2] === 'revoke') {
+    await revoke(process.argv[3], process.argv[4]);
+    return;
+  }
+
   const [slug, planName, fullName, documentId, phone] = process.argv.slice(2);
 
   if (
@@ -82,6 +88,51 @@ async function main(): Promise<void> {
     console.log('');
     console.log(`  ENLACE   : sinchi://invite/${invite.token}`);
     console.log('');
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Revoca las invitaciones vigentes a nombre de alguien.
+ *
+ * Reemitir con datos corregidos deja dos enlaces vivos para la misma persona si
+ * no se revoca el anterior, y dos enlaces vivos es una superficie que no aporta
+ * nada: solo uno se va a usar.
+ */
+async function revoke(slug: string | undefined, fullName: string | undefined): Promise<void> {
+  if (slug === undefined || fullName === undefined) {
+    throw new Error('uso: invite-cli revoke <slug> <nombre>');
+  }
+
+  const pool = createPool(process.env.DATABASE_URL!);
+  const db = createDatabase(pool);
+
+  try {
+    const [tenant] = await withoutTenantIsolation(db, (tx) =>
+      tx
+        .select({ id: schema.tenants.id })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.slug, slug))
+        .limit(1),
+    );
+    if (tenant === undefined) throw new Error(`No existe el gimnasio "${slug}".`);
+
+    const revoked = await withTenant(db, tenant.id, (tx) =>
+      tx
+        .update(schema.invites)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(schema.invites.fullName, fullName),
+            isNull(schema.invites.consumedAt),
+            isNull(schema.invites.revokedAt),
+          ),
+        )
+        .returning({ id: schema.invites.id }),
+    );
+
+    console.log(`  revocadas: ${revoked.length}`);
   } finally {
     await pool.end();
   }
