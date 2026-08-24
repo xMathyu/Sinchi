@@ -21,6 +21,7 @@
     "android": {
       "package": "pe.sinchi.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#08080A"
       },
       "permissions": [
@@ -38,7 +39,16 @@
           "cameraPermission": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0E0E11"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -49,6 +59,10 @@
         "projectId": "f43ddb28-dc9f-47d3-a6e3-309ed32f7016"
       }
     },
-    "owner": "mathyus-team"
+    "owner": "mathyus-team",
+    "icon": "./assets/icon.png",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
   }
 }
