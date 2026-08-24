@@ -81,11 +81,15 @@ La forma del token refleja la del producto:
   acepta del cliente: un recepcionista no puede leer el padrón de otro local por
   más que escriba otro uuid en la URL.
 
-**PENDIENTE:** la autenticación real es por SMS (el celular es único en `users`).
-No está implementada porque exige elegir proveedor y presupuesto de mensajes.
-Mientras tanto existe `POST /v1/auth/dev-login`, que **no verifica nada** y solo
-funciona con `ALLOW_DEV_LOGIN=true`. La api se niega a arrancar con esa bandera
-en producción.
+La autenticación es **Google Sign-In vía Firebase** para alumnos y dueños, y
+**token de equipo + PIN** para el staff del mostrador. El detalle está en
+[`autenticacion.md`](autenticacion.md), incluido el problema que Firebase no
+resuelve —vincular la cuenta con la ficha que la recepcionista ya creó— y cómo se
+cierra sin agujeros.
+
+`POST /v1/auth/dev-login` sigue existiendo para los tests de punta a punta: **no
+verifica nada**, solo funciona con `ALLOW_DEV_LOGIN=true`, y la api se niega a
+arrancar con esa bandera en producción.
 
 ---
 
@@ -95,8 +99,11 @@ en producción.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/auth/dev-login` | Emite sesión por celular. Sin verificar. Solo desarrollo. |
+| `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve código de vinculación. |
+| `GET` | `/auth/shift/staff` | Quiénes pueden abrir turno en este equipo (`X-Device-Token`). |
+| `POST` | `/auth/shift` | Abre turno: token del equipo + PIN. Sesión de 12 h. |
 | `POST` | `/auth/switch-to-student` | El dueño del dojo también entrena en él: puede mirar su propia billetera. |
+| `POST` | `/auth/dev-login` | Emite sesión por celular. Sin verificar. Solo desarrollo. |
 
 ### Alumno (`/me`)
 
@@ -127,6 +134,12 @@ en producción.
 | `POST` | `/staff/payments` | Registra un pago en mostrador. |
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
+| `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
+| `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |
+| `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
+| `POST` | `/staff/pin` | Fija el PIN de turno. |
+| `GET` `POST` | `/staff/devices` | Solo el dueño: equipos del mostrador. |
+| `DELETE` | `/staff/devices/:id` | Solo el dueño: revoca un equipo. |
 
 ### Salud
 

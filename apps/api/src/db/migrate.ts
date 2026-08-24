@@ -22,6 +22,21 @@ async function main(): Promise<void> {
   const target = new URL(url);
   console.log(`[migrate] base: ${target.hostname}${target.pathname}`);
 
+  // Trampa fácil de pisar: `MIGRATION_DATABASE_URL` GANA sobre `DATABASE_URL`,
+  // así que pasar solo `DATABASE_URL=... npm run db:migrate` para apuntar a una
+  // base local migra igual la de producción, en silencio. Se avisa cuando las
+  // dos apuntan a hosts distintos.
+  if (env.MIGRATION_DATABASE_URL !== undefined) {
+    const appHost = new URL(env.DATABASE_URL).hostname;
+    if (appHost !== target.hostname) {
+      console.warn(
+        `[migrate] AVISO: se migra ${target.hostname} pero la api apunta a ${appHost}. ` +
+          'Las migraciones usan MIGRATION_DATABASE_URL, que tiene prioridad. ' +
+          'Para migrar otra base, pasa MIGRATION_DATABASE_URL también.',
+      );
+    }
+  }
+
   try {
     const [{ version }] = (
       await db.execute<{ version: string }>(sql`select version()`)

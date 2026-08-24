@@ -51,6 +51,26 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   /**
+   * Proyecto de Firebase contra el que se verifican los ID token.
+   *
+   * En Cloud Run se toma de `GOOGLE_CLOUD_PROJECT`, que la plataforma inyecta
+   * sola. Local hay que ponerlo a mano.
+   *
+   * Verificar un ID token solo necesita esto: las claves publicas de Google se
+   * descargan por HTTP. No hacen falta credenciales de servicio.
+   */
+  FIREBASE_PROJECT_ID: z.string().min(4).optional(),
+
+  /**
+   * Credenciales de servicio, como JSON.
+   *
+   * Opcional y normalmente ausente: solo hace falta si algun dia se usan APIs de
+   * Firebase que escriben (crear usuarios, revocar sesiones). Para verificar
+   * tokens, no.
+   */
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+
+  /**
    * Quien dispara los trabajos programados.
    *
    *   in_process  el cron vive dentro de la api (`@nestjs/schedule`). Para
@@ -95,12 +115,23 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema>;
 
+/**
+ * Cloud Run inyecta `GOOGLE_CLOUD_PROJECT`; Firebase Auth vive en ese mismo
+ * proyecto. Derivarlo evita duplicar el dato y que las dos copias se separen.
+ */
+function withDerivedDefaults(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (source.FIREBASE_PROJECT_ID !== undefined) return source;
+  const fromPlatform = source.GOOGLE_CLOUD_PROJECT ?? source.GCLOUD_PROJECT;
+  if (fromPlatform === undefined) return source;
+  return { ...source, FIREBASE_PROJECT_ID: fromPlatform };
+}
+
 let cached: Env | null = null;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (cached !== null) return cached;
 
-  const parsed = schema.safeParse(source);
+  const parsed = schema.safeParse(withDerivedDefaults(source));
   if (!parsed.success) {
     const detail = parsed.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)

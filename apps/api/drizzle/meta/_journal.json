@@ -15,6 +15,20 @@
       "when": 1787549917400,
       "tag": "0001_invariantes_y_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787549918400,
+      "tag": "0002_firebase_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787549919400,
+      "tag": "0003_device_token_policy",
+      "breakpoints": true
     }
   ]
 }

@@ -16,7 +16,8 @@ gimnasios a los que asiste.
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes), sobre datos de demostración |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (81 tests, 37 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
-| Despliegue | api en **Cloud Run** (us-east4), contra Neon. Falta autenticación real para que sirva |
+| Despliegue | api en **Cloud Run** (us-east4), contra Neon |
+| Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
 
 La app todavía corre contra un store en memoria (`apps/mobile/src/data`) que pasa
 por las mismas funciones puras que la api. Conectarla a la api real es cambiar ese
@@ -40,7 +41,7 @@ validar. Ver [`docs/decisiones.md`](docs/decisiones.md) para el detalle.
 nvm use            # Node 24.8.0 (.nvmrc)
 npm ci
 npm run build      # compila shared y ui: la app los consume compilados
-npm test           # 209 tests (246 con TEST_DATABASE_URL apuntando a una base)
+npm test           # 224 tests (282 con TEST_DATABASE_URL apuntando a una base)
 
 cd apps/mobile
 npm start          # Expo: pulsa i (iOS), a (Android)
@@ -76,6 +77,7 @@ la cola offline.
   glosario.md        dominio en español ↔ código en inglés
   decisiones.md      qué se decidió y por qué; desviaciones del diseño
   api.md             rutas, autenticación, idempotencia, aislamiento por tenant
+  autenticacion.md   Google vía Firebase, vinculación con el padrón, PIN de turno
   despliegue.md      Cloud Run: costo, el cron que no corre, cómo redesplegar
 ```
 
@@ -155,10 +157,9 @@ Las cuatro reglas que sostienen el producto:
 2. **`apps/web` — panel del gimnasio.** La superficie que el cliente que paga usa
    a diario: alta de alumnos, planes, registro de pago manual, lista de morosos.
    La api ya expone todo lo que necesita.
-3. **Autenticación por SMS.** Es lo que bloquea el despliegue: la api está arriba
-   en Cloud Run pero nadie puede iniciar sesión, porque `/auth/dev-login` no
-   verifica nada y dejarlo abierto en una URL pública sería dejar la puerta
-   abierta. Ver [docs/despliegue.md](docs/despliegue.md).
+3. **Activar el proveedor de Google en la consola de Firebase.** Tres clics; es
+   lo único que falta para que la autenticación funcione de punta a punta. Ver
+   [docs/autenticacion.md](docs/autenticacion.md).
 4. **Notificaciones.** El cron de morosidad ya detecta cuándo alguien entra en
    gracia o se suspende; falta el canal.
 5. **Culqi.** Antes de construir encima: sandbox completo (tokenizar, cobrar,

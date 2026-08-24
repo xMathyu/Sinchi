@@ -102,11 +102,51 @@ export const users = pgTable(
      * El cifrado lo hace la aplicacion; la base solo guarda el sobre.
      */
     totpSecretEncrypted: text('totp_secret_encrypted'),
+    /**
+     * Cuenta de Google vinculada. `null` mientras la ficha del padron no tiene
+     * dueno digital: la recepcionista la creo antes de que el alumno instalara
+     * la app, que es el caso normal.
+     */
+    firebaseUid: text('firebase_uid'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex('users_phone_key').on(t.phone),
     uniqueIndex('users_document_key').on(t.documentId),
+    uniqueIndex('users_firebase_uid_key')
+      .on(t.firebaseUid)
+      .where(sql`firebase_uid is not null`),
+  ],
+);
+
+/**
+ * Codigo con el que una cuenta de Google reclama una ficha del padron.
+ *
+ * Sin `tenant_id` a proposito: se emite ANTES de saber a que gimnasio pertenece
+ * la persona. La proteccion no esta aqui sino del otro lado — confirmar exige
+ * una sesion de staff y una membresia, y las membresias si estan aisladas por
+ * RLS, asi que un recepcionista solo puede vincular contra su propio padron.
+ */
+export const accountClaims = pgTable(
+  'account_claims',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    firebaseUid: text('firebase_uid').notNull(),
+    email: text('email'),
+    displayName: text('display_name'),
+    /** 6 digitos: se dicta en voz alta en el mostrador. */
+    code: text('code').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    consumedBy: uuid('consumed_by').references(() => staff.id, { onDelete: 'set null' }),
+    linkedUserId: uuid('linked_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('account_claims_active_code')
+      .on(t.code)
+      .where(sql`consumed_at is null`),
+    index('account_claims_firebase_uid_idx').on(t.firebaseUid),
   ],
 );
 
@@ -200,6 +240,16 @@ export const staff = pgTable(
       .references(() => users.id, { onDelete: 'restrict' }),
     role: staffRoleEnum('role').notNull(),
     displayName: text('display_name').notNull(),
+    /**
+     * Hash scrypt del PIN con el que abre turno en el equipo compartido.
+     *
+     * Nunca el PIN. Son 4-6 digitos: un hash rapido se rompe por fuerza bruta en
+     * segundos, y los intentos se limitan con las dos columnas de abajo.
+     */
+    pinHash: text('pin_hash'),
+    pinUpdatedAt: timestamp('pin_updated_at', { withTimezone: true }),
+    pinFailedAttempts: smallint('pin_failed_attempts').notNull().default(0),
+    pinLockedUntil: timestamp('pin_locked_until', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -465,10 +515,24 @@ export const checkinDevices = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     totpSecretEncrypted: text('totp_secret_encrypted'),
+    /**
+     * Hash del token de portador del equipo.
+     *
+     * Secreto de portador y no JWT porque revocar tiene que ser inmediato: una
+     * tablet que se pierde en el gimnasio. Borrar una fila es inmediato; un JWT
+     * vive hasta que expira.
+     */
+    tokenHash: text('token_hash'),
+    tokenIssuedAt: timestamp('token_issued_at', { withTimezone: true }),
     active: boolean('active').notNull().default(true),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   },
-  (t) => [index('checkin_devices_tenant_idx').on(t.tenantId)],
+  (t) => [
+    index('checkin_devices_tenant_idx').on(t.tenantId),
+    uniqueIndex('checkin_devices_token_hash_key')
+      .on(t.tokenHash)
+      .where(sql`token_hash is not null`),
+  ],
 );
 
 /**
