@@ -34,6 +34,11 @@ const deviceSchema = z.object({
 
 const inviteSchema = z.object({
   fullName: z.string().min(2).max(120),
+  /**
+   * Con correo, la cuenta se activa sola al entrar con Google. Es el camino
+   * normal; sin el, la persona recibe el codigo de 6 digitos.
+   */
+  email: z.string().email().max(254).optional(),
   /** DNI peruano: 8 digitos. CE y pasaporte no caben aqui todavia. */
   documentId: z.string().regex(/^\d{8}$/),
   phone: z.string().min(6).max(20),
@@ -75,6 +80,7 @@ export class AccountsController {
       staffId: staff.staffId,
       planId: body.planId,
       fullName: body.fullName,
+      email: body.email ?? null,
       documentId: body.documentId,
       phone: body.phone,
       membershipId: body.membershipId ?? null,

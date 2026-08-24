@@ -15,6 +15,7 @@ import { InjectDb } from '../db/db.module';
 import {
   adoptTenant,
   schema,
+  withInviteEmail,
   withInviteToken,
   withTenant,
   type Database,
@@ -68,6 +69,8 @@ export class InviteService {
     readonly fullName: string;
     readonly documentId: string;
     readonly phone: string;
+    /** Con correo, la cuenta se activa sola al entrar. Sin el, queda el codigo. */
+    readonly email?: string | null | undefined;
     readonly membershipId?: string | null | undefined;
     readonly ttlDays?: number | undefined;
   }): Promise<CreatedInvite> {
@@ -98,6 +101,7 @@ export class InviteService {
         tenantId: input.tenantId,
         tokenHash: hash,
         fullName: input.fullName.trim(),
+        email: input.email == null ? null : input.email.trim().toLowerCase(),
         documentId: input.documentId.trim(),
         phone: input.phone.trim(),
         planId: plan.id,
@@ -210,56 +214,74 @@ export class InviteService {
       // contexto normal, o los INSERT de abajo fallan su WITH CHECK.
       await adoptTenant(tx, invite.tenantId);
 
-      // Si esta cuenta de Firebase ya existe, se reutiliza: la tesis del producto
-      // es una identidad para todos los gimnasios. Lo que no puede es acabar con
-      // dos fichas en el MISMO gimnasio — seria la misma persona dos veces, con
-      // dos cupos y dos deudas.
-      const [already] = await tx
-        .select({ id: schema.users.id })
-        .from(schema.users)
-        .where(eq(schema.users.firebaseUid, input.firebaseUid))
-        .limit(1);
-
-      let userId: string;
-      if (already === undefined) {
-        const [created] = await tx
-          .insert(schema.users)
-          .values({
-            name: invite.fullName,
-            documentId: invite.documentId,
-            phone: invite.phone,
-            email: input.email,
-            firebaseUid: input.firebaseUid,
-          })
-          .returning({ id: schema.users.id });
-        userId = created!.id;
-      } else {
-        userId = already.id;
-        await this.assertNotAlreadyInGym(tx, userId, invite.tenantId);
-      }
-
-      if (invite.membershipId === null) {
-        const [membership] = await tx
-          .insert(schema.memberships)
-          .values({ userId, tenantId: invite.tenantId, status: 'active' })
-          .returning({ id: schema.memberships.id });
-        await this.startSubscription(tx, invite, membership!.id);
-      } else {
-        // Invitacion a una ficha que ya existia: no se crea suscripcion ni
-        // cargos, porque los suyos ya estan. Solo se le ata la cuenta.
-        await tx
-          .update(schema.memberships)
-          .set({ userId })
-          .where(eq(schema.memberships.id, invite.membershipId));
-      }
-
-      await tx
-        .update(schema.invites)
-        .set({ consumedAt: new Date(), consumedBy: userId })
-        .where(eq(schema.invites.id, invite.id));
-
+      const userId = await this.materialize(tx, invite, input.firebaseUid, input.email);
       return { userId, tenantId: invite.tenantId };
     });
+  }
+
+  /**
+   * Convierte una invitacion en cuenta, ficha, suscripcion y cargos.
+   *
+   * Compartido por los dos caminos —enlace y correo verificado— a proposito: son
+   * dos formas de llegar, no dos formas de inscribirse. Duplicarlo seria la
+   * manera segura de que un dia el correo empiece a cobrar distinto que el
+   * enlace sin que nadie lo note.
+   */
+  private async materialize(
+    tx: Tx,
+    invite: typeof schema.invites.$inferSelect,
+    firebaseUid: string,
+    email: string | null,
+  ): Promise<string> {
+    // Si esta cuenta de Firebase ya existe, se reutiliza: la tesis del producto
+    // es una identidad para todos los gimnasios. Lo que no puede es acabar con
+    // dos fichas en el MISMO gimnasio — seria la misma persona dos veces, con
+    // dos cupos y dos deudas.
+    const [already] = await tx
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.firebaseUid, firebaseUid))
+      .limit(1);
+
+    let userId: string;
+    if (already === undefined) {
+      const [created] = await tx
+        .insert(schema.users)
+        .values({
+          name: invite.fullName,
+          documentId: invite.documentId,
+          phone: invite.phone,
+          email,
+          firebaseUid,
+        })
+        .returning({ id: schema.users.id });
+      userId = created!.id;
+    } else {
+      userId = already.id;
+      await this.assertNotAlreadyInGym(tx, userId, invite.tenantId);
+    }
+
+    if (invite.membershipId === null) {
+      const [membership] = await tx
+        .insert(schema.memberships)
+        .values({ userId, tenantId: invite.tenantId, status: 'active' })
+        .returning({ id: schema.memberships.id });
+      await this.startSubscription(tx, invite, membership!.id);
+    } else {
+      // Invitacion a una ficha que ya existia: no se crea suscripcion ni cargos,
+      // porque los suyos ya estan. Solo se le ata la cuenta.
+      await tx
+        .update(schema.memberships)
+        .set({ userId })
+        .where(eq(schema.memberships.id, invite.membershipId));
+    }
+
+    await tx
+      .update(schema.invites)
+      .set({ consumedAt: new Date(), consumedBy: userId })
+      .where(eq(schema.invites.id, invite.id));
+
+    return userId;
   }
 
   /**
@@ -321,6 +343,95 @@ export class InviteService {
     if (revoked.length === 0) {
       throw new NotFoundException('Esa invitación no existe o ya no está vigente.');
     }
+  }
+
+  /**
+   * Activa las invitaciones dirigidas a un correo verificado.
+   *
+   * Es el camino que reemplaza al codigo de 6 digitos en el caso normal: el
+   * gimnasio pide el correo en el mostrador, lo registra, y al entrar con Google
+   * la cuenta ya esta activa.
+   *
+   * **Todas**, no la primera. Si Kaizen y otro gimnasio registraron el mismo
+   * correo, entrar una vez inscribe en los dos — que es exactamente la tesis del
+   * producto: una identidad para todas las membresias. Devolver solo una
+   * obligaria a la persona a volver a entrar para activar la siguiente, sin que
+   * nada en la pantalla le explicara por que.
+   *
+   * Devuelve el `userId` si activo alguna, o `null` si no habia ninguna — y
+   * entonces el flujo sigue hasta el codigo, que es el camino de quien no tiene
+   * correo registrado.
+   */
+  async claimByVerifiedEmail(identity: {
+    readonly uid: string;
+    readonly email: string | null;
+    readonly emailVerified: boolean;
+  }): Promise<string | null> {
+    // Sin verificar no se mira siquiera. Un correo no verificado lo puede
+    // declarar cualquiera, y entonces esto seria peor que el DNI: bastaria saber
+    // a que gimnasio va alguien y con que correo lo inscribieron.
+    if (identity.email === null || !identity.emailVerified) return null;
+
+    const email = identity.email.toLowerCase();
+
+    const pending = await withInviteEmail(this.db, email, (tx) =>
+      tx
+        .select({ id: schema.invites.id, tenantId: schema.invites.tenantId })
+        .from(schema.invites)
+        .where(
+          and(
+            eq(schema.invites.email, email),
+            isNull(schema.invites.consumedAt),
+            isNull(schema.invites.revokedAt),
+          ),
+        ),
+    );
+
+    if (pending.length === 0) return null;
+
+    let userId: string | null = null;
+    for (const row of pending) {
+      // Una por transaccion: si el gimnasio B falla, el A ya activado no se
+      // deshace. Al reves, un fallo tonto en el segundo dejaria a la persona
+      // fuera de los dos sin motivo.
+      try {
+        const result = await this.claimById(row.id, identity.uid, email);
+        userId ??= result;
+      } catch {
+        // Ya tiene ficha en ese gimnasio, o la invitacion caduco entre la
+        // lectura y aqui. Ninguno de los dos justifica negarle la entrada.
+      }
+    }
+
+    return userId;
+  }
+
+  /** El nucleo del reclamo, compartido por el enlace y por el correo. */
+  private async claimById(
+    inviteId: string,
+    firebaseUid: string,
+    email: string | null,
+  ): Promise<string> {
+    return withInviteEmail(this.db, email ?? '', async (tx) => {
+      const [invite] = await tx
+        .select()
+        .from(schema.invites)
+        .where(
+          and(
+            eq(schema.invites.id, inviteId),
+            isNull(schema.invites.consumedAt),
+            isNull(schema.invites.revokedAt),
+          ),
+        )
+        .limit(1);
+
+      if (invite === undefined || invite.expiresAt.getTime() < Date.now()) {
+        throw new NotFoundException(NOT_USABLE);
+      }
+
+      await adoptTenant(tx, invite.tenantId);
+      return this.materialize(tx, invite, firebaseUid, email);
+    });
   }
 
   private async assertNotAlreadyInGym(tx: Tx, userId: string, tenantId: string): Promise<void> {

@@ -369,6 +369,147 @@ suite('invitaciones', () => {
     await http.get(`/v1/invites/${invite.token}`).expect(200);
   });
 
+  // -------------------------------------------------------------------------
+  // Activacion por correo verificado
+  // -------------------------------------------------------------------------
+
+  it('registrar el correo activa la cuenta al entrar, sin codigo', async () => {
+    const correo = `alumno.${runId}@ejemplo.pe`;
+    await createInvite(frontDesk, { fullName: 'Correo Directo', email: correo });
+
+    const uid = `uid-correo-${runId}`;
+    const token = asToken(uid);
+    identities.set(token, {
+      uid,
+      email: correo,
+      emailVerified: true,
+      displayName: 'Correo Directo',
+      provider: 'google.com',
+    });
+
+    const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+
+    // Ni codigo ni pantalla intermedia: entra ya inscrito.
+    expect(body.linked).toBe(true);
+    expect(body.claim).toBeUndefined();
+
+    const roster = await http.get('/v1/staff/roster').set(auth(frontDesk)).expect(200);
+    const names = (roster.body as { user: { name: string } }[]).map((r) => r.user.name);
+    expect(names).toContain('Correo Directo');
+  });
+
+  it('un correo SIN verificar no activa nada', async () => {
+    const correo = `sinverificar.${runId}@ejemplo.pe`;
+    await createInvite(frontDesk, { fullName: 'Sin Verificar', email: correo });
+
+    const uid = `uid-sinverif-${runId}`;
+    const token = asToken(uid);
+    identities.set(token, {
+      uid,
+      email: correo,
+      // Un correo no verificado lo declara cualquiera: si esto activara, bastaria
+      // saber con que correo inscribieron a alguien para quedarse con su ficha.
+      emailVerified: false,
+      displayName: 'Sin Verificar',
+      provider: 'google.com',
+    });
+
+    const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(body.linked).toBe(false);
+    expect(body.claim.code).toMatch(/^\d{6}$/);
+  });
+
+  it('quien no fue invitado sigue recibiendo el codigo', async () => {
+    const uid = `uid-desconocido-${runId}`;
+    const token = asToken(uid);
+    identities.set(token, {
+      uid,
+      email: `nadie.${runId}@ejemplo.pe`,
+      emailVerified: true,
+      displayName: 'Desconocido',
+      provider: 'google.com',
+    });
+
+    // El codigo no desaparece: es el camino de quien no dio correo.
+    const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(body.linked).toBe(false);
+    expect(body.claim.code).toMatch(/^\d{6}$/);
+  });
+
+  it('una invitacion por correo revocada ya no activa', async () => {
+    const correo = `revocado.${runId}@ejemplo.pe`;
+    await createInvite(frontDesk, { fullName: 'Correo Revocado', email: correo });
+
+    const { body: pendientes } = await http
+      .get('/v1/staff/invites')
+      .set(auth(frontDesk))
+      .expect(200);
+    const fila = (pendientes as { id: string; fullName: string }[]).find(
+      (row) => row.fullName === 'Correo Revocado',
+    )!;
+    await http.delete(`/v1/staff/invites/${fila.id}`).set(auth(frontDesk)).expect(200);
+
+    const uid = `uid-revocado-correo-${runId}`;
+    const token = asToken(uid);
+    identities.set(token, {
+      uid,
+      email: correo,
+      emailVerified: true,
+      displayName: 'Correo Revocado',
+      provider: 'google.com',
+    });
+
+    const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(body.linked).toBe(false);
+  });
+
+  it('dos gimnasios que registran el mismo correo activan los dos de una vez', async () => {
+    const correo = `dosgimnasios.${runId}@ejemplo.pe`;
+
+    // El otro gimnasio invita al mismo correo con su propio plan.
+    const { body: otrosPlanes } = await http
+      .get('/v1/staff/plans')
+      .set(auth(otherGym))
+      .expect(200);
+
+    await createInvite(frontDesk, { fullName: 'Dos Gimnasios', email: correo });
+    await http
+      .post('/v1/staff/invites')
+      .set(auth(otherGym))
+      .send({
+        fullName: 'Dos Gimnasios',
+        email: correo,
+        documentId: nextDni(),
+        phone: nextPhone(),
+        planId: (otrosPlanes as PlanRow[])[0]!.id,
+      })
+      .expect(201);
+
+    const uid = `uid-dos-${runId}`;
+    const token = asToken(uid);
+    identities.set(token, {
+      uid,
+      email: correo,
+      emailVerified: true,
+      displayName: 'Dos Gimnasios',
+      provider: 'google.com',
+    });
+
+    const { body: session } = await http
+      .post('/v1/auth/google')
+      .send({ idToken: token })
+      .expect(201);
+    expect(session.linked).toBe(true);
+
+    // Una identidad, dos membresias: entrar una vez basta para las dos. Devolver
+    // solo una obligaria a volver a entrar sin que nada lo explicara.
+    const { body: wallet } = await http
+      .get('/v1/me/wallet')
+      .set(auth(session.accessToken))
+      .expect(200);
+    expect((wallet as unknown[]).length).toBe(2);
+  });
+
   it('sin sesion de staff no se puede crear una invitacion', async () => {
     await http
       .post('/v1/staff/invites')

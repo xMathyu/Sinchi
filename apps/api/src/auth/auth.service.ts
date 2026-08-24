@@ -35,6 +35,7 @@ import { loadEnv } from '../config/env';
 import type { SessionClaims } from './session';
 import { FirebaseVerifier } from './firebase';
 import { AccountLinkService, type PendingClaim } from './account-link.service';
+import { InviteService } from './invite.service';
 import { hashDeviceToken, hashPin, issueDeviceToken, verifyPin } from './secrets';
 
 /**
@@ -86,6 +87,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly firebase: FirebaseVerifier,
     private readonly accountLink: AccountLinkService,
+    private readonly invites: InviteService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -111,6 +113,12 @@ export class AuthService {
     // Arranque del dueno: la unica vinculacion automatica, y solo por email
     // verificado que nosotros registramos al dar de alta el gimnasio.
     userId ??= await this.accountLink.tryLinkOwnerByEmail(identity);
+
+    // El gimnasio registro este correo en el mostrador: la cuenta se activa
+    // sola, y en TODOS los gimnasios que lo hayan registrado. Va antes del
+    // codigo porque es el camino normal; el codigo queda para quien no dio
+    // correo, que en este mercado es gente real.
+    userId ??= await this.invites.claimByVerifiedEmail(identity);
 
     if (userId === null) {
       return { linked: false, claim: await this.accountLink.issueClaim(identity) };

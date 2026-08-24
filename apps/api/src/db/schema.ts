@@ -597,6 +597,11 @@ export const invites = pgTable(
     /** sha256 del token de 32 bytes. Hay que buscar por el, asi que no lleva sal. */
     tokenHash: text('token_hash').notNull(),
     fullName: text('full_name').notNull(),
+    /**
+     * Correo al que va dirigida. Con valor, la cuenta se activa sola al entrar
+     * con un correo verificado que coincida — sin codigo y sin enlace.
+     */
+    email: text('email'),
     /** `users.document_id` es NOT NULL: el staff lo aporta al invitar. */
     documentId: text('document_id').notNull(),
     phone: text('phone').notNull(),

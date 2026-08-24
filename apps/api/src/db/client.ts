@@ -85,6 +85,7 @@ export interface QueryContext {
    */
   readonly deviceTokenHash?: string;
   readonly inviteTokenHash?: string;
+  readonly inviteEmail?: string;
 }
 
 /**
@@ -110,6 +111,9 @@ export async function withContext<T>(
     );
     await tx.execute(
       sql`select set_config('app.invite_token_hash', ${context.inviteTokenHash ?? ''}, true)`,
+    );
+    await tx.execute(
+      sql`select set_config('app.invite_email', ${context.inviteEmail ?? ''}, true)`,
     );
     return run(tx);
   });
@@ -161,6 +165,21 @@ export async function adoptTenant(tx: Tx, tenantId: string): Promise<void> {
  * asi que sin este contexto la consulta que busca la invitacion no veria
  * ninguna fila. Presentar el token abre exactamente esa.
  */
+/**
+ * Contexto de quien presenta un correo verificado.
+ *
+ * Mismo caso que el token: al entrar todavia no se sabe a que gimnasio pertenece
+ * —puede que a ninguno— asi que la busqueda de invitaciones dirigidas a ese
+ * correo necesita su propia puerta en la politica.
+ */
+export function withInviteEmail<T>(
+  db: Database,
+  email: string,
+  run: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return withContext(db, { inviteEmail: email.toLowerCase() }, run);
+}
+
 export function withInviteToken<T>(
   db: Database,
   tokenHash: string,

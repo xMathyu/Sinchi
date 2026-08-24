@@ -9,7 +9,7 @@
  * inserts, el dia que cambie el flujo (otro cargo, otra caducidad) esta ruta
  * quedaria produciendo invitaciones sutilmente distintas a las de la app.
  *
- *   npx tsx src/db/invite-cli.ts <slug> <plan> <nombre> <dni> <telefono>
+ *   npx tsx src/db/invite-cli.ts <slug> <plan> <nombre> <dni> <telefono> [correo]
  *   npx tsx src/db/invite-cli.ts revoke <slug> <nombre>
  */
 import 'dotenv/config';
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const [slug, planName, fullName, documentId, phone] = process.argv.slice(2);
+  const [slug, planName, fullName, documentId, phone, email] = process.argv.slice(2);
 
   if (
     slug === undefined ||
@@ -78,6 +78,7 @@ async function main(): Promise<void> {
       fullName,
       documentId,
       phone,
+      email: email ?? null,
     });
 
     console.log('');
@@ -86,7 +87,13 @@ async function main(): Promise<void> {
     console.log(`  para     : ${fullName}`);
     console.log(`  caduca   : ${new Date(invite.expiresAt).toLocaleString('es-PE')}`);
     console.log('');
-    console.log(`  ENLACE   : sinchi://invite/${invite.token}`);
+    if (email === undefined) {
+      console.log(`  ENLACE   : sinchi://invite/${invite.token}`);
+    } else {
+      console.log(`  correo   : ${email}`);
+      console.log('  -> la cuenta se activa sola al entrar con ese correo');
+      console.log(`  (enlace de respaldo: sinchi://invite/${invite.token})`);
+    }
     console.log('');
   } finally {
     await pool.end();
