@@ -3,7 +3,10 @@
     "name": "Sinchi",
     "slug": "sinchi",
     "version": "0.1.0",
-    "scheme": "sinchi",
+    "scheme": [
+      "sinchi",
+      "com.googleusercontent.apps.961173851857-fm5mu0uipsp07j8l69i21i929tfm2rs8"
+    ],
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#08080A",
