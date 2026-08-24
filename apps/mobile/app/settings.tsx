@@ -19,6 +19,8 @@ import { Card, Divider, Dot, Eyebrow, Logo, Row, Stack, Text } from '../src/desi
 import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
+import { signOut } from '../src/data/auth';
+import { useSession } from '../src/data/session-hooks';
 import { resetState, setRole } from '../src/data/store';
 
 const ROLES: readonly { readonly value: AppRole; readonly label: string; readonly hint: string }[] =
@@ -33,6 +35,7 @@ export default function SettingsScreen() {
   const { colorBlindSafe, setColorBlindSafe } = useThemeContext();
   const role = useStore((state) => state.role);
   const user = useStore((state) => state.user);
+  const session = useSession();
 
   return (
     <Screen scroll>
@@ -149,6 +152,58 @@ export default function SettingsScreen() {
           hay api.
         </Text>
       </Stack>
+
+        {/* La sesion de demostracion no tenia salida: se entraba desde la
+            puerta de desarrollo y no habia forma de volver. Los datos falsos
+            —Mathyu Quispe y sus tres gimnasios— se veian como si vinieran del
+            servidor, que es exactamente la confusion que provocaba. */}
+        {session.status === 'demo' && (
+          <Stack gap={10} style={{ marginTop: 24 }}>
+            <Eyebrow color={theme.semaphore.warn}>Estás en modo demostración</Eyebrow>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              Los datos que ves son inventados y viven dentro de la app. Sal para
+              entrar con tu cuenta real.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void signOut({ forgetTotpSecret: false }).then(() => {
+                  resetState();
+                  router.replace('/login');
+                });
+              }}
+            >
+              <Card radius={theme.radii.lg} borderColor={theme.semaphore.warn}>
+                <Text variant="bodySmall" weight="semibold" color={theme.semaphore.warn}>
+                  Salir del modo demostración
+                </Text>
+              </Card>
+            </Pressable>
+          </Stack>
+        )}
+
+        {session.status === 'signed_in' && (
+          <Stack gap={10} style={{ marginTop: 24 }}>
+            <Eyebrow>Sesión</Eyebrow>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                // Se olvida el secreto del QR: si presta el telefono, el
+                // siguiente no debe poder generar su codigo.
+                void signOut({ forgetTotpSecret: true }).then(() => {
+                  resetState();
+                  router.replace('/login');
+                });
+              }}
+            >
+              <Card radius={theme.radii.lg}>
+                <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
+                  Cerrar sesión
+                </Text>
+              </Card>
+            </Pressable>
+          </Stack>
+        )}
 
       <Stack gap={10} style={{ marginTop: 24 }}>
         <Eyebrow>Datos de demostración</Eyebrow>

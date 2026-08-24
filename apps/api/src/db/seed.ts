@@ -102,12 +102,48 @@ export interface SeedOptions {
   readonly reset?: boolean;
   /** Silencia la salida. Lo usa la prueba de punta a punta. */
   readonly quiet?: boolean;
+  /**
+   * Salta la proteccion contra bases que no son de pruebas.
+   *
+   * Existe para poder demostrar el producto contra una base real cuando alguien
+   * lo decide a conciencia. Hay que escribirlo a mano: nunca es el valor por
+   * defecto y no hay bandera de linea de comandos que lo active por accidente.
+   */
+  readonly allowAnywhere?: boolean;
+}
+
+/**
+ * Se niega a sembrar donde no toca.
+ *
+ * Esta siembra **borra y rehace**, y sus datos son inventados: tres gimnasios
+ * que no existen y ocho personas que tampoco. Correrla contra la base buena deja
+ * a un gimnasio real conviviendo con datos falsos, y quien abre la app no tiene
+ * forma de distinguirlos — que es exactamente lo que paso.
+ *
+ * Se reconoce por el host: `localhost` y `127.0.0.1` son de pruebas; cualquier
+ * cosa remota, no. Es una heuristica tosca a proposito — errar hacia negarse
+ * cuesta escribir una bandera; errar hacia permitir cuesta la base.
+ */
+function assertNotProduction(url: string, allowAnywhere: boolean): void {
+  if (allowAnywhere) return;
+
+  const host = new URL(url).hostname;
+  const esLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local');
+  if (esLocal) return;
+
+  throw new Error(
+    `El seed de demostración borra y rehace, y "${host}" no parece una base de pruebas.
+` +
+      'Si de verdad quieres sembrar datos falsos ahí, pasa { allowAnywhere: true }.',
+  );
 }
 
 export async function runSeed(options: SeedOptions = {}): Promise<void> {
   const reset = options.reset ?? false;
   const log = options.quiet === true ? () => {} : console.log;
   const env = loadEnv();
+
+  assertNotProduction(env.DATABASE_URL, options.allowAnywhere ?? false);
   const pool = createPool(env.DATABASE_URL);
   const db = createDatabase(pool);
   const secrets = new SecretBox(env.ENCRYPTION_KEY);
