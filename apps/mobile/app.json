@@ -20,7 +20,8 @@
         "backgroundColor": "#08080A"
       },
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -37,6 +38,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f43ddb28-dc9f-47d3-a6e3-309ed32f7016"
+      }
+    },
+    "owner": "mathyus-team"
   }
 }
