@@ -76,6 +76,12 @@ Tres jobs independientes, cada uno condicionado a las rutas que cambiaron:
 | `api` | `apps/api/**` o `packages/**` | migra y corre 117 tests contra **Postgres real**, construye la imagen |
 | `mobile` | `apps/mobile/**` o `packages/**` | typecheck y genera el bundle |
 
+Y un job `resumen` que existe por un problema que apareció en el primer commit
+de este workflow: **un check en verde que no corrió ningún test se ve exactamente
+igual que uno que corrió todos.** El commit solo tocaba workflows y documentación,
+así que los tres jobs se saltaron y GitHub reportó éxito. Ahora el resumen dice en
+voz alta qué corrió y qué no, y cambiar `ci.yml` re-dispara los tres.
+
 Dos detalles que hacen que el job de `api` valga:
 
 - **El rol de Postgres no es superusuario.** El `postgres` por defecto tiene

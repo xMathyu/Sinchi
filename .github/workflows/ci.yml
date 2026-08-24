@@ -36,20 +36,29 @@ jobs:
         id: filter
         with:
           filters: |
+            # Las rutas comunes se repiten en los tres. Un anchor de YAML
+            # (`&base` / `*base`) mete la lista ANIDADA como un solo elemento en
+            # vez de expandirla, y paths-filter la recibe mal. Repetir es feo y
+            # es correcto.
             shared:
               - 'packages/**'
               - 'package-lock.json'
               - 'tsconfig.base.json'
+              # Cambiar el propio CI tiene que re-correr el CI: si no, se puede
+              # romper un pipeline y ver el check en verde.
+              - '.github/workflows/ci.yml'
             api:
               - 'apps/api/**'
               - 'packages/**'
               - 'package-lock.json'
               - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
             mobile:
               - 'apps/mobile/**'
               - 'packages/**'
               - 'package-lock.json'
               - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
 
   # ---------------------------------------------------------------------------
   # Dominio: las reglas puras
@@ -170,3 +179,46 @@ jobs:
         # pero sí comprueba que Metro resuelva todo el árbol de imports.
         working-directory: apps/mobile
         run: npx expo export --platform ios --output-dir /tmp/expo-ci
+
+  # ---------------------------------------------------------------------------
+  # Resumen
+  # ---------------------------------------------------------------------------
+  resumen:
+    # `always()` para que corra tambien cuando algo fallo o se salto.
+    if: always()
+    needs: [changes, shared, api, mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decir en voz alta que se ejecuto
+        # Existe por un problema real: con filtros por ruta, un check en verde que
+        # no corrio NINGUN test se ve exactamente igual que uno que corrio todos.
+        # Paso en el primer commit de este workflow. Este job deja el resumen
+        # escrito, y falla si algo fallo de verdad.
+        run: |
+          estado() {
+            case "$1" in
+              success)  echo "paso" ;;
+              failure)  echo "FALLO" ;;
+              skipped)  echo "no aplicaba (sin cambios en esas rutas)" ;;
+              *)        echo "$1" ;;
+            esac
+          }
+
+          {
+            echo "### CI"
+            echo ""
+            echo "| Area | Resultado |"
+            echo "|---|---|"
+            echo "| dominio (packages) | $(estado '${{ needs.shared.result }}') |"
+            echo "| api | $(estado '${{ needs.api.result }}') |"
+            echo "| app | $(estado '${{ needs.mobile.result }}') |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ needs.shared.result }}" = "failure" ]             || [ "${{ needs.api.result }}" = "failure" ]             || [ "${{ needs.mobile.result }}" = "failure" ]; then
+            echo "Algun area fallo."
+            exit 1
+          fi
+
+          if [ "${{ needs.shared.result }}" = "skipped" ]             && [ "${{ needs.api.result }}" = "skipped" ]             && [ "${{ needs.mobile.result }}" = "skipped" ]; then
+            echo "::notice::Ningun test corrio: este commit no toco codigo. El verde no dice nada sobre el codigo."
+          fi
