@@ -50,6 +50,35 @@ const schema = z.object({
 
   PORT: z.coerce.number().int().positive().default(3000),
 
+  /**
+   * Quien dispara los trabajos programados.
+   *
+   *   in_process  el cron vive dentro de la api (`@nestjs/schedule`). Para
+   *               desarrollo y para un servidor que siempre esta encendido.
+   *   external    los dispara alguien de afuera por HTTP (Cloud Scheduler).
+   *
+   * En Cloud Run con `min-instances=0` el contenedor se apaga cuando no hay
+   * trafico. A las 06:00, que es cuando toca refrescar la morosidad, no hay
+   * nadie usando la app: no hay contenedor, y el cron interno NO CORRE. El
+   * fallo es silencioso —nadie recibe un error— y solo se nota semanas despues,
+   * cuando el panel muestra morosos que ya pagaron.
+   */
+  SCHEDULER_MODE: z.enum(['in_process', 'external']).default('in_process'),
+
+  /**
+   * Secreto compartido con el planificador externo.
+   *
+   * Sin el, las rutas de `/jobs` quedan apagadas. Falla cerrado: es preferible
+   * un trabajo que no corre a un endpoint que cualquiera puede disparar.
+   */
+  JOBS_TOKEN: z.string().min(24).optional(),
+
+  /**
+   * Conexiones por instancia. Cloud Run escala horizontalmente, asi que el
+   * total contra Neon es este numero por el numero de instancias vivas.
+   */
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(8),
+
   DEFAULT_TIMEZONE: z.string().default('America/Lima'),
 
   /**
@@ -82,6 +111,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (parsed.data.NODE_ENV === 'production' && parsed.data.ALLOW_DEV_LOGIN) {
     throw new Error(
       'ALLOW_DEV_LOGIN no puede estar activo en producción: emite sesiones sin verificar identidad.',
+    );
+  }
+
+  if (parsed.data.SCHEDULER_MODE === 'external' && parsed.data.JOBS_TOKEN === undefined) {
+    throw new Error(
+      'SCHEDULER_MODE=external necesita JOBS_TOKEN: sin él las rutas de /jobs quedan ' +
+        'apagadas y el refresco de morosidad no correría nunca, sin avisar.',
     );
   }
 

@@ -15,7 +15,12 @@ export type Database = NodePgDatabase<typeof schema>;
 /** Handle transaccional: es lo que reciben los servicios. */
 export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
-export function buildPoolConfig(databaseUrl: string): PoolConfig {
+export interface PoolOptions {
+  /** Conexiones por instancia del proceso. */
+  readonly max?: number;
+}
+
+export function buildPoolConfig(databaseUrl: string, options: PoolOptions = {}): PoolConfig {
   const url = new URL(databaseUrl);
   const isNeon = url.hostname.endsWith('.neon.tech');
 
@@ -33,7 +38,10 @@ export function buildPoolConfig(databaseUrl: string): PoolConfig {
     // Neon exige TLS. `sslmode` en la cadena no siempre lo activa en node-postgres,
     // así que se pone explícito y con verificación de certificado.
     ssl: isNeon ? { rejectUnauthorized: true } : undefined,
-    max: 10,
+    // Por INSTANCIA. En Cloud Run el total contra Neon es esto por el numero de
+    // instancias vivas, asi que un valor alto aqui agota el limite del proyecto
+    // en cuanto la api escala.
+    max: options.max ?? 8,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     // Neon suspende el compute cuando no hay tráfico; la primera consulta
@@ -42,8 +50,8 @@ export function buildPoolConfig(databaseUrl: string): PoolConfig {
   };
 }
 
-export function createPool(databaseUrl: string): Pool {
-  const pool = new Pool(buildPoolConfig(databaseUrl));
+export function createPool(databaseUrl: string, options: PoolOptions = {}): Pool {
+  const pool = new Pool(buildPoolConfig(databaseUrl, options));
   pool.on('error', (error) => {
     // Un cliente ocioso que se cae no debe tumbar el proceso: el pool lo
     // reemplaza. Sin este handler, node lo trata como excepción no capturada.

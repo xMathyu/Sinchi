@@ -16,6 +16,7 @@ gimnasios a los que asiste.
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes), sobre datos de demostración |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (81 tests, 37 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
+| Despliegue | api en **Cloud Run** (us-east4), contra Neon. Falta autenticación real para que sirva |
 
 La app todavía corre contra un store en memoria (`apps/mobile/src/data`) que pasa
 por las mismas funciones puras que la api. Conectarla a la api real es cambiar ese
@@ -75,6 +76,7 @@ la cola offline.
   glosario.md        dominio en español ↔ código en inglés
   decisiones.md      qué se decidió y por qué; desviaciones del diseño
   api.md             rutas, autenticación, idempotencia, aislamiento por tenant
+  despliegue.md      Cloud Run: costo, el cron que no corre, cómo redesplegar
 ```
 
 Los comentarios del código citan la especificación por número ("MD 4.3", "MD 8.1").
@@ -153,8 +155,10 @@ Las cuatro reglas que sostienen el producto:
 2. **`apps/web` — panel del gimnasio.** La superficie que el cliente que paga usa
    a diario: alta de alumnos, planes, registro de pago manual, lista de morosos.
    La api ya expone todo lo que necesita.
-3. **Autenticación por SMS.** Hoy solo existe `/auth/dev-login`, que no verifica
-   nada y no arranca en producción.
+3. **Autenticación por SMS.** Es lo que bloquea el despliegue: la api está arriba
+   en Cloud Run pero nadie puede iniciar sesión, porque `/auth/dev-login` no
+   verifica nada y dejarlo abierto en una URL pública sería dejar la puerta
+   abierta. Ver [docs/despliegue.md](docs/despliegue.md).
 4. **Notificaciones.** El cron de morosidad ya detecta cuándo alguien entra en
    gracia o se suspende; falta el canal.
 5. **Culqi.** Antes de construir encima: sandbox completo (tokenizar, cobrar,

@@ -1,0 +1,29 @@
+# Lo que NO entra al contexto de build. Sin esto, Docker copia ~1 GB de
+# node_modules y el build tarda minutos en solo leer el contexto.
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.expo
+**/coverage
+**/*.tsbuildinfo
+
+# Secretos: jamas dentro de una imagen. Van por variables de entorno o por
+# Secret Manager, que es lo que permite rotarlos sin reconstruir.
+**/.env
+**/.env.*
+!**/.env.example
+
+.git
+.github
+**/.tmp
+
+# La app movil y su diseno no son parte de la api.
+apps/mobile
+apps/web
+Sinchi App design request
+
+# Documentacion: util para leer, peso muerto en la imagen.
+docs
+*.md
+!apps/api/README.md

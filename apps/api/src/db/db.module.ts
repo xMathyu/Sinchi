@@ -20,7 +20,10 @@ export const InjectDb = () => Inject(DATABASE);
   providers: [
     {
       provide: PG_POOL,
-      useFactory: (): Pool => createPool(loadEnv().DATABASE_URL),
+      useFactory: (): Pool => {
+        const env = loadEnv();
+        return createPool(env.DATABASE_URL, { max: env.DB_POOL_MAX });
+      },
     },
     {
       provide: DATABASE,

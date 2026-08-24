@@ -22,6 +22,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { eq, ne } from 'drizzle-orm';
 import { evaluateDelinquency, computeReceivable, type SubscriptionStatus } from '@sinchi/shared';
 import { InjectDb } from '../db/db.module';
+import { loadEnv } from '../config/env';
 import { schema, withTenant, withoutTenantIsolation, type Database } from '../db/client';
 import { toPlan, toSubscription, toTenant } from '../common/mappers';
 import { Clock } from '../common/clock';
@@ -53,6 +54,11 @@ export class RefreshDelinquencyJob {
    */
   @Cron('0 11 * * *', { name: 'refresh-delinquency' })
   async runScheduled(): Promise<void> {
+    // Con `external`, quien dispara es Cloud Scheduler contra `/v1/jobs/...`.
+    // El decorador se registra igual —no se puede condicionar— asi que la
+    // comprobacion va aqui.
+    if (loadEnv().SCHEDULER_MODE === 'external') return;
+
     const report = await this.run();
     this.logger.log(
       `Morosidad refrescada: ${report.reviewed} suscripciones en ${report.tenants} gimnasios, ` +

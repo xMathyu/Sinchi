@@ -25,8 +25,11 @@ async function bootstrap(): Promise<void> {
 
   configureApp(app, env);
 
-  await app.listen(env.PORT);
-  logger.log(`Sinchi api en http://localhost:${env.PORT}/v1`);
+  // `0.0.0.0` explicito: en un contenedor, escuchar solo en localhost hace que
+  // el balanceador no llegue nunca y el despliegue falle con "no responde".
+  await app.listen(env.PORT, '0.0.0.0');
+  logger.log(`Sinchi api escuchando en el puerto ${env.PORT}, prefijo /v1`);
+  logger.log(`planificador: ${env.SCHEDULER_MODE}`);
   if (env.ALLOW_DEV_LOGIN) {
     logger.warn('ALLOW_DEV_LOGIN activo: /v1/auth/dev-login emite sesiones sin verificar nada.');
   }
