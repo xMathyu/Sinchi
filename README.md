@@ -18,6 +18,7 @@ gimnasios a los que asiste.
 | `apps/web` — panel Next.js | **No empezado** |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
 | Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
+| CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo |
 
 La app todavía corre contra un store en memoria (`apps/mobile/src/data`) que pasa
 por las mismas funciones puras que la api. Conectarla a la api real es cambiar ese
@@ -78,6 +79,7 @@ la cola offline.
   decisiones.md      qué se decidió y por qué; desviaciones del diseño
   api.md             rutas, autenticación, idempotencia, aislamiento por tenant
   autenticacion.md   Google vía Firebase, vinculación con el padrón, PIN de turno
+  decisiones-repo.md un repo o varios; CI/CD sin secretos en GitHub
   despliegue.md      Cloud Run: costo, el cron que no corre, cómo redesplegar
 ```
 

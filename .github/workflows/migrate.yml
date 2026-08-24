@@ -1,0 +1,128 @@
+name: Migrar la base
+
+# Las migraciones NO van en el despliegue, y es a propósito.
+#
+# Encadenarlas al deploy suena cómodo hasta la primera migración mala: se aplica
+# sola, sin nadie mirando, sobre el ledger de pagos de gimnasios reales. Y un
+# `ALTER TABLE` no se deshace con un `git revert`.
+#
+# Así que se dispara a mano, con el SHA que se quiere aplicar a la vista, y con
+# un paso previo que enseña el SQL pendiente antes de tocar nada.
+#
+# Tampoco hay secretos en GitHub: la cadena del rol dueño vive en Secret Manager
+# y la lee `sinchi-deployer`, que llegó ahí por federación de identidad.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe "aplicar" para confirmar. Cualquier otra cosa solo muestra el SQL pendiente.'
+        required: true
+        default: 'revisar'
+
+concurrency:
+  # Dos migraciones a la vez sobre la misma base corrompen el esquema.
+  group: migrate
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: sinchi-a95913
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/961173851857/locations/global/workloadIdentityPools/github/providers/github
+          service_account: sinchi-deployer@sinchi-a95913.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - run: npm ci
+      - run: npm run build -w @sinchi/shared
+
+      - name: Ensayo contra un Postgres desechable
+        # Aplicar las migraciones primero sobre una base vacía cuesta veinte
+        # segundos y atrapa el error de sintaxis antes de que llegue a la real.
+        run: |
+          docker run -d --name pg-ensayo -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:17
+          for i in $(seq 1 30); do
+            docker exec pg-ensayo pg_isready -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec pg-ensayo psql -U postgres -c \
+            "create role sinchi_app login password 'app_local' nosuperuser nobypassrls"
+          docker exec pg-ensayo psql -U postgres -c \
+            "create database sinchi_ensayo owner sinchi_app"
+
+      - name: Aplicar en el ensayo
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://sinchi_app:app_local@localhost:5432/sinchi_ensayo
+          MIGRATION_DATABASE_URL: postgresql://sinchi_app:app_local@localhost:5432/sinchi_ensayo
+          JWT_SECRET: solo-para-el-ensayo-no-es-un-secreto-real-000000
+          ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: npm run db:migrate
+
+      - name: Qué falta por aplicar en producción
+        id: pendientes
+        run: |
+          URL=$(gcloud secrets versions access latest \
+            --secret=sinchi-migration-database-url --project="$PROJECT_ID")
+          APLICADAS=$(node -e "
+            const { Client } = require('pg');
+            const c = new Client({ connectionString: process.argv[1], ssl: { rejectUnauthorized: true } });
+            c.connect()
+              .then(() => c.query('select hash from drizzle.__drizzle_migrations order by created_at'))
+              .then((r) => { console.log(r.rows.length); return c.end(); })
+              .catch(() => { console.log('0'); return c.end().catch(() => {}); });
+          " "$URL")
+          TOTAL=$(node -e "
+            const j = require('./apps/api/drizzle/meta/_journal.json');
+            console.log(j.entries.length);
+          ")
+          echo "Aplicadas en producción: $APLICADAS de $TOTAL"
+          echo "pendientes=$((TOTAL - APLICADAS))" >> "$GITHUB_OUTPUT"
+
+          if [ "$APLICADAS" -lt "$TOTAL" ]; then
+            echo "--- SQL que se aplicaría ---"
+            node -e "
+              const j = require('./apps/api/drizzle/meta/_journal.json');
+              const fs = require('fs');
+              for (const e of j.entries.slice($APLICADAS)) {
+                console.log('=== ' + e.tag + ' ===');
+                console.log(fs.readFileSync('apps/api/drizzle/' + e.tag + '.sql', 'utf8'));
+              }
+            "
+          fi
+
+      - name: Aplicar en producción
+        if: ${{ github.event.inputs.confirmar == 'aplicar' }}
+        working-directory: apps/api
+        run: |
+          MIGRATION_DATABASE_URL=$(gcloud secrets versions access latest \
+            --secret=sinchi-migration-database-url --project="$PROJECT_ID")
+          export MIGRATION_DATABASE_URL
+          export DATABASE_URL="$MIGRATION_DATABASE_URL"
+          export JWT_SECRET="solo-para-migrar-no-firma-nada-0000000000000000"
+          export ENCRYPTION_KEY="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          npm run db:migrate
+
+      - name: Sin confirmar, no se aplicó nada
+        if: ${{ github.event.inputs.confirmar != 'aplicar' }}
+        run: |
+          echo "Solo se revisó. Quedan ${{ steps.pendientes.outputs.pendientes }} migración(es) pendiente(s)."
+          echo "Para aplicarlas, vuelve a lanzar el workflow escribiendo: aplicar"

@@ -1,0 +1,172 @@
+name: CI
+
+# Un solo repositorio, tres pipelines independientes.
+#
+# Es la respuesta a "¿el backend no debería tener su propio repo para tener
+# CI/CD?": no hace falta. Los filtros por ruta dan pipelines separados dentro del
+# monorepo, y así el dominio compartido sigue siendo UNA sola versión — que es lo
+# que impide que la app del alumno y la del staff digan cosas distintas del mismo
+# hecho. Ver docs/decisiones-repo.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Un push nuevo cancela el anterior de la misma rama: nadie necesita el
+  # resultado de un commit que ya quedó atrás.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Qué cambió
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      api: ${{ steps.filter.outputs.api }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'packages/**'
+              - 'package-lock.json'
+              - 'tsconfig.base.json'
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'package-lock.json'
+              - 'tsconfig.base.json'
+            mobile:
+              - 'apps/mobile/**'
+              - 'packages/**'
+              - 'package-lock.json'
+              - 'tsconfig.base.json'
+
+  # ---------------------------------------------------------------------------
+  # Dominio: las reglas puras
+  # ---------------------------------------------------------------------------
+  shared:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @sinchi/shared
+      - run: npm run typecheck -w @sinchi/shared
+      - run: npm test -w @sinchi/shared
+      - run: npm run build -w @sinchi/ui
+      - run: npm test -w @sinchi/ui
+
+  # ---------------------------------------------------------------------------
+  # API, con Postgres de verdad
+  # ---------------------------------------------------------------------------
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # La misma versión mayor que Neon (18). Las pruebas de esquema usan
+        # índices únicos parciales y políticas RLS: no da igual la versión.
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @sinchi/shared
+
+      - name: Preparar la base con un rol SIN BYPASSRLS
+        # Es el detalle que hace que la prueba valga: el usuario `postgres` es
+        # superusuario y se salta RLS, así que probar con él no probaría el
+        # aislamiento por tenant. Este rol reproduce a `sinchi_app` en Neon.
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c \
+            "create role sinchi_app login password 'app_local' nosuperuser nobypassrls"
+          psql -h localhost -U postgres -c \
+            "create database sinchi_test owner sinchi_app"
+
+      - name: Migrar
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://sinchi_app:app_local@localhost:5432/sinchi_test
+          MIGRATION_DATABASE_URL: postgresql://sinchi_app:app_local@localhost:5432/sinchi_test
+          JWT_SECRET: ${{ github.run_id }}-solo-para-ci-no-es-un-secreto-real-0000
+          ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: npm run db:migrate
+
+      - name: Typecheck
+        working-directory: apps/api
+        run: npx tsc --noEmit
+
+      - name: Tests, incluidos los de punta a punta
+        working-directory: apps/api
+        env:
+          TEST_DATABASE_URL: postgresql://sinchi_app:app_local@localhost:5432/sinchi_test
+          JWT_SECRET: ${{ github.run_id }}-solo-para-ci-no-es-un-secreto-real-0000
+          ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: npm test
+
+      - name: Compilar
+        working-directory: apps/api
+        run: npm run build
+
+      - name: La imagen se construye
+        # Barato y atrapa lo que el typecheck no ve: una ruta de import que solo
+        # falla en tiempo de ejecución, o un paquete del workspace que no se copió.
+        run: docker build -f apps/api/Dockerfile -t sinchi-api:ci .
+
+  # ---------------------------------------------------------------------------
+  # App
+  # ---------------------------------------------------------------------------
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @sinchi/shared
+      - run: npm run build -w @sinchi/ui
+
+      - name: Typecheck
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: El bundle se genera
+        # No compila binarios nativos —eso necesita Xcode y un runner de macOS—
+        # pero sí comprueba que Metro resuelva todo el árbol de imports.
+        working-directory: apps/mobile
+        run: npx expo export --platform ios --output-dir /tmp/expo-ci

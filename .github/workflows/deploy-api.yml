@@ -1,0 +1,135 @@
+name: Desplegar API
+
+# Despliegue de apps/api a Cloud Run.
+#
+# NO HAY SECRETOS EN GITHUB. La autenticación va por Workload Identity
+# Federation: GitHub emite un token OIDC firmado que dice "soy el repo
+# xMathyu/Sinchi", y GCP lo cambia por credenciales temporales. Los dos valores
+# de abajo son identificadores, no secretos — y aun así solo sirven desde este
+# repositorio, porque el proveedor lleva la condición
+# `assertion.repository == 'xMathyu/Sinchi'`.
+#
+# La alternativa era guardar la llave JSON de una cuenta de servicio en un secreto
+# de GitHub: una credencial de larga vida, con acceso de despliegue, que hay que
+# rotar a mano y que queda expuesta ante cualquier fuga del repositorio. Esto no
+# tiene nada que rotar.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # El dominio compartido también dispara: la api lo lleva compilado dentro
+      # de la imagen, así que un cambio en las reglas de cobro tiene que llegar.
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Nunca dos despliegues a la vez, y sin cancelar el que está a medio camino:
+  # abortar un `gcloud run deploy` deja el servicio en un estado ambiguo.
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: sinchi-a95913
+  REGION: us-east4
+  SERVICE: sinchi-api
+  IMAGE: us-east4-docker.pkg.dev/sinchi-a95913/sinchi/api
+  RUNTIME_SA: sinchi-api@sinchi-a95913.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # Es lo que permite pedir el token OIDC. Sin esto, la federación no
+      # funciona y el error es un 403 poco informativo.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          workload_identity_provider: projects/961173851857/locations/global/workloadIdentityPools/github/providers/github
+          service_account: sinchi-deployer@sinchi-a95913.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Autenticar Docker contra Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Construir
+        # `linux/amd64` explícito: el runner ya lo es, pero dejarlo escrito evita
+        # que el día que alguien construya desde una Mac con ARM salga una imagen
+        # que Cloud Run no puede ejecutar. Ese error aparece al desplegar, no al
+        # construir.
+        #
+        # Se etiqueta con el SHA además de `latest` para poder volver a una
+        # versión concreta sin reconstruir.
+        run: |
+          docker build --platform linux/amd64 \
+            -f apps/api/Dockerfile \
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:latest" .
+
+      - name: Subir
+        run: |
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Desplegar
+        # Solo la imagen. Variables de entorno, secretos y escalado se quedan como
+        # están: repetirlos aquí crea una segunda fuente de verdad que se separa
+        # de la real en el primer cambio hecho desde la consola.
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE:${{ github.sha }}" \
+            --quiet
+
+      - name: Comprobar que responde
+        # Un despliegue que arranca pero no llega a la base no está bien. Si esto
+        # falla, el paso siguiente revierte.
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" \
+            --project="$PROJECT_ID" --region="$REGION" --format='value(status.url)')
+          echo "Servicio en $URL"
+
+          for i in $(seq 1 12); do
+            BODY=$(curl -fsS --max-time 20 "$URL/v1/health/ready" || true)
+            if echo "$BODY" | grep -q '"database":"ok"'; then
+              echo "Listo: $BODY"
+              exit 0
+            fi
+            echo "Intento $i sin éxito, reintentando..."
+            sleep 10
+          done
+
+          echo "La revisión nueva no pasó la comprobación de salud."
+          exit 1
+
+      - name: Revertir si la comprobación falló
+        if: failure()
+        # Volver a la revisión anterior es preferible a dejar servido algo que no
+        # llega a la base. Se hace explícito porque Cloud Run no lo hace solo:
+        # una revisión que arranca se considera buena aunque no funcione.
+        run: |
+          PREV=$(gcloud run revisions list \
+            --project="$PROJECT_ID" --region="$REGION" --service="$SERVICE" \
+            --sort-by=~metadata.creationTimestamp \
+            --format='value(metadata.name)' --limit=2 | tail -1)
+
+          if [ -n "$PREV" ]; then
+            echo "Devolviendo el tráfico a $PREV"
+            gcloud run services update-traffic "$SERVICE" \
+              --project="$PROJECT_ID" --region="$REGION" \
+              --to-revisions="$PREV=100" --quiet
+          else
+            echo "No hay revisión anterior a la que volver."
+          fi
