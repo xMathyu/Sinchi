@@ -1,0 +1,25 @@
+{
+  "name": "sinchi",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Plataforma de gestion para gimnasios y escuelas de artes marciales",
+  "engines": {
+    "node": ">=24.8.0",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test:shared": "npm run test -w @sinchi/shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

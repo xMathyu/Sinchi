@@ -1,0 +1,256 @@
+/**
+ * Tipos del dominio. Espejo del esquema del MD 5.
+ *
+ * Nota de arquitectura: `User` vive FUERA del tenant. El objetivo del producto
+ * es que una persona tenga en una sola app todas sus suscripciones, de todos
+ * los gimnasios a los que asiste. Si la identidad naciera dentro del tenant,
+ * el mismo alumno quedaria duplicado en cada local y unificarlo despues seria
+ * una migracion dolorosa. `Membership` es la que vincula usuario global con
+ * cada gimnasio.
+ *
+ * Los identificadores del codigo van en ingles; el MD 5 los nombra en espanol.
+ * La correspondencia esta en `docs/glosario.md`.
+ */
+import type { Cents } from '../money/cents.js';
+import type { IsoWeekday, LocalTime, PlainDate } from '../time/plain-date.js';
+import type { IanaTimeZone } from '../time/zone.js';
+
+// ---------------------------------------------------------------------------
+// Identificadores
+// ---------------------------------------------------------------------------
+
+declare const idBrand: unique symbol;
+type Id<T extends string> = string & { readonly [idBrand]: T };
+
+export type UserId = Id<'user'>;
+export type TenantId = Id<'tenant'>;
+export type MembershipId = Id<'membership'>;
+export type PlanId = Id<'plan'>;
+export type SubscriptionId = Id<'subscription'>;
+export type ChargeId = Id<'charge'>;
+export type PaymentMethodId = Id<'payment_method'>;
+export type ClassScheduleId = Id<'class_schedule'>;
+export type AttendanceId = Id<'attendance'>;
+export type DeviceId = Id<'device'>;
+export type StaffId = Id<'staff'>;
+
+/** Cast explicito para bordes de I/O (HTTP, SQL). Deliberadamente feo. */
+export const asId = <T extends string>(raw: string): Id<T> => raw as Id<T>;
+
+// ---------------------------------------------------------------------------
+// Identidad global
+// ---------------------------------------------------------------------------
+
+export interface User {
+  readonly id: UserId;
+  readonly name: string;
+  /** DNI o carne de extranjeria. */
+  readonly documentId: string;
+  readonly email: string | null;
+  /** Unico en todo el sistema: es la llave con la que el alumno se reconoce. */
+  readonly phone: string;
+  readonly photoUrl: string | null;
+  readonly createdAt: Date;
+}
+
+export type MembershipStatus = 'active' | 'inactive';
+
+export interface Membership {
+  readonly id: MembershipId;
+  readonly userId: UserId;
+  readonly tenantId: TenantId;
+  /** Como lo llama el gimnasio en su padron (codigo de alumno, apodo). */
+  readonly internalAlias: string | null;
+  readonly status: MembershipStatus;
+}
+
+// ---------------------------------------------------------------------------
+// Tenant
+// ---------------------------------------------------------------------------
+
+export type SaasTier = 'up_to_60' | 'up_to_150' | 'unlimited';
+
+/**
+ * Politica de fecha de cobro.
+ *
+ * PENDIENTE (MD 8.1): el producto todavia no decide si se cobra el dia de
+ * inscripcion de cada alumno o un dia fijo del mes para todos. Ambas formas
+ * estan implementadas y la eleccion es configuracion del tenant, no una
+ * constante en el codigo.
+ */
+export type BillingDatePolicy =
+  | { readonly mode: 'anniversary' }
+  | { readonly mode: 'fixed_day'; readonly dayOfMonth: number };
+
+/**
+ * Que hacer cuando el alumno agota su cupo semanal.
+ *
+ * PENDIENTE (MD 8.2). El motor solo informa; la decision comercial es del
+ * gimnasio, y por eso vive en su configuracion.
+ */
+export type QuotaOverflowPolicy = 'block' | 'offer_drop_in';
+
+export interface Tenant {
+  readonly id: TenantId;
+  readonly name: string;
+  readonly taxId: string;
+  readonly slug: string;
+  readonly timezone: IanaTimeZone;
+  readonly saasTier: SaasTier;
+  readonly graceDays: number;
+  readonly billingDatePolicy: BillingDatePolicy;
+  readonly quotaOverflowPolicy: QuotaOverflowPolicy;
+  readonly dropInPriceCents: Cents | null;
+  readonly status: 'active' | 'suspended';
+}
+
+export type StaffRole = 'owner' | 'front_desk';
+
+export interface Staff {
+  readonly id: StaffId;
+  readonly tenantId: TenantId;
+  readonly userId: UserId;
+  readonly role: StaffRole;
+  readonly displayName: string;
+}
+
+/** Rol con el que la app se abre. El mismo binario sirve a los tres (MD 4.6). */
+export type AppRole = 'student' | 'front_desk' | 'owner';
+
+// ---------------------------------------------------------------------------
+// Planes
+// ---------------------------------------------------------------------------
+
+export type PlanType = 'unlimited' | 'sessions_per_week' | 'fixed_days';
+
+export interface Plan {
+  readonly id: PlanId;
+  readonly tenantId: TenantId;
+  readonly name: string;
+  readonly type: PlanType;
+  /** Solo para `sessions_per_week`. */
+  readonly sessionsPerWeek: number | null;
+  /**
+   * Dias en que el plan habilita entrenar. `null` = cualquier dia.
+   *
+   * Se combina con `sessionsPerWeek`: un plan de 2 sesiones restringido a
+   * lunes-viernes es `sessions_per_week` con `allowedDays` recortado (MD 4.3).
+   */
+  readonly allowedDays: readonly IsoWeekday[] | null;
+  readonly priceCents: Cents;
+  readonly active: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Suscripciones
+// ---------------------------------------------------------------------------
+
+export type SubscriptionStatus = 'active' | 'in_grace' | 'suspended' | 'canceled';
+
+export interface Subscription {
+  readonly id: SubscriptionId;
+  readonly tenantId: TenantId;
+  readonly membershipId: MembershipId;
+  readonly planId: PlanId;
+  /** Downgrade aceptado que se aplica en la proxima renovacion (MD 4.2). */
+  readonly pendingPlanId: PlanId | null;
+  readonly status: SubscriptionStatus;
+  readonly startDate: PlainDate;
+  /** Inicio del periodo vigente. Con `nextBillingDate` define el periodo. */
+  readonly periodStart: PlainDate;
+  readonly nextBillingDate: PlainDate;
+  readonly canceledAt: Date | null;
+}
+
+// ---------------------------------------------------------------------------
+// Metodos de pago
+// ---------------------------------------------------------------------------
+
+export type CardBrand = 'Visa' | 'Mastercard' | 'Amex' | 'Diners' | 'Unknown';
+
+export interface PaymentMethod {
+  readonly id: PaymentMethodId;
+  readonly tenantId: TenantId;
+  readonly membershipId: MembershipId;
+  readonly culqiCustomerId: string;
+  readonly culqiCardId: string;
+  readonly brand: CardBrand;
+  readonly last4: string;
+  readonly expMonth: number;
+  readonly expYear: number;
+  readonly active: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Ledger de cargos
+// ---------------------------------------------------------------------------
+
+export type ChargeType = 'renewal' | 'proration' | 'enrollment' | 'drop_in' | 'saas';
+export type ChargeStatus = 'pending' | 'succeeded' | 'failed';
+
+/**
+ * Buena parte de los alumnos paga en efectivo o Yape en mostrador. Un pago
+ * manual crea un cargo igual que uno con tarjeta y activa el mismo ciclo
+ * (MD 4.5): el ledger es la unica fuente de verdad del estado de pago, sin
+ * importar el metodo.
+ */
+export type PaymentRail = 'card' | 'yape' | 'cash' | 'bank_transfer';
+
+export interface Charge {
+  readonly id: ChargeId;
+  readonly tenantId: TenantId;
+  readonly subscriptionId: SubscriptionId | null;
+  readonly membershipId: MembershipId;
+  readonly type: ChargeType;
+  readonly amountCents: Cents;
+  readonly status: ChargeStatus;
+  readonly rail: PaymentRail;
+  readonly culqiChargeId: string | null;
+  readonly errorCode: string | null;
+  readonly attempt: number;
+  readonly periodStart: PlainDate | null;
+  readonly periodEnd: PlainDate | null;
+  /** Staff que registro el cobro manual. Es el hueco por donde entran favores. */
+  readonly recordedBy: StaffId | null;
+  readonly createdAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Horarios y asistencia
+// ---------------------------------------------------------------------------
+
+export interface ClassSchedule {
+  readonly id: ClassScheduleId;
+  readonly tenantId: TenantId;
+  readonly name: string;
+  readonly weekday: IsoWeekday;
+  readonly startTime: LocalTime;
+  readonly endTime: LocalTime;
+  readonly capacity: number | null;
+  readonly instructor: string | null;
+}
+
+export type CheckInMethod = 'qr' | 'manual';
+
+export interface Attendance {
+  readonly id: AttendanceId;
+  readonly tenantId: TenantId;
+  readonly membershipId: MembershipId;
+  readonly subscriptionId: SubscriptionId;
+  readonly classScheduleId: ClassScheduleId | null;
+  readonly checkedInAt: Date;
+  /** Clave `YYYY-Www`, desnormalizada para contar el cupo sin recalcular. */
+  readonly isoWeek: string;
+  readonly method: CheckInMethod;
+  readonly deviceId: DeviceId | null;
+  readonly recordedBy: StaffId | null;
+  /**
+   * `true` cuando el staff dejo pasar a alguien a quien la validacion rechazo.
+   *
+   * Se expone a proposito: es el rastro que permite ver, en el panel del dueno,
+   * cuantas excepciones hace cada recepcionista. Un flag de auditoria que solo
+   * vive en la base y nunca sale no audita nada.
+   */
+  readonly overrodeDenial: boolean;
+  readonly syncedAt: Date | null;
+}

@@ -1,0 +1,25 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+.tmp/
+
+# Expo regenera estas carpetas con `expo prebuild` desde app.json (ver README §Convenciones).
+# Versionarlas arrastra configuracion especifica de maquina.
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+
+.next/
+.nest/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

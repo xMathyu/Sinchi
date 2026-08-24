@@ -1,0 +1,290 @@
+/**
+ * A2 · Mi QR.
+ *
+ * El codigo se genera en el dispositivo y rota cada 30 segundos (MD 4.6). Lo
+ * que la pantalla dice del estado no lo decide la pantalla: sale de
+ * `validateCheckIn`, la misma funcion que correra el escaner del staff. Si el
+ * alumno lee "puedes entrar" aqui, en la puerta va a pasar.
+ */
+import { useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX } from '@sinchi/ui';
+import { semaphoreStyle } from '@sinchi/ui';
+import { Dot, Row, Stack, Text } from '../../src/design/primitives';
+import { PhotoCircle } from '../../src/design/photo';
+import { TintedScreen } from '../../src/design/screen';
+import { useTheme } from '../../src/design/theme';
+import { useAccessCode, useCheckInPreview, useStore, useWallet } from '../../src/data/hooks';
+import { setActiveTenant } from '../../src/data/store';
+import { initials, splitGymName } from '../../src/lib/format';
+
+export default function QrScreen() {
+  const theme = useTheme();
+  const user = useStore((state) => state.user);
+  const activeTenantId = useStore((state) => state.activeTenantId);
+  const wallet = useWallet();
+
+  const selected = useMemo(
+    () => wallet.find((entry) => entry.tenant.id === activeTenantId) ?? wallet[0],
+    [wallet, activeTenantId],
+  );
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const code = useAccessCode();
+  const preview = useCheckInPreview(selected?.membership.id ?? null);
+
+  if (selected === undefined || preview === null) {
+    return (
+      <TintedScreen gradient={theme.semaphoreGradient.warn} ink={theme.colors.inkOnLight}>
+        <Text variant="title" color={theme.colors.inkOnLight}>
+          Todavía no tienes membresías.
+        </Text>
+      </TintedScreen>
+    );
+  }
+
+  const semaphore = semaphoreStyle(theme, preview.message.level);
+  const ink = semaphore.ink;
+  const { brand } = splitGymName(selected.tenant.name);
+
+  return (
+    <TintedScreen gradient={semaphore.gradient} ink={ink} watermark="SINCHI">
+      <Row>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Gimnasio: ${selected.tenant.name}. Toca para cambiar.`}
+          onPress={() => setPickerOpen((open) => !open)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 9,
+            backgroundColor: 'rgba(10,10,11,0.10)',
+            paddingLeft: 8,
+            paddingRight: 12,
+            paddingVertical: 7,
+            borderRadius: theme.radii.pill,
+          }}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 7,
+              backgroundColor: 'rgba(10,10,11,0.75)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text variant="eyebrow" weight="extrabold" color="#FFFFFF" style={{ letterSpacing: 0 }}>
+              {initials(selected.tenant.name)}
+            </Text>
+          </View>
+          <Text variant="caption" weight="semibold" color={ink}>
+            {brand}
+          </Text>
+          <Text variant="eyebrow" color={ink} style={{ opacity: 0.55, letterSpacing: 0 }}>
+            ▾
+          </Text>
+        </Pressable>
+        <Text variant="eyebrow" weight="bold" color={ink} style={{ opacity: 0.5 }}>
+          Mi QR
+        </Text>
+      </Row>
+
+      {pickerOpen ? (
+        <Stack gap={6} style={{ marginTop: 10 }}>
+          {wallet.map((entry) => (
+            <Pressable
+              key={entry.membership.id}
+              accessibilityRole="button"
+              onPress={() => {
+                setActiveTenant(entry.tenant.id);
+                setPickerOpen(false);
+              }}
+              style={{
+                backgroundColor: 'rgba(10,10,11,0.10)',
+                borderRadius: theme.radii.md,
+                paddingHorizontal: 14,
+                paddingVertical: 11,
+              }}
+            >
+              <Text variant="bodySmall" weight="semibold" color={ink}>
+                {entry.tenant.name}
+              </Text>
+            </Pressable>
+          ))}
+        </Stack>
+      ) : null}
+
+      <Stack gap={18} style={{ marginTop: 26, alignItems: 'center' }}>
+        <PhotoCircle
+          name={user.name}
+          photoUrl={user.photoUrl}
+          size={112}
+          ringColor="rgba(255,255,255,0.55)"
+        />
+        <Stack gap={5} style={{ alignItems: 'center' }}>
+          <Text variant="display" weight="extrabold" color={ink} uppercase align="center">
+            {user.name}
+          </Text>
+          <Text variant="caption" weight="semibold" color={ink} style={{ opacity: 0.62 }}>
+            {selected.plan.name} · {selected.tenant.name}
+          </Text>
+        </Stack>
+        <Row
+          gap={9}
+          justify="center"
+          style={{
+            backgroundColor: 'rgba(10,10,11,0.92)',
+            paddingHorizontal: 18,
+            paddingVertical: 9,
+            borderRadius: theme.radii.pill,
+          }}
+        >
+          <Dot color={semaphore.color} size={9} />
+          <Text variant="bodySmall" weight="bold" color="#FFFFFF">
+            {studentTitle(preview.message.title, preview.result.allowed)}
+          </Text>
+        </Row>
+      </Stack>
+
+      <View
+        style={{
+          marginTop: 26,
+          backgroundColor: '#FFFFFF',
+          borderRadius: theme.radii.xxxl,
+          padding: 20,
+          alignItems: 'center',
+          gap: 14,
+        }}
+      >
+        <View style={{ width: 212, height: 212, alignItems: 'center', justifyContent: 'center' }}>
+          {code.ready ? (
+            <QRCode
+              value={code.payload}
+              size={212}
+              backgroundColor="#FFFFFF"
+              color={theme.colors.inkOnLight}
+              // Nivel Q: la etiqueta central tapa parte de la matriz y aun asi
+              // tiene que leerse a la primera con la camara de un celular viejo.
+              ecl="Q"
+            />
+          ) : (
+            <Text variant="caption" color="#7A7A83">
+              Preparando tu código…
+            </Text>
+          )}
+          <View
+            style={{
+              position: 'absolute',
+              width: 52,
+              height: 52,
+              borderRadius: theme.radii.md,
+              backgroundColor: '#FFFFFF',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Svg width={30} height={30} viewBox={LOGO_VIEWBOX}>
+              <Path d={LOGO_OUTLINE_PATH} fill={theme.colors.inkOnLight} />
+              <Path d={LOGO_BAR_PATH} stroke="#FFFFFF" strokeWidth={LOGO_BAR_WIDTH} />
+            </Svg>
+          </View>
+        </View>
+
+        <Row gap={12} justify="center">
+          <CountdownRing
+            secondsLeft={code.secondsLeft}
+            periodSeconds={code.periodSeconds}
+            color={semaphore.color}
+          />
+          <Stack gap={1}>
+            <Text variant="caption" weight="semibold" color={theme.colors.inkOnLight}>
+              Se renueva en {code.secondsLeft} s
+            </Text>
+            <Text variant="micro" color="#7A7A83">
+              Código firmado · funciona sin internet
+            </Text>
+          </Stack>
+        </Row>
+      </View>
+
+      <View
+        style={{
+          marginTop: 'auto',
+          backgroundColor: 'rgba(10,10,11,0.10)',
+          borderRadius: theme.radii.xl,
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          gap: 6,
+        }}
+      >
+        <Text variant="caption" weight="bold" color={ink}>
+          {preview.message.reason}
+        </Text>
+        {preview.message.detail === null ? null : (
+          <Text variant="captionSmall" color={ink} style={{ opacity: 0.62 }}>
+            {preview.message.detail}
+          </Text>
+        )}
+      </View>
+    </TintedScreen>
+  );
+}
+
+/**
+ * Los mensajes del dominio estan escritos para el staff ("Puede pasar"). Al
+ * alumno se le habla en segunda persona.
+ */
+function studentTitle(title: string, allowed: boolean): string {
+  const map: Readonly<Record<string, string>> = {
+    'Puede pasar': 'Puedes entrar',
+    'Le queda 1 sesión': 'Te queda 1 sesión',
+    'Puede pasar, pero debe': 'Entra, pero debes',
+    'Hoy no es su día': 'Hoy no es tu día',
+    'Acceso suspendido': 'Acceso suspendido',
+  };
+  return map[title] ?? (allowed ? title : title);
+}
+
+/** Anillo de cuenta regresiva de la ventana TOTP. */
+function CountdownRing({
+  secondsLeft,
+  periodSeconds,
+  color,
+}: {
+  readonly secondsLeft: number;
+  readonly periodSeconds: number;
+  readonly color: string;
+}) {
+  const theme = useTheme();
+  const radius = 34;
+  const circumference = 2 * Math.PI * radius;
+  const consumed = 1 - secondsLeft / periodSeconds;
+
+  return (
+    <View style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={38} height={38} viewBox="0 0 80 80" style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Circle cx={40} cy={40} r={radius} fill="none" stroke="rgba(10,10,11,0.12)" strokeWidth={7} />
+        <Circle
+          cx={40}
+          cy={40}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={7}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * consumed}
+        />
+      </Svg>
+      <View style={{ position: 'absolute' }}>
+        <Text variant="caption" weight="extrabold" color={theme.colors.inkOnLight}>
+          {secondsLeft}
+        </Text>
+      </View>
+    </View>
+  );
+}

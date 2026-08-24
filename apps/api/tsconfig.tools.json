@@ -1,0 +1,9 @@
+{
+  "//": "Solo para los archivos de herramientas que viven fuera de src/ (drizzle.config.ts). El tsconfig principal fija rootDir en src/ para que la salida compilada no gane un nivel de carpetas.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["drizzle.config.ts"]
+}

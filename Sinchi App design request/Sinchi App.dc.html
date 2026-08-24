@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+  body { margin:0; background:#08080A; -webkit-font-smoothing:antialiased; }
+  a { color:#F4F1EA; text-decoration:none; }
+  a:hover { color:#FFFFFF; }
+  @keyframes sinchiDrift { from { transform: rotate(-18deg) translate3d(0,0,0); } to { transform: rotate(-18deg) translate3d(-33.33%,-33.33%,0); } }
+  @keyframes sinchiBreathe { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+  @keyframes sinchiScan { 0% { top:8%; } 100% { top:88%; } }
+  @keyframes sinchiBlink { 0%,100% { opacity:.25; } 50% { opacity:1; } }
+</style>
+</helmet>
+
+<div style="padding:56px 56px 96px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;color:#F4F1EA;background:#08080A;min-height:100vh">
+<div style="{{ paletteStyle }}">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:48px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:28px;margin-bottom:12px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:64px;letter-spacing:-.045em;line-height:.9;text-transform:uppercase">Sinchi</div>
+      <div style="font-size:15px;color:#8A8A93;max-width:520px;text-wrap:pretty">Billetera de membresías del alumno + control de puerta para el staff. Flujo navegable, iOS-flavored, oscuro.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:340px">
+      <div style="font-family:Archivo,sans-serif;font-weight:700;font-size:11px;letter-spacing:.16em;color:#8A8A93;text-transform:uppercase">Semáforo de acceso — un solo lenguaje</div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;align-items:center;font-size:13px">
+        <span style="width:12px;height:12px;border-radius:50%;background:var(--ok,#2FD16D);box-shadow:0 0 12px var(--ok,#2FD16D)"></span><span style="color:#C9C9D1">Pasa. Suscripción al día y cupo disponible.</span>
+        <span style="width:12px;height:12px;border-radius:50%;background:var(--warn,#FFC94D);box-shadow:0 0 12px var(--warn,#FFC94D)"></span><span style="color:#C9C9D1">Pasa con aviso. Última sesión o periodo de gracia.</span>
+        <span style="width:12px;height:12px;border-radius:50%;background:var(--alert,#FF8A3D);box-shadow:0 0 12px var(--alert,#FF8A3D)"></span><span style="color:#C9C9D1">Hoy no. Está al día pero cupo agotado o día no permitido.</span>
+        <span style="width:12px;height:12px;border-radius:50%;background:var(--bad,#FF4D4D);box-shadow:0 0 12px var(--bad,#FF4D4D)"></span><span style="color:#C9C9D1">Bloqueado. Suscripción suspendida por mora.</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:16px;margin:56px 0 28px">
+    <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#08080A;background:#F4F1EA;padding:6px 12px;border-radius:6px">Modo alumno</div>
+    <div style="font-size:14px;color:#8A8A93">Fase 4 — su identidad, sus gimnasios, su QR</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:40px 44px;align-items:flex-start">
+
+    <div data-screen-label="A1 Billetera" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600;letter-spacing:-.01em">
+          <span>9:41</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5);position:relative"><span style="position:absolute;inset:2px;right:6px;border-radius:1px;background:#F4F1EA"></span></span></span>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:8px 20px 0;display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg viewBox="0 0 100 100" style="width:28px;height:28px;flex:none"><path d="M50 8 L88 92 L50 71 L12 92 Z" fill="#F4F1EA"></path><path d="M31 51 H69" stroke="#0E0E11" stroke-width="11"></path></svg>
+              <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:30px;letter-spacing:-.045em;text-transform:uppercase">Sinchi</div>
+            </div>
+            <div style="width:38px;height:38px;border-radius:50%;background:#26262C;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#C9C9D1">MQ</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:26px;font-weight:700;letter-spacing:-.03em">Mathyu Quispe</div>
+            <div style="font-size:13px;color:#8A8A93">DNI 71 448 902 · 3 membresías activas</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:.14em;color:#6E6E78;text-transform:uppercase">Tus gimnasios</div>
+
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-left:none;border-radius:18px;padding:16px 16px 16px 0;display:flex;gap:14px;position:relative;overflow:hidden">
+              <div style="width:4px;flex:none;background:var(--ok,#2FD16D)"></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                  <div style="font-size:17px;font-weight:650;letter-spacing:-.02em;line-height:1.2">Dojo Shotokan<br>Miraflores</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--ok,#2FD16D);background:rgba(47,209,109,.12);padding:5px 9px;border-radius:99px;white-space:nowrap">AL DÍA</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#8A8A93">
+                  <span>Plan Ilimitado · S/ 180</span><span>Cobra el 3 de sep</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-left:none;border-radius:18px;padding:16px 16px 16px 0;display:flex;gap:14px;overflow:hidden">
+              <div style="width:4px;flex:none;background:var(--warn,#FFC94D)"></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                  <div style="font-size:17px;font-weight:650;letter-spacing:-.02em;line-height:1.2">Nova BJJ<br>Surco</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--warn,#FFC94D);background:rgba(255,201,77,.12);padding:5px 9px;border-radius:99px;white-space:nowrap">1 SESIÓN</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#8A8A93">
+                  <span>3x semana · S/ 150</span><span>2 de 3 usadas</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#17171B;border:1px solid rgba(255,77,77,.22);border-left:none;border-radius:18px;padding:16px 16px 16px 0;display:flex;gap:14px;overflow:hidden">
+              <div style="width:4px;flex:none;background:var(--bad,#FF4D4D)"></div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                  <div style="font-size:17px;font-weight:650;letter-spacing:-.02em;line-height:1.2">Iron Muay Thai<br>Lince</div>
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--bad,#FF4D4D);background:rgba(255,77,77,.12);padding:5px 9px;border-radius:99px;white-space:nowrap">SUSPENDIDA</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#8A8A93">
+                  <span>2x semana · debes S/ 120</span><span style="color:var(--bad,#FF4D4D);font-weight:600">Pagar</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="border:1px dashed rgba(255,255,255,.14);border-radius:16px;padding:14px;display:flex;align-items:center;gap:12px">
+              <div style="width:30px;height:30px;border-radius:9px;background:#26262C;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:400;color:#8A8A93;line-height:1">+</div>
+              <div style="font-size:14px;color:#8A8A93">Unirme a otro gimnasio</div>
+            </div>
+            <div style="font-size:11.5px;color:#5A5A63;text-align:center;text-wrap:pretty">Una sola identidad Sinchi. Tu DNI y tu QR funcionan en cualquier local de la red.</div>
+          </div>
+        </div>
+        <div style="flex:none;height:86px;border-top:1px solid rgba(255,255,255,.07);background:rgba(14,14,17,.9);backdrop-filter:blur(20px);display:grid;grid-template-columns:repeat(4,1fr);padding:10px 8px 0">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#F4F1EA"><span style="width:20px;height:16px;border:2px solid currentColor;border-radius:4px"></span><span style="font-size:10.5px;font-weight:600">Billetera</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5A5A63"><span style="width:18px;height:18px;border:2px solid currentColor;border-radius:3px"></span><span style="font-size:10.5px;font-weight:500">Mi QR</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5A5A63"><span style="width:18px;height:18px;border:2px solid currentColor;border-radius:50%"></span><span style="font-size:10.5px;font-weight:500">Plan</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:5px;color:#5A5A63"><span style="width:18px;height:14px;border-top:2px solid currentColor;border-bottom:2px solid currentColor"></span><span style="font-size:10.5px;font-weight:500">Historial</span></div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A1 · Billetera</div>
+    </div>
+
+    <div data-screen-label="A2 Mi QR" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;inset:0;background:{{ qrWash }}"></div>
+        <div style="position:absolute;inset:-40%;overflow:hidden;opacity:.13">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);width:300%;height:300%;animation:sinchiDrift 26s linear infinite;transform-origin:center">
+            <sc-for list="{{ marks }}" as="m" hint-placeholder-count="24">
+              <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:52px;letter-spacing:-.03em;color:#000;padding:26px 18px;white-space:nowrap">SINCHI</div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="position:relative;height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600;color:#0A0A0B">
+          <span>9:41</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#0A0A0B"></span><span style="width:15px;height:11px;border-radius:2px;background:#0A0A0B"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(10,10,11,.5);position:relative"><span style="position:absolute;inset:2px;right:6px;border-radius:1px;background:#0A0A0B"></span></span></span>
+        </div>
+
+        <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:6px 22px 22px;color:#0A0A0B">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div style="display:flex;align-items:center;gap:9px;background:rgba(10,10,11,.1);padding:7px 12px 7px 8px;border-radius:99px">
+              <span style="width:22px;height:22px;border-radius:7px;background:rgba(10,10,11,.75);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center">DS</span>
+              <span style="font-size:13.5px;font-weight:650;letter-spacing:-.01em">{{ gymName }}</span>
+              <span style="font-size:10px;opacity:.55">▾</span>
+            </div>
+            <div style="font-size:12px;font-weight:700;letter-spacing:.1em;opacity:.5">MI QR</div>
+          </div>
+
+          <div style="margin-top:26px;display:flex;flex-direction:column;align-items:center;gap:18px">
+            <div style="position:relative;width:112px;height:112px">
+              <div style="position:absolute;inset:-6px;border-radius:50%;background:rgba(255,255,255,.55);animation:sinchiBreathe 3.2s ease-in-out infinite"></div>
+              <image-slot id="sinchi-foto-alumno" style="position:absolute;inset:0;width:112px;height:112px" shape="circle" placeholder="Foto del alumno"></image-slot>
+            </div>
+            <div style="text-align:center;display:flex;flex-direction:column;gap:5px">
+              <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:27px;letter-spacing:-.035em;line-height:1">MATHYU QUISPE</div>
+              <div style="font-size:13.5px;font-weight:600;opacity:.62">{{ qrPlan }}</div>
+            </div>
+            <div style="background:rgba(10,10,11,.92);color:#fff;padding:9px 18px;border-radius:99px;display:flex;align-items:center;gap:9px">
+              <span style="width:9px;height:9px;border-radius:50%;background:{{ qrColor }};box-shadow:0 0 10px {{ qrColor }}"></span>
+              <span style="font-family:Archivo,sans-serif;font-size:14px;font-weight:700;letter-spacing:-.01em">{{ qrTitulo }}</span>
+            </div>
+          </div>
+
+          <div style="margin-top:26px;background:#fff;border-radius:28px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:14px;box-shadow:0 24px 48px -16px rgba(0,0,0,.35)">
+            <div style="position:relative;width:212px;height:212px">
+              <div style="position:absolute;inset:0;background-image:url('{{ qrUrl }}');background-size:contain;background-repeat:no-repeat;background-position:center"></div>
+              <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:14px;background:#fff;display:flex;align-items:center;justify-content:center">
+                <svg viewBox="0 0 100 100" style="width:30px;height:30px"><path d="M50 8 L88 92 L50 71 L12 92 Z" fill="#0A0A0B"></path><path d="M31 51 H69" stroke="#fff" stroke-width="11"></path></svg>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="position:relative;width:38px;height:38px">
+                <svg viewBox="0 0 80 80" style="width:38px;height:38px;transform:rotate(-90deg)">
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(10,10,11,.12)" stroke-width="7"></circle>
+                  <circle cx="40" cy="40" r="34" fill="none" stroke="{{ qrColor }}" stroke-width="7" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="{{ qrDash }}"></circle>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#0A0A0B">{{ secs }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <div style="font-size:13.5px;font-weight:650;color:#0A0A0B">Se renueva en {{ secs }} s</div>
+                <div style="font-size:11.5px;color:#7A7A83">Código firmado · funciona sin internet</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;background:rgba(10,10,11,.1);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+            <div style="font-size:13.5px;font-weight:700;letter-spacing:-.01em">{{ qrMotivo }}</div>
+            <div style="font-size:12.5px;opacity:.62;text-wrap:pretty">{{ qrDetalle }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A2 · Mi QR — prueba los estados</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <sc-for list="{{ qrStates }}" as="s" hint-placeholder-count="6">
+            <button onClick="{{ s.pick }}" style="{{ s.pillStyle }}">{{ s.pill }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div data-screen-label="A3 Mi plan" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:20px;color:#8A8A93;line-height:1">‹</span>
+            <div style="font-size:20px;font-weight:700;letter-spacing:-.025em">Nova BJJ Surco</div>
+          </div>
+
+          <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">PLAN ACTUAL</div>
+                <div style="font-family:Archivo,sans-serif;font-size:26px;font-weight:800;letter-spacing:-.03em">3x por semana</div>
+              </div>
+              <div style="text-align:right"><div style="font-size:22px;font-weight:700;letter-spacing:-.02em">S/ 150</div><div style="font-size:11.5px;color:#6E6E78">al mes</div></div>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,.07)"></div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <div style="font-size:13.5px;color:#8A8A93">Sesiones de esta semana</div>
+                <div style="font-size:13.5px;font-weight:700"><span style="color:var(--warn,#FFC94D)">2</span> de 3</div>
+              </div>
+              <div style="display:flex;gap:7px">
+                <div style="flex:1;height:8px;border-radius:99px;background:var(--warn,#FFC94D)"></div>
+                <div style="flex:1;height:8px;border-radius:99px;background:var(--warn,#FFC94D)"></div>
+                <div style="flex:1;height:8px;border-radius:99px;background:rgba(255,255,255,.11)"></div>
+              </div>
+              <div style="font-size:11.5px;color:#6E6E78">El cupo se reinicia el lunes. Las sesiones no usadas no se acumulan.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:12px;font-weight:700;letter-spacing:.14em;color:#6E6E78">DÍAS PERMITIDOS</div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+              <div style="aspect-ratio:1;border-radius:12px;background:#22222A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#F4F1EA">L</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#22222A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#F4F1EA">M</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#22222A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#F4F1EA">M</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#22222A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#F4F1EA">J</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#22222A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#F4F1EA">V</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#131317;border:1px dashed rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#4A4A52">S</div>
+              <div style="aspect-ratio:1;border-radius:12px;background:#131317;border:1px dashed rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#4A4A52">D</div>
+            </div>
+          </div>
+
+          <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#8A8A93">Próximo cobro</span><span style="font-weight:650">12 sep · S/ 150</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#8A8A93">Tarjeta</span><span style="font-weight:650">Visa •••• 4021</span></div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:10px">
+            <div style="background:rgba(255,201,77,.09);border:1px solid rgba(255,201,77,.22);border-radius:16px;padding:13px 15px;font-size:12.5px;color:#D9CFA8;text-wrap:pretty">Subir a Ilimitado cobra hoy solo el diferencial prorrateado (S/ 14). Bajar a 2x se aplica en tu próxima renovación, sin devoluciones.</div>
+            <div style="background:#F4F1EA;color:#08080A;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:650;letter-spacing:-.01em">Cambiar de plan</div>
+            <div style="text-align:center;font-size:13.5px;color:#6E6E78">Cancelar suscripción</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A3 · Plan y cupo semanal</div>
+    </div>
+
+    <div data-screen-label="A4 Estado de pago" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px"><span style="font-size:20px;color:#8A8A93;line-height:1">‹</span><div style="font-size:20px;font-weight:700;letter-spacing:-.025em">Iron Muay Thai</div></div>
+
+          <div style="border-radius:22px;padding:20px;background:linear-gradient(180deg,rgba(255,201,77,.16),rgba(255,201,77,.05));border:1px solid rgba(255,201,77,.3);display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:11px;height:11px;border-radius:50%;background:var(--warn,#FFC94D);box-shadow:0 0 12px var(--warn,#FFC94D);animation:sinchiBlink 1.8s ease-in-out infinite"></span>
+              <div style="font-family:Archivo,sans-serif;font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--warn,#FFC94D)">PERIODO DE GRACIA</div>
+            </div>
+            <div style="font-family:Archivo,sans-serif;font-size:30px;font-weight:800;letter-spacing:-.035em;line-height:1.05">Te quedan 3 días<br>para entrenar</div>
+            <div style="font-size:13.5px;color:#C4BB98;text-wrap:pretty">El 24 de agosto tu acceso se suspende y el escáner de la puerta dejará de validar tu QR.</div>
+          </div>
+
+          <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline">
+              <div style="font-size:13px;color:#8A8A93">Deuda pendiente</div>
+              <div style="font-family:Archivo,sans-serif;font-size:30px;font-weight:800;letter-spacing:-.03em">S/ 120.00</div>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,.07)"></div>
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">INTENTOS DE COBRO</div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;gap:12px;align-items:flex-start">
+                <span style="width:8px;height:8px;border-radius:50%;background:var(--bad,#FF4D4D);margin-top:6px;flex:none"></span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600">16 ago · rechazado</div><div style="font-size:12.5px;color:#8A8A93">Fondos insuficientes · Visa •••• 4021</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start">
+                <span style="width:8px;height:8px;border-radius:50%;background:var(--bad,#FF4D4D);margin-top:6px;flex:none"></span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600">19 ago · rechazado</div><div style="font-size:12.5px;color:#8A8A93">Fondos insuficientes · reintento 2 de 3</div></div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:flex-start">
+                <span style="width:8px;height:8px;border-radius:50%;border:2px solid #4A4A52;margin-top:6px;flex:none;box-sizing:border-box"></span>
+                <div style="flex:1"><div style="font-size:14px;font-weight:600;color:#8A8A93">23 ago · último reintento</div><div style="font-size:12.5px;color:#6E6E78">Programado para hoy 20:00</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:10px">
+            <div style="background:#F4F1EA;color:#08080A;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:650">Pagar S/ 120 con Visa •••• 4021</div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1;background:#1E1E24;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14.5px;font-weight:600">Pagar con Yape</div>
+              <div style="flex:1;background:#1E1E24;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14.5px;font-weight:600">Otra tarjeta</div>
+            </div>
+            <div style="text-align:center;font-size:11.5px;color:#5A5A63;text-wrap:pretty">También puedes pagar en efectivo en mostrador; se reactiva al instante.</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A4 · Gracia y morosidad</div>
+    </div>
+
+    <div data-screen-label="A5 Registrar tarjeta" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:15px;color:#8A8A93">Cancelar</span><div style="font-size:16px;font-weight:650">Método de pago</div><span style="width:52px"></span></div>
+
+          <div style="height:186px;border-radius:22px;background:linear-gradient(145deg,#26262E,#131317);border:1px solid rgba(255,255,255,.09);padding:20px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+            <div style="position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:rgba(244,241,234,.04)"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div style="display:flex;align-items:center;gap:7px">
+                <svg viewBox="0 0 100 100" style="width:17px;height:17px;flex:none"><path d="M50 8 L88 92 L50 71 L12 92 Z" fill="rgba(244,241,234,.5)"></path><path d="M31 51 H69" stroke="#1B1B21" stroke-width="11"></path></svg>
+                <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:15px;letter-spacing:-.02em;color:rgba(244,241,234,.5)">SINCHI</div>
+              </div>
+              <div style="width:38px;height:26px;border-radius:5px;background:linear-gradient(135deg,#C9A227,#8A6D14)"></div>
+            </div>
+            <div style="font-family:Archivo,sans-serif;font-size:23px;font-weight:600;letter-spacing:.08em">4021 •••• •••• ••••</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div><div style="font-size:9.5px;letter-spacing:.14em;color:#6E6E78">TITULAR</div><div style="font-size:14px;font-weight:600;letter-spacing:.02em">MATHYU QUISPE</div></div>
+              <div><div style="font-size:9.5px;letter-spacing:.14em;color:#6E6E78">VENCE</div><div style="font-size:14px;font-weight:600">08/29</div></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.12em;color:#6E6E78">NÚMERO DE TARJETA</div>
+              <div style="font-size:17px;font-weight:600;letter-spacing:.03em">4021 5588 1204 <span style="color:#4A4A52">••••</span></div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1;background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:11px;font-weight:700;letter-spacing:.12em;color:#6E6E78">VENCE</div><div style="font-size:17px;font-weight:600">08 / 29</div></div>
+              <div style="flex:1;background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px"><div style="font-size:11px;font-weight:700;letter-spacing:.12em;color:#6E6E78">CVV</div><div style="font-size:17px;font-weight:600;color:#4A4A52">•••</div></div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:flex-start;background:rgba(47,209,109,.07);border:1px solid rgba(47,209,109,.2);border-radius:14px;padding:13px 15px">
+            <span style="width:16px;height:16px;border-radius:5px;background:var(--ok,#2FD16D);flex:none;margin-top:1px"></span>
+            <div style="font-size:12.5px;color:#A9C9B4;text-wrap:pretty">Tokenizado por <strong style="color:#D6EBDD;font-weight:700">Culqi</strong>. Sinchi guarda solo el token; el número nunca toca nuestros servidores.</div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:12px;color:#6E6E78;text-align:center;text-wrap:pretty">La mensualidad se cobra por adelantado cada 12 del mes, hora de Lima.</div>
+            <div style="background:#F4F1EA;color:#08080A;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:650">Guardar tarjeta</div>
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1;height:1px;background:rgba(255,255,255,.09)"></div><div style="font-size:11.5px;color:#5A5A63">o paga cada mes por</div><div style="flex:1;height:1px;background:rgba(255,255,255,.09)"></div></div>
+            <div style="background:#1E1E24;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14.5px;font-weight:600">Yape — solo pago único</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A5 · Tarjeta (Culqi)</div>
+    </div>
+
+    <div data-screen-label="A6 Historial" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:17px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="font-size:26px;font-weight:700;letter-spacing:-.03em">Historial</div>
+          <div style="display:flex;background:#1A1A1F;border-radius:12px;padding:3px">
+            <div style="flex:1;text-align:center;padding:8px;border-radius:9px;background:#33333B;font-size:14px;font-weight:600">Asistencia</div>
+            <div style="flex:1;text-align:center;padding:8px;font-size:14px;font-weight:500;color:#8A8A93">Pagos</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">SEMANA 34 · 2 DE 3</div>
+            <div style="background:#17171B;border-radius:16px;overflow:hidden">
+              <div style="padding:14px 16px;display:flex;gap:13px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="width:34px;height:34px;border-radius:11px;background:rgba(47,209,109,.14);color:var(--ok,#2FD16D);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">QR</span>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:600">Miércoles 20 · 19:00</div><div style="font-size:12.5px;color:#8A8A93">Nova BJJ · No-Gi con Prof. Ramos</div></div>
+              </div>
+              <div style="padding:14px 16px;display:flex;gap:13px;align-items:center">
+                <span style="width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.07);color:#8A8A93;font-size:9.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">MAN</span>
+                <div style="flex:1"><div style="font-size:14.5px;font-weight:600">Lunes 18 · 20:00</div><div style="font-size:12.5px;color:#8A8A93">Manual · registrado por Recepción Ana</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">SEMANA 33 · 3 DE 3</div>
+            <div style="background:#17171B;border-radius:16px;overflow:hidden">
+              <div style="padding:14px 16px;display:flex;gap:13px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)"><span style="width:34px;height:34px;border-radius:11px;background:rgba(47,209,109,.14);color:var(--ok,#2FD16D);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">QR</span><div style="flex:1"><div style="font-size:14.5px;font-weight:600">Viernes 15 · 19:00</div><div style="font-size:12.5px;color:#8A8A93">Nova BJJ · Sparring</div></div></div>
+              <div style="padding:14px 16px;display:flex;gap:13px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)"><span style="width:34px;height:34px;border-radius:11px;background:rgba(47,209,109,.14);color:var(--ok,#2FD16D);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">QR</span><div style="flex:1"><div style="font-size:14.5px;font-weight:600">Miércoles 13 · 19:00</div><div style="font-size:12.5px;color:#8A8A93">Nova BJJ · Fundamentos</div></div></div>
+              <div style="padding:14px 16px;display:flex;gap:13px;align-items:center"><span style="width:34px;height:34px;border-radius:11px;background:rgba(255,138,61,.14);color:var(--alert,#FF8A3D);font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">✕</span><div style="flex:1"><div style="font-size:14.5px;font-weight:600">Sábado 16 · 10:04</div><div style="font-size:12.5px;color:var(--alert,#FF8A3D)">Rechazado · cupo semanal agotado</div></div></div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px"><div style="background:#1E1E24;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14.5px;font-weight:600">Descargar estado de cuenta</div></div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">A6 · Historial</div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;align-items:baseline;gap:16px;margin:80px 0 28px">
+    <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#F4F1EA;background:#1F1F26;border:1px solid rgba(255,255,255,.12);padding:6px 12px;border-radius:6px">Modo staff</div>
+    <div style="font-size:14px;color:#8A8A93">Fase 3 — la puerta. Misma app, otro rol.</div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:40px 44px;align-items:flex-start">
+
+    <div data-screen-label="S1 Escáner" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0A0A0C;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;inset:0;background:radial-gradient(120% 80% at 50% 35%,#2A2A30,#0A0A0C 70%)"></div>
+        <div style="position:relative;height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:8px 20px 20px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;flex-direction:column"><div style="font-size:19px;font-weight:700;letter-spacing:-.025em">Puerta principal</div><div style="font-size:12.5px;color:#8A8A93">Dojo Shotokan · Ana (recepción)</div></div>
+            <div style="display:flex;align-items:center;gap:7px;background:rgba(255,138,61,.13);border:1px solid rgba(255,138,61,.28);padding:6px 11px;border-radius:99px"><span style="width:7px;height:7px;border-radius:50%;background:var(--alert,#FF8A3D);animation:sinchiBlink 1.6s ease-in-out infinite"></span><span style="font-size:11.5px;font-weight:700;color:var(--alert,#FF8A3D)">OFFLINE</span></div>
+          </div>
+
+          <div style="margin-top:22px;position:relative;aspect-ratio:1;border-radius:26px;background:linear-gradient(160deg,#1C1C22,#0E0E12);overflow:hidden;border:1px solid rgba(255,255,255,.07)">
+            <div style="position:absolute;left:8%;top:8%;width:46px;height:46px;border-left:4px solid #F4F1EA;border-top:4px solid #F4F1EA;border-radius:14px 0 0 0"></div>
+            <div style="position:absolute;right:8%;top:8%;width:46px;height:46px;border-right:4px solid #F4F1EA;border-top:4px solid #F4F1EA;border-radius:0 14px 0 0"></div>
+            <div style="position:absolute;left:8%;bottom:8%;width:46px;height:46px;border-left:4px solid #F4F1EA;border-bottom:4px solid #F4F1EA;border-radius:0 0 0 14px"></div>
+            <div style="position:absolute;right:8%;bottom:8%;width:46px;height:46px;border-right:4px solid #F4F1EA;border-bottom:4px solid #F4F1EA;border-radius:0 0 14px 0"></div>
+            <div style="position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--ok,#2FD16D),transparent);box-shadow:0 0 18px var(--ok,#2FD16D);animation:sinchiScan 2.4s ease-in-out infinite alternate"></div>
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13.5px;color:#6E6E78">Apunta al QR del alumno</div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">ÚLTIMOS MARCADOS</div>
+            <div style="display:flex;gap:11px;align-items:center;background:#141418;border-radius:14px;padding:11px 13px"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok,#2FD16D);flex:none"></span><div style="flex:1;font-size:14px;font-weight:600">Lucía Ferrer</div><div style="font-size:12.5px;color:#6E6E78">19:02</div></div>
+            <div style="display:flex;gap:11px;align-items:center;background:#141418;border-radius:14px;padding:11px 13px"><span style="width:8px;height:8px;border-radius:50%;background:var(--bad,#FF4D4D);flex:none"></span><div style="flex:1;font-size:14px;font-weight:600">Diego Salas <span style="color:#6E6E78;font-weight:500">· mora</span></div><div style="font-size:12.5px;color:#6E6E78">18:58</div></div>
+          </div>
+
+          <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+            <button onClick="{{ doScan }}" style="{{ scanBtnStyle }}">{{ scanBtnLabel }}</button>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1;background:#1A1A20;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14px;font-weight:600">Marcar manual</div>
+              <div style="flex:1;background:#1A1A20;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;text-align:center;font-size:14px;font-weight:600">Cobrar</div>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ showResult }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;background:{{ resWash }};display:flex;flex-direction:column;padding:54px 24px 24px;color:#0A0A0B">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:800;letter-spacing:.18em">VALIDACIÓN LOCAL</div>
+              <div style="font-size:12px;font-weight:700;opacity:.55">19:04</div>
+            </div>
+            <div style="margin-top:26px;display:flex;flex-direction:column;align-items:center;gap:16px">
+              <image-slot id="sinchi-foto-staff" style="width:180px;height:180px;box-shadow:0 0 0 6px rgba(255,255,255,.55)" shape="circle" placeholder="Foto del alumno"></image-slot>
+              <div style="text-align:center;display:flex;flex-direction:column;gap:6px">
+                <div style="font-family:Archivo,sans-serif;font-size:34px;font-weight:900;letter-spacing:-.04em;line-height:.98">{{ resNombre }}</div>
+                <div style="font-size:14px;font-weight:600;opacity:.6">{{ resPlan }}</div>
+              </div>
+            </div>
+            <div style="margin-top:26px;background:rgba(10,10,11,.92);color:#fff;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="width:12px;height:12px;border-radius:50%;background:{{ resColor }};box-shadow:0 0 14px {{ resColor }}"></span>
+                <div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.03em">{{ resTitulo }}</div>
+              </div>
+              <div style="font-size:14px;color:#B8B8C0;text-wrap:pretty">{{ resMotivo }}</div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px">
+              <div style="flex:1;background:rgba(10,10,11,.1);border:1px solid rgba(10,10,11,.16);border-radius:16px;padding:14px;text-align:center;font-size:14px;font-weight:650">{{ resAccion }}</div>
+            </div>
+            <div style="margin-top:auto"><button onClick="{{ nextScan }}" style="width:100%;background:#0A0A0B;color:#F4F1EA;border:none;border-radius:18px;padding:18px;font-size:16px;font-weight:650;font-family:inherit;cursor:pointer;letter-spacing:-.01em">Escanear siguiente</button></div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S1 · Escáner — pulsa para simular</div>
+    </div>
+
+    <div data-screen-label="S2 Validación OK" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;inset:0;background:linear-gradient(170deg,var(--ok,#2FD16D),#1FA855)"></div>
+        <div style="position:absolute;inset:-40%;overflow:hidden;opacity:.1">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);width:300%;height:300%;animation:sinchiDrift 26s linear infinite;transform-origin:center">
+            <sc-for list="{{ marks }}" as="m" hint-placeholder-count="24">
+              <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:52px;color:#000;padding:26px 18px;white-space:nowrap">PASA</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="position:relative;height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600;color:#08260F"><span>9:41</span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(8,38,15,.5)"></span></div>
+        <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:8px 24px 24px;color:#08260F">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:800;letter-spacing:.18em">ACCESO PERMITIDO</div><div style="font-size:12px;font-weight:700;opacity:.55">19:06 · QR</div></div>
+          <div style="margin-top:30px;display:flex;flex-direction:column;align-items:center;gap:18px">
+            <image-slot id="sinchi-foto-ok" style="width:200px;height:200px;box-shadow:0 0 0 7px rgba(255,255,255,.6)" shape="circle" placeholder="Foto del alumno"></image-slot>
+            <div style="text-align:center;display:flex;flex-direction:column;gap:6px">
+              <div style="font-family:Archivo,sans-serif;font-size:38px;font-weight:900;letter-spacing:-.045em;line-height:.95">LUCÍA<br>FERRER</div>
+              <div style="font-size:14.5px;font-weight:600;opacity:.62">Cinturón marrón · desde 2021</div>
+            </div>
+          </div>
+          <div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:rgba(8,38,15,.1);border-radius:18px;padding:15px"><div style="font-size:11px;font-weight:800;letter-spacing:.12em;opacity:.5">PLAN</div><div style="font-family:Archivo,sans-serif;font-size:20px;font-weight:800;letter-spacing:-.02em;margin-top:4px">Ilimitado</div></div>
+            <div style="background:rgba(8,38,15,.1);border-radius:18px;padding:15px"><div style="font-size:11px;font-weight:800;letter-spacing:.12em;opacity:.5">SESIONES</div><div style="font-family:Archivo,sans-serif;font-size:20px;font-weight:800;letter-spacing:-.02em;margin-top:4px">Sin límite</div></div>
+            <div style="grid-column:span 2;background:rgba(8,38,15,.1);border-radius:18px;padding:15px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;font-weight:800;letter-spacing:.12em;opacity:.5">SUSCRIPCIÓN</div><div style="font-size:16px;font-weight:650;margin-top:3px">Al día · renueva 3 sep</div></div><div style="width:42px;height:42px;border-radius:50%;background:#08260F;color:var(--ok,#2FD16D);display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800">✓</div></div>
+          </div>
+          <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:12px;text-align:center;opacity:.55">Validado en el dispositivo · se sincroniza al volver el wifi</div>
+            <div style="background:#08260F;color:#F4F1EA;border-radius:18px;padding:18px;text-align:center;font-size:16px;font-weight:650">Escanear siguiente</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S2 · Validación OK</div>
+    </div>
+
+    <div data-screen-label="S3 Rechazo" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="position:absolute;inset:0;background:linear-gradient(170deg,var(--bad,#FF4D4D),#C22B2B)"></div>
+        <div style="position:absolute;inset:-40%;overflow:hidden;opacity:.1">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);width:300%;height:300%;animation:sinchiDrift 26s linear infinite;transform-origin:center">
+            <sc-for list="{{ marks }}" as="m" hint-placeholder-count="24">
+              <div style="font-family:Archivo,sans-serif;font-weight:900;font-size:52px;color:#000;padding:26px 18px;white-space:nowrap">ALTO</div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="position:relative;height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600;color:#380B0B"><span>9:41</span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(56,11,11,.5)"></span></div>
+        <div style="position:relative;flex:1;display:flex;flex-direction:column;padding:8px 24px 24px;color:#380B0B">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:800;letter-spacing:.18em">ACCESO DENEGADO</div><div style="font-size:12px;font-weight:700;opacity:.55">19:08 · QR</div></div>
+          <div style="margin-top:26px;display:flex;align-items:center;gap:16px">
+            <image-slot id="sinchi-foto-no" style="width:96px;height:96px;box-shadow:0 0 0 5px rgba(255,255,255,.5)" shape="circle" placeholder="Foto"></image-slot>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-family:Archivo,sans-serif;font-size:28px;font-weight:900;letter-spacing:-.04em;line-height:.98">DIEGO<br>SALAS</div>
+              <div style="font-size:13.5px;font-weight:600;opacity:.62">2x semana · S/ 120</div>
+            </div>
+          </div>
+
+          <div style="margin-top:24px;background:#380B0B;color:#fff;border-radius:24px;padding:22px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-family:Archivo,sans-serif;font-size:11.5px;font-weight:800;letter-spacing:.16em;color:rgba(255,255,255,.5)">MOTIVO</div>
+            <div style="font-family:Archivo,sans-serif;font-size:30px;font-weight:900;letter-spacing:-.035em;line-height:1.02">Suscripción suspendida</div>
+            <div style="font-size:14px;color:#E8B9B9;text-wrap:pretty">Mora de 12 días. Venció el periodo de gracia el 11 de agosto. Último cobro rechazado: fondos insuficientes.</div>
+          </div>
+
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
+            <div style="background:rgba(56,11,11,.1);border-radius:16px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13.5px;font-weight:600">Deuda</span><span style="font-family:Archivo,sans-serif;font-size:19px;font-weight:800">S/ 120.00</span></div>
+            <div style="background:rgba(56,11,11,.1);border-radius:16px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13.5px;font-weight:600">Último pago</span><span style="font-size:14px;font-weight:650">11 jul · efectivo</span></div>
+          </div>
+
+          <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:12px;text-align:center;opacity:.6;text-wrap:pretty">Cobra aquí y el acceso se libera al instante, sin salir de esta pantalla.</div>
+            <div style="background:#380B0B;color:#F4F1EA;border-radius:18px;padding:18px;text-align:center;font-size:16px;font-weight:650">Cobrar S/ 120 en mostrador</div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:1;background:rgba(56,11,11,.12);border-radius:16px;padding:14px;text-align:center;font-size:14px;font-weight:600">Dejar pasar hoy</div>
+              <div style="flex:1;background:rgba(56,11,11,.12);border-radius:16px;padding:14px;text-align:center;font-size:14px;font-weight:600">Siguiente</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S3 · Rechazo con motivo</div>
+    </div>
+
+    <div data-screen-label="S4 Marcado manual" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:20px;font-weight:700;letter-spacing:-.025em">Marcar manual</div><span style="font-size:15px;color:#8A8A93">Cerrar</span></div>
+          <div style="background:#1A1A1F;border-radius:13px;padding:12px 15px;display:flex;align-items:center;gap:10px"><span style="width:15px;height:15px;border:2px solid #6E6E78;border-radius:50%;flex:none"></span><span style="font-size:16px;color:#F4F1EA">sal</span><span style="width:2px;height:19px;background:var(--ok,#2FD16D)"></span></div>
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">3 COINCIDENCIAS</div>
+
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="background:#17171B;border:1px solid rgba(47,209,109,.28);border-radius:16px;padding:13px;display:flex;gap:12px;align-items:center">
+              <span style="width:44px;height:44px;border-radius:14px;background:#2A2A32;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#B8B8C0;flex:none">DS</span>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:650">Diego Salas</div><div style="font-size:12.5px;color:#8A8A93">DNI 70 112 334 · 2x semana</div></div>
+              <span style="font-size:11px;font-weight:700;color:var(--bad,#FF4D4D);background:rgba(255,77,77,.12);padding:5px 9px;border-radius:99px">MORA</span>
+            </div>
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:13px;display:flex;gap:12px;align-items:center">
+              <span style="width:44px;height:44px;border-radius:14px;background:#2A2A32;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#B8B8C0;flex:none">RS</span>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:650">Rosa Salazar</div><div style="font-size:12.5px;color:#8A8A93">DNI 45 908 771 · Ilimitado</div></div>
+              <span style="font-size:11px;font-weight:700;color:var(--ok,#2FD16D);background:rgba(47,209,109,.12);padding:5px 9px;border-radius:99px">AL DÍA</span>
+            </div>
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:13px;display:flex;gap:12px;align-items:center">
+              <span style="width:44px;height:44px;border-radius:14px;background:#2A2A32;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#B8B8C0;flex:none">JS</span>
+              <div style="flex:1"><div style="font-size:15.5px;font-weight:650">Julio Salcedo</div><div style="font-size:12.5px;color:#8A8A93">DNI 09 887 210 · 3x semana</div></div>
+              <span style="font-size:11px;font-weight:700;color:var(--alert,#FF8A3D);background:rgba(255,138,61,.12);padding:5px 9px;border-radius:99px">3 / 3</span>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;background:rgba(255,138,61,.08);border:1px solid rgba(255,138,61,.22);border-radius:16px;padding:14px;display:flex;gap:11px;align-items:flex-start">
+            <span style="width:17px;height:17px;border-radius:50%;background:var(--alert,#FF8A3D);color:#2B1305;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px">!</span>
+            <div style="font-size:12.5px;color:#D3B394;text-wrap:pretty">El marcado manual queda auditado con tu nombre y la hora. Úsalo solo cuando el alumno no tenga su celular.</div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#8A8A93"><span>Registrado por</span><span style="color:#F4F1EA;font-weight:600">Ana Ríos · recepción</span></div>
+            <div style="background:#F4F1EA;color:#08080A;border-radius:16px;padding:16px;text-align:center;font-size:16px;font-weight:650">Marcar asistencia de Diego</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S4 · Marcado manual</div>
+    </div>
+
+    <div data-screen-label="S5 Cobrar en mostrador" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:15px;height:11px;border-radius:2px;background:#F4F1EA"></span><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:20px;font-weight:700;letter-spacing:-.025em">Registrar pago</div><span style="font-size:15px;color:#8A8A93">Cancelar</span></div>
+
+          <div style="background:#17171B;border-radius:18px;padding:14px;display:flex;gap:12px;align-items:center">
+            <span style="width:44px;height:44px;border-radius:14px;background:#2A2A32;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#B8B8C0">DS</span>
+            <div style="flex:1"><div style="font-size:15.5px;font-weight:650">Diego Salas</div><div style="font-size:12.5px;color:var(--bad,#FF4D4D)">Suspendido · mora de 12 días</div></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">CONCEPTO</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span style="background:#F4F1EA;color:#08080A;border-radius:99px;padding:9px 15px;font-size:13.5px;font-weight:650">Mensualidad</span>
+              <span style="background:#1E1E24;border:1px solid rgba(255,255,255,.09);border-radius:99px;padding:9px 15px;font-size:13.5px;font-weight:550;color:#B8B8C0">Matrícula</span>
+              <span style="background:#1E1E24;border:1px solid rgba(255,255,255,.09);border-radius:99px;padding:9px 15px;font-size:13.5px;font-weight:550;color:#B8B8C0">Clase suelta</span>
+            </div>
+          </div>
+
+          <div style="background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:6px;align-items:center">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">MONTO</div>
+            <div style="font-family:Archivo,sans-serif;font-size:52px;font-weight:900;letter-spacing:-.045em;line-height:1">S/ 120</div>
+            <div style="font-size:12.5px;color:#8A8A93">Periodo 23 ago — 22 sep</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">MÉTODO</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div style="background:#22222A;border:1.5px solid var(--ok,#2FD16D);border-radius:14px;padding:14px 8px;text-align:center;font-size:13.5px;font-weight:650">Efectivo</div>
+              <div style="background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px 8px;text-align:center;font-size:13.5px;font-weight:550;color:#B8B8C0">Yape</div>
+              <div style="background:#17171B;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:14px 8px;text-align:center;font-size:13.5px;font-weight:550;color:#B8B8C0">Transf.</div>
+            </div>
+          </div>
+
+          <div style="background:rgba(47,209,109,.07);border:1px solid rgba(47,209,109,.2);border-radius:16px;padding:14px;font-size:12.5px;color:#A9C9B4;text-wrap:pretty">Al confirmar: se crea el cargo en el ledger, se extiende la renovación al 22 de septiembre y el QR de Diego vuelve a validar de inmediato.</div>
+
+          <div style="margin-top:auto;padding-bottom:18px"><div style="background:var(--ok,#2FD16D);color:#08260F;border-radius:16px;padding:17px;text-align:center;font-size:16.5px;font-weight:700">Confirmar S/ 120 en efectivo</div></div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S5 · Cobro en mostrador</div>
+    </div>
+
+    <div data-screen-label="S6 Offline y sincronización" style="display:flex;flex-direction:column;gap:14px;width:390px">
+      <div style="width:390px;height:844px;border-radius:46px;background:#0E0E11;box-shadow:0 0 0 10px #111114,0 0 0 12px #33333A,0 40px 80px -24px rgba(0,0,0,.85);overflow:hidden;position:relative;display:flex;flex-direction:column">
+        <div style="height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 8px;font-size:15px;font-weight:600"><span>9:41</span><span style="display:flex;align-items:center;gap:6px"><span style="width:24px;height:12px;border-radius:3px;border:1.5px solid rgba(244,241,234,.5)"></span></span></div>
+        <div style="flex:1;padding:10px 20px 0;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="font-size:20px;font-weight:700;letter-spacing:-.025em">Estado del dispositivo</div>
+
+          <div style="border-radius:22px;padding:20px;background:linear-gradient(180deg,rgba(255,138,61,.16),rgba(255,138,61,.05));border:1px solid rgba(255,138,61,.3);display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:11px;height:11px;border-radius:50%;background:var(--alert,#FF8A3D);box-shadow:0 0 12px var(--alert,#FF8A3D);animation:sinchiBlink 1.6s ease-in-out infinite"></span><div style="font-family:Archivo,sans-serif;font-size:12.5px;font-weight:800;letter-spacing:.14em;color:var(--alert,#FF8A3D)">SIN CONEXIÓN — 14 MIN</div></div>
+            <div style="font-family:Archivo,sans-serif;font-size:27px;font-weight:800;letter-spacing:-.035em;line-height:1.05">La puerta sigue<br>funcionando</div>
+            <div style="font-size:13.5px;color:#C9A98C;text-wrap:pretty">Validando contra el padrón en caché. Los marcados se suben solos cuando vuelva el wifi.</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:16px"><div style="font-family:Archivo,sans-serif;font-size:34px;font-weight:900;letter-spacing:-.04em">17</div><div style="font-size:12.5px;color:#8A8A93;margin-top:2px">marcados en cola</div></div>
+            <div style="background:#17171B;border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:16px"><div style="font-family:Archivo,sans-serif;font-size:34px;font-weight:900;letter-spacing:-.04em">2</div><div style="font-size:12.5px;color:#8A8A93;margin-top:2px">cobros en efectivo</div></div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">CACHÉ LOCAL</div><div style="font-size:12px;color:#6E6E78">actualizado 18:52</div></div>
+            <div style="background:#17171B;border-radius:16px;overflow:hidden">
+              <div style="padding:13px 16px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px"><span style="color:#8A8A93">Padrón de alumnos</span><span style="font-weight:650">148</span></div>
+              <div style="padding:13px 16px;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px"><span style="color:#8A8A93">Suscripciones vigentes</span><span style="font-weight:650">121</span></div>
+              <div style="padding:13px 16px;display:flex;justify-content:space-between;font-size:14px"><span style="color:#8A8A93">Horarios de hoy</span><span style="font-weight:650">6 clases</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:11.5px;font-weight:700;letter-spacing:.14em;color:#6E6E78">EN COLA</div>
+            <div style="background:#17171B;border-radius:16px;overflow:hidden">
+              <div style="padding:12px 16px;display:flex;gap:11px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)"><span style="width:7px;height:7px;border-radius:50%;background:var(--alert,#FF8A3D);flex:none"></span><div style="flex:1;font-size:14px;font-weight:600">Lucía Ferrer · asistencia</div><span style="font-size:12.5px;color:#6E6E78">19:02</span></div>
+              <div style="padding:12px 16px;display:flex;gap:11px;align-items:center"><span style="width:7px;height:7px;border-radius:50%;background:var(--alert,#FF8A3D);flex:none"></span><div style="flex:1;font-size:14px;font-weight:600">Diego Salas · S/ 120 efectivo</div><span style="font-size:12.5px;color:#6E6E78">19:09</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding-bottom:18px;display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:11.5px;color:#5A5A63;text-align:center;text-wrap:pretty">El servidor reconcilia al sincronizar y tiene la última palabra.</div>
+            <div style="background:#1E1E24;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:15px;text-align:center;font-size:15px;font-weight:600">Reintentar sincronización</div>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#6E6E78">S6 · Offline y cola</div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;qrWindow&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:30,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:10,&quot;max&quot;:120,&quot;unit&quot;:&quot;s&quot;,&quot;section&quot;:&quot;Comportamiento&quot;},&quot;colorBlindSafe&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Accesibilidad&quot;},&quot;gymName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Dojo Shotokan&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Contenido&quot;}}">
+class Component extends DCLogic {
+  state = { qrIdx: 0, secs: 30, scan: 'idle', res: 0 };
+
+  componentDidMount() {
+    this.t = setInterval(() => {
+      const win = this.props.qrWindow ?? 30;
+      this.setState(s => ({ secs: s.secs <= 1 ? win : s.secs - 1 }));
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.t); clearTimeout(this.st); }
+
+  palette() {
+    return this.props.colorBlindSafe
+      ? { ok: '#3CB4FF', warn: '#FFD166', alert: '#C58BFF', bad: '#FF3B6B' }
+      : { ok: '#2FD16D', warn: '#FFC94D', alert: '#FF8A3D', bad: '#FF4D4D' };
+  }
+
+  qrMatrix() {
+    const N = 25, m = [];
+    let seed = 20260823;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    for (let y = 0; y < N; y++) { m.push([]); for (let x = 0; x < N; x++) m[y].push(rnd() > 0.52 ? 1 : 0); }
+    const finder = (ox, oy) => {
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+        const edge = x === 0 || y === 0 || x === 6 || y === 6;
+        const core = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+        m[oy + y][ox + x] = edge || core ? 1 : 0;
+      }
+      for (let y = -1; y < 8; y++) for (let x = -1; x < 8; x++) {
+        const py = oy + y, px = ox + x;
+        if (py < 0 || px < 0 || py >= N || px >= N) continue;
+        if (x === -1 || y === -1 || x === 7 || y === 7) m[py][px] = 0;
+      }
+    };
+    finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+    return m;
+  }
+
+  qrDataUrl() {
+    if (this._qr) return this._qr;
+    const m = this.qrMatrix(), N = m.length;
+    let rects = '';
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (m[y][x]) rects += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + N + ' ' + N + '" shape-rendering="crispEdges"><g fill="#0A0A0B">' + rects + '</g></svg>';
+    this._qr = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    return this._qr;
+  }
+
+  states() {
+    const p = this.palette();
+    return [
+      { pill: 'Al día', color: p.ok, wash: 'linear-gradient(170deg,' + p.ok + ',#1FA855)', titulo: 'Puedes entrar', plan: 'Plan Ilimitado · Dojo Shotokan', motivo: 'Suscripción al día', detalle: 'Sin límite de sesiones. Próximo cobro el 3 de septiembre, S/ 180.' },
+      { pill: 'Última sesión', color: p.warn, wash: 'linear-gradient(170deg,#FFD873,#E5A81F)', titulo: 'Te queda 1 sesión', plan: 'Plan 3x semana · Nova BJJ', motivo: '2 de 3 sesiones usadas esta semana', detalle: 'El cupo se reinicia el lunes. Las sesiones no usadas no se acumulan.' },
+      { pill: 'En gracia', color: p.warn, wash: 'linear-gradient(170deg,#FFCF6B,#D99524)', titulo: 'Entra, pero debes S/ 120', plan: 'Plan 2x semana · Iron Muay Thai', motivo: 'Periodo de gracia · 3 días restantes', detalle: 'El 24 de agosto tu acceso se suspende. Puedes pagar en mostrador o con tarjeta.' },
+      { pill: 'Cupo agotado', color: p.alert, wash: 'linear-gradient(170deg,#FF9E5C,#E0641C)', titulo: 'Cupo semanal agotado', plan: 'Plan 2x semana · Nova BJJ', motivo: '2 de 2 sesiones usadas', detalle: 'Estás al día, pero ya no te quedan sesiones. Vuelve el lunes o compra una clase suelta.' },
+      { pill: 'Día no permitido', color: p.alert, wash: 'linear-gradient(170deg,#FFA875,#D9631F)', titulo: 'Hoy no es tu día', plan: 'Plan días fijos · Dojo Shotokan', motivo: 'Tus días son lunes y miércoles', detalle: 'Hoy es sábado. Habla con recepción si quieres cambiar tus días fijos.' },
+      { pill: 'Suspendido', color: p.bad, wash: 'linear-gradient(170deg,#FF6161,#C22B2B)', titulo: 'Acceso suspendido', plan: 'Plan 2x semana · Iron Muay Thai', motivo: 'Mora de 12 días · S/ 120', detalle: 'Venció el periodo de gracia. Paga desde la app o en mostrador para reactivar hoy mismo.' }
+    ];
+  }
+
+  results() {
+    const p = this.palette();
+    return [
+      { wash: 'linear-gradient(170deg,' + p.ok + ',#1FA855)', color: p.ok, nombre: 'LUCÍA FERRER', plan: 'Ilimitado · al día', titulo: 'Puede pasar', motivo: 'Suscripción al día. Renueva el 3 de septiembre.', accion: 'Confirmar ingreso' },
+      { wash: 'linear-gradient(170deg,#FF9E5C,#E0641C)', color: p.alert, nombre: 'JULIO SALCEDO', plan: '3x semana · al día', titulo: 'Cupo agotado', motivo: '3 de 3 sesiones usadas esta semana. Se reinicia el lunes.', accion: 'Cobrar clase suelta S/ 25' },
+      { wash: 'linear-gradient(170deg,#FF6161,#C22B2B)', color: p.bad, nombre: 'DIEGO SALAS', plan: '2x semana · suspendido', titulo: 'Mora de 12 días', motivo: 'Venció la gracia el 11 de agosto. Deuda S/ 120.', accion: 'Cobrar en mostrador' }
+    ];
+  }
+
+  renderVals() {
+    const p = this.palette();
+    const win = this.props.qrWindow ?? 30;
+    const sts = this.states();
+    const st = sts[this.state.qrIdx] || sts[0];
+    const res = this.results()[this.state.res % 3];
+    const scanning = this.state.scan === 'scanning';
+
+    const pill = (active, color) => 'font-family:Archivo,sans-serif;font-size:12px;font-weight:700;letter-spacing:.02em;padding:8px 13px;border-radius:99px;cursor:pointer;font-feature-settings:normal;border:1px solid ' +
+      (active ? color : 'rgba(255,255,255,.12)') + ';background:' + (active ? color : 'transparent') + ';color:' + (active ? '#0A0A0B' : '#8A8A93');
+
+    return {
+      paletteStyle: '--ok:' + p.ok + ';--warn:' + p.warn + ';--alert:' + p.alert + ';--bad:' + p.bad,
+      marks: Array.from({ length: 24 }, (_, i) => ({ i })),
+      gymName: this.props.gymName ?? 'Dojo Shotokan',
+      secs: this.state.secs,
+      qrDash: (213.6 * (1 - this.state.secs / win)).toFixed(1),
+      qrUrl: this.qrDataUrl(),
+      qrColor: st.color, qrWash: st.wash, qrTitulo: st.titulo, qrPlan: st.plan, qrMotivo: st.motivo, qrDetalle: st.detalle,
+      qrStates: sts.map((s, i) => ({
+        pill: s.pill,
+        pillStyle: pill(i === this.state.qrIdx, s.color),
+        pick: () => this.setState({ qrIdx: i })
+      })),
+      showResult: this.state.scan === 'result',
+      resWash: res.wash, resColor: res.color, resNombre: res.nombre, resPlan: res.plan, resTitulo: res.titulo, resMotivo: res.motivo, resAccion: res.accion,
+      scanBtnLabel: scanning ? 'Leyendo QR…' : 'Simular escaneo',
+      scanBtnStyle: 'width:100%;border:none;border-radius:18px;padding:18px;font-size:16.5px;font-weight:700;font-family:inherit;cursor:pointer;letter-spacing:-.01em;background:' +
+        (scanning ? '#33333B' : '#F4F1EA') + ';color:' + (scanning ? '#8A8A93' : '#08080A'),
+      doScan: () => {
+        if (this.state.scan !== 'idle') return;
+        this.setState({ scan: 'scanning' });
+        this.st = setTimeout(() => this.setState({ scan: 'result' }), 1100);
+      },
+      nextScan: () => this.setState(s => ({ scan: 'idle', res: (s.res + 1) % 3 }))
+    };
+  }
+}
+</script>
+</body>
+</html>

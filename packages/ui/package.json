@@ -1,0 +1,32 @@
+{
+  "name": "@sinchi/ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design system iOS-flavored: tokens de color, tipografia, radios y espaciado",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && node scripts/stamp-cjs.mjs",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.build.cjs.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinchi/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@sinchi/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tipos, DTOs y reglas puras del dominio (prorrateo, cupos, fechas, dunning)",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && node scripts/stamp-cjs.mjs",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.build.cjs.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

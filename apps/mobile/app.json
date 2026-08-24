@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Sinchi",
+    "slug": "sinchi",
+    "version": "0.1.0",
+    "scheme": "sinchi",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#08080A",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "pe.sinchi.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta."
+      }
+    },
+    "android": {
+      "package": "pe.sinchi.app",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": { "backgroundColor": "#08080A" },
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta."
+        }
+      ]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
