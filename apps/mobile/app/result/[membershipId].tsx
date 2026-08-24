@@ -117,9 +117,14 @@ export default function ScanResultScreen() {
               accentColor={semaphore.ink}
               accentInk={theme.colors.ink}
               onPress={() =>
+                // El patron de la ruta va literal y el id dentro de `params`.
+                // Interpolarlo en `pathname` compila con las rutas tipadas hasta
+                // que expo-router regenera los tipos, y entonces falla — que es
+                // exactamente lo que paso.
                 router.replace({
-                  pathname: `/charge/${entry.view.membership.id}`,
+                  pathname: '/charge/[membershipId]',
                   params: {
+                    membershipId: entry.view.membership.id,
                     type: result.reason.code === 'quota_exhausted' ? 'drop_in' : 'renewal',
                   },
                 })
