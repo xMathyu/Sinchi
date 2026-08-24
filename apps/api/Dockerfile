@@ -43,6 +43,13 @@ RUN npm run build --workspace @sinchi/shared \
 # `vitest` y `drizzle-kit` no tienen nada que hacer en la imagen final.
 RUN npm ci --workspace @sinchi/api --include-workspace-root --omit=dev --ignore-scripts
 
+# `npm ci` no siempre hoistea todo a la raiz: cuando dos workspaces piden
+# versiones incompatibles del mismo paquete, npm deja la del workspace anidada en
+# `apps/api/node_modules`. Se crean vacios para que el COPY de la etapa final no
+# dependa de que npm haya decidido anidar algo — si no existe, `COPY` aborta el
+# build.
+RUN mkdir -p /repo/apps/api/node_modules /repo/packages/shared/node_modules
+
 # ---------------------------------------------------------------------------
 # 3. Imagen final
 # ---------------------------------------------------------------------------
@@ -62,7 +69,9 @@ COPY --from=build /repo/node_modules node_modules
 COPY --from=build /repo/package.json package.json
 COPY --from=build /repo/packages/shared/package.json packages/shared/package.json
 COPY --from=build /repo/packages/shared/dist packages/shared/dist
+COPY --from=build /repo/packages/shared/node_modules packages/shared/node_modules
 COPY --from=build /repo/apps/api/package.json apps/api/package.json
+COPY --from=build /repo/apps/api/node_modules apps/api/node_modules
 COPY --from=build /repo/apps/api/dist apps/api/dist
 # Las migraciones viajan con la imagen: así se pueden aplicar desde el mismo
 # artefacto que está desplegado, sin depender de una copia del repo.

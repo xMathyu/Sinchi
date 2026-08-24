@@ -1,30 +1,40 @@
 /**
  * Entrar.
  *
- * Una sola pantalla para los tres roles, con dos caminos: el alumno entra con
- * Google; el staff abre turno en el equipo del mostrador. La app no pregunta
- * "¿eres alumno o staff?" — el rol lo decide la api al mirar si esa persona tiene
- * fila en `staff`, no una elección del usuario.
+ * Una sola pantalla para los tres roles. El alumno entra con correo o con Google;
+ * el staff abre turno en el equipo del mostrador. La app no pregunta "¿eres
+ * alumno o staff?" — el rol lo decide la api al mirar si esa persona tiene fila
+ * en `staff`, no una elección del usuario.
+ *
+ * Los dos caminos del alumno terminan en el mismo sitio: un ID token de Firebase
+ * que la api cambia por una sesión de Sinchi. El correo va primero porque es el
+ * que siempre funciona — Google depende de un cliente OAuth que solo se crea
+ * desde la consola de Firebase.
  *
  * El acceso del staff va abajo y discreto a propósito: en un dojo de 60 alumnos
  * hay 60 personas que entran con Google y una que abre turno.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../src/design/screen';
-import { Button, Card, Eyebrow, Logo, Stack, Text } from '../src/design/primitives';
+import { Button, Card, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
-import { completeGoogleSignIn } from '../src/data/auth';
-import { googleAuthReady, googleClientIds } from '../src/data/firebase';
+import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
+import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
 
 export default function LoginScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  // "Entrar" o "crear cuenta": el mismo formulario, porque los campos son los
+  // mismos y separarlos en dos pantallas solo añade un paso.
+  const [creating, setCreating] = useState(false);
 
   // `useIdTokenAuthRequest` en vez del flujo de código: devuelve directamente el
   // ID token de Google, que es lo único que necesita el intercambio con Firebase.
@@ -76,7 +86,25 @@ export default function LoginScreen() {
     };
   }, [response, router]);
 
-  const configured = googleAuthReady();
+  const submitEmail = (): void => {
+    setError(null);
+    setWorking(true);
+    void completeEmailSignIn(email, password, creating ? 'signUp' : 'signIn').then((outcome) => {
+      setWorking(false);
+      if (outcome.kind === 'error') {
+        setError(outcome.message);
+        return;
+      }
+      if (outcome.kind === 'needs_link') router.replace('/link');
+      // Si quedo dentro, el layout raiz enruta solo al ver la sesion.
+    });
+  };
+
+  const googleReady = googleAuthReady();
+  const emailReady = firebaseConfigured();
+  // Seis es el minimo que exige Firebase; comprobarlo aqui evita un viaje de red
+  // para que el servidor conteste lo mismo.
+  const canSubmit = email.trim().length > 3 && password.length >= 6 && !working;
 
   return (
     <Screen scroll>
@@ -97,27 +125,110 @@ export default function LoginScreen() {
           </Card>
         )}
 
-        {configured ? (
-          <Button
-            label={working ? 'Entrando…' : 'Entrar con Google'}
-            disabled={request === null || working}
-            onPress={() => {
-              setError(null);
-              setWorking(true);
-              void promptAsync();
-            }}
-          />
+        {emailReady ? (
+          <Stack gap={14}>
+            <Stack gap={4}>
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                Correo
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                keyboardType="email-address"
+                editable={!working}
+                placeholder="tucorreo@ejemplo.com"
+                placeholderTextColor={theme.colors.textDisabled}
+                style={{
+                  color: theme.colors.ink,
+                  fontSize: 16,
+                  paddingVertical: 10,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.hairline,
+                }}
+              />
+            </Stack>
+
+            <Stack gap={4}>
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                Contraseña
+              </Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={creating ? 'new-password' : 'current-password'}
+                editable={!working}
+                placeholder={creating ? 'Al menos 6 caracteres' : '••••••••'}
+                placeholderTextColor={theme.colors.textDisabled}
+                onSubmitEditing={() => {
+                  if (canSubmit) submitEmail();
+                }}
+                returnKeyType="go"
+                style={{
+                  color: theme.colors.ink,
+                  fontSize: 16,
+                  paddingVertical: 10,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.colors.hairline,
+                }}
+              />
+            </Stack>
+
+            <Button
+              label={
+                working ? (creating ? 'Creando…' : 'Entrando…') : creating ? 'Crear cuenta' : 'Entrar'
+              }
+              disabled={!canSubmit}
+              onPress={submitEmail}
+            />
+
+            <Pressable
+              onPress={() => {
+                setError(null);
+                setCreating((previous) => !previous);
+              }}
+              hitSlop={12}
+              disabled={working}
+            >
+              <Text variant="caption" color={theme.colors.textSecondary} align="center">
+                {creating ? '¿Ya tienes cuenta? Entra' : '¿Primera vez? Crea tu cuenta'}
+              </Text>
+            </Pressable>
+          </Stack>
         ) : (
-          // Mejor decirlo que mostrar un botón que abre el navegador y falla con
-          // un error de Google que nadie va a entender.
-          <Card accent={theme.semaphore.warn} borderColor={withAlpha(theme.semaphore.warn, 0.28)}>
+          <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
             <Eyebrow>Falta configurar</Eyebrow>
             <Text variant="bodySmall" style={{ marginTop: 6 }}>
-              El acceso con Google no está habilitado en este build: falta activar
-              el proveedor en la consola de Firebase y publicar los ids de cliente
-              OAuth.
+              Este build no trae configuración de Firebase (ver `.env.example`).
             </Text>
           </Card>
+        )}
+
+        {googleReady && (
+          <Stack gap={12}>
+            <Row align="center" gap={10}>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+              <Text variant="captionSmall" color={theme.colors.textFaint}>
+                o
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+            </Row>
+            <Button
+              label="Entrar con Google"
+              variant="secondary"
+              disabled={request === null || working}
+              onPress={() => {
+                setError(null);
+                setWorking(true);
+                void promptAsync();
+              }}
+            />
+          </Stack>
         )}
 
         {working && <ActivityIndicator color={theme.colors.ink} />}

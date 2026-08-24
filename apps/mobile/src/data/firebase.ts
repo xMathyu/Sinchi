@@ -139,3 +139,96 @@ function humanize(code: string): string {
   }
   return 'No se pudo entrar con Google. Intenta de nuevo.';
 }
+
+/**
+ * Entra con correo y contraseña, o crea la cuenta.
+ *
+ * Existe porque el proveedor de Google necesita un cliente OAuth y ese solo se
+ * crea desde la consola de Firebase: no hay api pública para crearlo, y la que
+ * había —la de IAP— Google la apagó en marzo de 2026. El proveedor de correo,
+ * en cambio, se activa por api y funciona el mismo día.
+ *
+ * A la api de Sinchi le da igual cuál de los dos se use: `/auth/google` verifica
+ * un **ID token de Firebase** y no exige que venga de un proveedor concreto —
+ * captura `sign_in_provider` para auditoría, pero no lo comprueba. Así que el
+ * camino del correo entra por la misma puerta, emite el mismo código de
+ * vinculación y lo confirma la misma recepcionista.
+ */
+export async function signInWithEmail(
+  email: string,
+  password: string,
+  mode: 'signIn' | 'signUp',
+): Promise<string> {
+  if (!firebaseConfigured()) {
+    throw new FirebaseAuthError(
+      'Falta la configuración de Firebase en este build (ver .env.example).',
+      'SIN_CONFIGURAR',
+    );
+  }
+
+  // Dos endpoints distintos, misma forma de petición y de respuesta.
+  const endpoint = mode === 'signUp' ? 'accounts:signUp' : 'accounts:signInWithPassword';
+  const url =
+    `https://identitytoolkit.googleapis.com/v1/${endpoint}?key=` +
+    encodeURIComponent(firebaseConfig.apiKey);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password,
+        returnSecureToken: true,
+      }),
+    });
+  } catch {
+    throw new FirebaseAuthError('No hay conexión. Revisa tu internet e intenta de nuevo.', null);
+  }
+
+  const payload = (await response.json()) as SignInWithIdpResponse;
+
+  if (!response.ok || typeof payload.idToken !== 'string') {
+    const raw = payload.error?.message ?? 'ERROR_DESCONOCIDO';
+    throw new FirebaseAuthError(humanizeEmail(raw), raw);
+  }
+
+  return payload.idToken;
+}
+
+/**
+ * Traduce los códigos del proveedor de correo.
+ *
+ * `INVALID_LOGIN_CREDENTIALS` es el que devuelve Firebase desde 2023 en vez de
+ * distinguir "no existe" de "contraseña incorrecta": es deliberado, porque
+ * distinguirlos le confirma a quien prueba qué correos están registrados.
+ */
+function humanizeEmail(code: string): string {
+  if (code.startsWith('EMAIL_EXISTS')) {
+    return 'Ese correo ya tiene cuenta. Entra en vez de crear una.';
+  }
+  if (
+    code.startsWith('INVALID_LOGIN_CREDENTIALS') ||
+    code.startsWith('INVALID_PASSWORD') ||
+    code.startsWith('EMAIL_NOT_FOUND')
+  ) {
+    return 'Correo o contraseña incorrectos.';
+  }
+  if (code.startsWith('WEAK_PASSWORD')) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+  if (code.startsWith('INVALID_EMAIL')) {
+    return 'Ese correo no parece válido.';
+  }
+  if (code.startsWith('TOO_MANY_ATTEMPTS')) {
+    return 'Demasiados intentos. Espera unos minutos.';
+  }
+  if (code.startsWith('OPERATION_NOT_ALLOWED')) {
+    return 'El acceso con correo no está habilitado. Avísale al gimnasio.';
+  }
+  if (code.startsWith('USER_DISABLED')) {
+    return 'Esta cuenta está deshabilitada.';
+  }
+  return 'No se pudo entrar. Intenta de nuevo.';
+}

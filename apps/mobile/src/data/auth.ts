@@ -16,7 +16,7 @@
  */
 import * as SecureStore from 'expo-secure-store';
 import { openShift, signInWithGoogle, staffForDevice, type ShiftCandidate } from './api';
-import { exchangeGoogleToken } from './firebase';
+import { exchangeGoogleToken, signInWithEmail } from './firebase';
 import {
   clearSession,
   forgetDeviceToken,
@@ -41,26 +41,56 @@ export type SignInOutcome =
  */
 export async function completeGoogleSignIn(googleIdToken: string): Promise<SignInOutcome> {
   try {
-    const firebaseIdToken = await exchangeGoogleToken(googleIdToken);
-    const result = await signInWithGoogle(firebaseIdToken);
-
-    if (!result.linked) {
-      setUnlinked(result.claim.code, new Date(result.claim.expiresAt).getTime());
-      return { kind: 'needs_link', code: result.claim.code };
-    }
-
-    await saveSession({
-      accessToken: result.accessToken,
-      expiresInSeconds: result.expiresInSeconds,
-      role: result.role,
-      userId: result.userId,
-      tenantId: result.tenantId,
-    });
-
-    return { kind: 'signed_in' };
+    return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken));
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }
+}
+
+/**
+ * Entra con correo y contraseña.
+ *
+ * Mismo destino que Google y por el mismo camino: lo único que cambia es cómo se
+ * consigue el ID token de Firebase. De ahí para adelante —vinculación, código de
+ * 6 dígitos, sesión de Sinchi— no hay ninguna diferencia, y por eso las dos
+ * funciones comparten `exchangeForSinchiSession` en vez de repetir el flujo.
+ */
+export async function completeEmailSignIn(
+  email: string,
+  password: string,
+  mode: 'signIn' | 'signUp',
+): Promise<SignInOutcome> {
+  try {
+    return await exchangeForSinchiSession(await signInWithEmail(email, password, mode));
+  } catch (error) {
+    return { kind: 'error', message: describe(error) };
+  }
+}
+
+/**
+ * De un ID token de Firebase a una sesión de Sinchi.
+ *
+ * Aquí es donde aparece el cuarto resultado: `linked: false` no es un error sino
+ * el estado normal de quien acaba de instalar la app, y se resuelve con el código
+ * que confirma recepción.
+ */
+async function exchangeForSinchiSession(firebaseIdToken: string): Promise<SignInOutcome> {
+  const result = await signInWithGoogle(firebaseIdToken);
+
+  if (!result.linked) {
+    setUnlinked(result.claim.code, new Date(result.claim.expiresAt).getTime());
+    return { kind: 'needs_link', code: result.claim.code };
+  }
+
+  await saveSession({
+    accessToken: result.accessToken,
+    expiresInSeconds: result.expiresInSeconds,
+    role: result.role,
+    userId: result.userId,
+    tenantId: result.tenantId,
+  });
+
+  return { kind: 'signed_in' };
 }
 
 // ---------------------------------------------------------------------------

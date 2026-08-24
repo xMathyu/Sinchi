@@ -84,13 +84,20 @@ export class FirebaseVerifier {
    * en días de gracia, la diferencia no importa.
    */
   async verify(idToken: string): Promise<VerifiedIdentity> {
+    // `getApp()` va FUERA del try a proposito. Dentro, su excepcion de
+    // configuracion —"falta FIREBASE_PROJECT_ID"— la capturaba el catch de
+    // abajo y salia como "sesion invalida o expirada": el mensaje acusaba al
+    // token de un fallo del despliegue, que es justo lo que la inicializacion
+    // perezosa pretendia evitar.
+    const app = this.getApp();
+
     let decoded: DecodedIdToken;
     try {
-      decoded = await getAuth(this.getApp()).verifyIdToken(idToken, false);
+      decoded = await getAuth(app).verifyIdToken(idToken, false);
     } catch (error) {
       // Sin detalle hacia afuera: distinguir "expirado" de "firma inválida" le
       // dice a quien prueba si acertó algo.
-      this.logger.debug(
+      this.logger.warn(
         `ID token rechazado: ${error instanceof Error ? error.message : String(error)}`,
       );
       throw new UnauthorizedException('Sesión de Google inválida o expirada.');

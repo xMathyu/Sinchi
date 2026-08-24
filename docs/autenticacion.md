@@ -148,20 +148,43 @@ La respuesta de `/auth/google` tiene dos formas y el cliente **debe** mirar
 
 ---
 
-## Falta un paso en la consola de Firebase
+## Dos proveedores, una sola puerta
 
-El proveedor de Google necesita un cliente OAuth. Por API habría que armarlo a
-mano y sale peor configurado; la consola lo provisiona sola. Son tres clics:
+La api verifica un **ID token de Firebase** y no exige que venga de un proveedor
+concreto: `firebase.ts` captura `sign_in_provider` para auditoría, pero no lo
+comprueba. Así que correo y Google entran por `/auth/google`, emiten el mismo
+código de vinculación y los confirma la misma recepcionista.
+
+| Proveedor | Estado | Qué necesitó |
+|---|---|---|
+| **Correo + contraseña** | activo | una llamada a la api de Identity Platform |
+| **Google** | pendiente | tres clics en la consola de Firebase |
+
+### Por qué el correo y no Google, de momento
+
+Google necesita un **cliente OAuth**, y no hay forma de crearlo por API:
+
+- No existe endpoint público para crear clientes OAuth estándar en Google Cloud.
+- El rodeo que existía —`gcloud alpha iap oauth-brands`— **Google lo apagó el 19
+  de marzo de 2026**, y además exige que el proyecto pertenezca a una
+  organización; este cuelga de una cuenta personal.
+- Registrar la app iOS en Firebase por API tampoco lo provisiona: el
+  `GoogleService-Info.plist` que devuelve no trae `CLIENT_ID`.
+
+El proveedor de correo no necesita ninguno, y se activa por api:
+
+```bash
+curl -X POST "https://identitytoolkit.googleapis.com/admin/v2/projects/$P/config?updateMask=signIn.email.enabled"   -H "Authorization: Bearer $(gcloud auth print-access-token)"   -d '{"signIn":{"email":{"enabled":true}}}'
+```
+
+### Cuando se quiera Google
 
 1. https://console.firebase.google.com/project/sinchi-a95913/authentication/providers
-2. **Google** → activar
-3. Elegir el correo de soporte y guardar
+2. **Google** → activar → elegir correo de soporte → guardar
+3. Copiar los client ID a `EXPO_PUBLIC_GOOGLE_CLIENT_ID_{WEB,IOS,ANDROID}`
 
-Sin eso, `/auth/google` responde 401 a cualquier token: Firebase no emite ninguno
-para ese proyecto. El resto de la cadena ya está desplegada y verificada.
-
-Después hay que registrar las apps (iOS/Android/Web) en el proyecto para obtener
-los client ID que consume `expo-auth-session`.
+La app lo detecta sola: `googleAuthReady()` mira si hay algún client ID y solo
+entonces muestra el botón. No hay que tocar código.
 
 ### La `apiKey` de Firebase no es un secreto (y GitHub la marca igual)
 
@@ -234,3 +257,23 @@ Ese test encontró dos bugs que no se veían leyendo el código:
    deshacía. El contador nunca subía: se podían probar las diez mil combinaciones
    de un PIN de cuatro dígitos sin que nada lo notara. Ahora el registro del fallo
    va en su propia transacción, que sí se confirma.
+
+---
+
+## Dos fallos que costaron el despliegue
+
+**La imagen no arrancaba y la culpa parecía del token.** `npm ci` no siempre
+hoistea todo a la raíz del monorepo: cuando dos workspaces piden versiones
+incompatibles del mismo paquete, npm deja la del workspace anidada en
+`apps/api/node_modules`. El Dockerfile copiaba solo `/repo/node_modules`, así que
+la imagen salía sin `dotenv` ni `zod` y moría con `Cannot find module
+'dotenv/config'`. Lo delicado es que **aparece al regenerar el lockfile, no al
+tocar el código**: el reparto entre raíz y workspace cambia solo.
+
+**El error de configuración se disfrazaba de token inválido.** `getApp()` se
+llamaba dentro del `try` de `verify()`, así que su excepción —"falta
+FIREBASE_PROJECT_ID"— la capturaba el `catch` y salía como *"Sesión de Google
+inválida o expirada"*. El mensaje acusaba al token de un fallo del despliegue, que
+es exactamente lo que la inicialización perezosa pretendía evitar. Y el detalle
+iba a `logger.debug`, que Cloud Run no muestra: los logs salían vacíos. Ahora
+`getApp()` va fuera del `try` y el rechazo se registra como `warn`.

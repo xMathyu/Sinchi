@@ -108,9 +108,13 @@ function SessionRouter() {
     // El registro del equipo y la apertura de turno se hacen SIN sesion: son
     // justamente lo que produce una.
     const enTurno = primero === 'staff' && segments[1] === 'shift';
+    // La puerta de desarrollo tambien: es de donde sale el modo demostracion.
+    // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
+    // devolvia a /login en el mismo instante — se veia como que no pasaba nada.
+    const enDev = __DEV__ && primero === 'dev';
 
     if (state.status === 'signed_out') {
-      if (!enLogin && !enTurno) router.replace('/login');
+      if (!enLogin && !enTurno && !enDev) router.replace('/login');
       return;
     }
 
