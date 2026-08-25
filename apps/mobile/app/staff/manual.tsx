@@ -24,7 +24,8 @@ import {
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useRoster, useStore, useToday } from '../../src/data/hooks';
-import { markAttendance, type RosterEntry } from '../../src/data/store';
+import type { RosterEntry } from '../../src/data/store';
+import { marcarAsistencia } from '../../src/data/actions';
 import { formatDocument, initials } from '../../src/lib/format';
 
 export default function ManualCheckInScreen() {
@@ -35,6 +36,8 @@ export default function ManualCheckInScreen() {
 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [marcando, setMarcando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -174,19 +177,32 @@ export default function ManualCheckInScreen() {
           onPress={() => {
             if (selected === null) return;
             const allowed = selected.view.delinquency.canTrain && !selected.view.quota.exhausted;
-            markAttendance(
-              {
-                membershipId: selected.view.membership.id,
-                method: 'manual',
-                overrideDenial: !allowed,
-              },
-              today,
-            );
-            setSelectedId(null);
-            setQuery('');
-            router.back();
+            setMarcando(true);
+            setError(null);
+
+            void marcarAsistencia({
+              membershipId: selected.view.membership.id,
+              method: 'manual',
+              overrideDenial: !allowed,
+            })
+              .then(() => {
+                setSelectedId(null);
+                setQuery('');
+                router.back();
+              })
+              .catch((causa: unknown) => {
+                setError(
+                  causa instanceof Error ? causa.message : 'No se pudo marcar la asistencia.',
+                );
+              })
+              .finally(() => setMarcando(false));
           }}
         />
+        {error !== null ? (
+          <Text variant="micro" color={theme.semaphore.bad} align="center">
+            {error}
+          </Text>
+        ) : null}
         {selected !== null && !selected.view.delinquency.canTrain ? (
           <Text variant="micro" color={theme.semaphore.bad} align="center">
             {firstName(selected.user.name)} está suspendido. Marcarlo queda registrado como

@@ -35,7 +35,8 @@ import {
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useMembership, useStore, useToday } from '../../src/data/hooks';
-import { railLabel, recordManualPayment } from '../../src/data/store';
+import { railLabel } from '../../src/data/store';
+import { registrarPago } from '../../src/data/actions';
 import { formatLongDate, initials } from '../../src/lib/format';
 
 const CONCEPTS: readonly { readonly value: ChargeType; readonly label: string }[] = [
@@ -57,6 +58,7 @@ export default function ChargeScreen() {
     params.type === 'drop_in' || params.type === 'enrollment' ? params.type : 'renewal',
   );
   const [rail, setRail] = useState<PaymentRail>('cash');
+  const [error, setError] = useState<string | null>(null);
   const [periods, setPeriods] = useState(Math.max(1, entry.receivable.periodsOwed));
   const [customSoles, setCustomSoles] = useState(
     String((entry.tenant.dropInPriceCents ?? 0) / 100),
@@ -240,16 +242,20 @@ export default function ChargeScreen() {
           accentInk={theme.semaphoreInk.ok}
           disabled={!canConfirm}
           onPress={() => {
-            recordManualPayment(
-              {
-                membershipId: entry.membership.id,
-                type: concept,
-                rail,
-                periods: concept === 'renewal' ? periods : undefined,
-                amountCents: concept === 'renewal' ? undefined : amount,
-              },
-              today,
-            );
+            void registrarPago({
+              membershipId: params.membershipId,
+              // `ChargeType` incluye 'proration' y 'saas', que no se cobran en
+              // mostrador: la primera la genera un cambio de plan y la segunda
+              // es lo que el gimnasio nos paga a nosotros.
+              type: concept as 'renewal' | 'enrollment' | 'drop_in',
+              rail,
+              periods,
+              amountCents: amount,
+            })
+              .then(() => router.replace(`/result/${params.membershipId}`))
+              .catch((causa: unknown) => {
+                setError(causa instanceof Error ? causa.message : 'No se pudo registrar el pago.');
+              });
             router.back();
           }}
         />

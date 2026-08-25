@@ -230,6 +230,17 @@ export default function ScannerScreen() {
             style={{ flex: 1 }}
             onPress={simulate}
           />
+          </Row>
+          {/* El cobro solo se alcanzaba DESPUES de un check-in, asi que para
+              cobrarle a alguien que viene a pagar sin entrenar habia que fingir
+              una asistencia primero. */}
+          <Row gap={10}>
+            <Button
+              label="Padrón y cobros"
+              variant="secondary"
+              style={{ flex: 1 }}
+              onPress={() => router.push('/staff/padron')}
+            />
         </Row>
       </Stack>
     </Screen>

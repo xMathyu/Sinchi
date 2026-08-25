@@ -15,6 +15,7 @@
  *   cd apps/api && DATABASE_URL=... ALLOW_DEV_LOGIN=true npm start
  *   cd apps/mobile && TEST_API_URL=http://localhost:3000/v1 npx vitest run src/data/api.test.ts
  */
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -277,6 +278,27 @@ suite('rutas del staff', () => {
       expect(outcome.result.reason.code).toBeTruthy();
     }
     expect(outcome.message.title.length).toBeGreaterThan(0);
+  });
+
+  it('marcar asistencia también devuelve el estado de DESPUÉS', async () => {
+    const roster = await fetchRoster();
+    const entrada = roster.find((r) => r.quota.limit !== null && !r.quota.exhausted) ?? roster[0]!;
+    const antes = entrada.quota.used;
+
+    const salida = await markManual({
+      membershipId: entrada.membership.id,
+      overrideDenial: true,
+      clientId: randomUUID(),
+    });
+
+    expect(salida.registered).toBe(true);
+
+    // La respuesta traía el cupo de ANTES del insert: el staff marcaba a alguien
+    // y la pantalla seguía diciendo "0 de 3". El mismo principio que ya se exigía
+    // a los pagos, que aquí no se cumplía.
+    if (!salida.alreadyRegistered && entrada.quota.limit !== null) {
+      expect(salida.view.quota.used).toBe(antes + 1);
+    }
   });
 
   it('registrar un pago devuelve el estado de DESPUÉS', async () => {

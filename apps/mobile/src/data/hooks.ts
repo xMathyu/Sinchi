@@ -66,8 +66,16 @@ export function useWallet(): readonly MembershipView[] {
 
 export function useMembership(membershipId: string): MembershipView {
   const today = useToday();
+  const remoto = useStore((s) => s.remoteRoster);
   const version = useStore((s) => s.charges.length + s.attendances.length + s.subscriptions.length);
-  return useMemo(() => viewMembership(membershipId, today), [membershipId, today, version]);
+  return useMemo(() => {
+    // Con padron del servidor la membresia no esta en `state.memberships`, y
+    // `viewMembership` lanzaba "Membresia ... no encontrada" — que es como se
+    // caia la pantalla de cobro al abrirla desde el padron.
+    const delServidor = remoto?.find((entrada) => entrada.view.membership.id === membershipId);
+    if (delServidor !== undefined) return delServidor.view;
+    return viewMembership(membershipId, today);
+  }, [membershipId, remoto, today, version]);
 }
 
 /**

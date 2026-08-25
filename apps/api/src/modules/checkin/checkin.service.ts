@@ -250,7 +250,17 @@ export class CheckInService {
 
       if (inserted !== undefined) {
         return {
-          ...evaluation,
+          // La vista se RECALCULA: `evaluation` se armo antes del insert, asi que
+          // su cupo no cuenta la asistencia recien marcada. La pantalla del staff
+          // mostraba "0 de 3" justo despues de gastar una. El principio ya estaba
+          // escrito para los pagos —"devuelve el estado de DESPUES"—, solo que
+          // aqui no se aplicaba.
+          ...(await this.evaluateInTx(tx, input.membershipId)),
+          // El veredicto y su mensaje son los del momento de entrar. Si se
+          // recalcularan, quien gasta su ultima sesion recibiria "sin cupo" como
+          // respuesta a haber entrado.
+          result: evaluation.result,
+          message: evaluation.message,
           registered: true,
           attendance: toAttendance(inserted),
           alreadyRegistered: false,
@@ -275,7 +285,9 @@ export class CheckInService {
       }
 
       return {
-        ...evaluation,
+        ...(await this.evaluateInTx(tx, input.membershipId)),
+        result: evaluation.result,
+        message: evaluation.message,
         registered: true,
         attendance: toAttendance(existing),
         alreadyRegistered: true,
