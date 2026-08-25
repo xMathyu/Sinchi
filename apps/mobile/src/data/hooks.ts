@@ -85,8 +85,11 @@ export function useCheckInPreview(membershipId: string | null): CheckInPreview |
 
 export function useRoster(): readonly RosterEntry[] {
   const today = useToday();
+  const remoto = useStore((s) => s.remoteRoster);
   const version = useStore((s) => s.charges.length + s.attendances.length + s.subscriptions.length);
-  return useMemo(() => viewRoster(today), [today, version]);
+  // Con sesion de staff manda lo que dijo el servidor; sin ella se calcula
+  // sobre los datos locales, que es lo que sostiene el modo demostracion.
+  return useMemo(() => remoto ?? viewRoster(today), [remoto, today, version]);
 }
 
 // ---------------------------------------------------------------------------

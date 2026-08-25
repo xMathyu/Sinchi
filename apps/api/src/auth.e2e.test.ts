@@ -238,30 +238,59 @@ suite('vinculación en el mostrador', () => {
 });
 
 suite('vinculación automática del dueño', () => {
-  it('empareja por email verificado que registramos nosotros', async () => {
-    // Es la única excepción y está acotada a `owner`: el email lo pone el alta del
-    // gimnasio, no una recepcionista con prisa, y Google certifica que quien
-    // entra controla ese buzón.
-    const token = declareIdentity('sergio-google', { email: 'sergio.paz@example.pe' });
+  /** Correo del dueño, el que pondría el alta del gimnasio. */
+  const CORREO_DUENO = `sergio.paz.${Date.now()}@example.pe`;
 
-    // Primero se registra ese email en la ficha del dueño (lo haría el alta).
-    const ownerName = 'Sergio Paz';
-    const { body: roster } = await http.get('/v1/staff/roster').set(auth(owner));
-    expect(Array.isArray(roster)).toBe(true);
-    expect(ownerName.length).toBeGreaterThan(0);
+  it('empareja por email verificado y entra ya como dueño', async () => {
+    // ESTA es la prueba que faltaba. La anterior solo comprobaba los casos
+    // negativos —que sin correo o sin verificar NO vincula— y nunca ejecutó el
+    // camino feliz. Por eso sobrevivió el fallo: `tryLinkOwnerByEmail` hacía un
+    // JOIN contra `staff`, que tiene FORCE ROW LEVEL SECURITY y sin contexto no
+    // devuelve ninguna fila. El método era código muerto en producción y fallaba
+    // en silencio, devolviendo el código de 6 dígitos como si el dueño fuera un
+    // desconocido.
+    const { createDatabase, createPool, schema, withoutTenantIsolation } = await import(
+      './db/client'
+    );
+    const { eq } = await import('drizzle-orm');
 
-    // Sin email registrado, la vinculación automática NO ocurre: cae al código.
+    const pool = createPool(DATABASE_URL!);
+    const db = createDatabase(pool);
+
+    // El alta del gimnasio registra el correo del dueño en su ficha.
+    const actualizados = await withoutTenantIsolation(db, (tx) =>
+      tx
+        .update(schema.users)
+        .set({ email: CORREO_DUENO })
+        .where(eq(schema.users.name, 'Sergio Paz'))
+        .returning({ id: schema.users.id }),
+    );
+    await pool.end();
+    expect(actualizados).toHaveLength(1);
+
+    const token = declareIdentity('sergio-google', { email: CORREO_DUENO });
     const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    expect(body.linked).toBe(false);
+
+    // Entra directo: sin código y con su gimnasio ya en la sesión.
+    expect(body.linked).toBe(true);
+    expect(body.role).toBe('owner');
+    expect(body.tenantId).not.toBeNull();
   });
 
   it('no vincula si Google no verificó el correo', async () => {
     const token = declareIdentity('sin-verificar', {
-      email: 'sergio.paz@example.pe',
+      email: `otro.dueno.${Date.now()}@example.pe`,
       emailVerified: false,
     });
     const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
     expect(body.linked).toBe(false);
+  });
+
+  it('un correo desconocido cae al código, no inventa una cuenta', async () => {
+    const token = declareIdentity('nadie-google', { email: `nadie.${Date.now()}@example.pe` });
+    const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(body.linked).toBe(false);
+    expect(body.claim.code).toMatch(/^\d{6}$/);
   });
 });
 

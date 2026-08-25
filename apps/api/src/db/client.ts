@@ -166,6 +166,18 @@ export async function adoptTenant(tx: Tx, tenantId: string): Promise<void> {
  * ninguna fila. Presentar el token abre exactamente esa.
  */
 /**
+ * Adopta una identidad a mitad de transaccion.
+ *
+ * Hermano de `adoptTenant`, y para el mismo tipo de caso: al entrar no se sabe
+ * quien es la persona hasta haberla buscado, y las tablas con aislamiento no
+ * devuelven nada hasta que el contexto esta puesto. Se busca en `users` —que es
+ * global— y a partir de ahi se adopta.
+ */
+export async function adoptUser(tx: Tx, userId: string): Promise<void> {
+  await tx.execute(sql`select set_config('app.current_user', ${userId}, true)`);
+}
+
+/**
  * Contexto de quien presenta un correo verificado.
  *
  * Mismo caso que el token: al entrar todavia no se sabe a que gimnasio pertenece

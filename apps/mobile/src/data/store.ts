@@ -71,6 +71,17 @@ export interface State extends DemoData {
   readonly online: boolean;
   /** Hay una carga desde la api en curso. */
   readonly hidratando: boolean;
+  /**
+   * Padron traido del servidor, ya calculado.
+   *
+   * `null` = no hay sesion de staff y manda `viewRoster()` sobre los datos
+   * locales. Se guarda calculado en vez de recalcularlo aqui porque
+   * `/staff/roster` ya devuelve el semaforo de cada alumno: recomponerlo en el
+   * telefono exigiria traer los cargos y las asistencias de CADA persona del
+   * padron —sesenta peticiones en un gimnasio mediano— para llegar al mismo
+   * numero que el servidor ya calculo con el mismo dominio.
+   */
+  readonly remoteRoster: readonly RosterEntry[] | null;
   readonly queue: readonly QueuedItem[];
   readonly lastSyncAt: Date | null;
 }
@@ -83,6 +94,7 @@ function initialState(): State {
     activeTenantId: demo.tenants[0]?.id ?? '',
     online: true,
     hidratando: false,
+    remoteRoster: null,
     queue: [],
     lastSyncAt: new Date(),
   };
@@ -135,6 +147,17 @@ export function marcarHidratando(valor: boolean): void {
   setState({ ...state, hidratando: valor });
 }
 
+/**
+ * Deja el padron del servidor y quien lo mira.
+ *
+ * `staff` sale de la sesion, no de un endpoint: el token ya dice `staffId`,
+ * `tenantId` y `role`, y pedir otra vez lo que ya se tiene firmado seria una
+ * ida y vuelta de mas.
+ */
+export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff): void {
+  setState({ ...state, remoteRoster: roster, staff, lastSyncAt: new Date() });
+}
+
 export function applyRemoteData(data: RemoteData): void {
   setState({
     ...state,
@@ -143,6 +166,9 @@ export function applyRemoteData(data: RemoteData): void {
     // haya endpoints que los sirvan, y hasta entonces vacios es la verdad.
     schedules: [],
     queue: [],
+    // Si sobreviviera, un alumno veria el padron del staff que uso el telefono
+    // antes que el.
+    remoteRoster: null,
     lastSyncAt: new Date(),
   });
 }

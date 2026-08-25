@@ -23,6 +23,7 @@ import {
 import { and, eq, isNull, lt, sql } from 'drizzle-orm';
 import { InjectDb } from '../db/db.module';
 import {
+  adoptUser,
   schema,
   withTenant,
   withoutTenantIsolation,
@@ -105,29 +106,48 @@ export class AccountLinkService {
     if (identity.email === null || !identity.emailVerified) return null;
 
     return withoutTenantIsolation(this.db, async (tx) => {
+      // Dos pasos, y no un JOIN, por RLS. `staff` tiene FORCE ROW LEVEL
+      // SECURITY y sin contexto no devuelve NINGUNA fila, asi que la version
+      // con JOIN nunca encontraba al dueno: el metodo entero era codigo muerto
+      // en produccion —fallaba en silencio devolviendo el codigo de 6 digitos—
+      // y solo se veia probandolo con un rol sujeto a RLS.
+      //
+      // `users` si es global —una identidad no pertenece a ningun gimnasio—,
+      // asi que se busca ahi primero y despues se adopta esa identidad. Eso
+      // abre su fila de `staff` por la excepcion que la politica ya tiene
+      // (`user_id = app_current_user()`), sin inventar una puerta nueva.
       const [candidate] = await tx
-        .select({ userId: schema.users.id, staffId: schema.staff.id })
+        .select({ userId: schema.users.id })
         .from(schema.users)
-        .innerJoin(schema.staff, eq(schema.staff.userId, schema.users.id))
         .where(
           and(
             eq(sql`lower(${schema.users.email})`, identity.email as string),
             isNull(schema.users.firebaseUid),
-            eq(schema.staff.role, 'owner'),
           ),
         )
         .limit(1);
 
       if (candidate === undefined) return null;
 
+      await adoptUser(tx, candidate.userId);
+
+      // El auto-vinculo es SOLO para duenos. Recepcion se vincula con codigo,
+      // como todos: su correo lo escribe otra persona y sin esa restriccion un
+      // typo entregaria el mostrador entero.
+      const [owner] = await tx
+        .select({ id: schema.staff.id })
+        .from(schema.staff)
+        .where(and(eq(schema.staff.userId, candidate.userId), eq(schema.staff.role, 'owner')))
+        .limit(1);
+
+      if (owner === undefined) return null;
+
       await tx
         .update(schema.users)
         .set({ firebaseUid: identity.uid })
         .where(eq(schema.users.id, candidate.userId));
 
-      this.logger.log(
-        `Dueño vinculado automáticamente por email verificado: ${identity.email}`,
-      );
+      this.logger.log(`Dueño vinculado automáticamente por email verificado: ${identity.email}`);
       return candidate.userId;
     });
   }

@@ -24,7 +24,7 @@ import { ThemeProvider } from '../src/design/theme';
 import { setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { useSession } from '../src/data/session-hooks';
-import { hydrate } from '../src/data/hydrate';
+import { hydrate, hydrateStaff } from '../src/data/hydrate';
 import { marcarHidratando } from '../src/data/store';
 
 /**
@@ -117,7 +117,21 @@ function DataLoader() {
     let cancelado = false;
     marcarHidratando(true);
 
-    void hydrate()
+    // Dos cargas distintas porque son dos preguntas distintas: el alumno pide su
+    // billetera, el staff pide el padron del gimnasio donde trabaja. Un
+    // recepcionista no tiene membresia ahi, asi que pedirle `/me` devolveria una
+    // lista vacia y la pantalla quedaria en blanco sin explicar por que.
+    const sesion = state.session;
+    const carga =
+      sesion.role === 'student'
+        ? hydrate()
+        : hydrateStaff({
+            userId: sesion.userId,
+            tenantId: sesion.tenantId,
+            role: sesion.role,
+          });
+
+    void carga
       .catch((error: unknown) => {
         // Sin conexion no se borra lo que ya habia: el alumno en la puerta del
         // gimnasio prefiere ver su ultimo estado conocido a una pantalla vacia.

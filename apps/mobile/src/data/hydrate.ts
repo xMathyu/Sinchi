@@ -17,9 +17,9 @@
  * alumno y el que ve recepción salen de la misma función, no de dos que se
  * parecen.
  */
-import type { Attendance, Charge, Plan, Tenant } from '@sinchi/shared';
-import { fetchMe, fetchMembership } from './api';
-import { applyRemoteData, type RemoteData } from './store';
+import { asId, type Attendance, type Charge, type Plan, type Tenant } from '@sinchi/shared';
+import { fetchMe, fetchMembership, fetchRoster } from './api';
+import { applyRemoteData, applyRemoteRoster, type RemoteData } from './store';
 
 /**
  * Trae la identidad, la billetera y el detalle de cada membresía.
@@ -79,4 +79,43 @@ export async function hydrate(): Promise<void> {
  */
 function empujarUnico<T extends { readonly id: string }>(lista: T[], item: T): void {
   if (!lista.some((x) => x.id === item.id)) lista.push(item);
+}
+
+/**
+ * Carga el padron para una sesion de staff.
+ *
+ * No pasa por `loadFromApi`: `/me` es la billetera de quien mira, y un
+ * recepcionista no tiene membresia en el gimnasio donde trabaja. Pedirsela
+ * devolveria una lista vacia y la pantalla del padron quedaria en blanco sin que
+ * nada explicara por que.
+ *
+ * Se piden las dos cosas en paralelo: el padron es lo que se pinta, y `/me` solo
+ * aporta el nombre de quien esta de turno para la cabecera. Encadenarlas haria
+ * esperar el padron por un dato decorativo.
+ */
+export async function hydrateStaff(session: {
+  readonly userId: string;
+  readonly tenantId: string | null;
+  readonly role: 'front_desk' | 'owner';
+}): Promise<void> {
+  const [roster, me] = await Promise.all([fetchRoster(), fetchMe()]);
+
+  applyRemoteRoster(
+    roster.map((entrada) => ({
+      user: entrada.user,
+      // Sin cargos ni asistencias: el padron muestra el semaforo, que el
+      // servidor ya calculo. El historial se pide al abrir cada alumno.
+      view: { ...entrada, attendances: [], charges: [] },
+    })),
+    {
+      // El token lleva `staffId` firmado pero la api no lo devuelve al cliente,
+      // y aqui no hace falta: solo lo usaria el registro local de la
+      // demostracion. Se deja vacio en vez de inventar un id que parezca real.
+      id: asId(''),
+      tenantId: asId(session.tenantId ?? ''),
+      userId: asId(session.userId),
+      role: session.role,
+      displayName: me.user.name,
+    },
+  );
 }
