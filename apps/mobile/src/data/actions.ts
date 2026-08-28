@@ -14,18 +14,29 @@
  * Así no hay forma de tener una app "conectada" que escriba en memoria.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { CheckInMethod, PaymentRail } from '@sinchi/shared';
+import type { CheckInMethod, PaymentRail, Plan } from '@sinchi/shared';
 import {
   ApiError,
+  cancelMembership,
+  changePlan as changePlanRemote,
+  confirmClaim,
+  fetchClaims,
+  fetchPlansFor,
+  fetchSummary,
   fetchStaffMember,
   markManual,
   recordPayment,
   scanQr,
+  setOwnPin,
   type CheckInOutcomeDto,
+  type SummaryDto,
 } from './api';
 import { getSessionState } from './session';
 import {
+  cancelSubscription as cancelSubscriptionLocal,
+  changePlan as changePlanLocal,
   clearScanVerdict,
+  getState,
   markAttendance as markAttendanceLocal,
   recordManualPayment as recordPaymentLocal,
   resolveQr,
@@ -33,7 +44,7 @@ import {
   viewMembership,
   type MembershipView,
 } from './store';
-import { hydrateStaff } from './hydrate';
+import { hydrate, hydrateStaff } from './hydrate';
 
 /**
  * Llave de idempotencia con forma de UUID.
@@ -59,6 +70,16 @@ function llaveIdempotente(texto: string): string {
 
 /** El día local, que es el que define "ya vino hoy". */
 const hoyISO = (): string => new Date().toISOString().slice(0, 10);
+
+/**
+ * `true` cuando hay una sesión real, del rol que sea.
+ *
+ * `conServidor` no sirve para las escrituras del alumno: descarta el rol
+ * `student` a propósito, porque distingue quién puede escribir en el padrón.
+ * Cambiar de plan y cancelar son del alumno, y usar aquel guardia las mandaba al
+ * store —a memoria— con sesión real.
+ */
+const haySesion = (): boolean => getSessionState().status === 'signed_in';
 
 /** `true` cuando hay una sesión de staff de verdad detrás. */
 function conServidor(): { readonly userId: string; readonly tenantId: string | null } | null {
@@ -275,4 +296,134 @@ async function refrescarPadron(sesion: {
     tenantId: sesion.tenantId,
     role: 'front_desk',
   }).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Suscripción del alumno
+// ---------------------------------------------------------------------------
+
+/**
+ * Planes a los que puede cambiar esta membresía.
+ *
+ * Sin sesión salen del store, que en la demostración los tiene todos.
+ */
+export async function planesPara(membershipId: string): Promise<readonly Plan[]> {
+  if (!haySesion()) {
+    const vista = viewMembership(membershipId);
+    return getState().plans.filter((plan) => plan.tenantId === vista.tenant.id && plan.active);
+  }
+  return await fetchPlansFor(membershipId);
+}
+
+/**
+ * Cambia de plan.
+ *
+ * Escribía SOLO en memoria: `changePlan` de `store.ts` movía la suscripción
+ * local y la pantalla se cerraba como si hubiera funcionado, hasta que la
+ * siguiente carga desde la api lo revertía sin decir nada. Es el mismo fallo que
+ * `actions.ts` vino a cerrar para el staff, repetido en el modo alumno.
+ *
+ * El dominio decide qué significa el cambio —subir cobra el diferencial
+ * prorrateado hoy, bajar espera a la renovación— y eso lo calcula el servidor con
+ * las mismas funciones de `@sinchi/shared`. Aquí solo se manda la intención.
+ */
+export async function cambiarPlan(membershipId: string, planId: string): Promise<void> {
+  if (!haySesion()) {
+    changePlanLocal(membershipId, planId);
+    return;
+  }
+  await changePlanRemote(membershipId, planId);
+  await hydrate();
+}
+
+/** Cancela la suscripción. Misma historia que `cambiarPlan`: escribía en memoria. */
+export async function cancelarSuscripcion(membershipId: string): Promise<void> {
+  if (!haySesion()) {
+    cancelSubscriptionLocal(membershipId);
+    return;
+  }
+  await cancelMembership(membershipId);
+  await hydrate();
+}
+
+// ---------------------------------------------------------------------------
+// Vinculación de cuentas
+// ---------------------------------------------------------------------------
+
+export interface Vinculacion {
+  readonly id: string;
+  readonly code: string;
+  readonly email: string | null;
+  readonly displayName: string | null;
+  readonly expiresAt: Date;
+}
+
+/**
+ * Códigos de vinculación vigentes en este gimnasio.
+ *
+ * `docs/autenticacion.md` describe el flujo entero —el alumno entra con Google,
+ * la api responde `linked: false` con un código de seis dígitos, y recepción lo
+ * confirma contra la ficha del padrón— y la app nunca tuvo la última mitad.
+ * `fetchClaims` y `confirmClaim` llevaban escritos desde entonces sin que ninguna
+ * pantalla los llamara, así que un alumno recién instalado se quedaba en
+ * `unlinked` indefinidamente, mirando un código que nadie podía canjear.
+ */
+export async function vinculacionesPendientes(): Promise<readonly Vinculacion[]> {
+  if (conServidor() === null) return [];
+  const filas = await fetchClaims();
+  return filas.map((fila) => ({
+    id: fila.id,
+    code: fila.code,
+    email: fila.email,
+    displayName: fila.displayName,
+    expiresAt: new Date(fila.expiresAt),
+  }));
+}
+
+/**
+ * Vincula una cuenta de Google con una ficha del padrón.
+ *
+ * La api comprueba que la ficha sea de ESTE gimnasio y rechaza si ya tiene otra
+ * cuenta: el vínculo lo hace una persona con prisa y las personas se equivocan.
+ * Aquí no se replica ninguna de esas dos reglas — replicarlas sería tener dos
+ * verdades sobre quién puede vincular a quién.
+ */
+export async function vincularCuenta(code: string, membershipId: string): Promise<void> {
+  const sesion = conServidor();
+  if (sesion === null) throw new Error('Vincular cuentas necesita una sesión de turno abierta.');
+  await confirmClaim(code, membershipId);
+  await refrescarPadron(sesion);
+}
+
+/**
+ * Resumen del gimnasio, solo para el dueño.
+ *
+ * Ajustes anunciaba el rol `owner` como «todo lo anterior más reportes» y no
+ * había ninguno: `/staff/summary` existía en la api y la app ni siquiera lo
+ * declaraba. Devuelve `null` cuando quien mira no es el dueño, para que la
+ * pantalla no tenga que decidirlo por su cuenta — la api responde 403 y eso ya
+ * sería un error visible por algo que es simplemente "no te toca".
+ */
+export async function resumenDelGimnasio(): Promise<SummaryDto | null> {
+  const estado = getSessionState();
+  if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
+  return await fetchSummary();
+}
+
+/**
+ * Fija el PIN de turno de quien tiene la sesión abierta.
+ *
+ * Cerraba un círculo que no tenía salida: para abrir turno en el equipo del
+ * mostrador hace falta un PIN, `shift.tsx` decía «el dueño puede asignarle uno
+ * desde su cuenta», y esa pantalla no existía en ninguna parte. Quien entraba
+ * con Google y no tenía PIN no podía volver a entrar por el mostrador nunca.
+ *
+ * La api solo deja cambiar el PIN de otra persona al dueño, y con razón: si
+ * recepción pudiera cambiar el de un compañero, podría marcar asistencia a su
+ * nombre y la auditoría dejaría de significar nada. Aquí se fija únicamente el
+ * propio.
+ */
+export async function fijarMiPin(pin: string): Promise<void> {
+  if (conServidor() === null) throw new Error('Fijar el PIN necesita una sesión de turno.');
+  await setOwnPin(pin);
 }

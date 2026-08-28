@@ -13,15 +13,16 @@
  * Cada fila abre la ficha del alumno, no el cobro. Ir directo a cobrar obligaba
  * a abrir un cargo para responder "¿por qué no pasa?" y a cancelarlo después.
  */
-import { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { screenPadding } from '@sinchi/ui';
 import { formatPEN, type Cents } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../../src/design/screen';
 import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
-import { useRoster, useStore } from '../../src/data/hooks';
+import { useClaims, useOwnerSummary, useRoster, useStore } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
 
 export default function PadronScreen() {
@@ -29,6 +30,8 @@ export default function PadronScreen() {
   const router = useRouter();
   const roster = useRoster();
   const cargando = useStore((s) => s.hidratando);
+  const { claims } = useClaims();
+  const resumen = useOwnerSummary();
   const [query, setQuery] = useState('');
 
   const listado = useMemo(() => {
@@ -52,10 +55,21 @@ export default function PadronScreen() {
   const deudaTotal = roster.reduce((suma, e) => suma + e.view.receivable.amountCents, 0);
   const conDeuda = roster.filter((e) => e.view.receivable.amountCents > 0).length;
 
-  return (
-    <Screen scroll>
-      <Stack gap={18} style={{ paddingVertical: 20 }}>
-        <Stack gap={4}>
+  // Va a la ficha, no al cobro: la pregunta del mostrador no siempre es cobrar,
+  // y para llegar a mirar a alguien no debería haber que abrir un cargo a medias.
+  const abrir = useCallback(
+    (entrada: RosterEntry) =>
+      router.push({
+        pathname: '/member/[membershipId]',
+        params: { membershipId: entrada.view.membership.id },
+      }),
+    [router],
+  );
+
+  const cabecera = (
+    <Stack gap={18} style={{ paddingTop: 20, paddingBottom: 18 }}>
+      <Row align="flex-start">
+        <Stack gap={4} style={{ flex: 1 }}>
           <Eyebrow>Padrón</Eyebrow>
           <Text variant="title">
             {roster.length} {roster.length === 1 ? 'alumno' : 'alumnos'}
@@ -67,55 +81,111 @@ export default function PadronScreen() {
             </Text>
           )}
         </Stack>
-
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Buscar por nombre o documento"
-          placeholderTextColor={theme.colors.textPlaceholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={{
-            color: theme.colors.ink,
-            fontSize: 15,
-            paddingVertical: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.hairline,
-          }}
-        />
-
-        {cargando && roster.length === 0 ? (
-          <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-            Cargando el padrón…
-          </Text>
-        ) : listado.length === 0 ? (
-          <Card tone="sunken">
-            <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-              {roster.length === 0
-                ? 'Todavía no hay alumnos inscritos en este gimnasio.'
-                : 'Nadie coincide con esa búsqueda.'}
-            </Text>
-          </Card>
-        ) : (
-          <Stack gap={10}>
-            {listado.map((entrada) => (
-              <Fila
-                key={entrada.view.membership.id}
-                entrada={entrada}
-                // Va a la ficha, no al cobro: la pregunta del mostrador no
-                // siempre es cobrar, y para llegar a mirar a alguien no debería
-                // haber que abrir un cargo a medias.
-                onPress={() =>
-                  router.push({
-                    pathname: '/member/[membershipId]',
-                    params: { membershipId: entrada.view.membership.id },
-                  })
-                }
-              />
-            ))}
-          </Stack>
+        {/* Solo aparece cuando hay alguien esperando. Un botón permanente para
+            algo que ocurre tres veces por semana es ruido en la pantalla que
+            recepción mira todo el día. */}
+        {claims.length > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={() => router.push('/staff/claims')}
+          >
+            <Card
+              radius={theme.radii.pill}
+              borderColor={withAlpha(theme.semaphore.warn, 0.35)}
+              style={{ paddingVertical: 7, paddingHorizontal: 13 }}
+            >
+              <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
+                {claims.length} por vincular
+              </Text>
+            </Card>
+          </Pressable>
         )}
-      </Stack>
+      </Row>
+
+      {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
+          es la misma pregunta mirada de lejos: cuánto entró, cuánto falta y
+          quién no está pagando. */}
+      {resumen === null ? null : (
+        <Stack gap={10}>
+          <Eyebrow>Este mes</Eyebrow>
+          <Row gap={10} align="stretch">
+            <Metrica
+              valor={formatPEN(resumen.collectedThisMonthCents as Cents, { withDecimals: false })}
+              etiqueta="cobrado"
+              color={theme.semaphore.ok}
+            />
+            <Metrica
+              valor={formatPEN(resumen.outstandingCents as Cents, { withDecimals: false })}
+              etiqueta="por cobrar"
+              color={resumen.outstandingCents > 0 ? theme.semaphore.warn : theme.colors.ink}
+            />
+          </Row>
+          <Row gap={10} align="stretch">
+            <Metrica
+              valor={String(resumen.checkInsToday)}
+              etiqueta="marcados hoy"
+              color={theme.colors.ink}
+            />
+            <Metrica
+              valor={String(resumen.delinquentMembers)}
+              etiqueta={resumen.delinquentMembers === 1 ? 'moroso' : 'morosos'}
+              color={resumen.delinquentMembers > 0 ? theme.semaphore.bad : theme.colors.ink}
+            />
+          </Row>
+        </Stack>
+      )}
+
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Buscar por nombre o documento"
+        placeholderTextColor={theme.colors.textPlaceholder}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={{
+          color: theme.colors.ink,
+          fontSize: 15,
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.hairline,
+        }}
+      />
+    </Stack>
+  );
+
+  const vacio =
+    cargando && roster.length === 0 ? (
+      <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
+        Cargando el padrón…
+      </Text>
+    ) : (
+      <Card tone="sunken">
+        <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
+          {roster.length === 0
+            ? 'Todavía no hay alumnos inscritos en este gimnasio.'
+            : 'Nadie coincide con esa búsqueda.'}
+        </Text>
+      </Card>
+    );
+
+  // FlatList y no un `map` dentro del ScrollView: el padrón es el gimnasio
+  // entero, y montar sesenta tarjetas de golpe se siente en el equipo del
+  // mostrador, que no es un teléfono nuevo.
+  return (
+    <Screen padded={false}>
+      <FlatList
+        data={listado}
+        keyExtractor={(entrada) => entrada.view.membership.id}
+        renderItem={({ item }) => <Fila entrada={item} onPress={() => abrir(item)} />}
+        ListHeaderComponent={cabecera}
+        ListEmptyComponent={vacio}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        contentContainerStyle={{ paddingHorizontal: screenPadding, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      />
     </Screen>
   );
 }
@@ -178,5 +248,30 @@ function Fila({
         </Row>
       </Card>
     </Pressable>
+  );
+}
+
+/** Una cifra del resumen del dueño. */
+function Metrica({
+  valor,
+  etiqueta,
+  color,
+}: {
+  readonly valor: string;
+  readonly etiqueta: string;
+  readonly color: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Card radius={theme.radii.xl} style={{ flex: 1 }}>
+      <Stack gap={2}>
+        <Text variant="displaySmall" weight="extrabold" color={color}>
+          {valor}
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          {etiqueta}
+        </Text>
+      </Stack>
+    </Card>
   );
 }

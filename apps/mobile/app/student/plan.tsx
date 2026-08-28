@@ -6,7 +6,8 @@
  * pintan siempre, incluso en planes ilimitados, porque es la pregunta que el
  * alumno hace en la puerta.
  */
-import { Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { allWeekdays, formatPENShort, weekdayInitial } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
@@ -14,7 +15,8 @@ import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/desi
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useStore, useWallet } from '../../src/data/hooks';
-import { cancelSubscription, railLabel, type MembershipView } from '../../src/data/store';
+import { railLabel, type MembershipView } from '../../src/data/store';
+import { cancelarSuscripcion } from '../../src/data/actions';
 import { formatShortDate } from '../../src/lib/format';
 
 export default function PlanScreen() {
@@ -189,15 +191,7 @@ export default function PlanScreen() {
           />
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => cancelSubscription(entry.membership.id)}
-          style={{ paddingVertical: 10 }}
-        >
-          <Text variant="caption" color={theme.colors.textTertiary} align="center">
-            Cancelar suscripción
-          </Text>
-        </Pressable>
+        <CancelButton membershipId={entry.membership.id} gimnasio={entry.tenant.name} />
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           Cancelar no borra tu historial. Volver es un toque, cuando quieras.
         </Text>
@@ -265,5 +259,66 @@ function QuotaBlock({ entry }: { readonly entry: MembershipView }) {
         El cupo se reinicia el lunes. Las sesiones no usadas no se acumulan.
       </Text>
     </Stack>
+  );
+}
+
+/**
+ * Cancelar la suscripción.
+ *
+ * Dos cambios sobre lo que había. Iba por `cancelSubscription` de `store.ts`, que
+ * escribe en memoria: con sesión real la pantalla se pintaba cancelada y la
+ * siguiente carga desde la api lo revertía sin decir nada.
+ *
+ * Y no preguntaba. Un toque en un texto gris, sin confirmación ni deshacer,
+ * terminaba la suscripción del alumno — justo al lado del botón de pagar. Es la
+ * acción más destructiva de la app y era la más fácil de disparar sin querer.
+ */
+function CancelButton({
+  membershipId,
+  gimnasio,
+}: {
+  readonly membershipId: string;
+  readonly gimnasio: string;
+}) {
+  const theme = useTheme();
+  const [cancelando, setCancelando] = useState(false);
+
+  const confirmar = () => {
+    Alert.alert(
+      `¿Cancelar tu plan en ${gimnasio}?`,
+      'Dejarás de renovar y el escáner dejará de validar tu QR al terminar el periodo que ya pagaste. Tu historial se conserva.',
+      [
+        { text: 'Seguir suscrito', style: 'cancel' },
+        {
+          text: 'Cancelar el plan',
+          style: 'destructive',
+          onPress: () => {
+            setCancelando(true);
+            void cancelarSuscripcion(membershipId)
+              .catch((causa: unknown) => {
+                Alert.alert(
+                  'No se pudo cancelar',
+                  causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+                );
+              })
+              .finally(() => setCancelando(false));
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: cancelando }}
+      onPress={cancelando ? undefined : confirmar}
+      hitSlop={8}
+      style={{ paddingVertical: 10 }}
+    >
+      <Text variant="caption" color={theme.colors.textTertiary} align="center">
+        {cancelando ? 'Cancelando…' : 'Cancelar suscripción'}
+      </Text>
+    </Pressable>
   );
 }

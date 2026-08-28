@@ -16,21 +16,26 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useMembership, useStore, useToday } from '../../src/data/hooks';
-import { changePlan } from '../../src/data/store';
+import { useMembership, usePlansFor, useToday } from '../../src/data/hooks';
+import { cambiarPlan } from '../../src/data/actions';
 
 export default function PlanChangeScreen() {
   const theme = useTheme();
   const today = useToday();
   const { membershipId } = useLocalSearchParams<{ membershipId: string }>();
   const entry = useMembership(membershipId);
-  const plans = useStore((state) => state.plans);
+  // Los planes se piden a la api. `state.plans` solo tiene el plan actual del
+  // alumno, asi que filtrarlo dejaba la lista vacia y no habia a que cambiarse.
+  const { plans, cargando, error: errorPlanes } = usePlansFor(membershipId);
 
   const options = plans.filter(
     (plan) => plan.tenantId === entry.tenant.id && plan.active && plan.id !== entry.plan.id,
   );
-  const [targetId, setTargetId] = useState<string | null>(options[0]?.id ?? null);
+  const [targetId, setTargetId] = useState<string | null>(null);
   const target = options.find((plan) => plan.id === targetId) ?? null;
+
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const decision =
     target === null
@@ -72,15 +77,27 @@ export default function PlanChangeScreen() {
 
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Cambiar a</Eyebrow>
-        {options.map((plan) => (
-          <PlanOption
-            key={plan.id}
-            plan={plan}
-            selected={plan.id === targetId}
-            currentPriceCents={entry.plan.priceCents}
-            onPress={() => setTargetId(plan.id)}
-          />
-        ))}
+        {cargando && options.length === 0 ? (
+          <Text variant="bodySmall" color={theme.colors.textSecondary}>
+            Cargando los planes del gimnasio…
+          </Text>
+        ) : options.length === 0 ? (
+          <Card radius={theme.radii.lg}>
+            <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
+              {errorPlanes ?? 'Este gimnasio no tiene otros planes activos ahora mismo.'}
+            </Text>
+          </Card>
+        ) : (
+          options.map((plan) => (
+            <PlanOption
+              key={plan.id}
+              plan={plan}
+              selected={plan.id === targetId}
+              currentPriceCents={entry.plan.priceCents}
+              onPress={() => setTargetId(plan.id)}
+            />
+          ))
+        )}
       </Stack>
 
       {decision === null ? null : (
@@ -124,18 +141,33 @@ export default function PlanChangeScreen() {
         <Button
           label={
             decision?.kind === 'upgrade'
-              ? `Subir de plan y pagar ${formatPENShort(decision.chargeTodayCents)} en mostrador`
+              ? guardando
+                ? 'Cambiando…'
+                : `Subir de plan y pagar ${formatPENShort(decision.chargeTodayCents)} en mostrador`
               : decision?.kind === 'downgrade'
                 ? 'Programar el cambio'
                 : 'Confirmar cambio'
           }
-          disabled={target === null || decision?.kind === 'no_change'}
+          disabled={target === null || decision?.kind === 'no_change' || guardando}
           onPress={() => {
-            if (target === null) return;
-            changePlan(entry.membership.id, target.id, today);
-            router.back();
+            if (target === null || guardando) return;
+            setGuardando(true);
+            setError(null);
+            void cambiarPlan(entry.membership.id, target.id)
+              .then(() => router.back())
+              .catch((causa: unknown) => {
+                setError(
+                  causa instanceof Error ? causa.message : 'No se pudo cambiar el plan.',
+                );
+              })
+              .finally(() => setGuardando(false));
           }}
         />
+        {error === null ? null : (
+          <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
+            {error}
+          </Text>
+        )}
       </View>
     </Screen>
   );
