@@ -12,7 +12,7 @@
  *    momento en que el moroso está parado frente al mostrador, que es el único
  *    momento en que va a pagar.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatPEN, formatPENShort } from '@sinchi/shared';
@@ -21,8 +21,9 @@ import { Button, Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
 import { TintedScreen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useRoster, useToday } from '../../src/data/hooks';
-import { markAttendance, validateScan } from '../../src/data/store';
+import { useRoster, useScanVerdict, useToday } from '../../src/data/hooks';
+import { clearScanVerdict, validateScan } from '../../src/data/store';
+import { marcarAsistencia } from '../../src/data/actions';
 import { formatClock, formatShortDate } from '../../src/lib/format';
 
 export default function ScanResultScreen() {
@@ -31,14 +32,45 @@ export default function ScanResultScreen() {
   const { membershipId } = useLocalSearchParams<{ membershipId: string }>();
   const roster = useRoster();
 
-  const outcome = useMemo(() => validateScan(membershipId, today), [membershipId, today, roster]);
-  const { entry, result, message } = outcome;
+  // Lo que dijo el servidor manda: es el unico que verifico la firma del QR. El
+  // calculo local es el respaldo sin conexion, no la version buena.
+  const verdict = useScanVerdict(membershipId);
+  const local = useMemo(
+    () => validateScan(membershipId, today),
+    [membershipId, today, roster],
+  );
+  const entry = local.entry;
+  const result = verdict?.result ?? local.result;
+  const message = verdict?.message ?? local.message;
+  const registrado = verdict?.registered === true;
+
   const semaphore = semaphoreStyle(theme, message.level);
   const ink = semaphore.ink;
 
-  const confirm = () => {
-    markAttendance({ membershipId, method: 'qr' }, today);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /** Sale de la pantalla soltando el veredicto: el siguiente alumno es otro. */
+  const salir = () => {
+    clearScanVerdict();
     router.back();
+  };
+
+  const confirm = () => {
+    // Si el servidor ya lo registro al validar el QR, volver a marcar seria una
+    // segunda asistencia del mismo dia. Aqui solo se cierra la pantalla.
+    if (registrado) {
+      salir();
+      return;
+    }
+    setGuardando(true);
+    setError(null);
+    void marcarAsistencia({ membershipId, method: 'qr' })
+      .then(salir)
+      .catch((causa: unknown) =>
+        setError(causa instanceof Error ? causa.message : 'No se pudo registrar el ingreso.'),
+      )
+      .finally(() => setGuardando(false));
   };
 
   return (
@@ -96,13 +128,21 @@ export default function ScanResultScreen() {
         {result.allowed ? (
           <>
             <Text variant="captionSmall" color={ink} align="center" style={{ opacity: 0.6 }}>
-              Validado en el dispositivo · se sincroniza al volver el wifi
+              {registrado
+                ? 'Firma verificada e ingreso registrado en el servidor'
+                : 'Validado en el dispositivo · se sincroniza al volver el wifi'}
             </Text>
+            {error === null ? null : (
+              <Text variant="captionSmall" color={semaphore.ink} align="center">
+                {error}
+              </Text>
+            )}
             <Button
-              label="Confirmar ingreso"
+              label={guardando ? 'Registrando…' : registrado ? 'Listo' : 'Confirmar ingreso'}
               variant="accent"
               accentColor={semaphore.ink}
               accentInk={theme.colors.ink}
+              disabled={guardando}
               onPress={confirm}
             />
           </>
@@ -134,7 +174,7 @@ export default function ScanResultScreen() {
               <OverrideButton membershipId={entry.view.membership.id} ink={ink} />
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.back()}
+                onPress={salir}
                 style={{
                   flex: 1,
                   backgroundColor: 'rgba(10,10,11,0.12)',
@@ -337,14 +377,24 @@ function OverrideButton({
   readonly membershipId: string;
   readonly ink: string;
 }) {
-  const today = useToday();
+  const [guardando, setGuardando] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: guardando }}
       accessibilityHint="Queda registrado con tu nombre y la hora"
       onPress={() => {
-        markAttendance({ membershipId, method: 'manual', overrideDenial: true }, today);
-        router.back();
+        if (guardando) return;
+        setGuardando(true);
+        // Por `actions`, no por el store: con sesion real la excepcion tiene que
+        // llegar al servidor. Escrita solo en memoria, el rastro que la auditoria
+        // existe para dejar se pierde al cerrar la app.
+        void marcarAsistencia({ membershipId, method: 'manual', overrideDenial: true })
+          .then(() => {
+            clearScanVerdict();
+            router.back();
+          })
+          .finally(() => setGuardando(false));
       }}
       style={{
         flex: 1,
@@ -355,7 +405,7 @@ function OverrideButton({
       }}
     >
       <Text variant="bodySmall" weight="semibold" color={ink}>
-        Dejar pasar hoy
+        {guardando ? 'Registrando…' : 'Dejar pasar hoy'}
       </Text>
     </Pressable>
   );

@@ -87,7 +87,7 @@ export default function ShiftScreen() {
                 value={deviceTokenInput}
                 onChangeText={setDeviceTokenInput}
                 placeholder="Pégalo aquí"
-                placeholderTextColor={theme.colors.textDisabled}
+                placeholderTextColor={theme.colors.textPlaceholder}
                 autoCapitalize="none"
                 autoCorrect={false}
                 multiline
@@ -187,7 +187,7 @@ export default function ShiftScreen() {
                 value={pin}
                 onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="••••"
-                placeholderTextColor={theme.colors.textDisabled}
+                placeholderTextColor={theme.colors.textPlaceholder}
                 keyboardType="number-pad"
                 secureTextEntry
                 style={{ color: theme.colors.ink, fontSize: 28, letterSpacing: 8, paddingVertical: 4 }}

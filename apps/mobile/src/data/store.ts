@@ -82,8 +82,26 @@ export interface State extends DemoData {
    * numero que el servidor ya calculo con el mismo dominio.
    */
   readonly remoteRoster: readonly RosterEntry[] | null;
+  /** Veredicto del ultimo QR que valido el servidor. Ver `ScanVerdict`. */
+  readonly scanVerdict: ScanVerdict | null;
   readonly queue: readonly QueuedItem[];
   readonly lastSyncAt: Date | null;
+}
+
+/**
+ * Lo que el servidor dijo del ultimo QR escaneado.
+ *
+ * La pantalla de resultado no puede recalcularlo: verificar la firma TOTP exige
+ * la clave del alumno, y el equipo del mostrador no la tiene. Se guarda aqui en
+ * vez de pasarlo por parametros de ruta porque son objetos del dominio, no
+ * cadenas, y serializarlos para volver a parsearlos seria inventar un formato.
+ */
+export interface ScanVerdict {
+  readonly membershipId: string;
+  readonly result: CheckInResult;
+  readonly message: AccessMessage;
+  /** El servidor ya lo registro: la puerta no tiene que confirmar otra vez. */
+  readonly registered: boolean;
 }
 
 function initialState(): State {
@@ -95,6 +113,7 @@ function initialState(): State {
     online: true,
     hidratando: false,
     remoteRoster: null,
+    scanVerdict: null,
     queue: [],
     lastSyncAt: new Date(),
   };
@@ -158,6 +177,22 @@ export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff):
   setState({ ...state, remoteRoster: roster, staff, lastSyncAt: new Date() });
 }
 
+/**
+ * Guarda lo que el servidor dijo del QR recien escaneado.
+ *
+ * Lo consume la pantalla de resultado y se descarta al salir de ella: un
+ * veredicto viejo mostrado sobre el siguiente alumno seria peor que no tener
+ * ninguno.
+ */
+export function setScanVerdict(verdict: ScanVerdict): void {
+  setState({ ...state, scanVerdict: verdict });
+}
+
+export function clearScanVerdict(): void {
+  if (state.scanVerdict === null) return;
+  setState({ ...state, scanVerdict: null });
+}
+
 export function applyRemoteData(data: RemoteData): void {
   setState({
     ...state,
@@ -169,6 +204,7 @@ export function applyRemoteData(data: RemoteData): void {
     // Si sobreviviera, un alumno veria el padron del staff que uso el telefono
     // antes que el.
     remoteRoster: null,
+    scanVerdict: null,
     lastSyncAt: new Date(),
   });
 }
@@ -288,16 +324,38 @@ export interface CheckInPreview {
  * Es lo que la pantalla "Mi QR" muestra antes de que el alumno llegue a la
  * puerta: el mismo veredicto que vera el staff, calculado con la misma funcion.
  */
+/**
+ * La vista de una membresia, venga de donde venga.
+ *
+ * Con sesion de staff el padron lo manda el servidor y `state.memberships` sigue
+ * teniendo los datos de demostracion, asi que buscar solo ahi daba "Membresia no
+ * encontrada" para todo alumno real. El booleano no es un detalle: el padron
+ * remoto llega SIN asistencias ni cargos —traerlos por alumno seria un N+1 de
+ * sesenta peticiones— y quien valide sobre el tiene que saberlo.
+ */
+function lookupView(
+  membershipId: string,
+  hoy: PlainDate,
+): { readonly view: MembershipView; readonly remota: boolean } {
+  const remota = state.remoteRoster?.find((e) => e.view.membership.id === membershipId);
+  if (remota !== undefined) return { view: remota.view, remota: true };
+  return { view: viewMembership(membershipId, hoy), remota: false };
+}
+
 export function previewCheckIn(
   membershipId: string,
   hoy: PlainDate = today(),
   now: Date = new Date(),
 ): CheckInPreview {
-  const view = viewMembership(membershipId, hoy);
+  const { view, remota } = lookupView(membershipId, hoy);
   const result = validateCheckIn({
     subscription: view.subscription,
     plan: view.plan,
     attendances: view.attendances,
+    // Sin esto, el cupo del padron remoto se contaria sobre una lista vacia y
+    // diria "0 de 3" para alguien que ya vino tres veces esta semana. El
+    // servidor lo conto en SQL; `validateCheckIn` acepta el resultado hecho.
+    ...(remota ? { quotaOverride: view.quota } : {}),
     schedules: state.schedules.filter((s) => s.tenantId === view.tenant.id),
     today: hoy,
     time: localTimeInZone(now, TZ_LIMA),
@@ -319,7 +377,18 @@ export interface RosterEntry {
   readonly view: MembershipView;
 }
 
-/** Padron del gimnasio donde trabaja el staff, cacheado en el dispositivo. */
+/**
+ * El padron vigente: el del servidor si hay sesion de staff, el local si no.
+ *
+ * Todo lo que mira a un alumno del gimnasio pasa por aqui. Antes cada sitio
+ * elegia por su cuenta, y los que se quedaron con `viewRoster` validaban contra
+ * los datos de demostracion sin que nada lo dijera.
+ */
+export function currentRoster(hoy: PlainDate = today()): readonly RosterEntry[] {
+  return state.remoteRoster ?? viewRoster(hoy);
+}
+
+/** Padron derivado de los datos locales. Sostiene el modo demostracion. */
 export function viewRoster(hoy: PlainDate = today()): readonly RosterEntry[] {
   const tenantId = state.staff.tenantId;
   return state.memberships
@@ -352,15 +421,17 @@ export function resolveQr(raw: string): QrResolution {
   const payload = parseQrPayload(raw);
   if (payload === null || payload.subject !== 'user') return { ok: false, reason: 'not_sinchi' };
 
+  const entrada = currentRoster().find((e) => e.user.id === payload.id);
+  if (entrada !== undefined) return { ok: true, membershipId: entrada.view.membership.id };
+
+  // Con el padron del servidor el dispositivo solo conoce a los de ESTE local,
+  // asi que no puede distinguir "ese usuario no existe" de "existe pero no
+  // entrena aqui". Con los datos locales si, y la diferencia importa: una cosa
+  // es un QR ajeno y otra un alumno que se equivoco de sede.
+  if (state.remoteRoster !== null) return { ok: false, reason: 'not_a_member' };
+
   const user = state.users.find((u) => u.id === payload.id);
-  if (user === undefined) return { ok: false, reason: 'unknown_user' };
-
-  const membership = state.memberships.find(
-    (m) => m.userId === user.id && m.tenantId === state.staff.tenantId,
-  );
-  if (membership === undefined) return { ok: false, reason: 'not_a_member' };
-
-  return { ok: true, membershipId: membership.id };
+  return { ok: false, reason: user === undefined ? 'unknown_user' : 'not_a_member' };
 }
 
 export interface ScanOutcome {
@@ -380,9 +451,9 @@ export function validateScan(
   hoy: PlainDate = today(),
   now: Date = new Date(),
 ): ScanOutcome {
-  const preview = previewCheckIn(membershipId, hoy, now);
-  const entry = viewRoster(hoy).find((r) => r.view.membership.id === membershipId);
+  const entry = currentRoster(hoy).find((r) => r.view.membership.id === membershipId);
   if (entry === undefined) throw new Error(`La membresía ${membershipId} no está en el padrón.`);
+  const preview = previewCheckIn(membershipId, hoy, now);
   return { entry, result: preview.result, message: preview.message };
 }
 

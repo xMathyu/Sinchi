@@ -59,6 +59,7 @@ export default function ChargeScreen() {
   );
   const [rail, setRail] = useState<PaymentRail>('cash');
   const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
   const [periods, setPeriods] = useState(Math.max(1, entry.receivable.periodsOwed));
   const [customSoles, setCustomSoles] = useState(
     String((entry.tenant.dropInPriceCents ?? 0) / 100),
@@ -93,7 +94,7 @@ export default function ChargeScreen() {
         <Text variant="titleSmall" weight="bold">
           Registrar pago
         </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
             Cancelar
           </Text>
@@ -236,12 +237,20 @@ export default function ChargeScreen() {
 
       <Stack gap={8} style={{ marginTop: 20 }}>
         <Button
-          label={`Confirmar ${formatPEN(amount, { withDecimals: false })} en ${railLabel(rail)}`}
+          label={
+            enviando
+              ? 'Registrando…'
+              : `Confirmar ${formatPEN(amount, { withDecimals: false })} en ${railLabel(rail)}`
+          }
           variant="accent"
           accentColor={theme.semaphore.ok}
           accentInk={theme.semaphoreInk.ok}
-          disabled={!canConfirm}
+          disabled={!canConfirm || enviando}
           onPress={() => {
+            if (enviando) return;
+            setEnviando(true);
+            setError(null);
+
             void registrarPago({
               membershipId: params.membershipId,
               // `ChargeType` incluye 'proration' y 'saas', que no se cobran en
@@ -252,13 +261,36 @@ export default function ChargeScreen() {
               periods,
               amountCents: amount,
             })
-              .then(() => router.replace(`/result/${params.membershipId}`))
+              .then((salida) => {
+                // La llave de idempotencia es por alumno, concepto y dia. Salva
+                // del doble toque, pero tambien descarta el segundo cobro
+                // legitimo del mismo dia —dos clases sueltas, por ejemplo— y en
+                // silencio se ve igual que un cobro bueno.
+                if (salida.repetido) {
+                  setError(
+                    'Ya había un cobro de este concepto para este alumno hoy. No se creó un segundo cargo.',
+                  );
+                  return;
+                }
+                router.replace({
+                  pathname: '/result/[membershipId]',
+                  params: { membershipId: params.membershipId },
+                });
+              })
               .catch((causa: unknown) => {
                 setError(causa instanceof Error ? causa.message : 'No se pudo registrar el pago.');
-              });
-            router.back();
+              })
+              .finally(() => setEnviando(false));
           }}
         />
+        {/* Antes esto se escribia en un estado que nadie pintaba, y encima la
+            pantalla ya se habia cerrado: un pago que fallaba se veia igual que
+            uno que entro. */}
+        {error === null ? null : (
+          <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
+            {error}
+          </Text>
+        )}
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           Queda registrado a nombre de {staff.displayName}.
         </Text>

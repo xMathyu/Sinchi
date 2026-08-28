@@ -78,6 +78,7 @@ export default function RootLayout() {
           <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="plan-change/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="charge/[membershipId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="member/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen
             name="result/[membershipId]"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
@@ -150,6 +151,27 @@ function DataLoader() {
   return null;
 }
 
+/**
+ * Rutas de detalle, que el Stack presenta ENCIMA de las pestanas.
+ *
+ * No viven bajo `/staff` ni bajo `/student` porque son modales del Stack raiz, y
+ * la regla de zonas las trataba como territorio ajeno: con sesion de staff,
+ * abrir el cobro o los ajustes rebotaba a `/staff` en el mismo instante. Se ve
+ * como que el boton no hace nada, y por eso el modo staff no tenia forma de
+ * cerrar turno.
+ *
+ * Se enumeran en vez de dejar pasar todo lo que no sea la zona contraria: una
+ * pantalla nueva tiene que decidir de quien es, y olvidarse la deja fuera —que
+ * es el fallo seguro. Al reves, olvidarse la dejaria accesible al rol
+ * equivocado sin que nadie lo note.
+ */
+const RUTAS_COMPARTIDAS = new Set(['settings']);
+
+const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
+  staff: new Set(['charge', 'result', 'member']),
+  student: new Set(['pay', 'plan-change']),
+};
+
 function SessionRouter() {
   const state = useSession();
   const router = useRouter();
@@ -204,8 +226,10 @@ function SessionRouter() {
       return;
     }
 
-    const enZonaCorrecta = esStaff ? primero === 'staff' : primero !== 'staff';
-    if (!enZonaCorrecta) router.replace(destino);
+    const zona = esStaff ? 'staff' : 'student';
+    const permitida =
+      primero === zona || RUTAS_COMPARTIDAS.has(primero) || RUTAS_DE[zona].has(primero);
+    if (!permitida) router.replace(destino);
   }, [state, segments, router]);
 
   return null;

@@ -393,10 +393,28 @@ export const linkDevice = (rotate = false): Promise<DeviceLinkDto> =>
 
 export interface RosterEntryDto extends MembershipViewDto {}
 
-export const fetchRoster = (): Promise<readonly RosterEntryDto[]> => request('/staff/roster');
+export const fetchRoster = async (): Promise<readonly RosterEntryDto[]> =>
+  (await request<readonly RosterEntryDto[]>('/staff/roster')).map(reviveView);
 
-export const fetchStaffMember = (membershipId: string): Promise<MembershipDetailDto> =>
-  request(`/staff/members/${membershipId}`);
+export const fetchStaffMember = async (membershipId: string): Promise<MembershipDetailDto> =>
+  reviveDetail(await request<MembershipDetailDto>(`/staff/members/${membershipId}`));
+
+/**
+ * Marcados de las ultimas horas en este local.
+ *
+ * Alimenta "Ultimos marcados" de la puerta. Sale del servidor y no de las
+ * asistencias en memoria porque el equipo del mostrador no tiene las de los
+ * turnos anteriores: la lista es del LOCAL, no de esta sesion.
+ */
+export interface RecentCheckInDto extends Attendance {
+  readonly userName: string;
+}
+
+export const fetchRecentCheckIns = async (): Promise<readonly RecentCheckInDto[]> =>
+  (await request<readonly RecentCheckInDto[]>('/staff/checkin/recent')).map((row) => ({
+    ...reviveAttendance(row),
+    userName: row.userName,
+  }));
 
 export interface CheckInOutcomeDto {
   readonly registered: boolean;
@@ -407,22 +425,32 @@ export interface CheckInOutcomeDto {
   readonly attendance?: Attendance;
 }
 
-export const scanQr = (
+const reviveOutcome = (o: CheckInOutcomeDto): CheckInOutcomeDto => ({
+  ...o,
+  view: reviveView(o.view),
+  ...(o.attendance === undefined ? {} : { attendance: reviveAttendance(o.attendance) }),
+});
+
+export const scanQr = async (
   payload: string,
   options: { readonly record?: boolean; readonly clientId?: string } = {},
 ): Promise<CheckInOutcomeDto> =>
-  request('/staff/checkin/qr', {
-    method: 'POST',
-    body: { payload, record: options.record ?? true, clientId: options.clientId },
-  });
+  reviveOutcome(
+    await request<CheckInOutcomeDto>('/staff/checkin/qr', {
+      method: 'POST',
+      body: { payload, record: options.record ?? true, clientId: options.clientId },
+    }),
+  );
 
-export const markManual = (input: {
+export const markManual = async (input: {
   readonly membershipId: string;
   readonly overrideDenial?: boolean;
   readonly clientId?: string;
   readonly occurredAt?: string;
 }): Promise<CheckInOutcomeDto> =>
-  request('/staff/checkin/manual', { method: 'POST', body: input });
+  reviveOutcome(
+    await request<CheckInOutcomeDto>('/staff/checkin/manual', { method: 'POST', body: input }),
+  );
 
 export interface PaymentResultDto {
   readonly charge: Charge;
@@ -430,14 +458,17 @@ export interface PaymentResultDto {
   readonly alreadyRecorded: boolean;
 }
 
-export const recordPayment = (input: {
+export const recordPayment = async (input: {
   readonly membershipId: string;
   readonly type: 'renewal' | 'enrollment' | 'drop_in';
   readonly rail: 'cash' | 'yape' | 'bank_transfer';
   readonly periods?: number;
   readonly amountCents?: number;
   readonly clientId?: string;
-}): Promise<PaymentResultDto> => request('/staff/payments', { method: 'POST', body: input });
+}): Promise<PaymentResultDto> => {
+  const out = await request<PaymentResultDto>('/staff/payments', { method: 'POST', body: input });
+  return { ...out, charge: reviveCharge(out.charge), view: reviveView(out.view) };
+};
 
 export const fetchClaims = (): Promise<
   readonly {
