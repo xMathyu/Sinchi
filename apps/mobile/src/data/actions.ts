@@ -15,11 +15,23 @@
  */
 import { sha256 } from '@noble/hashes/sha2.js';
 import type { CheckInMethod, PaymentRail } from '@sinchi/shared';
-import { markManual, recordPayment, type CheckInOutcomeDto } from './api';
+import {
+  ApiError,
+  fetchStaffMember,
+  markManual,
+  recordPayment,
+  scanQr,
+  type CheckInOutcomeDto,
+} from './api';
 import { getSessionState } from './session';
 import {
+  clearScanVerdict,
   markAttendance as markAttendanceLocal,
   recordManualPayment as recordPaymentLocal,
+  resolveQr,
+  setScanVerdict,
+  viewMembership,
+  type MembershipView,
 } from './store';
 import { hydrateStaff } from './hydrate';
 
@@ -98,11 +110,7 @@ export async function marcarAsistencia(input: {
   // El padrón cambió —el cupo baja, el semáforo puede cambiar— así que se
   // recarga. No se parchea a mano el estado local: el servidor acaba de
   // recalcularlo todo y copiar esa lógica aquí sería tener dos verdades.
-  await hydrateStaff({
-    userId: sesion.userId,
-    tenantId: sesion.tenantId,
-    role: 'front_desk',
-  }).catch(() => {});
+  await refrescarPadron(sesion);
 
   return {
     registrada: salida.registered,
@@ -158,11 +166,113 @@ export async function registrarPago(input: {
     clientId: llaveIdempotente(`pago:${input.membershipId}:${input.type}:${hoyISO()}`),
   });
 
+  await refrescarPadron(sesion);
+
+  return { repetido: salida.alreadyRecorded, montoCents: salida.charge.amountCents };
+}
+
+// ---------------------------------------------------------------------------
+// Puerta
+// ---------------------------------------------------------------------------
+
+export type ResultadoEscaneo =
+  | { readonly ok: true; readonly membershipId: string }
+  | { readonly ok: false; readonly titulo: string; readonly detalle: string };
+
+/**
+ * Valida un QR leido en la puerta.
+ *
+ * Con sesion real manda el servidor, y no por gusto: es el unico que puede
+ * verificar la firma TOTP. Sin esa verificacion, la captura de pantalla del QR
+ * de ayer abre la puerta igual que el codigo vivo, y el control de aforo —que es
+ * lo que el gimnasio compra— deja de existir. El dispositivo del mostrador no
+ * puede hacerlo porque no cachea las claves del padron (ver el ultimo punto del
+ * README).
+ *
+ * Sin servidor —modo demostracion, o wifi caido— se resuelve contra el padron en
+ * cache. Eso es la promesa del MD 4.6: la puerta sigue funcionando. Lo que se
+ * pierde es exactamente la firma, y por eso el veredicto local se marca como tal
+ * en vez de presentarse como si el servidor lo hubiera confirmado.
+ */
+export async function evaluarQr(payload: string): Promise<ResultadoEscaneo> {
+  const sesion = conServidor();
+
+  if (sesion !== null) {
+    try {
+      // `record: true`: el servidor verifica la firma y registra en la misma
+      // llamada. Separarlo en dos pasos no es posible — el codigo rota cada 30
+      // segundos y ya habria vencido cuando el recepcionista confirme.
+      const salida = await scanQr(payload, { record: true });
+      setScanVerdict({
+        membershipId: salida.view.membership.id,
+        result: salida.result,
+        message: salida.message,
+        registered: salida.registered,
+      });
+      await refrescarPadron(sesion);
+      return { ok: true, membershipId: salida.view.membership.id };
+    } catch (causa) {
+      if (!(causa instanceof ApiError) || !causa.isOffline) {
+        // La api responde en espanol y con el motivo concreto ("el codigo ya
+        // venció", "no vinculó su dispositivo"). Reescribirlo aqui solo lo
+        // empeoraria.
+        return {
+          ok: false,
+          titulo: 'No se pudo validar',
+          detalle: causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+        };
+      }
+      // Sin red se sigue, contra la cache.
+    }
+  }
+
+  clearScanVerdict();
+  const local = resolveQr(payload);
+  if (local.ok) return { ok: true, membershipId: local.membershipId };
+
+  return {
+    ok: false,
+    titulo: 'Código no reconocido',
+    detalle:
+      local.reason === 'not_sinchi'
+        ? 'Ese QR no es de Sinchi.'
+        : local.reason === 'unknown_user'
+          ? 'El código es de Sinchi, pero no corresponde a ningún usuario.'
+          : 'Este alumno no tiene membresía en este local.',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Ficha del alumno
+// ---------------------------------------------------------------------------
+
+/**
+ * Trae la ficha completa de un alumno del padron.
+ *
+ * El padron de `/staff/roster` llega sin cargos ni asistencias a proposito:
+ * pedirlos de cada alumno serian sesenta peticiones para pintar una lista. El
+ * historial se pide al abrir a UNA persona, que es cuando de verdad se necesita.
+ */
+export async function cargarDetalleAlumno(membershipId: string): Promise<MembershipView> {
+  if (conServidor() === null) return viewMembership(membershipId);
+  return await fetchStaffMember(membershipId);
+}
+
+/**
+ * Vuelve a pedir el padron despues de escribir.
+ *
+ * Se traga el error a proposito: la escritura ya ocurrio y el servidor tiene la
+ * verdad. Fallar aqui solo significa que la lista se vera vieja hasta la
+ * siguiente carga, y eso no justifica presentarle un error a quien acaba de
+ * cobrar bien.
+ */
+async function refrescarPadron(sesion: {
+  readonly userId: string;
+  readonly tenantId: string | null;
+}): Promise<void> {
   await hydrateStaff({
     userId: sesion.userId,
     tenantId: sesion.tenantId,
     role: 'front_desk',
   }).catch(() => {});
-
-  return { repetido: salida.alreadyRecorded, montoCents: salida.charge.amountCents };
 }

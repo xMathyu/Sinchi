@@ -93,9 +93,31 @@ export const colors = {
 
   textBright: '#C9C9D1',
   textStrong: '#B8B8C0',
-  textSecondary: '#8A8A93',
-  textTertiary: '#6E6E78',
-  textFaint: '#5A5A63',
+
+  /**
+   * Los tres tonos legibles, y no hay mas.
+   *
+   * La rampa tenia seis escalones bajo `ink` y los tres de abajo no llegaban a
+   * AA sobre las propias superficies del sistema: `textTertiary` daba 3.54:1,
+   * `textFaint` 2.62:1 y el placeholder de los campos 2.20:1. En una app que se
+   * usa de pie, en el mostrador y con la luz de un gimnasio, eso no es un matiz
+   * de jerarquia: es texto que no se lee.
+   *
+   * `#8C8C95` es el suelo — el gris mas oscuro que pasa 4.5:1 sobre las siete
+   * superficies, incluida `surfaceHigher`. Debajo de ahi no hay escalon que
+   * ganar, asi que la jerarquia por debajo del secundario se hace con tamano y
+   * peso, no con mas gris.
+   */
+  textSecondary: '#9C9CA6',
+  textTertiary: '#8C8C95',
+  textFaint: '#8C8C95',
+  /** Texto de sugerencia de un campo vacio. Es una instruccion: tiene que leerse. */
+  textPlaceholder: '#8C8C95',
+  /**
+   * Solo para controles inactivos —un dia que el plan no habilita, un metodo de
+   * pago que no aplica—. Aqui el contraste bajo ES la senal, y por eso este es
+   * el unico tono que se queda por debajo de AA a proposito.
+   */
   textDisabled: '#4A4A52',
 
   divider: 'rgba(255,255,255,0.05)',

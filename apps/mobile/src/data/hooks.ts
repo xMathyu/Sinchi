@@ -16,6 +16,9 @@ import {
   type PlainDate,
 } from '@sinchi/shared';
 import { hmacSha256, loadSecret } from './crypto';
+import { fetchRecentCheckIns } from './api';
+import { cargarDetalleAlumno } from './actions';
+import { getSessionState } from './session';
 import {
   getState,
   previewCheckIn,
@@ -26,6 +29,7 @@ import {
   type CheckInPreview,
   type MembershipView,
   type RosterEntry,
+  type ScanVerdict,
   type State,
 } from './store';
 
@@ -164,4 +168,144 @@ export function useAccessCode(): AccessCode {
     ready: code !== null,
     needsLink: loaded && secret === null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Staff
+// ---------------------------------------------------------------------------
+
+/** Lo que el servidor dijo del ultimo QR, si es de este alumno. */
+export function useScanVerdict(membershipId: string): ScanVerdict | null {
+  const verdict = useStore((s) => s.scanVerdict);
+  return verdict !== null && verdict.membershipId === membershipId ? verdict : null;
+}
+
+export interface FichaAlumno {
+  readonly view: MembershipView | null;
+  readonly cargando: boolean;
+  readonly error: string | null;
+  /**
+   * Lo que se ve sale del padron en cache, sin historial.
+   *
+   * La pantalla lo dice en vez de mostrar un historial vacio: "no ha pagado
+   * nunca" y "no pude traer sus pagos" se ven igual y significan lo contrario.
+   */
+  readonly parcial: boolean;
+  readonly recargar: () => void;
+}
+
+/**
+ * Ficha completa de un alumno del padron.
+ *
+ * Empieza por lo que ya hay en cache —el padron trae el semaforo, el plan y la
+ * deuda— y lo completa con el historial cuando llega. Asi la pantalla se pinta
+ * de inmediato y sin conexion sigue sirviendo para lo que importa en el
+ * mostrador: saber si puede pasar y cuanto debe.
+ */
+export function useStaffMember(membershipId: string): FichaAlumno {
+  const roster = useRoster();
+  const [detalle, setDetalle] = useState<MembershipView | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  const enCache =
+    roster.find((entrada) => entrada.view.membership.id === membershipId)?.view ?? null;
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(null);
+
+    void cargarDetalleAlumno(membershipId)
+      .then((vista) => {
+        if (!cancelado) setDetalle(vista);
+      })
+      .catch((causa: unknown) => {
+        if (cancelado) return;
+        setError(causa instanceof Error ? causa.message : 'No se pudo traer la ficha.');
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+    // `roster` cambia cuando se recarga el padron tras cobrar o marcar, y es
+    // justo cuando esta ficha quedo vieja.
+  }, [membershipId, intento, roster]);
+
+  return {
+    view: detalle ?? enCache,
+    cargando,
+    error,
+    parcial: detalle === null && enCache !== null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+export interface MarcadoReciente {
+  readonly id: string;
+  readonly name: string;
+  readonly at: Date;
+  readonly manual: boolean;
+}
+
+/**
+ * "Ultimos marcados" de la puerta.
+ *
+ * Sale del servidor porque la lista es del LOCAL, no de esta sesion: el equipo
+ * del mostrador se enciende a mitad del dia y las asistencias de la manana no
+ * estan en su memoria. Sin conexion cae a lo que si tenga en cache, que en un
+ * turno ya empezado es lo que se marco desde este aparato.
+ */
+export function useRecentCheckIns(): readonly MarcadoReciente[] {
+  const roster = useRoster();
+  const staff = useStore((s) => s.staff);
+  const attendances = useStore((s) => s.attendances);
+  const [remotos, setRemotos] = useState<readonly MarcadoReciente[] | null>(null);
+
+  useEffect(() => {
+    if (getSessionState().status !== 'signed_in') return;
+
+    let cancelado = false;
+    void fetchRecentCheckIns()
+      .then((filas) => {
+        if (cancelado) return;
+        setRemotos(
+          filas.map((fila) => ({
+            id: fila.id,
+            name: fila.userName,
+            at: fila.checkedInAt,
+            manual: fila.method === 'manual',
+          })),
+        );
+      })
+      // Sin red se conserva lo ultimo que se pudo traer: una lista vieja dice
+      // mas que una vacia.
+      .catch(() => {});
+
+    return () => {
+      cancelado = true;
+    };
+  }, [roster]);
+
+  const locales = useMemo(
+    () =>
+      attendances
+        .filter((a) => a.tenantId === staff.tenantId)
+        .slice()
+        .sort((a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime())
+        .map((a) => ({
+          id: a.id,
+          name:
+            roster.find((e) => e.view.membership.id === a.membershipId)?.user.name ?? 'Alumno',
+          at: a.checkedInAt,
+          manual: a.method === 'manual',
+        })),
+    [attendances, staff.tenantId, roster],
+  );
+
+  return remotos ?? locales;
 }

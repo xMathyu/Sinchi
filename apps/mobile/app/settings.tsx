@@ -35,7 +35,16 @@ export default function SettingsScreen() {
   const { colorBlindSafe, setColorBlindSafe } = useThemeContext();
   const role = useStore((state) => state.role);
   const user = useStore((state) => state.user);
+  const staff = useStore((state) => state.staff);
+  const tenants = useStore((state) => state.tenants);
   const session = useSession();
+
+  // Con sesion de staff el store NO tiene la billetera de nadie: `/me` es del
+  // alumno y un recepcionista no tiene membresia donde trabaja. `state.user`
+  // sigue siendo el de demostracion, asi que mostrarlo aqui le ponia a la
+  // recepcionista el nombre de Mathyu Quispe.
+  const esTurno = session.status === 'signed_in' && session.session.role !== 'student';
+  const enTurno = tenants.find((t) => t.id === staff.tenantId);
 
   return (
     <Screen scroll>
@@ -43,7 +52,7 @@ export default function SettingsScreen() {
         <Text variant="titleSmall" weight="bold">
           Ajustes
         </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
             Cerrar
           </Text>
@@ -55,10 +64,12 @@ export default function SettingsScreen() {
           <Logo size={28} />
           <Stack gap={1} style={{ flex: 1 }}>
             <Text variant="heading" weight="semibold">
-              {user.name}
+              {esTurno ? staff.displayName : user.name}
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {user.phone} · identidad Sinchi
+              {esTurno
+                ? `${staff.role === 'owner' ? 'Dueño' : 'Recepción'}${enTurno === undefined ? '' : ` · ${enTurno.name}`}`
+                : `${user.phone} · identidad Sinchi`}
             </Text>
           </Stack>
         </Row>
@@ -117,6 +128,10 @@ export default function SettingsScreen() {
         </Card>
       </Stack>
 
+      {/* Con sesion real el rol lo firma el token: cambiarlo aqui solo dejaria la
+          app pintando una zona para la que la api va a devolver 403. El selector
+          es lo que sostiene el recorrido en modo demostracion, y ahi se queda. */}
+      {session.status === 'signed_in' ? null : (
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Rol de la sesión</Eyebrow>
         {ROLES.map((option) => (
@@ -152,6 +167,7 @@ export default function SettingsScreen() {
           hay api.
         </Text>
       </Stack>
+      )}
 
         {/* La sesion de demostracion no tenia salida: se entraba desde la
             puerta de desarrollo y no habia forma de volver. Los datos falsos
@@ -182,15 +198,28 @@ export default function SettingsScreen() {
           </Stack>
         )}
 
+        {/* El modo staff no tenia salida: las pantallas de la puerta no llevaban
+            a ajustes, y con sesion de staff el enrutado ademas rebotaba
+            `/settings` a `/staff`. Cerrar turno era imposible sin desinstalar. */}
         {session.status === 'signed_in' && (
           <Stack gap={10} style={{ marginTop: 24 }}>
             <Eyebrow>Sesión</Eyebrow>
+            {esTurno && (
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                El equipo sigue registrado en {enTurno?.name ?? 'este gimnasio'}: al cerrar,
+                la siguiente persona abre su turno con su PIN, sin volver a pegar el
+                token del dueño.
+              </Text>
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                // Se olvida el secreto del QR: si presta el telefono, el
-                // siguiente no debe poder generar su codigo.
-                void signOut({ forgetTotpSecret: true }).then(() => {
+                // El secreto del QR se olvida al salir el ALUMNO: si presta el
+                // telefono, el siguiente no debe poder generar su codigo. Al
+                // cerrar turno no hay ninguno que olvidar —el equipo del
+                // mostrador no genera QR— y borrarlo tocaria el del dueño de
+                // este telefono, que no es lo que se pidió.
+                void signOut({ forgetTotpSecret: !esTurno }).then(() => {
                   resetState();
                   router.replace('/login');
                 });
@@ -198,29 +227,33 @@ export default function SettingsScreen() {
             >
               <Card radius={theme.radii.lg}>
                 <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
-                  Cerrar sesión
+                  {esTurno ? 'Cerrar turno' : 'Cerrar sesión'}
                 </Text>
               </Card>
             </Pressable>
           </Stack>
         )}
 
-      <Stack gap={10} style={{ marginTop: 24 }}>
-        <Eyebrow>Datos de demostración</Eyebrow>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            resetState();
-            router.replace('/');
-          }}
-        >
-          <Card radius={theme.radii.lg}>
-            <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
-              Reiniciar datos
-            </Text>
-          </Card>
-        </Pressable>
-      </Stack>
+      {/* Reinicia el store a `demo.ts`. Con sesion real solo consigue pintar
+          datos inventados encima de los del gimnasio hasta la siguiente carga. */}
+      {session.status !== 'signed_in' && (
+        <Stack gap={10} style={{ marginTop: 24 }}>
+          <Eyebrow>Datos de demostración</Eyebrow>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              resetState();
+              router.replace('/');
+            }}
+          >
+            <Card radius={theme.radii.lg}>
+              <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
+                Reiniciar datos
+              </Text>
+            </Card>
+          </Pressable>
+        </Stack>
+      )}
     </Screen>
   );
 }

@@ -140,7 +140,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 editable={!working}
                 placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={theme.colors.textDisabled}
+                placeholderTextColor={theme.colors.textPlaceholder}
                 style={{
                   color: theme.colors.ink,
                   fontSize: 16,
@@ -164,7 +164,7 @@ export default function LoginScreen() {
                 autoComplete={creating ? 'new-password' : 'current-password'}
                 editable={!working}
                 placeholder={creating ? 'Al menos 6 caracteres' : '••••••••'}
-                placeholderTextColor={theme.colors.textDisabled}
+                placeholderTextColor={theme.colors.textPlaceholder}
                 onSubmitEditing={() => {
                   if (canSubmit) submitEmail();
                 }}

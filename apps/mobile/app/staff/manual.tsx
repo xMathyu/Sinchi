@@ -57,7 +57,7 @@ export default function ManualCheckInScreen() {
         <Text variant="titleSmall" weight="bold">
           Marcar manual
         </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
             Cerrar
           </Text>
@@ -89,7 +89,7 @@ export default function ManualCheckInScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder="Nombre o documento"
-          placeholderTextColor={theme.colors.textTertiary}
+          placeholderTextColor={theme.colors.textPlaceholder}
           autoCorrect={false}
           autoCapitalize="words"
           accessibilityLabel="Buscar alumno por nombre o documento"
@@ -169,13 +169,18 @@ export default function ManualCheckInScreen() {
         </Row>
         <Button
           label={
-            selected === null
-              ? 'Elige un alumno'
-              : `Marcar asistencia de ${firstName(selected.user.name)}`
+            marcando
+              ? 'Marcando…'
+              : selected === null
+                ? 'Elige un alumno'
+                : `Marcar asistencia de ${firstName(selected.user.name)}`
           }
-          disabled={selected === null}
+          // `marcando` se calculaba y no se usaba: dos toques seguidos mandaban
+          // dos peticiones. La idempotencia las colapsa en el servidor, pero la
+          // pantalla no lo reflejaba.
+          disabled={selected === null || marcando}
           onPress={() => {
-            if (selected === null) return;
+            if (selected === null || marcando) return;
             const allowed = selected.view.delinquency.canTrain && !selected.view.quota.exhausted;
             setMarcando(true);
             setError(null);

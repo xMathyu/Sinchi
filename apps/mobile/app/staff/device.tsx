@@ -139,11 +139,16 @@ export default function DeviceScreen() {
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           El servidor reconcilia al sincronizar y tiene la última palabra.
         </Text>
-        <Button
-          label={online ? 'Simular corte de wifi' : 'Reintentar sincronización'}
-          variant="secondary"
-          onPress={() => (online ? setOnline(false) : syncQueue())}
-        />
+        {/* Cortar el wifi a mano es una herramienta de desarrollo. En un local
+            de verdad, un boton que deja la puerta offline a proposito solo
+            puede hacer dano. */}
+        {online ? (
+          __DEV__ ? (
+            <Button label="Simular corte de wifi" variant="ghost" onPress={() => setOnline(false)} />
+          ) : null
+        ) : (
+          <Button label="Reintentar sincronización" variant="secondary" onPress={() => syncQueue()} />
+        )}
       </Stack>
     </Screen>
   );

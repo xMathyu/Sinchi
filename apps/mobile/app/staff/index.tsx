@@ -12,43 +12,35 @@
  *    permiso de camara todavia concedido, o con la camara ocupada, recepcion
  *    necesita una via para atender al alumno que ya esta en la puerta.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { withAlpha } from '@sinchi/ui';
-import { Button, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Avatar, Button, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useRoster, useStore } from '../../src/data/hooks';
-import { resolveQr, setOnline } from '../../src/data/store';
-import { formatClock } from '../../src/lib/format';
+import { useRecentCheckIns, useRoster, useStore } from '../../src/data/hooks';
+import { setOnline } from '../../src/data/store';
+import { evaluarQr } from '../../src/data/actions';
+import { formatClock, initials } from '../../src/lib/format';
 
 export default function ScannerScreen() {
   const theme = useTheme();
   const staff = useStore((state) => state.staff);
   const tenants = useStore((state) => state.tenants);
   const online = useStore((state) => state.online);
-  const attendances = useStore((state) => state.attendances);
   const roster = useRoster();
+  const recent = useRecentCheckIns();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
+  const [validando, setValidando] = useState(false);
   // Un QR sigue en cuadro varios fotogramas: sin este candado se disparan
   // cinco navegaciones por un solo escaneo.
   const locked = useRef(false);
 
   const tenant = tenants.find((item) => item.id === staff.tenantId);
-
-  const recent = useMemo(
-    () =>
-      attendances
-        .filter((attendance) => attendance.tenantId === staff.tenantId)
-        .slice()
-        .sort((a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime())
-        .slice(0, 3),
-    [attendances, staff.tenantId],
-  );
 
   const openResult = useCallback((membershipId: string) => {
     router.push(`/result/${membershipId}`);
@@ -57,24 +49,24 @@ export default function ScannerScreen() {
   const onBarcode = useCallback(
     ({ data }: { readonly data: string }) => {
       if (locked.current) return;
-      const resolution = resolveQr(data);
-      if (!resolution.ok) {
-        locked.current = true;
-        Alert.alert(
-          'Código no reconocido',
-          resolution.reason === 'not_sinchi'
-            ? 'Ese QR no es de Sinchi.'
-            : resolution.reason === 'unknown_user'
-              ? 'El código es de Sinchi, pero no corresponde a ningún usuario.'
-              : 'Este alumno no tiene membresía en este local.',
-          [{ text: 'Entendido', onPress: () => (locked.current = false) }],
-        );
-        return;
-      }
       locked.current = true;
-      setScanning(false);
-      openResult(resolution.membershipId);
-      setTimeout(() => (locked.current = false), 1200);
+      setValidando(true);
+
+      // La firma TOTP la verifica el servidor, no este aparato: `evaluarQr`
+      // decide a quien preguntar y cae a la cache si no hay red.
+      void evaluarQr(data)
+        .then((salida) => {
+          if (!salida.ok) {
+            Alert.alert(salida.titulo, salida.detalle, [
+              { text: 'Entendido', onPress: () => (locked.current = false) },
+            ]);
+            return;
+          }
+          setScanning(false);
+          openResult(salida.membershipId);
+          setTimeout(() => (locked.current = false), 1200);
+        })
+        .finally(() => setValidando(false));
     },
     [openResult],
   );
@@ -96,6 +88,7 @@ export default function ScannerScreen() {
             {tenant?.name ?? ''} · {staff.displayName} ({staff.role === 'owner' ? 'dueño' : 'recepción'})
           </Text>
         </Stack>
+        <Row gap={9} justify="flex-end">
         <Pressable
           accessibilityRole="switch"
           accessibilityState={{ checked: online }}
@@ -122,6 +115,16 @@ export default function ScannerScreen() {
             {online ? 'EN LÍNEA' : 'OFFLINE'}
           </Text>
         </Pressable>
+        {/* La unica salida del modo staff: sin esto no habia forma de cerrar
+            turno desde la puerta, que es donde se pasa el dia. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ajustes y cerrar turno"
+          onPress={() => router.push('/settings')}
+        >
+          <Avatar initials={initials(staff.displayName)} size={34} radius={17} />
+        </Pressable>
+        </Row>
       </Row>
 
       <View
@@ -165,44 +168,40 @@ export default function ScannerScreen() {
             Todavía no hay marcados en este turno.
           </Text>
         ) : (
-          recent.map((attendance) => {
-            const entry = roster.find(
-              (item) => item.view.membership.id === attendance.membershipId,
-            );
-            return (
-              <Row
-                key={attendance.id}
-                gap={11}
-                justify="flex-start"
-                style={{
-                  backgroundColor: '#141418',
-                  borderRadius: theme.radii.md,
-                  paddingHorizontal: 13,
-                  paddingVertical: 11,
-                }}
-              >
-                <Dot color={theme.semaphore.ok} size={8} />
-                <Text variant="bodySmall" weight="semibold" style={{ flex: 1 }}>
-                  {entry?.user.name ?? 'Alumno'}
-                  {attendance.method === 'manual' ? (
-                    <Text variant="bodySmall" color={theme.colors.textTertiary}>
-                      {' '}
-                      · manual
-                    </Text>
-                  ) : null}
-                </Text>
-                <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                  {formatClock(attendance.checkedInAt)}
-                </Text>
-              </Row>
-            );
-          })
+          recent.slice(0, 3).map((marcado) => (
+            <Row
+              key={marcado.id}
+              gap={11}
+              justify="flex-start"
+              style={{
+                backgroundColor: '#141418',
+                borderRadius: theme.radii.md,
+                paddingHorizontal: 13,
+                paddingVertical: 11,
+              }}
+            >
+              <Dot color={theme.semaphore.ok} size={8} />
+              <Text variant="bodySmall" weight="semibold" style={{ flex: 1 }}>
+                {marcado.name}
+                {marcado.manual ? (
+                  <Text variant="bodySmall" color={theme.colors.textTertiary}>
+                    {' '}
+                    · manual
+                  </Text>
+                ) : null}
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                {formatClock(marcado.at)}
+              </Text>
+            </Row>
+          ))
         )}
       </Stack>
 
       <Stack gap={10}>
         <Button
-          label={scanning ? 'Leyendo QR…' : 'Escanear QR'}
+          label={validando ? 'Validando…' : scanning ? 'Leyendo QR…' : 'Escanear QR'}
+          disabled={validando}
           onPress={async () => {
             if (permission?.granted !== true) {
               const result = await requestPermission();
@@ -217,6 +216,9 @@ export default function ScannerScreen() {
             setScanning((value) => !value);
           }}
         />
+        {/* El cobro solo se alcanzaba DESPUES de un check-in, asi que para
+            cobrarle a alguien que viene a pagar sin entrenar habia que fingir
+            una asistencia primero. */}
         <Row gap={10}>
           <Button
             label="Marcar manual"
@@ -225,23 +227,18 @@ export default function ScannerScreen() {
             onPress={() => router.push('/staff/manual')}
           />
           <Button
-            label="Simular escaneo"
+            label="Padrón y cobros"
             variant="secondary"
             style={{ flex: 1 }}
-            onPress={simulate}
+            onPress={() => router.push('/staff/padron')}
           />
-          </Row>
-          {/* El cobro solo se alcanzaba DESPUES de un check-in, asi que para
-              cobrarle a alguien que viene a pagar sin entrenar habia que fingir
-              una asistencia primero. */}
-          <Row gap={10}>
-            <Button
-              label="Padrón y cobros"
-              variant="secondary"
-              style={{ flex: 1 }}
-              onPress={() => router.push('/staff/padron')}
-            />
         </Row>
+        {/* Recorre el padron sin camara. Es una herramienta de desarrollo: en un
+            local de verdad, un boton que inventa escaneos ensucia la asistencia
+            y el cupo de alguien real. */}
+        {__DEV__ ? (
+          <Button label="Simular escaneo" variant="ghost" onPress={simulate} />
+        ) : null}
       </Stack>
     </Screen>
   );

@@ -151,7 +151,7 @@ export default function DevScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="url"
-                placeholderTextColor={theme.colors.textDisabled}
+                placeholderTextColor={theme.colors.textPlaceholder}
                 style={{
                   color: theme.colors.ink,
                   fontSize: 14,

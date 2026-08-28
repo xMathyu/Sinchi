@@ -9,6 +9,9 @@
  * Se ordena por deuda descendente y no alfabéticamente: la pregunta que trae a
  * alguien a esta pantalla es "¿a quién tengo que cobrarle?", no "¿dónde está
  * Fulano?". Para eso está el buscador.
+ *
+ * Cada fila abre la ficha del alumno, no el cobro. Ir directo a cobrar obligaba
+ * a abrir un cargo para responder "¿por qué no pasa?" y a cancelarlo después.
  */
 import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -69,7 +72,7 @@ export default function PadronScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder="Buscar por nombre o documento"
-          placeholderTextColor={theme.colors.textDisabled}
+          placeholderTextColor={theme.colors.textPlaceholder}
           autoCapitalize="none"
           autoCorrect={false}
           style={{
@@ -99,7 +102,15 @@ export default function PadronScreen() {
               <Fila
                 key={entrada.view.membership.id}
                 entrada={entrada}
-                onPress={() => router.push(`/charge/${entrada.view.membership.id}`)}
+                // Va a la ficha, no al cobro: la pregunta del mostrador no
+                // siempre es cobrar, y para llegar a mirar a alguien no debería
+                // haber que abrir un cargo a medias.
+                onPress={() =>
+                  router.push({
+                    pathname: '/member/[membershipId]',
+                    params: { membershipId: entrada.view.membership.id },
+                  })
+                }
               />
             ))}
           </Stack>
