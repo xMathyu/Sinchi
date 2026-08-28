@@ -24,7 +24,14 @@ import { useTheme } from '../src/design/theme';
 import { getApiBase, setApiBase } from '../src/data/api';
 import { enterDemoMode, saveSession } from '../src/data/session';
 
-/** Los que siembra `npm run db:seed`. */
+/**
+ * Atajos a las cuentas que siembra `npm run db:seed`.
+ *
+ * Son un atajo, no la lista: una base real no tiene por qué estar sembrada con
+ * ellas —la de produccion no lo esta— y cuando no lo esta, estos botones fallan
+ * con un 404 que parece un problema de la api. Por eso arriba hay un campo para
+ * escribir cualquier telefono del padron.
+ */
 const CUENTAS = [
   { phone: '+51987654321', label: 'Mathyu Quispe', detail: 'alumno · 3 gimnasios' },
   { phone: '+51987000111', label: 'Ana Ríos', detail: 'recepción · Dojo Shotokan' },
@@ -37,6 +44,7 @@ export default function DevScreen() {
   const router = useRouter();
   const [apiUrl, setApiUrl] = useState(getApiBase());
   const [working, setWorking] = useState<string | null>(null);
+  const [telefono, setTelefono] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   if (!__DEV__) {
@@ -161,6 +169,46 @@ export default function DevScreen() {
                 }}
               />
             </Stack>
+
+            <Stack gap={4}>
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                Teléfono de la persona
+              </Text>
+              <Row gap={10}>
+                <TextInput
+                  value={telefono}
+                  onChangeText={setTelefono}
+                  placeholder="+51..."
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="phone-pad"
+                  placeholderTextColor={theme.colors.textPlaceholder}
+                  style={{
+                    flex: 1,
+                    color: theme.colors.ink,
+                    fontSize: 16,
+                    paddingVertical: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: theme.colors.hairline,
+                  }}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={12}
+                  disabled={telefono.trim().length < 6 || working !== null}
+                  onPress={() => void devLogin(telefono.trim())}
+                  style={{ opacity: telefono.trim().length < 6 || working !== null ? 0.4 : 1 }}
+                >
+                  <Text variant="bodySmall" weight="semibold" color={theme.semaphore.ok}>
+                    Entrar
+                  </Text>
+                </Pressable>
+              </Row>
+            </Stack>
+
+            <Text variant="micro" color={theme.colors.textFaint}>
+              O usa una de las cuentas de la semilla, si la base las tiene:
+            </Text>
 
             {CUENTAS.map((cuenta) => (
               <Pressable
