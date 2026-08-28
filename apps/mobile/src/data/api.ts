@@ -470,6 +470,23 @@ export const recordPayment = async (input: {
   return { ...out, charge: reviveCharge(out.charge), view: reviveView(out.view) };
 };
 
+/**
+ * Resumen del local. Solo el dueño.
+ *
+ * `collectedThisMonthCents` cuenta cargos con estado `succeeded` desde el 1 del
+ * mes; `checkInsToday` son las últimas 18 horas, no el día civil, para que un
+ * turno de noche no se corte a medias.
+ */
+export interface SummaryDto {
+  readonly activeMembers: number;
+  readonly delinquentMembers: number;
+  readonly collectedThisMonthCents: number;
+  readonly outstandingCents: number;
+  readonly checkInsToday: number;
+}
+
+export const fetchSummary = (): Promise<SummaryDto> => request('/staff/summary');
+
 export const fetchClaims = (): Promise<
   readonly {
     readonly id: string;

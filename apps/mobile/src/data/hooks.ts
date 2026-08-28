@@ -14,10 +14,18 @@ import {
   secondsUntilRotation,
   TOTP_PERIOD_SECONDS,
   type PlainDate,
+  type Plan,
 } from '@sinchi/shared';
 import { hmacSha256, loadSecret } from './crypto';
-import { fetchRecentCheckIns } from './api';
-import { cargarDetalleAlumno } from './actions';
+import { fetchRecentCheckIns, type SummaryDto } from './api';
+import {
+  cargarDetalleAlumno,
+  planesPara,
+  resumenDelGimnasio,
+  vinculacionesPendientes,
+  type Vinculacion,
+} from './actions';
+import { ensureAccessCodeSecret } from './auth';
 import { getSessionState } from './session';
 import {
   getState,
@@ -140,15 +148,27 @@ export function useAccessCode(): AccessCode {
 
   useEffect(() => {
     let cancelled = false;
-    void loadSecret().then((value) => {
-      if (cancelled) return;
-      setSecret(value);
-      setLoaded(true);
-    });
+
+    // Se pide el secreto y, si no está, se siembra. La siembra vivía en
+    // `auth.ts` sin que nadie la llamara: el llavero se quedaba vacío y esta
+    // pantalla pedía vincular el dispositivo para siempre.
+    void loadSecret()
+      .then(async (value) => {
+        if (value !== null) return value;
+        const sesion = getSessionState();
+        if (sesion.status !== 'signed_in') return null;
+        return (await ensureAccessCodeSecret(sesion.session.userId)) ? loadSecret() : null;
+      })
+      .then((value) => {
+        if (cancelled) return;
+        setSecret(value);
+        setLoaded(true);
+      });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const timer = setInterval(() => setTick(new Date()), 1000);
@@ -308,4 +328,115 @@ export function useRecentCheckIns(): readonly MarcadoReciente[] {
   );
 
   return remotos ?? locales;
+}
+
+/**
+ * Planes a los que esta membresía puede cambiar.
+ *
+ * Se piden a la api. `state.plans` solo contiene el plan actual del alumno y su
+ * plan pendiente —es lo único que `/me` devuelve—, así que la pantalla de cambio
+ * de plan filtraba esa lista, se quedaba sin opciones y no ofrecía ninguna. El
+ * comentario de `hydrate.ts` decía que los planes hacían falta; el código nunca
+ * llegó a pedirlos.
+ */
+export function usePlansFor(membershipId: string): {
+  readonly plans: readonly Plan[];
+  readonly cargando: boolean;
+  readonly error: string | null;
+} {
+  const [plans, setPlans] = useState<readonly Plan[] | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const locales = useStore((s) => s.plans);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(null);
+
+    void planesPara(membershipId)
+      .then((lista) => {
+        if (!cancelado) setPlans(lista);
+      })
+      .catch((causa: unknown) => {
+        if (!cancelado) {
+          setError(causa instanceof Error ? causa.message : 'No se pudieron traer los planes.');
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [membershipId]);
+
+  return { plans: plans ?? locales, cargando, error };
+}
+
+/**
+ * Códigos de vinculación vigentes, con recarga manual.
+ *
+ * No se refresca solo: el código dura diez minutos y quien mira esta pantalla
+ * tiene al alumno enfrente enseñándole la pantalla. Un temporizador que recarga
+ * cada pocos segundos movería la lista bajo el dedo justo al tocarla.
+ */
+export function useClaims(): {
+  readonly claims: readonly Vinculacion[];
+  readonly cargando: boolean;
+  readonly error: string | null;
+  readonly recargar: () => void;
+} {
+  const [claims, setClaims] = useState<readonly Vinculacion[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(null);
+
+    void vinculacionesPendientes()
+      .then((lista) => {
+        if (!cancelado) setClaims(lista);
+      })
+      .catch((causa: unknown) => {
+        if (!cancelado) {
+          setError(causa instanceof Error ? causa.message : 'No se pudieron traer los códigos.');
+        }
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  return { claims, cargando, error, recargar: () => setIntento((n) => n + 1) };
+}
+
+/** Resumen del local para el dueño. `null` cuando no es el dueño o aún no llegó. */
+export function useOwnerSummary(): SummaryDto | null {
+  const roster = useRoster();
+  const [resumen, setResumen] = useState<SummaryDto | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    // Se recalcula cuando cambia el padrón, que es justo cuando alguien cobró o
+    // marcó: pedirlo en un temporizador movería los números sin motivo.
+    void resumenDelGimnasio()
+      .then((valor) => {
+        if (!cancelado) setResumen(valor);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [roster]);
+
+  return resumen;
 }

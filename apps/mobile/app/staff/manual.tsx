@@ -7,10 +7,10 @@
  * que hace que el recepcionista sepa que se está firmando.
  */
 import { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatPENShort } from '@sinchi/shared';
-import { semaphoreStyle, withAlpha } from '@sinchi/ui';
+import { screenPadding, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import {
   Avatar,
   Badge,
@@ -51,8 +51,8 @@ export default function ManualCheckInScreen() {
 
   const selected = matches.find((entry) => entry.view.membership.id === selectedId) ?? null;
 
-  return (
-    <Screen scroll>
+  const cabecera = (
+    <>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
           Marcar manual
@@ -102,28 +102,14 @@ export default function ManualCheckInScreen() {
         />
       </View>
 
-      <Eyebrow style={{ marginTop: 16 }}>
+      <Eyebrow style={{ marginTop: 16, marginBottom: 10 }}>
         {matches.length} {matches.length === 1 ? 'coincidencia' : 'coincidencias'}
       </Eyebrow>
+    </>
+  );
 
-      <Stack gap={9} style={{ marginTop: 10 }}>
-        {matches.map((entry) => (
-          <MemberRow
-            key={entry.view.membership.id}
-            entry={entry}
-            selected={entry.view.membership.id === selectedId}
-            onPress={() => setSelectedId(entry.view.membership.id)}
-          />
-        ))}
-        {matches.length === 0 ? (
-          <Card radius={theme.radii.lg}>
-            <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-              Nadie en el padrón coincide con «{query}».
-            </Text>
-          </Card>
-        ) : null}
-      </Stack>
-
+  const pie = (
+    <>
       <View
         style={{
           marginTop: 16,
@@ -215,6 +201,38 @@ export default function ManualCheckInScreen() {
           </Text>
         ) : null}
       </Stack>
+    </>
+  );
+
+  // FlatList: la lista es el padrón entero mientras no se escriba nada en el
+  // buscador, y montarlo de golpe se nota en el equipo del mostrador.
+  return (
+    <Screen padded={false}>
+      <FlatList
+        data={matches}
+        keyExtractor={(entry) => entry.view.membership.id}
+        renderItem={({ item }) => (
+          <MemberRow
+            entry={item}
+            selected={item.view.membership.id === selectedId}
+            onPress={() => setSelectedId(item.view.membership.id)}
+          />
+        )}
+        ListHeaderComponent={cabecera}
+        ListFooterComponent={pie}
+        ItemSeparatorComponent={() => <View style={{ height: 9 }} />}
+        ListEmptyComponent={
+          <Card radius={theme.radii.lg}>
+            <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
+              Nadie en el padrón coincide con «{query}».
+            </Text>
+          </Card>
+        }
+        contentContainerStyle={{ paddingHorizontal: screenPadding, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      />
     </Screen>
   );
 }

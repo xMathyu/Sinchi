@@ -11,7 +11,8 @@
  *    (MD 4.6). En producción el rol viene de la sesión; hasta que exista la api,
  *    este es el único camino para recorrer el modo staff.
  */
-import { Pressable, Switch, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Switch, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
 import { SEMAPHORE_COLORBLIND_SAFE, SEMAPHORE_DEFAULT } from '@sinchi/ui';
@@ -20,6 +21,7 @@ import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
 import { signOut } from '../src/data/auth';
+import { fijarMiPin } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
 import { resetState, setRole } from '../src/data/store';
 
@@ -74,6 +76,8 @@ export default function SettingsScreen() {
           </Stack>
         </Row>
       </Card>
+
+      {esTurno && <PinDeTurno />}
 
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Accesibilidad</Eyebrow>
@@ -285,6 +289,106 @@ function PaletteSample({
       >
         {label}
       </Text>
+    </Stack>
+  );
+}
+
+/**
+ * Fijar el PIN de turno.
+ *
+ * Sin esto, quien entra por primera vez con Google no tiene forma de conseguir
+ * un PIN, y sin PIN no puede abrir turno en el equipo del mostrador — que es el
+ * único sitio donde se marca y se cobra. `shift.tsx` remitía a una pantalla del
+ * dueño que nunca se escribió.
+ */
+function PinDeTurno() {
+  const theme = useTheme();
+  const [pin, setPin] = useState('');
+  const [repetido, setRepetido] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  const coincide = pin.length >= 4 && pin === repetido;
+
+  return (
+    <Stack gap={10} style={{ marginTop: 20 }}>
+      <Eyebrow>PIN de turno</Eyebrow>
+      <Card radius={theme.radii.xl}>
+        <Stack gap={12}>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            Es con lo que abres tu turno en el equipo del mostrador. Lo que marques y
+            cobres queda a tu nombre, así que no lo compartas.
+          </Text>
+          <TextInput
+            value={pin}
+            onChangeText={(valor) => setPin(valor.replace(/\D/g, '').slice(0, 6))}
+            placeholder="PIN nuevo"
+            placeholderTextColor={theme.colors.textPlaceholder}
+            keyboardType="number-pad"
+            secureTextEntry
+            accessibilityLabel="PIN nuevo"
+            style={{
+              color: theme.colors.ink,
+              fontSize: 22,
+              letterSpacing: 6,
+              paddingVertical: 8,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.hairline,
+            }}
+          />
+          <TextInput
+            value={repetido}
+            onChangeText={(valor) => setRepetido(valor.replace(/\D/g, '').slice(0, 6))}
+            placeholder="Repítelo"
+            placeholderTextColor={theme.colors.textPlaceholder}
+            keyboardType="number-pad"
+            secureTextEntry
+            accessibilityLabel="Repite el PIN"
+            style={{
+              color: theme.colors.ink,
+              fontSize: 22,
+              letterSpacing: 6,
+              paddingVertical: 8,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.hairline,
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !coincide || guardando }}
+            onPress={() => {
+              if (!coincide || guardando) return;
+              setGuardando(true);
+              setAviso(null);
+              void fijarMiPin(pin)
+                .then(() => {
+                  setAviso('PIN guardado. Ya puedes abrir turno con él.');
+                  setPin('');
+                  setRepetido('');
+                })
+                .catch((causa: unknown) => {
+                  setAviso(causa instanceof Error ? causa.message : 'No se pudo guardar el PIN.');
+                })
+                .finally(() => setGuardando(false));
+            }}
+            style={{ opacity: coincide && !guardando ? 1 : 0.4 }}
+          >
+            <Text variant="bodySmall" weight="semibold" color={theme.semaphore.ok}>
+              {guardando ? 'Guardando…' : 'Guardar PIN'}
+            </Text>
+          </Pressable>
+          {aviso === null ? null : (
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {aviso}
+            </Text>
+          )}
+          {pin.length > 0 && repetido.length > 0 && !coincide ? (
+            <Text variant="micro" color={theme.semaphore.alert}>
+              {pin.length < 4 ? 'El PIN tiene al menos 4 dígitos.' : 'Los dos no coinciden.'}
+            </Text>
+          ) : null}
+        </Stack>
+      </Card>
     </Stack>
   );
 }

@@ -17,6 +17,7 @@
 import * as SecureStore from 'expo-secure-store';
 import {
   claimInvite,
+  linkDevice,
   openShift,
   signInWithGoogle,
   staffForDevice,
@@ -30,7 +31,7 @@ import {
   saveSession,
   setUnlinked,
 } from './session';
-import { forgetSecret, storeSecret } from './crypto';
+import { forgetSecret, loadSecret, storeSecret } from './crypto';
 
 export type SignInOutcome =
   | { readonly kind: 'signed_in' }
@@ -216,6 +217,39 @@ export async function adoptTotpSecret(secretBase64: string, userId: string): Pro
 export async function totpSecretBelongsTo(userId: string): Promise<boolean> {
   const owner = await SecureStore.getItemAsync(LINKED_USER_KEY);
   return owner === userId;
+}
+
+/**
+ * Siembra el secreto del QR si falta, y devuelve si el dispositivo quedó listo.
+ *
+ * Sin esto el producto no funciona: `adoptTotpSecret` y `totpSecretBelongsTo`
+ * existían desde el principio y **no los llamaba nadie**, así que el llavero
+ * nunca recibía un secreto y la pantalla «Mi QR» se quedaba pidiendo vincular el
+ * dispositivo para siempre. El alumno no podía entrar a su gimnasio.
+ *
+ * `POST /me/device` es idempotente: devuelve el secreto que ya existe y solo
+ * genera uno cuando el usuario no tiene ninguno. Por eso se puede llamar en cada
+ * arranque sin rotar nada — rotarlo invalidaría el QR que el alumno tiene abierto
+ * delante del escáner.
+ *
+ * Se comprueban las dos mitades. El secreto vive en el llavero del DISPOSITIVO y
+ * el dueño se guarda aparte: un teléfono donde entraron dos personas tendría
+ * secreto, pero el de la primera.
+ */
+export async function ensureAccessCodeSecret(userId: string): Promise<boolean> {
+  try {
+    const [secreto, esSuyo] = await Promise.all([loadSecret(), totpSecretBelongsTo(userId)]);
+    if (secreto !== null && esSuyo) return true;
+
+    const enlace = await linkDevice();
+    await adoptTotpSecret(enlace.secret, enlace.userId);
+    return true;
+  } catch {
+    // Sin red no se puede sembrar, y no es fatal: quien ya está vinculado sigue
+    // generando su código en el dispositivo, que es el requisito del MD 4.6. El
+    // que todavía no lo está ve el aviso de vincular en la pantalla del QR.
+    return false;
+  }
 }
 
 function describe(error: unknown): string {
