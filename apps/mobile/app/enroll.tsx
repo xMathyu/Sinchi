@@ -1,21 +1,21 @@
 /**
  * Alta de un alumno en el mostrador.
  *
- * Faltaba entera, y su ausencia sostenía media app en el aire: vincular cuentas
- * exige una ficha del padrón contra la que vincular, el escáner valida contra un
- * padrón que nadie podía llenar, y las pantallas vacías del alumno le dicen «te
- * agregan con tu DNI» — apuntando a un flujo que no existía. `POST /staff/members`
- * llevaba escrito desde el principio sin que ninguna pantalla lo llamara.
+ * Faltaba entera, y su ausencia sostenia media app en el aire: vincular cuentas
+ * exige una ficha del padron contra la que vincular, el escaner valida contra un
+ * padron que nadie podia llenar, y las pantallas vacias del alumno le dicen "te
+ * agregan con tu DNI" — apuntando a un flujo que no existia.
  *
- * Los cuatro datos son los mínimos del dominio y ninguno es decorativo: el
- * documento es lo que recepción compara con el carné, el celular es la llave
- * ÚNICA en toda la red —es con lo que el alumno se reconoce— y el plan decide
- * desde el primer día qué puede hacer en la puerta.
+ * Empieza por el CORREO, y la api solo responde si existe o no. No devuelve el
+ * nombre ni el documento, y eso no es tacaneria: `users` es global, asi que
+ * rellenar el alta desde una busqueda por correo dejaria a cualquier recepcion
+ * cosechar datos de gente que entrena en otro local. Lo que se ahorra igual es
+ * el 80% del tecleo, que era el objetivo.
  *
- * La identidad es global (MD 5). Si el celular o el documento ya existen, la api
- * reutiliza esa persona y le suma este gimnasio en vez de crear una segunda. Y
- * si coincide uno de los dos pero no el otro, se niega: es o un tipeo o dos
- * personas distintas, y adivinarlo es como se fusionan dos alumnos por error.
+ * El ancla de la identidad es el DOCUMENTO, no el correo. El correo no es unico
+ * en `users` —dos personas pueden compartirlo— y un tipeo en uno ajeno
+ * inscribiria a un desconocido. El documento es lo que recepcion esta leyendo
+ * del carne que tiene delante, y es lo que la api usa para reutilizar.
  */
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -26,16 +26,20 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitive
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { usePlanesDelGimnasio } from '../src/data/hooks';
-import { inscribirAlumno, YaEnElPadron } from '../src/data/actions';
+import { existeIdentidad, inscribirAlumno, YaEnElPadron } from '../src/data/actions';
 
 export default function EnrollScreen() {
   const theme = useTheme();
   const planes = usePlanesDelGimnasio();
 
+  const [correo, setCorreo] = useState('');
+  // `null` = todavia no se ha comprobado el correo.
+  const [yaExiste, setYaExiste] = useState<boolean | null>(null);
+  const [comprobando, setComprobando] = useState(false);
+
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
   const [celular, setCelular] = useState('+51');
-  const [correo, setCorreo] = useState('');
   const [planId, setPlanId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +49,14 @@ export default function EnrollScreen() {
   const [fichaExistente, setFichaExistente] = useState<string | null>(null);
 
   const plan = planes.find((p) => p.id === planId) ?? null;
+  const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim());
+
+  // Reutilizando identidad no hacen falta ni el nombre ni el celular: la api ya
+  // los tiene, y pedirlos otra vez es teclear para confirmar lo que ya sabe.
   const listo =
-    nombre.trim().length >= 2 &&
+    plan !== null &&
     documento.trim().length >= 6 &&
-    celular.trim().length >= 7 &&
-    plan !== null;
+    (yaExiste === true || (nombre.trim().length >= 2 && celular.trim().length >= 7));
 
   return (
     <Screen scroll>
@@ -65,43 +72,105 @@ export default function EnrollScreen() {
       </Row>
 
       <Stack gap={10} style={{ marginTop: 20 }}>
-        <Eyebrow>Quién es</Eyebrow>
+        <Eyebrow>Su correo</Eyebrow>
         <Card radius={theme.radii.xl}>
-          <Stack gap={16}>
+          <Stack gap={14}>
             <Campo
-              etiqueta="Nombre completo"
-              valor={nombre}
-              onChange={setNombre}
-              placeholder="Como figura en su documento"
-              autoCapitalize="words"
-            />
-            <Campo
-              etiqueta="DNI o carné de extranjería"
-              valor={documento}
-              onChange={(texto) => setDocumento(texto.replace(/\s/g, ''))}
-              placeholder="71448902"
-              keyboardType="number-pad"
-            />
-            <Campo
-              etiqueta="Celular"
-              valor={celular}
-              onChange={setCelular}
-              placeholder="+51 987 654 321"
-              keyboardType="phone-pad"
-              pie="Es su llave única en toda la red: con este número entra a su app."
-            />
-            <Campo
-              etiqueta="Correo (opcional)"
+              etiqueta="Correo"
               valor={correo}
-              onChange={setCorreo}
-              placeholder="para vincular su cuenta de Google"
+              onChange={(texto) => {
+                setCorreo(texto);
+                setYaExiste(null);
+              }}
+              placeholder="alumno@correo.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              pie="Con él, su cuenta se activa sola al entrar con Google."
             />
+
+            {yaExiste === null ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !correoValido || comprobando }}
+                onPress={() => {
+                  if (!correoValido || comprobando) return;
+                  setComprobando(true);
+                  setError(null);
+                  void existeIdentidad(correo.trim())
+                    .then(setYaExiste)
+                    .catch(() => setYaExiste(false))
+                    .finally(() => setComprobando(false));
+                }}
+                style={{ opacity: correoValido && !comprobando ? 1 : 0.4 }}
+              >
+                <Text variant="bodySmall" weight="semibold" color={theme.semaphore.ok}>
+                  {comprobando ? 'Comprobando…' : 'Continuar'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Row>
+                <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ flex: 1 }}>
+                  {yaExiste
+                    ? 'Ya hay una identidad Sinchi con ese correo. Confirma su documento y se le suma este gimnasio.'
+                    : 'No hay ninguna identidad con ese correo. Hacen falta su nombre y su celular.'}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  onPress={() => setYaExiste(null)}
+                >
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    Cambiar
+                  </Text>
+                </Pressable>
+              </Row>
+            )}
           </Stack>
         </Card>
       </Stack>
 
+      {yaExiste === null ? null : (
+        <Stack gap={10} style={{ marginTop: 20 }}>
+          <Eyebrow>{yaExiste ? 'Confirma quién es' : 'Quién es'}</Eyebrow>
+          <Card radius={theme.radii.xl}>
+            <Stack gap={16}>
+              {yaExiste ? null : (
+                <Campo
+                  etiqueta="Nombre completo"
+                  valor={nombre}
+                  onChange={setNombre}
+                  placeholder="Como figura en su documento"
+                  autoCapitalize="words"
+                />
+              )}
+              <Campo
+                etiqueta="DNI o carné de extranjería"
+                valor={documento}
+                onChange={(texto) => setDocumento(texto.replace(/\s/g, ''))}
+                placeholder="71448902"
+                keyboardType="number-pad"
+                pie={
+                  yaExiste
+                    ? 'Compáralo con su carné: es lo que decide a qué identidad se suma este gimnasio.'
+                    : undefined
+                }
+              />
+              {yaExiste ? null : (
+                <Campo
+                  etiqueta="Celular"
+                  valor={celular}
+                  onChange={setCelular}
+                  placeholder="+51 987 654 321"
+                  keyboardType="phone-pad"
+                  pie="Es su llave única en toda la red: con este número entra a su app."
+                />
+              )}
+            </Stack>
+          </Card>
+        </Stack>
+      )}
+
+      {yaExiste === null ? null : (
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Con qué plan empieza</Eyebrow>
         {planes.length === 0 ? (
@@ -136,6 +205,7 @@ export default function EnrollScreen() {
           })
         )}
       </Stack>
+      )}
 
       <View
         style={{
@@ -163,9 +233,8 @@ export default function EnrollScreen() {
             setError(null);
 
             void inscribirAlumno({
-              name: nombre.trim(),
               documentId: documento.trim(),
-              phone: celular.trim(),
+              ...(yaExiste ? {} : { name: nombre.trim(), phone: celular.trim() }),
               ...(correo.trim().length > 0 ? { email: correo.trim() } : {}),
               planId: plan.id,
             })

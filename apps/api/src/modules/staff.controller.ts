@@ -46,10 +46,17 @@ const paymentSchema = z.object({
   clientId: z.string().uuid().optional(),
 });
 
+/**
+ * Alta de un alumno.
+ *
+ * `name` y `phone` son opcionales porque el ancla es el DOCUMENTO: si ya hay una
+ * identidad con ese documento, se reutiliza y esos datos ya se saben. Solo hacen
+ * falta cuando la persona es nueva, y el servicio lo exige entonces.
+ */
 const enrollSchema = z.object({
-  name: z.string().min(2).max(120),
+  name: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
-  phone: z.string().min(6).max(20),
+  phone: z.string().min(6).max(20).optional(),
   email: z.string().email().optional(),
   planId: z.string().uuid(),
   startDate: z
@@ -133,6 +140,28 @@ export class StaffController {
     return this.views.roster(assertStaffSession(session).tenantId, undefined, {
       includeCanceled: includeCanceled === 'true',
     });
+  }
+
+  /**
+   * ¿Hay ya una identidad Sinchi con ese correo?
+   *
+   * Devuelve un booleano y NADA MAS. La tentacion es responder con el nombre y
+   * el documento para que el alta se rellene sola, y eso convierte esta ruta en
+   * un buscador de personas: `users` es global, asi que cualquier recepcion
+   * podria cosechar datos de gente que entrena en otro local, o comprobar si un
+   * correo cualquiera es usuario de Sinchi.
+   *
+   * Lo que se ahorra igual: saber si hara falta pedirle el nombre y el celular.
+   * Los datos aparecen despues, al inscribirla con su documento — cuando ya es
+   * alumna de este gimnasio y por tanto son suyos de ver.
+   *
+   * `exactamente una` a proposito: el correo NO es unico en `users`, asi que dos
+   * coincidencias no identifican a nadie.
+   */
+  @Get('members/identity')
+  async identityByEmail(@CurrentSession() session: Session, @Query('email') email = '') {
+    assertStaffSession(session);
+    return this.members.identityExists(email.trim());
   }
 
   @Get('roster/search')

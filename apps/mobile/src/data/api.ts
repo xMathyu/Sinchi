@@ -434,6 +434,17 @@ export const fetchRoster = async (incluirBajas = false): Promise<readonly Roster
 export const fetchStaffMember = async (membershipId: string): Promise<MembershipDetailDto> =>
   reviveDetail(await request<MembershipDetailDto>(`/staff/members/${membershipId}`));
 
+/**
+ * ¿Hay ya una identidad Sinchi con ese correo?
+ *
+ * Un booleano y nada mas, a proposito: `users` es global, y devolver el nombre o
+ * el documento convertiria esto en un buscador de personas que entrenan en otros
+ * locales. Lo que se ahorra igual es saber si hara falta pedir el nombre y el
+ * celular.
+ */
+export const identityExists = (email: string): Promise<{ readonly existe: boolean }> =>
+  request(`/staff/members/identity?email=${encodeURIComponent(email)}`);
+
 export interface EnrollResultDto {
   readonly view: MembershipViewDto;
   /** `true` si la persona ya existia en la red y solo se le sumo este gimnasio. */
@@ -449,9 +460,10 @@ export interface EnrollResultDto {
  * personas distintas, y adivinarlo es como se fusionan dos alumnos por error.
  */
 export const enrollMember = async (input: {
-  readonly name: string;
+  /** Solo si la persona es nueva: reutilizando identidad ya se sabe. */
+  readonly name?: string;
   readonly documentId: string;
-  readonly phone: string;
+  readonly phone?: string;
   readonly email?: string;
   readonly planId: string;
 }): Promise<EnrollResultDto> => {
