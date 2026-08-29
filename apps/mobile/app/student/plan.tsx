@@ -15,6 +15,7 @@ import {
   isoWeekday,
   weekdayInitial,
   weekdayName,
+  type IsoWeekday,
 } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
@@ -93,41 +94,7 @@ export default function PlanScreen() {
         </Stack>
       </Card>
 
-      <Stack gap={10} style={{ marginTop: 18 }}>
-        <Eyebrow>Días permitidos</Eyebrow>
-        <Row gap={6} justify="flex-start">
-          {allWeekdays().map((day) => {
-            const allowed = entry.plan.allowedDays === null || entry.plan.allowedDays.includes(day);
-            return (
-              <View
-                key={day}
-                accessibilityLabel={`${weekdayInitial(day)}${allowed ? ' permitido' : ' no permitido'}`}
-                style={{
-                  flex: 1,
-                  aspectRatio: 1,
-                  borderRadius: theme.radii.sm,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: allowed ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
-                  borderWidth: allowed ? 0 : 1,
-                  borderStyle: allowed ? 'solid' : 'dashed',
-                  borderColor: theme.colors.borderStrong,
-                }}
-              >
-                <Text
-                  variant="caption"
-                  weight={allowed ? 'bold' : 'semibold'}
-                  color={allowed ? theme.colors.ink : theme.colors.textDisabled}
-                >
-                  {weekdayInitial(day)}
-                </Text>
-              </View>
-            );
-          })}
-        </Row>
-      </Stack>
-
-      <Horario entry={entry} />
+      <SemanaYHorario entry={entry} />
 
       <Card radius={theme.radii.xl} style={{ marginTop: 18 }}>
         <Stack gap={12}>
@@ -346,105 +313,154 @@ function CancelButton({
   );
 }
 
+
 /**
- * Horario de clases del gimnasio.
+ * La semana del alumno: que dias le cubre su plan y que clases hay en cada uno.
  *
- * No se veia en ninguna pantalla, y su ausencia tiene consecuencia: el escaner
- * rechaza por "fuera de horario" a quien llega a deshora, y el alumno no tenia
- * forma de saber cuando podia ir. La app conocia la regla y no la compartia con
- * quien tiene que cumplirla.
+ * Eran dos cosas separadas —una tira de dias permitidos y una lista con los seis
+ * dias apilados— y juntarlas sale mejor por dos razones. La tira ya era un
+ * calendario semanal, solo que no se podia tocar; y la lista obligaba a leer
+ * catorce filas para responder "¿puedo ir hoy?", que es la pregunta que trae
+ * aqui a casi todo el mundo.
  *
- * Se ensena el horario ENTERO del local, no solo los dias que el plan habilita:
- * un alumno de 2 por semana tiene que poder ver que hay judo el sabado antes de
- * decidir si sube de plan. Los dias que su plan no cubre se marcan, no se
- * esconden.
+ * No se usa una rejilla de horas por dias, que es lo que parece pedir un horario:
+ * con estas clases —seis dias, catorce clases, y tres de esos dias con una sola—
+ * quedaria un 85% vacia, y a 390px cada columna mide cincuenta puntos, donde
+ * "Judo Kids (4 a 7 años)" no entra. La rejilla dibuja sobre todo el hueco.
  */
-function Horario({ entry }: { readonly entry: MembershipView }) {
+function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
   const theme = useTheme();
   const hoy = useToday();
   const todas = useStore((state) => state.schedules);
+  const diaDeHoy = isoWeekday(hoy);
+  const [elegido, setElegido] = useState<IsoWeekday>(diaDeHoy);
 
   const delLocal = useMemo(
     () => todas.filter((clase) => clase.tenantId === entry.tenant.id),
     [todas, entry.tenant.id],
   );
 
-  if (delLocal.length === 0) return null;
-
-  const diaDeHoy = isoWeekday(hoy);
   const permitidos = entry.plan.allowedDays;
+  const permite = (dia: IsoWeekday) => permitidos === null || permitidos.includes(dia);
 
-  const porDia = allWeekdays()
-    .map((dia) => ({
-      dia,
-      clases: delLocal
-        .filter((clase) => clase.weekday === dia)
-        .slice()
-        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    }))
-    .filter((grupo) => grupo.clases.length > 0);
+  const clasesDe = (dia: IsoWeekday) =>
+    delLocal
+      .filter((clase) => clase.weekday === dia)
+      .slice()
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+  const delDia = clasesDe(elegido);
+  const nombre = weekdayName(elegido);
+  const hayHorario = delLocal.length > 0;
 
   return (
     <Stack gap={10} style={{ marginTop: 18 }}>
-      {/* Sin el nombre del gimnasio: ya es el titulo de la pantalla, y en
-          versalitas ocupaba dos renglones para repetirlo. */}
-      <Eyebrow>Horario de clases</Eyebrow>
-      <Card padded={false} radius={theme.radii.xl}>
-        {porDia.map((grupo, indice) => {
-          const esHoy = grupo.dia === diaDeHoy;
-          const tuDia = permitidos === null || permitidos.includes(grupo.dia);
-          const nombre = weekdayName(grupo.dia);
+      <Eyebrow>{hayHorario ? 'Tu semana' : 'Días permitidos'}</Eyebrow>
+
+      <Row gap={6} justify="flex-start">
+        {allWeekdays().map((dia) => {
+          const cubierto = permite(dia);
+          const activo = dia === elegido;
+          const tieneClases = clasesDe(dia).length > 0;
 
           return (
-            <View key={grupo.dia}>
-              {indice === 0 ? null : <Divider />}
-              <Stack gap={7} style={{ paddingHorizontal: 16, paddingVertical: 13 }}>
-                <Row justify="flex-start" gap={8}>
-                  <Text
-                    variant="captionSmall"
-                    weight="bold"
-                    color={esHoy ? theme.semaphore.ok : theme.colors.textSecondary}
-                  >
-                    {`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)}`}
-                  </Text>
-                  {esHoy ? (
-                    <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
-                      HOY
-                    </Text>
-                  ) : null}
-                  {tuDia ? null : (
-                    <Text variant="micro" color={theme.colors.textTertiary}>
-                      fuera de tu plan
-                    </Text>
-                  )}
-                </Row>
-
-                {grupo.clases.map((clase) => (
-                  <Row key={clase.id} gap={12}>
-                    <Text
-                      variant="bodySmall"
-                      style={{ flex: 1 }}
-                      color={tuDia ? theme.colors.ink : theme.colors.textTertiary}
-                    >
-                      {clase.name}
-                    </Text>
-                    <Text
-                      variant="bodySmall"
-                      weight="semibold"
-                      color={tuDia ? theme.colors.textStrong : theme.colors.textTertiary}
-                    >
-                      {clase.startTime} – {clase.endTime}
-                    </Text>
-                  </Row>
-                ))}
-              </Stack>
-            </View>
+            <Pressable
+              key={dia}
+              accessibilityRole={hayHorario ? 'button' : 'text'}
+              accessibilityState={{ selected: activo }}
+              accessibilityLabel={`${weekdayName(dia)}${cubierto ? '' : ', fuera de tu plan'}${
+                tieneClases ? '' : ', sin clases'
+              }`}
+              onPress={hayHorario ? () => setElegido(dia) : undefined}
+              style={{
+                flex: 1,
+                aspectRatio: 1,
+                borderRadius: theme.radii.sm,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 3,
+                backgroundColor: cubierto ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
+                borderWidth: activo && hayHorario ? 1.5 : cubierto ? 0 : 1,
+                borderStyle: activo || cubierto ? 'solid' : 'dashed',
+                borderColor: activo && hayHorario ? theme.semaphore.ok : theme.colors.borderStrong,
+              }}
+            >
+              <Text
+                variant="caption"
+                weight={cubierto ? 'bold' : 'semibold'}
+                color={cubierto ? theme.colors.ink : theme.colors.textDisabled}
+              >
+                {weekdayInitial(dia)}
+              </Text>
+              {/* El punto dice que ese dia hay clase: sin el, un dia vacio y uno
+                  lleno se ven igual hasta tocarlos. */}
+              <View
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: !hayHorario
+                    ? 'transparent'
+                    : !tieneClases
+                      ? 'transparent'
+                      : dia === diaDeHoy
+                        ? theme.semaphore.ok
+                        : theme.colors.textTertiary,
+                }}
+              />
+            </Pressable>
           );
         })}
-      </Card>
-      <Text variant="micro" color={theme.colors.textFaint}>
-        El escáner valida solo dentro del horario, con media hora de margen antes y después.
-      </Text>
+      </Row>
+
+      {!hayHorario ? null : (
+        <Card padded={false} radius={theme.radii.xl}>
+          <Row style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: delDia.length === 0 ? 13 : 4 }} gap={8} justify="flex-start">
+            <Text variant="captionSmall" weight="bold" color={theme.colors.textSecondary}>
+              {`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)}`}
+            </Text>
+            {elegido === diaDeHoy ? (
+              <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
+                HOY
+              </Text>
+            ) : null}
+            {permite(elegido) ? null : (
+              <Text variant="micro" color={theme.colors.textTertiary}>
+                fuera de tu plan
+              </Text>
+            )}
+          </Row>
+
+          {delDia.length === 0 ? (
+            <Text
+              variant="bodySmall"
+              color={theme.colors.textSecondary}
+              style={{ paddingHorizontal: 16, paddingBottom: 14 }}
+            >
+              No hay clases este día.
+            </Text>
+          ) : (
+            <Stack gap={9} style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 6 }}>
+              {delDia.map((clase) => (
+                <Row key={clase.id} gap={12}>
+                  <Text variant="bodySmall" style={{ flex: 1 }}>
+                    {clase.name}
+                  </Text>
+                  <Text variant="bodySmall" weight="semibold" color={theme.colors.textStrong}>
+                    {clase.startTime} – {clase.endTime}
+                  </Text>
+                </Row>
+              ))}
+            </Stack>
+          )}
+        </Card>
+      )}
+
+      {!hayHorario ? null : (
+        <Text variant="micro" color={theme.colors.textFaint}>
+          El escáner valida solo dentro del horario, con media hora de margen antes y después.
+        </Text>
+      )}
     </Stack>
   );
 }
