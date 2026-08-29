@@ -159,6 +159,41 @@ suite('invitaciones', () => {
     await http.get(`/v1/invites/${invite.token}`).expect(200);
   });
 
+  /**
+   * La pagina que se abre desde el correo o desde WhatsApp.
+   *
+   * Lo que se comprueba no es el HTML sino la decision: que el telefono que
+   * abrio el enlace reciba su tienda. Un alumno con Android al que le ofrecen el
+   * App Store no se descarga nada, y ahi se acaba el alta.
+   */
+  it('la pagina del enlace ofrece la tienda del telefono que la abre', async () => {
+    const { body: invite } = await createInvite(frontDesk, { fullName: 'Marco Tienda' });
+
+    const android = await http
+      .get(`/v1/invites/${invite.token}/abrir`)
+      .set('User-Agent', 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36')
+      .expect(200);
+    expect(android.text).toContain('play.google.com');
+    // El intent de Android abre la app si esta, y cae solo a la tienda si no.
+    expect(android.text).toContain('intent://invite/');
+    expect(android.text).not.toContain('apps.apple.com');
+
+    const iphone = await http
+      .get(`/v1/invites/${invite.token}/abrir`)
+      .set('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)')
+      .expect(200);
+    expect(iphone.text).toContain(`sinchi:///invite/${invite.token}`);
+    expect(iphone.text).not.toContain('play.google.com');
+
+    // Sigue sin consumirse: abrir la pagina no es aceptar la invitacion.
+    await http.get(`/v1/invites/${invite.token}`).expect(200);
+  });
+
+  it('un enlace caducado o inventado explica que paso, no da un 404 en blanco', async () => {
+    const respuesta = await http.get('/v1/invites/no-existe-este-token/abrir').expect(200);
+    expect(respuesta.text).toContain('ya no vale');
+  });
+
   it('aceptarla deja a la persona dentro, con plan y cargos pendientes', async () => {
     const { body: invite } = await createInvite(frontDesk, { fullName: 'Rosa Palomino' });
     const idToken = declareIdentity(`uid-rosa-${Date.now()}`);

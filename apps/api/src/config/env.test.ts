@@ -24,6 +24,15 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...valid, DATABASE_URL: '' })).toThrow(/DATABASE_URL/);
   });
 
+  it('una URL de tienda vacia cuenta como ausente, no como invalida', () => {
+    // Es lo que queda al copiar .env.example sin rellenar la linea. Tumbar el
+    // arranque por un dato opcional seria un fallo absurdo, y ademas ocurriria
+    // en el despliegue y no en el portatil de nadie.
+    const env = loadEnv({ ...valid, IOS_STORE_URL: '', ANDROID_STORE_URL: '' });
+    expect(env.IOS_STORE_URL).toBeUndefined();
+    expect(env.ANDROID_STORE_URL).toContain('play.google.com');
+  });
+
   it('rechaza un secreto de firma corto', () => {
     // Un JWT_SECRET debil es un token falsificable, y con el se entra a
     // cualquier gimnasio de la red.

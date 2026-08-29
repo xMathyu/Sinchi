@@ -14,7 +14,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
-import { SEMAPHORE_DEFAULT, colors } from '@sinchi/ui';
+import {
+  LOGO_BAR_PATH,
+  LOGO_BAR_WIDTH,
+  LOGO_OUTLINE_PATH,
+  LOGO_VIEWBOX,
+  SEMAPHORE_DEFAULT,
+  colors,
+} from '@sinchi/ui';
 
 // Con `output: 'export'` hay que decirlo explicito: la imagen se hornea en el
 // build, no se genera por peticion.
@@ -78,9 +85,9 @@ export function GET() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <svg width="54" height="54" viewBox="0 0 64 64">
-            <path d="M32 6 L54 52 L32 41 L10 52 Z" fill={colors.ink} />
-            <path d="M32 41 L32 24" stroke={colors.canvas} strokeWidth={5} />
+          <svg width="58" height="58" viewBox={LOGO_VIEWBOX}>
+            <path d={LOGO_OUTLINE_PATH} fill={colors.ink} />
+            <path d={LOGO_BAR_PATH} stroke={colors.canvas} strokeWidth={LOGO_BAR_WIDTH} />
           </svg>
           <span style={{ fontWeight: 800, fontSize: 42, letterSpacing: 3 }}>SINCHI</span>
         </div>
