@@ -5,8 +5,10 @@
   "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/build-packages.mjs",
     "build": "next build",
     "start": "next start",
+    "pretypecheck": "node scripts/build-packages.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

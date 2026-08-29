@@ -209,19 +209,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
-
-      # La landing usa pnpm y vive FUERA del workspace de npm, pero consume
-      # `@sinchi/ui` por `link:`. Hay que compilar el paquete con npm antes de
-      # que pnpm lo enlace: sin `dist/` la pagina no encuentra los tokens.
-      - run: npm ci
-      - run: npm run build -w @sinchi/shared
-      - run: npm run build -w @sinchi/ui
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11.1.1
 
+      # Sin `npm ci` de la raiz A PROPOSITO, y no por ahorrar tiempo: asi este
+      # job comprueba lo mismo que hace un hosting con un clon recien hecho. La
+      # landing se compilaba aqui porque el CI construia antes los paquetes, y
+      # en Vercel fallaba con «module not found: @sinchi/ui». Ahora `pnpm build`
+      # los compila el mismo (apps/web/scripts/build-packages.mjs), y si esa
+      # autosuficiencia se rompe, se rompe aqui.
       - name: Instalar
         working-directory: apps/web
         run: pnpm install --frozen-lockfile
