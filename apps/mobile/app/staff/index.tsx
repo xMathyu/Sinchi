@@ -81,13 +81,16 @@ export default function ScannerScreen() {
 
   return (
     <Screen background={theme.colors.screenScanner}>
-      <Row style={{ paddingTop: 8 }}>
-        <Stack gap={1}>
-          <Text variant="titleSmall" weight="bold">
-            Puerta principal
+      <Row style={{ paddingTop: 8 }} gap={10}>
+        {/* `flex: 1` y una sola linea: sin ellos, el nombre del gimnasio hace
+            crecer esta columna, la linea se parte en dos y empuja el indicador
+            de conexion y el avatar fuera de la pantalla. */}
+        <Stack gap={1} style={{ flex: 1 }}>
+          <Text variant="titleSmall" weight="bold" numberOfLines={1}>
+            {tenant?.name ?? 'Puerta principal'}
           </Text>
-          <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {tenant?.name ?? ''} · {staff.displayName} ({staff.role === 'owner' ? 'dueño' : 'recepción'})
+          <Text variant="captionSmall" color={theme.colors.textSecondary} numberOfLines={1}>
+            {staff.displayName} · {staff.role === 'owner' ? 'dueño' : 'recepción'}
           </Text>
         </Stack>
         <Row gap={9} justify="flex-end">
@@ -103,19 +106,21 @@ export default function ScannerScreen() {
             backgroundColor: withAlpha(online ? theme.semaphore.ok : theme.semaphore.alert, 0.13),
             borderWidth: 1,
             borderColor: withAlpha(online ? theme.semaphore.ok : theme.semaphore.alert, 0.28),
-            paddingHorizontal: 11,
-            paddingVertical: 6,
+            paddingHorizontal: online ? 8 : 11,
+            paddingVertical: online ? 8 : 6,
             borderRadius: theme.radii.pill,
           }}
         >
           <Dot color={online ? theme.semaphore.ok : theme.semaphore.alert} size={7} />
-          <Text
-            variant="micro"
-            weight="bold"
-            color={online ? theme.semaphore.ok : theme.semaphore.alert}
-          >
-            {online ? 'EN LÍNEA' : 'OFFLINE'}
-          </Text>
+          {/* Estando en linea basta el punto: es el estado normal y el color ya
+              lo dice. La palabra se reserva para OFFLINE, que es el que pide
+              atencion — y de paso devuelve 80 puntos de ancho al nombre del
+              gimnasio, que se estaba cortando por escribir "todo bien". */}
+          {online ? null : (
+            <Text variant="micro" weight="bold" color={theme.semaphore.alert}>
+              OFFLINE
+            </Text>
+          )}
         </Pressable>
         {/* La unica salida del modo staff: sin esto no habia forma de cerrar
             turno desde la puerta, que es donde se pasa el dia. */}
@@ -129,10 +134,14 @@ export default function ScannerScreen() {
         </Row>
       </Row>
 
+      {/* Cuadrado solo cuando hay camara. Apagado ocupaba el 40% de la pantalla
+          para decir "concede el permiso", y empujaba «Últimos marcados» —lo que
+          el mostrador de verdad lee entre alumno y alumno— contra los botones. */}
       <View
         style={{
           marginTop: 22,
-          aspectRatio: 1,
+          aspectRatio: scanning && permission?.granted === true ? 1 : undefined,
+          height: scanning && permission?.granted === true ? undefined : 200,
           borderRadius: theme.radii.xxxl,
           overflow: 'hidden',
           borderWidth: 1,

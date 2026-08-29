@@ -251,7 +251,25 @@ export function marcarIntentoTerminado(): void {
  * ida y vuelta de mas.
  */
 export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff): void {
-  setState({ ...state, remoteRoster: roster, staff, cargado: true, lastSyncAt: new Date() });
+  // El gimnasio sale del padron, que ya lo trae en cada entrada. Sin esto
+  // `state.tenants` se quedaba vacio con sesion de staff —`/me` es la billetera
+  // del alumno y no dice donde trabaja— y la puerta no sabia en que local
+  // estaba: la cabecera salia con un separador suelto delante del nombre.
+  const tenants: Tenant[] = [];
+  for (const entrada of roster) {
+    if (!tenants.some((t) => t.id === entrada.view.tenant.id)) tenants.push(entrada.view.tenant);
+  }
+
+  setState({
+    ...state,
+    remoteRoster: roster,
+    staff,
+    // Un padron vacio no trae tenant, y perder el que ya se sabia solo para
+    // reemplazarlo por nada haria parpadear la cabecera al inscribir al primero.
+    tenants: tenants.length > 0 ? tenants : state.tenants,
+    cargado: true,
+    lastSyncAt: new Date(),
+  });
 }
 
 /**
