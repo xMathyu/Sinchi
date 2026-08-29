@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   output: 'export',
   images: { unoptimized: true },
   typedRoutes: true,
+  // Next 16 escribe un AGENTS.md y un CLAUDE.md propios en cada arranque. Las
+  // convenciones de este repo estan en el CLAUDE.md de la raiz, y un archivo
+  // generado que las contradice a mitad de arbol es peor que no tener ninguno.
+  agentRules: false,
 };
 
 export default nextConfig;

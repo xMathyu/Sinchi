@@ -15,6 +15,9 @@ apps/mobile/.expo/
 .next/
 # Next exporta la landing estatica a apps/web/out
 out/
+# Next lo reescribe apuntando a .next/dev o a .next segun el comando: versionarlo
+# deja el arbol sucio cada vez que se levanta el servidor.
+apps/web/next-env.d.ts
 .nest/
 
 .env
