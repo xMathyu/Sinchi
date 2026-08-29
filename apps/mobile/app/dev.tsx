@@ -23,6 +23,7 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitive
 import { useTheme } from '../src/design/theme';
 import { getApiBase, setApiBase } from '../src/data/api';
 import { enterDemoMode, saveSession } from '../src/data/session';
+import { cargarDemostracion } from '../src/data/store';
 
 /**
  * Atajos a las cuentas que siembra `npm run db:seed`.
@@ -133,6 +134,9 @@ export default function DevScreen() {
             <Button
               label="Modo demostración"
               onPress={() => {
+                // El store arranca vacio: los datos falsos se cargan aqui, que
+                // es el unico sitio donde alguien los pide a proposito.
+                cargarDemostracion();
                 enterDemoMode();
                 router.replace('/');
               }}

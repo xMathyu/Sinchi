@@ -13,7 +13,7 @@
  * ese olvido no se ve en una revision de codigo.
  */
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -25,7 +25,8 @@ import { setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { useSession } from '../src/data/session-hooks';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
-import { marcarHidratando } from '../src/data/store';
+import { useStore } from '../src/data/hooks';
+import { marcarHidratando, marcarIntentoTerminado } from '../src/data/store';
 
 /**
  * El cliente HTTP toma sus credenciales de aqui.
@@ -63,6 +64,7 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <SessionRouter />
         <DataLoader />
+        <Portada />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -139,7 +141,9 @@ function DataLoader() {
         console.warn('No se pudieron cargar los datos:', error);
       })
       .finally(() => {
-        if (!cancelado) marcarHidratando(false);
+        // Termina el intento aunque haya fallado: si no, la portada del arranque
+        // se queda puesta para siempre en un teléfono sin red.
+        if (!cancelado) marcarIntentoTerminado();
       });
 
     return () => {
@@ -171,6 +175,36 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set(['charge', 'result', 'member']),
   student: new Set(['pay', 'plan-change']),
 };
+
+/**
+ * Tapa la app hasta que hay algo de verdad que ensenar.
+ *
+ * El arranque mostraba la billetera de Mathyu Quispe y sus tres gimnasios
+ * inventados durante los segundos que tardan el llavero y `/me`, y luego
+ * cambiaban por los reales delante del alumno. Con el store ya vacio lo que se
+ * veria en su lugar es una pantalla a medio llenar, que no es mejor: sigue
+ * afirmando "no tienes membresias" a alguien que si las tiene.
+ *
+ * Va ENCIMA del Stack y no en su lugar: `SessionRouter` y `DataLoader` viven
+ * dentro del arbol, y devolver otra cosa antes de montarlos deja la sesion sin
+ * restaurar y la carga sin empezar. La app se monta debajo, tapada.
+ */
+function Portada() {
+  const state = useSession();
+  const cargado = useStore((s) => s.cargado);
+
+  // Sin sesion no hay nada que esperar: el login se pinta de inmediato.
+  const esperando =
+    state.status === 'loading' || (state.status === 'signed_in' && !cargado);
+
+  if (!esperando) return null;
+
+  return (
+    <View style={styles.portada} pointerEvents="auto">
+      <ActivityIndicator color={colors.ink} />
+    </View>
+  );
+}
 
 function SessionRouter() {
   const state = useSession();
@@ -237,4 +271,16 @@ function SessionRouter() {
 
 const styles = StyleSheet.create({
   splash: { flex: 1, backgroundColor: colors.canvas },
+  portada: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Por encima del Stack y de la barra de pestanas.
+    zIndex: 10,
+  },
 });
