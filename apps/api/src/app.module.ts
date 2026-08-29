@@ -17,6 +17,7 @@ import { InvitesController } from './modules/invites.controller';
 import { JobsController } from './jobs/jobs.controller';
 import { RefreshDelinquencyJob } from './jobs/refresh-delinquency.job';
 import { BillingService } from './modules/billing/billing.service';
+import { MailService } from './modules/mail/mail.service';
 import { CheckInService } from './modules/checkin/checkin.service';
 import { HealthController } from './modules/health.controller';
 import { IdentityService } from './modules/identity/identity.service';
@@ -42,6 +43,7 @@ import { StudentController } from './modules/student.controller';
     MembersService,
     CheckInService,
     BillingService,
+    MailService,
     RefreshDelinquencyJob,
   ],
 })

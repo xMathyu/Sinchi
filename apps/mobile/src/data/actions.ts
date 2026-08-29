@@ -20,6 +20,7 @@ import {
   cancelMembership,
   changePlan as changePlanRemote,
   enrollMember,
+  identityExists,
   confirmClaim,
   fetchClaims,
   fetchPlansFor,
@@ -536,9 +537,9 @@ export class YaEnElPadron extends Error {
 }
 
 export async function inscribirAlumno(input: {
-  readonly name: string;
+  readonly name?: string;
   readonly documentId: string;
-  readonly phone: string;
+  readonly phone?: string;
   readonly email?: string;
   readonly planId: string;
 }): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
@@ -561,4 +562,16 @@ export async function inscribirAlumno(input: {
     membershipId: salida.view.membership.id,
     identidadReutilizada: salida.reusedIdentity,
   };
+}
+
+/**
+ * ¿Ya hay una identidad Sinchi con ese correo?
+ *
+ * Lo unico que devuelve es si existe. Con eso el alta sabe si tiene que pedir el
+ * nombre y el celular o si le basta el documento, sin ensenarle a este gimnasio
+ * los datos de alguien que entrena en otro.
+ */
+export async function existeIdentidad(email: string): Promise<boolean> {
+  if (conServidor() === null) return false;
+  return (await identityExists(email)).existe;
 }

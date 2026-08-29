@@ -22,9 +22,11 @@ import {
 } from '../memberships/membership-view.service';
 
 export interface EnrollMemberInput {
-  readonly name: string;
+  /** Solo si la persona es nueva: reutilizando una identidad, ya se sabe. */
+  readonly name?: string | undefined;
   readonly documentId: string;
-  readonly phone: string;
+  /** Igual que `name`: obligatorio solo cuando no hay identidad que reutilizar. */
+  readonly phone?: string | undefined;
   readonly email?: string | null | undefined;
   readonly planId: string;
   /** `YYYY-MM-DD`. Por defecto, hoy en la zona del gimnasio. */
@@ -46,20 +48,56 @@ export class MembersService {
     private readonly views: MembershipViewService,
   ) {}
 
+  /**
+   * ¿Hay exactamente una identidad con ese correo?
+   *
+   * Un booleano y nada mas: ver `identityByEmail` en el controlador para por que
+   * no devuelve los datos. Se consulta FUERA del contexto del tenant porque la
+   * identidad es global — la persona puede entrenar en otro local.
+   */
+  async identityExists(email: string): Promise<{ readonly existe: boolean }> {
+    if (email.length === 0) return { existe: false };
+
+    const filas = await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(2),
+    );
+
+    // Dos coincidencias no identifican a nadie: `email` no es unico en `users`.
+    return { existe: filas.length === 1 };
+  }
+
   async enroll(tenantId: string, input: EnrollMemberInput): Promise<EnrollResult> {
-    const phone = input.phone.trim();
+    const phone = input.phone === undefined ? null : input.phone.trim();
     const documentId = input.documentId.trim();
 
     // La identidad se resuelve FUERA del contexto del tenant: es global.
     const { userId, reused } = await withoutTenantIsolation(this.db, async (tx) => {
+      // El ancla es el DOCUMENTO, no el correo. El correo no es unico en esta
+      // tabla —dos personas pueden compartirlo— y ademas un tipeo en un correo
+      // ajeno inscribiria a un desconocido. El documento es lo que recepcion
+      // esta leyendo del carne que tiene delante.
       const [existing] = await tx
-        .select({ id: schema.users.id, phone: schema.users.phone, doc: schema.users.documentId })
+        .select({
+          id: schema.users.id,
+          phone: schema.users.phone,
+          doc: schema.users.documentId,
+          email: schema.users.email,
+        })
         .from(schema.users)
-        .where(or(eq(schema.users.phone, phone), eq(schema.users.documentId, documentId)))
+        .where(
+          phone === null
+            ? eq(schema.users.documentId, documentId)
+            : or(eq(schema.users.phone, phone), eq(schema.users.documentId, documentId)),
+        )
         .limit(1);
 
       if (existing !== undefined) {
-        if (existing.phone !== phone || existing.doc !== documentId) {
+        // Reutilizando por documento, el celular no hace falta: ya se sabe.
+        if (phone !== null && (existing.phone !== phone || existing.doc !== documentId)) {
           // Coincide uno de los dos pero no el otro: o hay un tipeo, o son dos
           // personas distintas. Adivinar aquí es cómo se fusionan dos alumnos
           // por error, y separarlos después es una migración a mano.
@@ -68,13 +106,34 @@ export class MembersService {
               'Revisa si es la misma persona antes de inscribirla.',
           );
         }
+        // Rellenar un correo que faltaba ayuda —es lo que activa la cuenta al
+        // entrar con Google— y no pisa nada. Reemplazar uno que ya esta seria
+        // otra cosa: un gimnasio cambiandole el correo a alguien que entrena en
+        // otro, sin que se entere.
+        const correo = input.email?.trim();
+        if (existing.email === null && correo !== undefined && correo.length > 0) {
+          await tx
+            .update(schema.users)
+            .set({ email: correo })
+            .where(eq(schema.users.id, existing.id));
+        }
+
         return { userId: existing.id, reused: true };
+      }
+
+      // Persona nueva: aqui SI hacen falta el nombre y el celular. Solo se
+      // pueden omitir cuando se reutiliza una identidad que ya los tiene.
+      const nombre = input.name?.trim();
+      if (nombre === undefined || nombre.length < 2 || phone === null) {
+        throw new BadRequestException(
+          'No hay ninguna identidad con ese documento: hacen falta el nombre y el celular.',
+        );
       }
 
       const [created] = await tx
         .insert(schema.users)
         .values({
-          name: input.name.trim(),
+          name: nombre,
           documentId,
           phone,
           email: input.email?.trim() ?? null,

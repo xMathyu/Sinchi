@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { CurrentSession, OwnerOnly, StaffOnly } from '../auth/auth.guard';
 import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
+import { loadEnv } from '../config/env';
+import { MailService } from './mail/mail.service';
 import { AccountLinkService } from '../auth/account-link.service';
 import { AuthService } from '../auth/auth.service';
 import { InviteService } from '../auth/invite.service';
@@ -55,6 +57,7 @@ export class AccountsController {
     private readonly accountLink: AccountLinkService,
     private readonly auth: AuthService,
     private readonly invites: InviteService,
+    private readonly mail: MailService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -75,7 +78,7 @@ export class AccountsController {
     @Body(parseWith(inviteSchema)) body: z.infer<typeof inviteSchema>,
   ) {
     const staff = assertStaffSession(session);
-    return this.invites.create({
+    const invitacion = await this.invites.create({
       tenantId: staff.tenantId,
       staffId: staff.staffId,
       planId: body.planId,
@@ -86,6 +89,26 @@ export class AccountsController {
       membershipId: body.membershipId ?? null,
       ttlDays: body.ttlDays,
     });
+
+    // El correo se manda DESPUÉS de que la invitación exista, y su fallo no la
+    // deshace: el enlace ya es válido y se puede compartir por donde sea. El
+    // correo es entrega, no la fuente del vínculo — si Resend estuviera caído,
+    // impedir el alta de alguien que espera en el mostrador sería peor.
+    const enlace = `${loadEnv().INVITE_LINK_BASE}${invitacion.token}`;
+    let correo = { enviado: false, motivo: 'Sin correo: comparte el enlace.' as string | null };
+
+    if (body.email !== undefined && this.mail.disponible) {
+      const detalle = await this.invites.preview(invitacion.token);
+      correo = await this.mail.enviarInvitacion({
+        para: body.email,
+        nombre: invitacion.fullName,
+        gimnasio: detalle.gymName,
+        plan: detalle.planName,
+        enlace,
+      });
+    }
+
+    return { ...invitacion, enlace, correo };
   }
 
   /** Invitaciones vigentes. Sin el token: no se guarda en claro. */

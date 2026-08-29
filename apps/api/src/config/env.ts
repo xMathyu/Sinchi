@@ -71,6 +71,33 @@ const schema = z.object({
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
 
   /**
+   * Resend: envio de invitaciones por correo.
+   *
+   * Opcional a proposito. Sin ella la invitacion se crea igual y se comparte por
+   * enlace —WhatsApp, que en Peru se lee mas que el correo—: el correo es un
+   * canal de ENTREGA, no la fuente del vinculo. Que falte no puede impedir dar
+   * de alta a nadie.
+   */
+  RESEND_API_KEY: z.string().min(10).optional(),
+
+  /**
+   * Remitente. `onboarding@resend.dev` es el dominio compartido de Resend y solo
+   * entrega al correo del duenno de la cuenta: sirve para probar, no para
+   * invitar alumnos. Para eso hace falta un dominio propio verificado con SPF y
+   * DKIM, y cambiar esta variable.
+   */
+  MAIL_FROM: z.string().default('Sinchi <onboarding@resend.dev>'),
+
+  /**
+   * Donde aterriza el enlace de la invitacion.
+   *
+   * Por defecto el esquema de la app, que solo funciona en un telefono que ya la
+   * tiene instalada. Cuando exista una pagina que redirija a la tienda, se
+   * cambia esta variable y ni el correo ni la app se enteran.
+   */
+  INVITE_LINK_BASE: z.string().default('sinchi:///invite/'),
+
+  /**
    * Quien dispara los trabajos programados.
    *
    *   in_process  el cron vive dentro de la api (`@nestjs/schedule`). Para
