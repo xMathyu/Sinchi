@@ -439,8 +439,32 @@ function Reactivar({
   const [planId, setPlanId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sin esto la reinscripción no daba señal de nada: el botón volvía a estar
+  // pulsable, la ficha tardaba en recargarse, y el segundo toque chocaba contra
+  // el índice de una suscripción por membresía. Salía como error del servidor.
+  const [listo, setListo] = useState(false);
 
   const elegido = planes.find((plan) => plan.id === planId) ?? null;
+
+  if (listo) {
+    return (
+      <Card
+        radius={theme.radii.xl}
+        borderColor={withAlpha(theme.semaphore.ok, 0.35)}
+        style={{ marginTop: 18 }}
+      >
+        <Stack gap={4}>
+          <Text variant="heading" weight="semibold" color={theme.semaphore.ok}>
+            Reinscrito
+          </Text>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            {nombre} vuelve a estar en el padrón con su historial completo. Cóbrale la
+            mensualidad para que el escáner valide su QR.
+          </Text>
+        </Stack>
+      </Card>
+    );
+  }
 
   return (
     <Stack gap={10} style={{ marginTop: 18 }}>
@@ -491,6 +515,7 @@ function Reactivar({
           setGuardando(true);
           setError(null);
           void reactivarSuscripcion(membershipId, elegido.id)
+            .then(() => setListo(true))
             .catch((causa: unknown) => {
               setError(causa instanceof Error ? causa.message : 'No se pudo reinscribir.');
             })
