@@ -20,7 +20,7 @@ import { screenPadding } from '@sinchi/ui';
 import { formatPEN, type Cents } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../../src/design/screen';
-import { Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Button, Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
 import {
   useBajas,
@@ -95,26 +95,47 @@ export default function PadronScreen() {
             </Text>
           )}
         </Stack>
-        {/* Solo aparece cuando hay alguien esperando. Un botón permanente para
-            algo que ocurre tres veces por semana es ruido en la pantalla que
-            recepción mira todo el día. */}
-        {claims.length > 0 && (
+        <Row gap={8} justify="flex-end">
+          {/* Solo aparece cuando hay alguien esperando. Un chip permanente para
+              algo que ocurre tres veces por semana es ruido en la pantalla que
+              recepción mira todo el día. */}
+          {claims.length > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={12}
+              onPress={() => router.push('/staff/claims')}
+            >
+              <Card
+                radius={theme.radii.pill}
+                borderColor={withAlpha(theme.semaphore.warn, 0.35)}
+                style={{ paddingVertical: 7, paddingHorizontal: 13 }}
+              >
+                <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
+                  {claims.length} por vincular
+                </Text>
+              </Card>
+            </Pressable>
+          )}
+          {/* Inscribir sí es permanente: es la acción que sostiene todo lo demás
+              —sin padrón no hay a quién vincular, ni a quién escanear, ni a quién
+              cobrar— y hasta ahora no existía en ninguna pantalla. */}
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Inscribir un alumno"
             hitSlop={12}
-            onPress={() => router.push('/staff/claims')}
+            onPress={() => router.push('/staff/enroll')}
           >
             <Card
               radius={theme.radii.pill}
-              borderColor={withAlpha(theme.semaphore.warn, 0.35)}
-              style={{ paddingVertical: 7, paddingHorizontal: 13 }}
+              borderColor={withAlpha(theme.semaphore.ok, 0.4)}
+              style={{ paddingVertical: 7, paddingHorizontal: 14 }}
             >
-              <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
-                {claims.length} por vincular
+              <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+                + Alumno
               </Text>
             </Card>
           </Pressable>
-        )}
+        </Row>
       </Row>
 
       {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
@@ -180,13 +201,20 @@ export default function PadronScreen() {
       </Text>
     ) : (
       <Card tone="sunken">
-        <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-          {query.trim().length > 0
-            ? 'Nadie coincide con esa búsqueda.'
-            : viendoBajas
-              ? 'Nadie ha cancelado. Aquí aparecen las fichas dadas de baja, que se reinscriben sin registrar otra vez a la persona.'
-              : 'Todavía no hay alumnos inscritos en este gimnasio.'}
-        </Text>
+        <Stack gap={14}>
+          <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
+            {query.trim().length > 0
+              ? 'Nadie coincide con esa búsqueda.'
+              : viendoBajas
+                ? 'Nadie ha cancelado. Aquí aparecen las fichas dadas de baja, que se reinscriben sin registrar otra vez a la persona.'
+                : 'Todavía no hay alumnos inscritos. Inscribe al primero con su nombre, su documento y su celular.'}
+          </Text>
+          {/* Un vacío que dice qué falta y no ofrece hacerlo deja a quien lo lee
+              buscando el botón por la app. */}
+          {query.trim().length === 0 && !viendoBajas && (
+            <Button label="Inscribir alumno" onPress={() => router.push('/staff/enroll')} />
+          )}
+        </Stack>
       </Card>
     );
 

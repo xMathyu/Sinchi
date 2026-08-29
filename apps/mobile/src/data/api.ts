@@ -410,6 +410,31 @@ export const fetchRoster = async (incluirBajas = false): Promise<readonly Roster
 export const fetchStaffMember = async (membershipId: string): Promise<MembershipDetailDto> =>
   reviveDetail(await request<MembershipDetailDto>(`/staff/members/${membershipId}`));
 
+export interface EnrollResultDto {
+  readonly view: MembershipViewDto;
+  /** `true` si la persona ya existia en la red y solo se le sumo este gimnasio. */
+  readonly reusedIdentity: boolean;
+}
+
+/**
+ * Da de alta a un alumno en el local.
+ *
+ * La identidad es GLOBAL: si el celular o el documento ya existen en la red, se
+ * reutiliza esa persona en vez de crear otra. Por eso puede responder 409 —
+ * coincide uno de los dos datos pero no el otro, que es o un tipeo o dos
+ * personas distintas, y adivinarlo es como se fusionan dos alumnos por error.
+ */
+export const enrollMember = async (input: {
+  readonly name: string;
+  readonly documentId: string;
+  readonly phone: string;
+  readonly email?: string;
+  readonly planId: string;
+}): Promise<EnrollResultDto> => {
+  const out = await request<EnrollResultDto>('/staff/members', { method: 'POST', body: input });
+  return { ...out, view: reviveView(out.view) };
+};
+
 /** Planes del local. Los del staff, no los del alumno: `/me/...` es su billetera. */
 export const fetchStaffPlans = (): Promise<readonly Plan[]> => request('/staff/plans');
 
