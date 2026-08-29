@@ -20,9 +20,16 @@ import { screenPadding } from '@sinchi/ui';
 import { formatPEN, type Cents } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../../src/design/screen';
-import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
-import { useClaims, useOwnerSummary, useRefresco, useRoster, useStore } from '../../src/data/hooks';
+import {
+  useBajas,
+  useClaims,
+  useOwnerSummary,
+  useRefresco,
+  useRoster,
+  useStore,
+} from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
 
 export default function PadronScreen() {
@@ -34,13 +41,19 @@ export default function PadronScreen() {
   const resumen = useOwnerSummary();
   const { refrescando, refrescar } = useRefresco();
   const [query, setQuery] = useState('');
+  // Las bajas no entran en el padron normal —el mostrador mira «quien entrena
+  // aqui» todo el dia— pero tienen que ser alcanzables: son las unicas fichas
+  // que se pueden reinscribir, y cancelar las hacia desaparecer de todas partes.
+  const [viendoBajas, setViendoBajas] = useState(false);
+  const { bajas, cargando: cargandoBajas } = useBajas(viendoBajas);
 
   const listado = useMemo(() => {
+    const fuente = viendoBajas ? bajas : roster;
     const texto = query.trim().toLowerCase();
     const filtrado =
       texto.length === 0
-        ? [...roster]
-        : roster.filter(
+        ? [...fuente]
+        : fuente.filter(
             (e) =>
               e.user.name.toLowerCase().includes(texto) || e.user.documentId.includes(texto),
           );
@@ -51,7 +64,7 @@ export default function PadronScreen() {
       if (deudaA !== deudaB) return deudaB - deudaA;
       return a.user.name.localeCompare(b.user.name, 'es');
     });
-  }, [roster, query]);
+  }, [roster, bajas, viendoBajas, query]);
 
   const deudaTotal = roster.reduce((suma, e) => suma + e.view.receivable.amountCents, 0);
   const conDeuda = roster.filter((e) => e.view.receivable.amountCents > 0).length;
@@ -137,6 +150,11 @@ export default function PadronScreen() {
         </Stack>
       )}
 
+      <Row gap={8} justify="flex-start">
+        <Chip label="Activos" selected={!viendoBajas} onPress={() => setViendoBajas(false)} />
+        <Chip label="Bajas" selected={viendoBajas} onPress={() => setViendoBajas(true)} />
+      </Row>
+
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -156,16 +174,18 @@ export default function PadronScreen() {
   );
 
   const vacio =
-    cargando && roster.length === 0 ? (
+    (viendoBajas ? cargandoBajas : cargando) && listado.length === 0 ? (
       <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-        Cargando el padrón…
+        {viendoBajas ? 'Buscando las bajas…' : 'Cargando el padrón…'}
       </Text>
     ) : (
       <Card tone="sunken">
         <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-          {roster.length === 0
-            ? 'Todavía no hay alumnos inscritos en este gimnasio.'
-            : 'Nadie coincide con esa búsqueda.'}
+          {query.trim().length > 0
+            ? 'Nadie coincide con esa búsqueda.'
+            : viendoBajas
+              ? 'Nadie ha cancelado. Aquí aparecen las fichas dadas de baja, que se reinscriben sin registrar otra vez a la persona.'
+              : 'Todavía no hay alumnos inscritos en este gimnasio.'}
         </Text>
       </Card>
     );

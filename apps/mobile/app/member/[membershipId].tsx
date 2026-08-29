@@ -31,9 +31,9 @@ import {
 import { PhotoCircle } from '../../src/design/photo';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useStaffMember } from '../../src/data/hooks';
+import { usePlanesDelGimnasio, useStaffMember } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
-import { marcarAsistencia } from '../../src/data/actions';
+import { marcarAsistencia, reactivarSuscripcion } from '../../src/data/actions';
 import {
   formatCheckInMoment,
   formatDocument,
@@ -103,6 +103,7 @@ function Ficha({
 
   const semaphore = semaphoreStyle(theme, view.level);
   const { quota, receivable, delinquency, plan, user } = view;
+  const cancelada = view.subscription.status === 'canceled';
 
   const asistencias = [...view.attendances].sort(
     (a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime(),
@@ -141,7 +142,11 @@ function Ficha({
       >
         <Stack gap={4}>
           <Text variant="heading" weight="semibold" color={semaphore.color}>
-            {delinquency.canTrain ? 'Puede entrenar' : 'No puede entrenar'}
+            {cancelada
+              ? 'Dado de baja'
+              : delinquency.canTrain
+                ? 'Puede entrenar'
+                : 'No puede entrenar'}
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             {motivo(view)}
@@ -210,6 +215,9 @@ function Ficha({
         </Card>
       ) : null}
 
+      {cancelada ? (
+        <Reactivar membershipId={view.membership.id} nombre={user.name} />
+      ) : (
       <Stack gap={10} style={{ marginTop: 18 }}>
         <Button
           label={receivable.due ? 'Cobrar' : 'Registrar pago'}
@@ -249,6 +257,7 @@ function Ficha({
           </Text>
         )}
       </Stack>
+      )}
 
       <View style={{ marginTop: 22 }}>
         <SegmentedControl<Pestana>
@@ -304,6 +313,9 @@ function Ficha({
 /** Una línea de por qué el semáforo está donde está. */
 function motivo(view: MembershipView): string {
   const { delinquency, receivable, quota } = view;
+  if (view.subscription.status === 'canceled') {
+    return 'Canceló su suscripción. La ficha y el historial se conservan: puede volver sin registrarse otra vez.';
+  }
   if (delinquency.status === 'suspended') {
     return `Suspendido por mora: ${delinquency.daysPastDue} días desde el vencimiento.`;
   }
@@ -404,5 +416,92 @@ function Lista({ filas, vacia }: { readonly filas: readonly Fila[]; readonly vac
         </View>
       ))}
     </Card>
+  );
+}
+
+/**
+ * Devuelve a alguien que canceló.
+ *
+ * No es un alta. La ficha, los pagos y las asistencias siguen ahí —cancelar
+ * apaga la suscripción, no borra a la persona— y por eso la api tiene una ruta
+ * aparte. Registrarlo de nuevo le crearía una segunda identidad en el mismo
+ * local, con el historial partido en dos.
+ */
+function Reactivar({
+  membershipId,
+  nombre,
+}: {
+  readonly membershipId: string;
+  readonly nombre: string;
+}) {
+  const theme = useTheme();
+  const planes = usePlanesDelGimnasio();
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const elegido = planes.find((plan) => plan.id === planId) ?? null;
+
+  return (
+    <Stack gap={10} style={{ marginTop: 18 }}>
+      <Eyebrow>Volver a inscribir</Eyebrow>
+      {planes.length === 0 ? (
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          Trayendo los planes del gimnasio…
+        </Text>
+      ) : (
+        planes.map((plan) => {
+          const activo = plan.id === planId;
+          return (
+            <Pressable
+              key={plan.id}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: activo }}
+              onPress={() => setPlanId(plan.id)}
+            >
+              <Card
+                radius={theme.radii.lg}
+                borderColor={activo ? theme.semaphore.ok : theme.colors.hairline}
+              >
+                <Row>
+                  <Text variant="heading" weight="semibold">
+                    {plan.name}
+                  </Text>
+                  <Text variant="heading" weight="semibold">
+                    {formatPEN(plan.priceCents)}
+                  </Text>
+                </Row>
+              </Card>
+            </Pressable>
+          );
+        })
+      )}
+
+      <Button
+        label={
+          guardando
+            ? 'Reinscribiendo…'
+            : elegido === null
+              ? 'Elige un plan'
+              : `Reinscribir a ${nombre.trim().split(/\s+/)[0] ?? nombre} en ${elegido.name}`
+        }
+        disabled={elegido === null || guardando}
+        onPress={() => {
+          if (elegido === null || guardando) return;
+          setGuardando(true);
+          setError(null);
+          void reactivarSuscripcion(membershipId, elegido.id)
+            .catch((causa: unknown) => {
+              setError(causa instanceof Error ? causa.message : 'No se pudo reinscribir.');
+            })
+            .finally(() => setGuardando(false));
+        }}
+      />
+      {error === null ? null : (
+        <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
+          {error}
+        </Text>
+      )}
+    </Stack>
   );
 }
