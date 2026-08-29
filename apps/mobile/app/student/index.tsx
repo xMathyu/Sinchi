@@ -23,7 +23,7 @@ import {
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useStore, useWallet } from '../../src/data/hooks';
+import { useRefresco, useStore, useWallet } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import type { MembershipView } from '../../src/data/store';
 import { formatDocument, formatShortDate, initials, splitGymName } from '../../src/lib/format';
@@ -32,6 +32,7 @@ export default function WalletScreen() {
   const theme = useTheme();
   const user = useStore((state) => state.user);
   const wallet = useWallet();
+  useRefresco();
   const active = wallet.filter((entry) => entry.subscription.status !== 'canceled').length;
 
   return (

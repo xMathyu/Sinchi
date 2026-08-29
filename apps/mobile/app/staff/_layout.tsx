@@ -4,6 +4,15 @@
  * Va antes que el modo alumno en el orden de construccion: sin ella el gimnasio
  * no puede operar la puerta, y es lo que el cliente que paga necesita desde el
  * dia uno.
+ *
+ * El padron es pestana y el marcado manual no. Estuvo al reves y no funcionaba:
+ * la lista con TODOS los alumnos —su estado, su deuda, su ficha— vivia detras de
+ * un boton dentro de la pantalla del escaner, mientras una pestana entera
+ * llevaba a buscar a alguien para marcarlo a mano. Quien entraba al modo staff
+ * no encontraba a sus alumnos.
+ *
+ * Marcar manual no pierde nada: sigue a un toque desde la puerta, que es donde
+ * se usa, y la ficha de cada alumno tambien lo ofrece.
  */
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';
 import { TabBarShell, TabButton, TabContent } from '../../src/design/tab-bar';
@@ -31,8 +40,8 @@ export default function StaffLayout() {
           <TabTrigger name="door" href="/staff" asChild>
             <TabButton icon="viewfinder" label="Puerta" />
           </TabTrigger>
-          <TabTrigger name="manual" href="/staff/manual" asChild>
-            <TabButton icon="search" label="Buscar" />
+          <TabTrigger name="padron" href="/staff/padron" asChild>
+            <TabButton icon="lines" label="Padrón" />
           </TabTrigger>
           <TabTrigger name="device" href="/staff/device" asChild>
             <TabButton icon="circle" label="Dispositivo" />

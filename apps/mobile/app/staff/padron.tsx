@@ -14,7 +14,7 @@
  * a abrir un cargo para responder "¿por qué no pasa?" y a cancelarlo después.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { screenPadding } from '@sinchi/ui';
 import { formatPEN, type Cents } from '@sinchi/shared';
@@ -22,7 +22,7 @@ import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../../src/design/screen';
 import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
-import { useClaims, useOwnerSummary, useRoster, useStore } from '../../src/data/hooks';
+import { useClaims, useOwnerSummary, useRefresco, useRoster, useStore } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
 
 export default function PadronScreen() {
@@ -32,6 +32,7 @@ export default function PadronScreen() {
   const cargando = useStore((s) => s.hidratando);
   const { claims } = useClaims();
   const resumen = useOwnerSummary();
+  const { refrescando, refrescar } = useRefresco();
   const [query, setQuery] = useState('');
 
   const listado = useMemo(() => {
@@ -185,6 +186,13 @@ export default function PadronScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refrescando}
+            onRefresh={refrescar}
+            tintColor={theme.colors.textTertiary}
+          />
+        }
       />
     </Screen>
   );

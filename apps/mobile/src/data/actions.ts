@@ -427,3 +427,31 @@ export async function fijarMiPin(pin: string): Promise<void> {
   if (conServidor() === null) throw new Error('Fijar el PIN necesita una sesión de turno.');
   await setOwnPin(pin);
 }
+
+// ---------------------------------------------------------------------------
+// Refresco
+// ---------------------------------------------------------------------------
+
+/**
+ * Vuelve a pedir los datos de quien tiene la sesión abierta.
+ *
+ * Faltaba, y se notaba justo donde más duele: el padrón se cargaba una vez al
+ * abrir turno y no se volvía a pedir nunca. Si el alumno cambiaba de plan desde
+ * su teléfono, o si otra recepcionista cobraba desde otro equipo, el mostrador
+ * seguía viendo el estado del momento en que entró — sin nada que lo dijera.
+ *
+ * Las escrituras propias sí recargaban (`refrescarPadron`), y eso disimulaba el
+ * agujero: todo lo que hacía el mostrador se veía al instante, y solo lo que
+ * pasaba fuera se quedaba viejo.
+ */
+export async function refrescarDatos(): Promise<void> {
+  const estado = getSessionState();
+  if (estado.status !== 'signed_in') return;
+
+  const { role, userId, tenantId } = estado.session;
+  if (role === 'student') {
+    await hydrate();
+    return;
+  }
+  await hydrateStaff({ userId, tenantId, role });
+}
