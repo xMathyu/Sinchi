@@ -362,6 +362,15 @@ export interface CheckInPreviewDto {
 export const fetchCheckInPreview = (membershipId: string): Promise<CheckInPreviewDto> =>
   request(`/me/memberships/${membershipId}/checkin-preview`);
 
+/**
+ * Horario de clases del gimnasio de esta membresia.
+ *
+ * Va por membresia porque el horario es del LOCAL: la billetera puede tener tres
+ * gimnasios y cada uno tiene el suyo.
+ */
+export const fetchMySchedules = (membershipId: string): Promise<readonly ClassSchedule[]> =>
+  request(`/me/memberships/${membershipId}/schedules`);
+
 export const fetchPlansFor = (membershipId: string): Promise<readonly Plan[]> =>
   request(`/me/memberships/${membershipId}/plans`);
 
