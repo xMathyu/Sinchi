@@ -10,7 +10,7 @@
  * todo el sistema y es la llave con la que la persona se reconoce.
  */
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { firstPeriod, parsePlainDate } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, withoutTenantIsolation, type Database } from '../../db/client';
@@ -203,6 +203,27 @@ export class MembersService {
         .where(eq(schema.plans.id, planId))
         .limit(1);
       if (planRow === undefined) throw new BadRequestException('Ese plan no existe en este gimnasio.');
+
+      // Una suscripcion viva ya existente hacia estallar el indice parcial
+      // `subscriptions_one_live_per_membership` y salia como 500. No es un fallo
+      // del servidor: es que a esa persona no hay que reinscribirla, ya esta
+      // dentro. Un doble toque en el mostrador basta para llegar aqui.
+      const [viva] = await tx
+        .select({ id: schema.subscriptions.id })
+        .from(schema.subscriptions)
+        .where(
+          and(
+            eq(schema.subscriptions.membershipId, membershipId),
+            sql`${schema.subscriptions.status} <> 'canceled'`,
+          ),
+        )
+        .limit(1);
+
+      if (viva !== undefined) {
+        throw new ConflictException(
+          'Esa persona ya tiene una suscripción activa. No hace falta reinscribirla.',
+        );
+      }
 
       const today = this.clock.today(tenant.timezone);
 

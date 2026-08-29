@@ -652,6 +652,43 @@ suite('alta de alumnos', () => {
     expect(body.membershipId).toEqual(expect.any(String));
   });
 
+  it('no reinscribe a quien ya esta dentro, y sabe ensenar las bajas', async () => {
+    const { body: plans } = await http
+      .get('/v1/staff/plans')
+      .set(auth(token.frontDesk))
+      .expect(200);
+
+    const { body: activos } = await http
+      .get('/v1/staff/roster')
+      .set(auth(token.frontDesk))
+      .expect(200);
+    const alguien = activos[0].membership.id;
+
+    // Reinscribir a alguien que ya esta dentro chocaba contra el indice parcial
+    // de una suscripcion viva por membresia, y salia como 500. Un doble toque en
+    // el mostrador basta para llegar aqui, y no es un fallo del servidor: es que
+    // esa persona no hay que reinscribirla.
+    const { body: repetido } = await http
+      .post(`/v1/staff/members/${alguien}/resubscribe`)
+      .set(auth(token.frontDesk))
+      .send({ planId: plans[0].id })
+      .expect(409);
+    expect(JSON.stringify(repetido)).toMatch(/ya tiene una suscripción activa/i);
+
+    // `includeCanceled` es lo que hace alcanzable a quien cancelo. Sin el, su
+    // `membershipId` no lo devuelve ninguna ruta y `resubscribe` —que existe
+    // justo para volver— no se puede llamar desde ninguna pantalla.
+    const { body: conBajas } = await http
+      .get('/v1/staff/roster?includeCanceled=true')
+      .set(auth(token.frontDesk))
+      .expect(200);
+    expect(conBajas.length).toBeGreaterThanOrEqual(activos.length);
+
+    // Y la ficha del mostrador tiene que abrirse aunque la suscripcion no este
+    // viva: si se ven en la lista, hay que poder entrar a reinscribirlas.
+    await http.get(`/v1/staff/members/${alguien}`).set(auth(token.frontDesk)).expect(200);
+  });
+
   it('inscribe a alguien nuevo y arranca con el primer periodo por cobrar', async () => {
     const { body: plans } = await http
       .get('/v1/staff/plans')
