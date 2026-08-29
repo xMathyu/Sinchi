@@ -689,6 +689,29 @@ suite('alta de alumnos', () => {
     await http.get(`/v1/staff/members/${alguien}`).set(auth(token.frontDesk)).expect(200);
   });
 
+  it('la ficha y el padron nunca discrepan sobre la misma persona', async () => {
+    // La ficha admite suscripciones canceladas para poder reinscribir, y eso
+    // abrio la puerta a que devolviera OTRA: quien cancelo y volvio tiene dos, y
+    // sin un orden explicito Postgres entrega cualquiera. El sintoma fue una
+    // ficha diciendo "dado de baja" de alguien que el padron mostraba al dia.
+    const { body: roster } = await http
+      .get('/v1/staff/roster')
+      .set(auth(token.frontDesk))
+      .expect(200);
+
+    for (const entrada of roster) {
+      const { body: ficha } = await http
+        .get(`/v1/staff/members/${entrada.membership.id}`)
+        .set(auth(token.frontDesk))
+        .expect(200);
+
+      expect(ficha.subscription.id).toBe(entrada.subscription.id);
+      expect(ficha.subscription.status).toBe(entrada.subscription.status);
+      expect(ficha.plan.id).toBe(entrada.plan.id);
+      expect(ficha.badge).toBe(entrada.badge);
+    }
+  });
+
   it('inscribe a alguien nuevo y arranca con el primer periodo por cobrar', async () => {
     const { body: plans } = await http
       .get('/v1/staff/plans')
