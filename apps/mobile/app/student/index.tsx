@@ -22,9 +22,9 @@ import {
   Wordmark,
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoVacio } from '../../src/design/empty';
+import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
-import { useRefresco, useStore, useWallet } from '../../src/data/hooks';
+import { useErrorDeCarga, useRefresco, useStore, useWallet } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import type { MembershipView } from '../../src/data/store';
 import { formatDocument, formatShortDate, initials, splitGymName } from '../../src/lib/format';
@@ -34,6 +34,7 @@ export default function WalletScreen() {
   const user = useStore((state) => state.user);
   const wallet = useWallet();
   useRefresco();
+  const { error: errorDeCarga, reintentar } = useErrorDeCarga();
   const active = wallet.filter((entry) => entry.subscription.status !== 'canceled').length;
 
   return (
@@ -62,7 +63,11 @@ export default function WalletScreen() {
         </Text>
       </Stack>
 
-      {wallet.length === 0 ? (
+      {wallet.length === 0 && errorDeCarga !== null ? (
+        <View style={{ flex: 1, minHeight: 380 }}>
+          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+        </View>
+      ) : wallet.length === 0 ? (
         <View style={{ flex: 1, minHeight: 380 }}>
           <EstadoVacio
             titulo="Tu billetera está vacía"

@@ -139,15 +139,21 @@ function DataLoader() {
           });
 
     void carga
+      .then(() => {
+        if (!cancelado) marcarIntentoTerminado();
+      })
       .catch((error: unknown) => {
         // Sin conexion no se borra lo que ya habia: el alumno en la puerta del
         // gimnasio prefiere ver su ultimo estado conocido a una pantalla vacia.
+        // Y se guarda POR QUE fallo: en un arranque limpio no hay nada que
+        // conservar, y una pantalla vacia sin explicacion se lee como "perdiste
+        // tus datos" en vez de "no llegue a la api".
         console.warn('No se pudieron cargar los datos:', error);
-      })
-      .finally(() => {
-        // Termina el intento aunque haya fallado: si no, la portada del arranque
-        // se queda puesta para siempre en un teléfono sin red.
-        if (!cancelado) marcarIntentoTerminado();
+        if (!cancelado) {
+          marcarIntentoTerminado(
+            error instanceof Error ? error.message : 'No se pudo conectar con la api.',
+          );
+        }
       });
 
     return () => {

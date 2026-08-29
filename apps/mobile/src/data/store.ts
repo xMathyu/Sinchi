@@ -94,6 +94,15 @@ export interface State extends DemoData {
    * app afirmaba cosas falsas sobre la cuenta de alguien.
    */
   readonly cargado: boolean;
+  /**
+   * Por que fallo la ultima carga, si fallo.
+   *
+   * `cargado` solo dice que el intento termino. Sin esto, un fallo de red se
+   * pinta igual que una cuenta sin nada: la app decia "todavia no tienes un
+   * plan" a alguien que si lo tiene, y quien lo lee concluye que se perdieron
+   * sus datos. Es la peor mentira que puede contar esta pantalla.
+   */
+  readonly errorDeCarga: string | null;
   /** Veredicto del ultimo QR que valido el servidor. Ver `ScanVerdict`. */
   readonly scanVerdict: ScanVerdict | null;
   readonly queue: readonly QueuedItem[];
@@ -166,6 +175,7 @@ function initialState(): State {
     online: true,
     hidratando: false,
     cargado: false,
+    errorDeCarga: null,
     remoteRoster: null,
     scanVerdict: null,
     queue: [],
@@ -242,8 +252,8 @@ export function marcarHidratando(valor: boolean): void {
  * llega a montarse nunca. Vale mas ensenar la pantalla vacia —que el alumno
  * puede reintentar— que un cargando eterno.
  */
-export function marcarIntentoTerminado(): void {
-  setState({ ...state, hidratando: false, cargado: true });
+export function marcarIntentoTerminado(error: string | null = null): void {
+  setState({ ...state, hidratando: false, cargado: true, errorDeCarga: error });
 }
 
 /**
@@ -274,6 +284,7 @@ export function applyRemoteRoster(
     // Un padron vacio no trae tenant, y perder el que ya se sabia solo para
     // reemplazarlo por nada haria parpadear la cabecera al inscribir al primero.
     tenants: tenants.length > 0 ? tenants : state.tenants,
+    errorDeCarga: null,
     // Sin ellos, la validacion sin conexion cree que el gimnasio no controla
     // horarios y deja pasar a cualquier hora.
     schedules: schedules.length > 0 ? schedules : state.schedules,
@@ -312,6 +323,7 @@ export function applyRemoteData(data: RemoteData): void {
     remoteRoster: null,
     scanVerdict: null,
     cargado: true,
+    errorDeCarga: null,
     lastSyncAt: new Date(),
   });
 }

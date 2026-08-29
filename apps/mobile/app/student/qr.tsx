@@ -15,9 +15,15 @@ import { semaphoreStyle } from '@sinchi/ui';
 import { Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
 import { Screen, TintedScreen } from '../../src/design/screen';
-import { EstadoVacio } from '../../src/design/empty';
+import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
-import { useAccessCode, useCheckInPreview, useStore, useWallet } from '../../src/data/hooks';
+import {
+  useAccessCode,
+  useCheckInPreview,
+  useErrorDeCarga,
+  useStore,
+  useWallet,
+} from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import { initials, splitGymName } from '../../src/lib/format';
 
@@ -32,6 +38,7 @@ export default function QrScreen() {
     [wallet, activeTenantId],
   );
 
+  const { error: errorDeCarga, reintentar } = useErrorDeCarga();
   const [pickerOpen, setPickerOpen] = useState(false);
   // El QR se mide contra la pantalla, no en duro. A 212 fijos se salia en un
   // iPhone con barra de pestanas —la tarjeta de abajo quedaba pegada a ella— y
@@ -45,6 +52,13 @@ export default function QrScreen() {
     // Fondo normal, no el ámbar del semáforo: no tener membresías no es una
     // advertencia sobre tu acceso, es que todavía no hay nada que enseñar. Pintar
     // media pantalla de ámbar decía que algo iba mal.
+    if (errorDeCarga !== null) {
+      return (
+        <Screen>
+          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+        </Screen>
+      );
+    }
     return (
       <Screen>
         <EstadoVacio
