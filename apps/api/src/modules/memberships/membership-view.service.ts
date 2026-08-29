@@ -121,6 +121,16 @@ export class MembershipViewService {
       )
       .innerJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
       .where(eq(schema.memberships.id, membershipId))
+      // Con `includeCanceled` una membresia puede traer VARIAS: la cancelada y
+      // la que la reemplazo al reinscribir. Sin orden, Postgres devuelve
+      // cualquiera — y devolvia la cancelada, asi que la ficha decia "dado de
+      // baja" de alguien que el padron mostraba al dia. La viva manda; la
+      // cancelada solo aparece cuando no hay ninguna viva, que es justo el caso
+      // en el que hace falta para poder reinscribir.
+      .orderBy(
+        sql`(${schema.subscriptions.status} = 'canceled') asc`,
+        desc(schema.subscriptions.startDate),
+      )
       .limit(1);
 
     if (row === undefined) {

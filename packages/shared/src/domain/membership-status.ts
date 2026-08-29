@@ -32,7 +32,7 @@ export interface MembershipStatusInput {
  * despues. Una deuda pendiente pesa mas que un cupo agotado porque una se
  * resuelve pagando y la otra se resuelve esperando al lunes.
  *
- * La etiqueta dice el hecho concreto ("DEBES S/ 120") antes que el estado
+ * La etiqueta dice el hecho concreto ("DEBE S/ 120") antes que el estado
  * abstracto: es lo unico que el alumno lee de reojo al abrir la app.
  */
 export function membershipStatus(input: MembershipStatusInput): MembershipStatusView {
@@ -41,7 +41,12 @@ export function membershipStatus(input: MembershipStatusInput): MembershipStatus
   if (delinquency.status === 'canceled') return { level: 'blocked', badge: 'CANCELADA' };
   if (delinquency.status === 'suspended') return { level: 'blocked', badge: 'SUSPENDIDA' };
   if (receivable.due) {
-    return { level: 'warn', badge: `DEBES ${formatPENShort(receivable.amountCents)}` };
+    // Tercera persona, como `accessMessage` ("Puede pasar"): el dominio habla
+    // del alumno, no CON el alumno. Sus pantallas lo traducen a segunda persona,
+    // igual que `studentTitle` hace con el veredicto de la puerta. Al reves no
+    // funciona: el padron y la ficha del mostrador acababan diciendole "DEBES
+    // S/ 150" al recepcionista que mira la deuda de otro.
+    return { level: 'warn', badge: `DEBE ${formatPENShort(receivable.amountCents)}` };
   }
   if (quota.exhausted && quota.limit !== null) {
     return { level: 'alert', badge: `${quota.used} / ${quota.limit}` };

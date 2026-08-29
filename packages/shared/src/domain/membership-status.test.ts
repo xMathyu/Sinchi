@@ -81,7 +81,7 @@ describe('membershipStatus', () => {
       receivable: { ...sinDeuda, due: true, periodsOwed: 1, amountCents: fromSoles(120) },
       quota: cupoLibre,
     });
-    expect(status).toEqual({ level: 'warn', badge: 'DEBES S/ 120' });
+    expect(status).toEqual({ level: 'warn', badge: 'DEBE S/ 120' });
   });
 
   it('la plata pesa mas que el cupo', () => {
@@ -91,7 +91,7 @@ describe('membershipStatus', () => {
       receivable: { ...sinDeuda, due: true, periodsOwed: 1, amountCents: fromSoles(120) },
       quota: { ...cupoLibre, used: 3, remaining: 0, exhausted: true },
     });
-    expect(status.badge).toBe('DEBES S/ 120');
+    expect(status.badge).toBe('DEBE S/ 120');
   });
 
   it('la suspension pesa mas que todo', () => {

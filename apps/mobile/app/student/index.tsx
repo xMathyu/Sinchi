@@ -122,7 +122,10 @@ function GymCard({ entry }: { readonly entry: MembershipView }) {
       asChild
       onPress={() => setActiveTenant(entry.tenant.id)}
     >
-      <Pressable accessibilityRole="button" accessibilityLabel={`${entry.tenant.name}, ${entry.badge}`}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${entry.tenant.name}, ${insigniaParaTi(entry.badge)}`}
+      >
         <Card
           accent={semaphore.color}
           radius={theme.radii.xl}
@@ -134,7 +137,7 @@ function GymCard({ entry }: { readonly entry: MembershipView }) {
                 {brand}
                 {area === '' ? '' : `\n${area}`}
               </Text>
-              <Badge label={entry.badge} color={semaphore.color} />
+              <Badge label={insigniaParaTi(entry.badge)} color={semaphore.color} />
             </Row>
             <Row>
               <Text variant="caption" color={theme.colors.textSecondary}>
@@ -192,3 +195,15 @@ function SecondaryLine({
     </Text>
   );
 }
+
+/**
+ * La insignia, dicha al alumno.
+ *
+ * El dominio habla en tercera persona —"DEBE S/ 150"— porque describe a alguien;
+ * es lo mismo que hace `accessMessage` con "Puede pasar". Aqui es su propia
+ * billetera, asi que se le habla de tu. La traduccion va en esta direccion y no
+ * al reves por una razon concreta: al reves, el padron y la ficha del mostrador
+ * le decian "DEBES S/ 150" al recepcionista que estaba mirando la deuda de otro.
+ */
+const insigniaParaTi = (badge: string): string =>
+  badge.startsWith('DEBE ') ? `DEBES ${badge.slice('DEBE '.length)}` : badge;
