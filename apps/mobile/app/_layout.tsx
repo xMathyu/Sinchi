@@ -13,7 +13,7 @@
  * ese olvido no se ve en una revision de codigo.
  */
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -25,8 +25,8 @@ import { setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { useSession } from '../src/data/session-hooks';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
-import { useStore } from '../src/data/hooks';
 import { marcarHidratando, marcarIntentoTerminado } from '../src/data/store';
+import { CargandoSeccion } from '../src/design/loading';
 
 /**
  * El cliente HTTP toma sus credenciales de aqui.
@@ -191,17 +191,17 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
  */
 function Portada() {
   const state = useSession();
-  const cargado = useStore((s) => s.cargado);
 
-  // Sin sesion no hay nada que esperar: el login se pinta de inmediato.
-  const esperando =
-    state.status === 'loading' || (state.status === 'signed_in' && !cargado);
-
-  if (!esperando) return null;
+  // Solo mientras se lee el llavero, que son milisegundos. Es corto pero no
+  // se puede saltar: hasta que no se sabe el rol no se sabe QUE barra de
+  // pestanas toca, y montar la del alumno para cambiarla por la del staff se
+  // ve como un fallo. La espera larga —la de la red— ya no se tapa: ocurre
+  // dentro de la app, en `CargandoSeccion`.
+  if (state.status !== 'loading') return null;
 
   return (
-    <View style={styles.portada} pointerEvents="auto">
-      <ActivityIndicator color={colors.ink} />
+    <View style={styles.portada}>
+      <CargandoSeccion texto="" size={52} />
     </View>
   );
 }
