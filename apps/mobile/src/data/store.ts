@@ -82,6 +82,16 @@ export interface State extends DemoData {
    * numero que el servidor ya calculo con el mismo dominio.
    */
   readonly remoteRoster: readonly RosterEntry[] | null;
+  /**
+   * `true` en cuanto el store tiene datos de verdad —o los de demostracion,
+   * pedidos a proposito—.
+   *
+   * Existe porque el arranque ensenaba a Mathyu Quispe y sus tres gimnasios
+   * inventados durante los segundos que tarda `/me`, y luego cambiaban por los
+   * de verdad delante del alumno. No era un parpadeo feo: durante ese rato la
+   * app afirmaba cosas falsas sobre la cuenta de alguien.
+   */
+  readonly cargado: boolean;
   /** Veredicto del ultimo QR que valido el servidor. Ver `ScanVerdict`. */
   readonly scanVerdict: ScanVerdict | null;
   readonly queue: readonly QueuedItem[];
@@ -104,19 +114,73 @@ export interface ScanVerdict {
   readonly registered: boolean;
 }
 
+/**
+ * Persona en blanco.
+ *
+ * El store arranca SIN datos, y `user` no es opcional porque tres pantallas lo
+ * leen sin comprobarlo. Un usuario vacio las deja renderizar sin ramas nuevas, y
+ * como la app no ensena nada hasta que `cargado` es `true`, nadie llega a verlo.
+ */
+const NADIE: User = {
+  id: asId(''),
+  name: '',
+  documentId: '',
+  email: null,
+  phone: '',
+  photoUrl: null,
+  createdAt: new Date(0),
+};
+
+const SIN_TURNO: Staff = {
+  id: asId(''),
+  tenantId: asId(''),
+  userId: asId(''),
+  role: 'front_desk',
+  displayName: '',
+};
+
+/**
+ * Estado de arranque: vacio.
+ *
+ * Antes salia de `buildDemoData()`, y esa era la causa de que al abrir la app se
+ * viera la billetera de un alumno inventado hasta que respondia `/me`. Los datos
+ * de demostracion ahora se cargan cuando alguien los pide (`cargarDemostracion`),
+ * que es lo unico que los hace honestos: se ven porque se eligieron.
+ */
 function initialState(): State {
-  const demo = buildDemoData();
   return {
-    ...demo,
+    user: NADIE,
+    staff: SIN_TURNO,
+    users: [],
+    tenants: [],
+    memberships: [],
+    plans: [],
+    subscriptions: [],
+    charges: [],
+    attendances: [],
+    schedules: [],
     role: 'student',
-    activeTenantId: demo.tenants[0]?.id ?? '',
+    activeTenantId: '',
     online: true,
     hidratando: false,
+    cargado: false,
     remoteRoster: null,
     scanVerdict: null,
     queue: [],
-    lastSyncAt: new Date(),
+    lastSyncAt: null,
   };
+}
+
+/** Llena el store con los datos de demostracion. Solo desde la puerta de dev. */
+export function cargarDemostracion(): void {
+  const demo = buildDemoData();
+  setState({
+    ...initialState(),
+    ...demo,
+    activeTenantId: demo.tenants[0]?.id ?? '',
+    cargado: true,
+    lastSyncAt: new Date(),
+  });
 }
 
 let state: State = initialState();
@@ -167,6 +231,19 @@ export function marcarHidratando(valor: boolean): void {
 }
 
 /**
+ * Da por terminado el intento de carga, saliera bien o mal.
+ *
+ * `cargado` lo ponen tambien `applyRemoteData` y `applyRemoteRoster` cuando hay
+ * datos. Hace falta ademas aqui porque si no, un arranque sin red dejaria la
+ * portada puesta para siempre: la carga falla, nadie marca nada y la app no
+ * llega a montarse nunca. Vale mas ensenar la pantalla vacia —que el alumno
+ * puede reintentar— que un cargando eterno.
+ */
+export function marcarIntentoTerminado(): void {
+  setState({ ...state, hidratando: false, cargado: true });
+}
+
+/**
  * Deja el padron del servidor y quien lo mira.
  *
  * `staff` sale de la sesion, no de un endpoint: el token ya dice `staffId`,
@@ -174,7 +251,7 @@ export function marcarHidratando(valor: boolean): void {
  * ida y vuelta de mas.
  */
 export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff): void {
-  setState({ ...state, remoteRoster: roster, staff, lastSyncAt: new Date() });
+  setState({ ...state, remoteRoster: roster, staff, cargado: true, lastSyncAt: new Date() });
 }
 
 /**
@@ -205,11 +282,18 @@ export function applyRemoteData(data: RemoteData): void {
     // antes que el.
     remoteRoster: null,
     scanVerdict: null,
+    cargado: true,
     lastSyncAt: new Date(),
   });
 }
 
-/** Solo para desarrollo: vuelve a los datos de demostracion. */
+/**
+ * Vacia el store.
+ *
+ * Se llama al cerrar sesion o turno. Antes devolvia a los datos de demostracion,
+ * asi que salir de una cuenta real dejaba en pantalla la billetera de un alumno
+ * inventado hasta el siguiente login.
+ */
 export function resetState(): void {
   setState(initialState());
 }

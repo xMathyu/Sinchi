@@ -23,7 +23,7 @@ import { useStore } from '../src/data/hooks';
 import { signOut } from '../src/data/auth';
 import { fijarMiPin } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
-import { resetState, setRole } from '../src/data/store';
+import { cargarDemostracion, resetState, setRole } from '../src/data/store';
 
 const ROLES: readonly { readonly value: AppRole; readonly label: string; readonly hint: string }[] =
   [
@@ -246,7 +246,9 @@ export default function SettingsScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => {
-              resetState();
+              // Recarga la demostracion, no vacia el store: quien toca esto
+              // esta DENTRO del modo demostracion y quiere empezarlo de nuevo.
+              cargarDemostracion();
               router.replace('/');
             }}
           >
