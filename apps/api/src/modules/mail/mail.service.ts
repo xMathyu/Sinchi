@@ -12,6 +12,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { loadEnv } from '../../config/env';
+import { correoInvitacion } from './invite-email';
 
 export interface ResultadoEnvio {
   readonly enviado: boolean;
@@ -41,6 +42,21 @@ export class MailService {
     }
 
     const primerNombre = input.nombre.trim().split(/\s+/)[0] ?? input.nombre;
+    const texto = [
+      `Hola ${primerNombre},`,
+      '',
+      `${input.gimnasio} te dio de alta con el plan ${input.plan}.`,
+      '',
+      'Abre este enlace para activar tu cuenta:',
+      input.enlace,
+      '',
+      'Desde la app verás tu plan, tu cupo de la semana y el código QR con',
+      'el que entras al gimnasio. El código cambia cada 30 segundos y',
+      'funciona sin internet.',
+      '',
+      'Si no esperabas este correo, ignóralo: sin abrir el enlace no se',
+      'activa nada.',
+    ].join('\n');
 
     try {
       const respuesta = await fetch('https://api.resend.com/emails', {
@@ -53,21 +69,17 @@ export class MailService {
           from: env.MAIL_FROM,
           to: [input.para],
           subject: `${input.gimnasio} te inscribió en Sinchi`,
-          text: [
-            `Hola ${primerNombre},`,
-            '',
-            `${input.gimnasio} te dio de alta con el plan ${input.plan}.`,
-            '',
-            'Abre este enlace en tu teléfono para activar tu cuenta:',
-            input.enlace,
-            '',
-            'Desde la app verás tu plan, tu cupo de la semana y el código QR con',
-            'el que entras al gimnasio. El código cambia cada 30 segundos y',
-            'funciona sin internet.',
-            '',
-            'Si no esperabas este correo, ignóralo: sin abrir el enlace no se',
-            'activa nada.',
-          ].join('\n'),
+          // Las dos versiones. El texto plano no es un trámite: es lo que ven
+          // los clientes que bloquean HTML y lo que leen los filtros de spam,
+          // que desconfían de un correo que solo trae imágenes y un botón.
+          text: texto,
+          html: correoInvitacion({
+            primerNombre,
+            gimnasio: input.gimnasio,
+            plan: input.plan,
+            enlace: input.enlace,
+            logo: `${env.PUBLIC_BASE_URL}/v1/brand/logo.png`,
+          }),
         }),
         signal: AbortSignal.timeout(10_000),
       });
