@@ -12,10 +12,52 @@
  * esperando un boton que no existe.
  */
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { withAlpha } from '@sinchi/ui';
 import { Logo, Stack, Text } from './primitives';
 import { useTheme } from './theme';
+
+/**
+ * Vacio porque no se pudo cargar, no porque no haya nada.
+ *
+ * Los dos se veian igual —"todavia no tienes un plan"— y eso le dice a alguien
+ * que SI tiene plan que sus datos desaparecieron. Cuando la carga falla, la
+ * pantalla tiene que decir que fallo y ofrecer reintentar, no inventar un vacio.
+ */
+export function EstadoSinConexion({
+  error,
+  onReintentar,
+}: {
+  readonly error: string;
+  readonly onReintentar: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <EstadoVacio
+      titulo="No se pudieron traer tus datos"
+      cuerpo="Tu información sigue ahí: es la conexión con el servidor la que falló."
+      pie={error}
+      accion={
+        <Pressable accessibilityRole="button" onPress={onReintentar}>
+          <View
+            style={{
+              borderRadius: theme.radii.lg,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.actionSecondary,
+              paddingVertical: 14,
+              alignItems: 'center',
+            }}
+          >
+            <Text variant="heading" weight="semibold">
+              Reintentar
+            </Text>
+          </View>
+        </Pressable>
+      }
+    />
+  );
+}
 
 export function EstadoVacio({
   titulo,

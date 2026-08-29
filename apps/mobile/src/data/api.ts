@@ -11,6 +11,7 @@
  * reconstruyen para que las pantallas trabajen con `PlainDate` y `Cents` igual
  * que lo hacen con el store local.
  */
+import Constants from 'expo-constants';
 import type {
   AccessLevel,
   AccessMessage,
@@ -55,14 +56,44 @@ export function setCredentialProvider(provider: CredentialProvider): void {
   credentials = provider;
 }
 
+const DESPLEGADA = 'https://sinchi-api-961173851857.us-east4.run.app/v1';
+
+/**
+ * La api local, en la misma maquina que sirve el bundle.
+ *
+ * Existe porque la IP del Mac cambia con cada wifi, y con ella se rompian a la
+ * vez Metro y la api: habia que editar el `.env` a mano, reiniciar Metro y
+ * relanzar la app, tres veces en una tarde. Y el sintoma no ayudaba — la app
+ * arrancaba, la sesion seguia viva y las pantallas salian vacias, que se lee
+ * como "no tienes nada" y no como "no llego a la api".
+ *
+ * Metro ya sabe su propio host y lo publica en `hostUri`; la api corre en la
+ * misma maquina. Derivarlo de ahi hace que la direccion siga a la wifi sola, y
+ * funciona igual para el simulador que para un telefono en la red.
+ *
+ * Solo en `__DEV__`: en un build publicado no hay servidor de desarrollo del que
+ * heredar nada, y `hostUri` viene vacio.
+ */
+function apiJuntoAMetro(): string | null {
+  if (!__DEV__) return null;
+  const host = Constants.expoConfig?.hostUri;
+  if (host === undefined) return null;
+  const maquina = host.split(':')[0];
+  if (maquina === undefined || maquina.length === 0) return null;
+  return `http://${maquina}:3000/v1`;
+}
+
 /**
  * Base de la api.
  *
- * Se lee de `EXPO_PUBLIC_API_URL` para que un build de desarrollo pueda apuntar a
- * `localhost` sin recompilar. El valor por defecto es el servicio desplegado.
+ * `EXPO_PUBLIC_API_URL` manda. El valor especial `auto` apunta a la api local de
+ * la maquina que sirve el bundle, sin escribir ninguna IP; sin variable, al
+ * servicio desplegado.
  */
 let apiBase =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://sinchi-api-961173851857.us-east4.run.app/v1';
+  process.env.EXPO_PUBLIC_API_URL === 'auto'
+    ? (apiJuntoAMetro() ?? DESPLEGADA)
+    : (process.env.EXPO_PUBLIC_API_URL ?? DESPLEGADA);
 
 export const getApiBase = (): string => apiBase;
 

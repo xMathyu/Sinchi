@@ -19,9 +19,9 @@ import {
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoVacio } from '../../src/design/empty';
+import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
-import { useStore, useToday, useWallet } from '../../src/data/hooks';
+import { useErrorDeCarga, useStore, useToday, useWallet } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { cancelarSuscripcion } from '../../src/data/actions';
 import { formatShortDate } from '../../src/lib/format';
@@ -31,6 +31,7 @@ export default function PlanScreen() {
   const params = useLocalSearchParams<{ membershipId?: string }>();
   const activeTenantId = useStore((state) => state.activeTenantId);
   const wallet = useWallet();
+  const { error: errorDeCarga, reintentar } = useErrorDeCarga();
 
   const entry =
     wallet.find((item) => item.membership.id === params.membershipId) ??
@@ -38,6 +39,15 @@ export default function PlanScreen() {
     wallet[0];
 
   if (entry === undefined) {
+    // Un fallo de red y una cuenta sin nada NO son lo mismo, y decirle "todavía
+    // no tienes un plan" a quien sí lo tiene se lee como que perdió sus datos.
+    if (errorDeCarga !== null) {
+      return (
+        <Screen>
+          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+        </Screen>
+      );
+    }
     return (
       <Screen>
         <EstadoVacio

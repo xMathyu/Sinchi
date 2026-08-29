@@ -566,3 +566,20 @@ export function usePlanesDelGimnasio(): readonly Plan[] {
 
   return planes;
 }
+
+/**
+ * Por que fallo la ultima carga, y como volver a intentarlo.
+ *
+ * Lo consumen las pantallas vacias: sin esto, un fallo de red y una cuenta sin
+ * nada se pintan igual.
+ */
+export function useErrorDeCarga(): {
+  readonly error: string | null;
+  readonly reintentar: () => void;
+} {
+  const error = useStore((s) => s.errorDeCarga);
+  const reintentar = useCallback(() => {
+    void refrescarDatos().catch(() => {});
+  }, []);
+  return { error, reintentar };
+}
