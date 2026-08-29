@@ -17,11 +17,42 @@ body {
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* La página nunca scrollea de lado: si algo se pasa de ancho, se ve. */
+  overflow-x: hidden;
 }
 
 a { color: var(--ok); text-decoration: none; }
-a:hover { color: #1FA855; }
 
+/* La barra queda fija arriba, así que un ancla que no descuente su altura deja
+   el título debajo de ella. */
+[id] { scroll-margin-top: 96px; }
+
+:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; border-radius: 4px; }
+
+/* ---------------------------------------------------------------------------
+   Retícula
+
+   El margen lateral y el aire vertical son variables, no tres bloques de
+   `!important` en un `@media`: así una sección nueva ya nace responsive.
+   --------------------------------------------------------------------------- */
+:root {
+  --gutter: 96px;
+  --bar-h: 82px;
+}
+@media (max-width: 1180px) { :root { --gutter: 56px; } }
+@media (max-width: 900px)  { :root { --gutter: 26px; --bar-h: 70px; } }
+@media (max-width: 420px)  { :root { --gutter: 20px; } }
+
+.section { padding: clamp(52px, 6.5vw, 84px) var(--gutter); }
+.wrap { max-width: 1360px; margin: 0 auto; }
+
+/* ---------------------------------------------------------------------------
+   Tipografía
+
+   `clamp()` en vez de un tamaño fijo con overrides: entre 360 y 1280 px el
+   titular crece de forma continua, y no hay ningún ancho intermedio donde se
+   vea desproporcionado.
+   --------------------------------------------------------------------------- */
 .display {
   font-family: var(--font-display), 'Helvetica Neue', sans-serif;
   font-weight: 900;
@@ -29,11 +60,15 @@ a:hover { color: #1FA855; }
   line-height: 0.95;
 }
 
+.h1 { font-size: clamp(38px, 6.2vw, 62px); }
+.h2 { font-size: clamp(29px, 4.2vw, 46px); }
+.h3 { font-size: clamp(26px, 3.6vw, 38px); }
+
 .eyebrow {
   font-size: 11px; letter-spacing: 1.5px; font-weight: 700;
   text-transform: uppercase; color: var(--text-tertiary);
 }
-.lead { font-size: 19px; line-height: 27px; color: var(--text-secondary); }
+.lead { font-size: clamp(16px, 1.5vw, 19px); line-height: 1.45; color: var(--text-secondary); }
 .body { font-size: 15px; line-height: 22px; color: var(--text-secondary); }
 .secondary { color: var(--text-secondary); }
 .tertiary { color: var(--text-tertiary); }
@@ -49,24 +84,133 @@ a:hover { color: #1FA855; }
   letter-spacing: 0.9px; font-weight: 700; text-transform: uppercase;
 }
 
-/* La retícula: 96px de margen en escritorio, 22 en móvil. */
-.section { padding: 84px 96px; }
-.wrap { max-width: 1280px; margin: 0 auto; }
+/* ---------------------------------------------------------------------------
+   Barra y menú
+   --------------------------------------------------------------------------- */
+.bar {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.bar-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; height: var(--bar-h); padding: 0 var(--gutter);
+}
+.brand { display: flex; align-items: center; gap: 11px; color: var(--ink); }
+.brand .display { font-size: 23px; letter-spacing: 0.02em; }
+
+.nav-desktop { display: flex; gap: 30px; align-items: center; }
+.nav-link {
+  font-size: 15px; color: var(--text-secondary); position: relative; padding: 4px 0;
+  transition: color 0.2s ease;
+}
+.nav-link::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 1.5px; width: 100%;
+  background: var(--ok); transform: scaleX(0); transform-origin: left;
+  transition: transform 0.28s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+.nav-link:hover { color: var(--ink); }
+.nav-link:hover::after { transform: scaleX(1); }
+
+.btn-outline {
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 18px;
+  font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.btn-outline:hover { border-color: var(--ok); background: rgba(47, 209, 109, 0.08); }
+
+.btn-solid {
+  background: var(--ink); color: var(--canvas); border-radius: 14px;
+  padding: 15px 22px; font-size: 16px; font-weight: 700; text-align: center;
+}
+
+.burger {
+  display: none; width: 44px; height: 44px; padding: 0; cursor: pointer;
+  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  background: transparent; border: 1px solid var(--border); border-radius: 13px;
+  transition: border-color 0.2s ease;
+}
+.burger:hover { border-color: var(--text-tertiary); }
+.burger span {
+  display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--ink);
+  transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.18s ease;
+}
+.burger[aria-expanded='true'] span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.burger[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
+.burger[aria-expanded='true'] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.menu {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; justify-content: center; gap: 18px;
+  padding: var(--bar-h) var(--gutter) 40px;
+  /* Opaco del todo, no un cristal: apoyar la legibilidad en `backdrop-filter`
+     deja el titular de la portada leyéndose por debajo de los enlaces en cuanto
+     un navegador no lo compone. */
+  background: var(--canvas);
+  opacity: 0; visibility: hidden; transform: translateY(-10px);
+  transition: opacity 0.26s ease, transform 0.26s ease, visibility 0.26s;
+}
+.menu[data-open='true'] { opacity: 1; visibility: visible; transform: none; }
+.menu nav { display: flex; flex-direction: column; }
+.menu nav a {
+  font-family: var(--font-display), 'Helvetica Neue', sans-serif;
+  font-weight: 800; letter-spacing: -0.03em;
+  font-size: clamp(30px, 9vw, 42px); color: var(--ink);
+  padding: 13px 0; border-bottom: 1px solid var(--hairline);
+}
+.menu[data-open='true'] nav a { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) both; }
+.menu[data-open='true'] nav a:nth-child(1) { animation-delay: 0.06s; }
+.menu[data-open='true'] nav a:nth-child(2) { animation-delay: 0.12s; }
+.menu[data-open='true'] nav a:nth-child(3) { animation-delay: 0.18s; }
+.menu[data-open='true'] .btn-solid { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) 0.24s both; }
+
+@media (max-width: 900px) {
+  .burger { display: flex; }
+  .nav-desktop { display: none; }
+}
+@media (min-width: 901px) {
+  .menu { display: none; }
+}
 
 /* ---------------------------------------------------------------------------
    Movimiento
 
-   Dos cosas, y las dos se ganan el sitio.
+   Tres capas, y las tres se ganan el sitio.
 
-   Las secciones entran al ENTRAR EN PANTALLA, no al cargar: aquí sí hay scroll
-   de verdad —a diferencia de la maqueta, que vive en un marco fijo— así que se
-   usa `animation-timeline: view()`. Donde el navegador no lo soporta no pasa
-   nada: el contenido se queda visible, que es el fallo correcto.
-
-   El anillo del QR es la única en bucle, y no decora: el código del alumno rota
-   de verdad cada 30 segundos.
+   1. La portada entra POR TIEMPO: cuando se carga la página todavía no hay
+      scroll, así que un `view()` la dejaría animándose sola en el sitio.
+   2. Las secciones entran AL ENTRAR EN PANTALLA, con `animation-timeline:
+      view()`. Donde el navegador no lo soporta no pasa nada: el contenido se
+      queda visible, que es el fallo correcto.
+   3. El anillo del QR es la única en bucle, y no decora: el código del alumno
+      rota de verdad cada 30 segundos.
    --------------------------------------------------------------------------- */
 @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes rise-soft { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes bar-solid { to { background: color-mix(in srgb, var(--canvas) 82%, transparent); border-bottom-color: var(--hairline); } }
+@keyframes float { from { transform: translateY(0); } to { transform: translateY(-12px); } }
+@keyframes drift { from { transform: translateY(34px); } to { transform: translateY(-34px); } }
+@keyframes glow { from { opacity: 0.35; } to { opacity: 0.75; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* La portada, escalonada: primero el sello, luego el titular, luego el resto. */
+  .enter > * { animation: rise 0.75s cubic-bezier(0.22, 0.8, 0.24, 1) both; }
+  .enter > *:nth-child(1) { animation-delay: 0.05s; }
+  .enter > *:nth-child(2) { animation-delay: 0.13s; }
+  .enter > *:nth-child(3) { animation-delay: 0.21s; }
+  .enter > *:nth-child(4) { animation-delay: 0.29s; }
+  .enter > *:nth-child(5) { animation-delay: 0.37s; }
+
+  .enter-late { animation: rise-soft 0.9s cubic-bezier(0.22, 0.8, 0.24, 1) 0.42s both; }
+
+  /* Los teléfonos respiran. Uno desfasado del otro: sincronizados parecen un
+     GIF, y desfasados parecen dos objetos. */
+  .float { animation: float 5.5s ease-in-out infinite alternate; }
+  .float:nth-child(2) { animation-delay: -2.75s; }
+
+  .halo { animation: glow 6s ease-in-out infinite alternate; }
+}
 
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
@@ -75,7 +219,26 @@ a:hover { color: #1FA855; }
       animation-timeline: view();
       animation-range: entry 0% cover 26%;
     }
+    /* Escalonado por RANGO, no por retardo: en una línea de tiempo de scroll un
+       `animation-delay` se mide en píxeles de scroll, no en segundos. */
+    .stagger > * { animation: rise linear both; animation-timeline: view(); }
+    .stagger > *:nth-child(1) { animation-range: entry 0% cover 24%; }
+    .stagger > *:nth-child(2) { animation-range: entry 0% cover 30%; }
+    .stagger > *:nth-child(3) { animation-range: entry 0% cover 36%; }
+
+    /* Paralaje de los teléfonos de en medio: se mueven un poco más despacio que
+       la página, que es lo que da la sensación de profundidad. */
+    .parallax { animation: drift linear both; animation-timeline: view(); animation-range: cover; }
+
+    .bar { animation: bar-solid linear both; animation-timeline: scroll(root); animation-range: 0 110px; }
   }
+}
+
+/* Sin `view()` la barra no puede reaccionar al scroll, así que se pinta sólida
+   desde el principio: es mejor que un titular pasando por debajo de un cristal
+   transparente. */
+@supports not (animation-timeline: view()) {
+  .bar { background: color-mix(in srgb, var(--canvas) 82%, transparent); border-bottom-color: var(--hairline); }
 }
 
 @keyframes drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 88; } }
@@ -85,19 +248,43 @@ a:hover { color: #1FA855; }
 .counter { height: 13px; overflow: hidden; }
 .counter > div { animation: tick 30s steps(30) infinite; }
 
+/* El hover no es una animación: es la respuesta a que estás señalando algo. */
+.lift { transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.24, 1), border-color 0.3s ease; }
+.lift:hover { transform: translateY(-5px); border-color: var(--border); }
+
+.store-btn { transition: transform 0.22s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.22s ease; }
+.store-btn:hover { transform: translateY(-2px); opacity: 0.92; }
+.store-btn:active { transform: translateY(0); }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .ring, .counter > div { animation: none; }
+  .bar { background: color-mix(in srgb, var(--canvas) 82%, transparent); border-bottom-color: var(--hairline); }
 }
 
-/* --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Puntos de ruptura de la composición
+   --------------------------------------------------------------------------- */
+
+/* El segundo teléfono de la portada es el primero que sobra. El límite no es el
+   ancho de la ventana sino el del titular: con los dos marcos puestos, a la
+   columna de texto le quedan 556 px, y por debajo de esto el titular se parte en
+   cinco líneas y se ve apretado. */
+@media (max-width: 1300px) {
+  .hide-lg { display: none !important; }
+}
+
 @media (max-width: 900px) {
-  .section { padding: 48px 22px; }
-  .stack { flex-direction: column !important; align-items: stretch !important; gap: 32px !important; }
-  .stack-reverse { flex-direction: column-reverse !important; align-items: stretch !important; gap: 32px !important; }
+  .stack { flex-direction: column !important; align-items: stretch !important; gap: 34px !important; }
+  .stack-reverse { flex-direction: column-reverse !important; align-items: stretch !important; gap: 34px !important; }
   .grid-3 { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
-  .h1 { font-size: 40px !important; }
-  .h2 { font-size: 31px !important; }
   .center-mobile { justify-content: center !important; }
   .hide-mobile { display: none !important; }
+  .foot { flex-direction: column; align-items: flex-start !important; gap: 18px !important; }
+}
+
+/* Un iPhone SE de primera generación son 320 px: el marco del teléfono mide 274
+   y no deja aire a los lados. Se encoge en vez de recortarse. */
+@media (max-width: 379px) {
+  .phone-shell { transform: scale(0.86); transform-origin: top center; margin-bottom: -70px; }
 }

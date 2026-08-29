@@ -33,6 +33,7 @@ function StoreButton({
   return (
     <a
       href="#"
+      className="store-btn"
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         background: 'var(--ink)', color: 'var(--canvas)',

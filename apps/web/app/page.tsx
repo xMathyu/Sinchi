@@ -1,4 +1,5 @@
 import { Logo } from '@/components/Brand';
+import { Nav } from '@/components/Nav';
 import { DeniedScreen, PlanScreen, QrScreen, RosterScreen } from '@/components/Screens';
 import { StoreButtons } from '@/components/StoreButtons';
 
@@ -47,191 +48,205 @@ const PLANS = [
 
 export default function Landing() {
   return (
-    <main>
-      <header className="wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '28px 96px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-          <Logo size={26} />
-          <span className="display" style={{ fontSize: 23, letterSpacing: '.02em' }}>SINCHI</span>
-        </div>
-        <nav style={{ display: 'flex', gap: 30, alignItems: 'center' }}>
-          <a href="#que-hace" className="body hide-mobile" style={{ color: 'var(--text-secondary)' }}>Qué hace</a>
-          <a href="#planes" className="body hide-mobile" style={{ color: 'var(--text-secondary)' }}>Planes</a>
-          <a href="#contacto" style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 18px', fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>
-            Hablar con ventas
-          </a>
-        </nav>
-      </header>
+    <>
+      <Nav />
 
-      {/* Héroe: el trabajo que hace, y las dos caras a la vez. */}
-      <section className="section wrap stack" style={{ display: 'flex', gap: 56, alignItems: 'center', paddingTop: 52, paddingBottom: 84 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 26, flex: 1 }}>
-          <span className="pill" style={{ background: 'rgba(47,209,109,.10)', color: 'var(--ok)', alignSelf: 'flex-start' }}>
-            Gimnasios y escuelas de artes marciales
-          </span>
-          <h1 className="display h1" style={{ fontSize: 70, margin: 0, maxWidth: 640 }}>
-            Quién entrena, quién paga y cuándo le toca.
-          </h1>
-          <p className="lead" style={{ margin: 0, maxWidth: 530 }}>
-            Sinchi lleva el padrón de tu gimnasio, marca la asistencia de cada clase y cobra
-            las mensualidades. Tú lo ves en el mostrador — y tu alumno, en su teléfono.
-          </p>
-          <StoreButtons />
-          <p className="body" style={{ margin: 0, fontSize: 13 }}>
-            Desde S/ 149 al mes por local · Yape, efectivo y transferencia
-          </p>
-        </div>
-        <div className="center-mobile" style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flex: 'none' }}>
-          <RosterScreen />
-          <div className="hide-mobile"><PlanScreen /></div>
-        </div>
-      </section>
-
-      {/* Las tres cosas que lleva */}
-      <section id="que-hace" style={{ background: 'var(--screen)' }}>
-        <div className="section wrap reveal" style={{ display: 'flex', flexDirection: 'column', gap: 44 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span className="eyebrow">Lo que deja de vivir en el cuaderno</span>
-            <h2 className="display h2" style={{ fontSize: 44, margin: 0, maxWidth: 640 }}>
-              Tres cosas que hoy se te escapan
-            </h2>
+      <main id="top">
+        {/* Portada: el trabajo que hace, y las dos caras a la vez. */}
+        <section className="section wrap stack" style={{ display: 'flex', gap: 48, alignItems: 'center', paddingTop: 46 }}>
+          <div className="enter" style={{ display: 'flex', flexDirection: 'column', gap: 26, flex: 1, minWidth: 0 }}>
+            <span className="pill" style={{ background: 'rgba(47,209,109,.10)', color: 'var(--ok)', alignSelf: 'flex-start' }}>
+              Gimnasios y escuelas de artes marciales
+            </span>
+            <h1 className="display h1" style={{ margin: 0, maxWidth: 640 }}>
+              Quién entrena, quién paga y cuándo le toca.
+            </h1>
+            <p className="lead" style={{ margin: 0, maxWidth: 530 }}>
+              Sinchi lleva el padrón de tu gimnasio, marca la asistencia de cada clase y cobra
+              las mensualidades. Tú lo ves en el mostrador — y tu alumno, en su teléfono.
+            </p>
+            <StoreButtons />
+            <p className="body" style={{ margin: 0, fontSize: 13 }}>
+              Desde S/ 149 al mes por local · Yape, efectivo y transferencia
+            </p>
           </div>
-          <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 44 }}>
-            {FEATURES.map((feature) => (
-              <div key={feature.title} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {ICONS[feature.icon]}
-                <h3 style={{ fontSize: 19, margin: 0, fontWeight: 700, letterSpacing: -0.5 }}>{feature.title}</h3>
-                <p className="body" style={{ margin: 0 }}>{feature.text}</p>
+
+          {/* Un halo detrás de los teléfonos: sin él, dos rectángulos oscuros
+              sobre fondo oscuro se pierden. */}
+          <div className="center-mobile enter-late" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flex: 'none', position: 'relative' }}>
+            <div
+              className="halo"
+              aria-hidden
+              style={{
+                position: 'absolute', inset: '-14% -10%', pointerEvents: 'none',
+                background: 'radial-gradient(circle at 50% 38%, rgba(47,209,109,.16), transparent 68%)',
+                filter: 'blur(26px)',
+              }}
+            />
+            <RosterScreen className="float" />
+            <div className="hide-lg"><PlanScreen className="float" /></div>
+          </div>
+        </section>
+
+        {/* Las tres cosas que lleva */}
+        <section id="que-hace" style={{ background: 'var(--screen)' }}>
+          <div className="section wrap" style={{ display: 'flex', flexDirection: 'column', gap: 44 }}>
+            <div className="reveal" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span className="eyebrow">Lo que deja de vivir en el cuaderno</span>
+              <h2 className="display h2" style={{ margin: 0, maxWidth: 640 }}>
+                Tres cosas que hoy se te escapan
+              </h2>
+            </div>
+            <div className="grid-3 stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 44 }}>
+              {FEATURES.map((feature) => (
+                <div key={feature.title} style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                  {ICONS[feature.icon]}
+                  <h3 style={{ fontSize: 19, margin: 0, fontWeight: 700, letterSpacing: -0.5 }}>{feature.title}</h3>
+                  <p className="body" style={{ margin: 0 }}>{feature.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* La mitad que ningún cuaderno da */}
+        <section id="los-dos-lados" className="section wrap stack-reverse" style={{ display: 'flex', gap: 96, alignItems: 'center' }}>
+          <div className="center-mobile" style={{ flex: 'none', display: 'flex' }}>
+            <QrScreen className="parallax" />
+          </div>
+          <div className="reveal" style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1, minWidth: 0 }}>
+            <span className="eyebrow">Los dos lados</span>
+            <h2 className="display h2" style={{ margin: 0, maxWidth: 560 }}>
+              Tu alumno ve lo mismo que tú
+            </h2>
+            <p className="lead" style={{ margin: 0, maxWidth: 620 }}>
+              Su plan, cuántas sesiones le quedan esta semana, el horario de clases y —lo que
+              de verdad importa— <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>cuándo le toca pagar</strong>.
+            </p>
+            <p className="body" style={{ margin: 0, maxWidth: 620, fontSize: 16, lineHeight: '24px' }}>
+              Es la diferencia entre un cuaderno y esto. Nadie llega a fin de mes sin saber que
+              debía, nadie discute la fecha en la puerta, y tú te ahorras la conversación
+              incómoda antes de que haga falta tenerla.
+            </p>
+            <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', marginTop: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 4, background: 'var(--ok)', flex: 'none', marginTop: 7 }} />
+              <p className="body" style={{ margin: 0 }}>
+                Su código cambia cada 30 segundos y funciona sin internet: el wifi de un
+                gimnasio no aguanta la hora punta.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* La consecuencia */}
+        <section style={{ background: 'var(--screen)' }}>
+          <div className="section wrap stack" style={{ display: 'flex', gap: 72, alignItems: 'center' }}>
+            <div className="reveal" style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1, minWidth: 0 }}>
+              <span className="eyebrow">Y cuando alguien deja de pagar</span>
+              <h2 className="display h2" style={{ margin: 0, maxWidth: 480 }}>
+                El corte lo hace la puerta, no tú
+              </h2>
+              <p className="body" style={{ margin: 0, maxWidth: 490, fontSize: 16, lineHeight: '24px' }}>
+                Tú decides cuántos días de gracia da tu local. Mientras duren, el alumno entra y
+                ve lo que debe. Cuando vencen, el escáner deja de validar su código y el motivo
+                sale escrito — nunca «acceso denegado» a secas.
+              </p>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', paddingTop: 6 }}>
+                <div style={{ width: 3, background: 'var(--bad)', borderRadius: 2, flex: 'none' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span className="display h3" style={{ color: 'var(--bad)', lineHeight: 1 }}>S/ 1,500</span>
+                  <p className="body" style={{ margin: 0, maxWidth: 400 }}>
+                    al mes es lo que pierde un local de 60 alumnos con 20% de morosidad: gente que
+                    entrena y no paga.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="center-mobile" style={{ flex: 'none', display: 'flex' }}>
+              <DeniedScreen className="parallax" />
+            </div>
+          </div>
+        </section>
+
+        {/* Planes */}
+        <section id="planes" className="section wrap" style={{ display: 'flex', flexDirection: 'column', gap: 38 }}>
+          <div className="stack reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 40 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span className="eyebrow">Planes</span>
+              <h2 className="display h2" style={{ margin: 0, maxWidth: 540 }}>
+                Precio fijo al mes. Ni un sol por transacción.
+              </h2>
+            </div>
+            <p className="body" style={{ margin: 0, maxWidth: 380 }}>
+              Se cuenta por <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>alumnos activos</strong> — los que
+              marcaron asistencia o pagaron ese mes—, no por los registrados. Un alumno que se
+              fue en marzo no te cuesta en abril.
+            </p>
+          </div>
+          <div className="grid-3 stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 20 }}>
+            {PLANS.map((plan) => (
+              <div
+                key={plan.tier}
+                className="card lift"
+                style={{
+                  padding: '26px 24px', display: 'flex', flexDirection: 'column', gap: 12,
+                  borderColor: plan.featured ? 'var(--ok)' : 'var(--hairline)',
+                }}
+              >
+                {plan.featured ? (
+                  <span className="pill" style={{ background: 'rgba(47,209,109,.13)', color: 'var(--ok)', alignSelf: 'flex-start' }}>
+                    El más común
+                  </span>
+                ) : null}
+                <span className="eyebrow">{plan.tier}</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span className="display" style={{ fontSize: 42 }}>S/ {plan.price}</span>
+                  <span className="body">/ mes</span>
+                </div>
+                <p className="body" style={{ margin: 0 }}>{plan.detail}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* La mitad que ningún cuaderno da */}
-      <section className="section wrap stack-reverse reveal" style={{ display: 'flex', gap: 72, alignItems: 'center' }}>
-        <div className="center-mobile" style={{ flex: 'none', display: 'flex' }}><QrScreen /></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
-          <span className="eyebrow">Los dos lados</span>
-          <h2 className="display h2" style={{ fontSize: 46, margin: 0, maxWidth: 520 }}>
-            Tu alumno ve lo mismo que tú
-          </h2>
-          <p className="lead" style={{ margin: 0, maxWidth: 500 }}>
-            Su plan, cuántas sesiones le quedan esta semana, el horario de clases y —lo que
-            de verdad importa— <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>cuándo le toca pagar</strong>.
+          <p className="body" style={{ margin: 0, fontSize: 13 }}>
+            El alumno te paga a ti, no a nosotros. Nosotros te cobramos con el mismo motor con
+            el que tú le cobras a él: si falla, nos enteramos antes que tú.
           </p>
-          <p className="body" style={{ margin: 0, maxWidth: 500, fontSize: 16, lineHeight: '24px' }}>
-            Es la diferencia entre un cuaderno y esto. Nadie llega a fin de mes sin saber que
-            debía, nadie discute la fecha en la puerta, y tú te ahorras la conversación
-            incómoda antes de que haga falta tenerla.
-          </p>
-          <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', marginTop: 4 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 4, background: 'var(--ok)', flex: 'none', marginTop: 7 }} />
-            <p className="body" style={{ margin: 0 }}>
-              Su código cambia cada 30 segundos y funciona sin internet: el wifi de un
-              gimnasio no aguanta la hora punta.
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* La consecuencia */}
-      <section style={{ background: 'var(--screen)' }}>
-        <div className="section wrap stack reveal" style={{ display: 'flex', gap: 72, alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
-            <span className="eyebrow">Y cuando alguien deja de pagar</span>
-            <h2 className="display h2" style={{ fontSize: 46, margin: 0, maxWidth: 480 }}>
-              El corte lo hace la puerta, no tú
+        {/* Cierre */}
+        <section id="contacto" style={{ background: 'var(--screen)' }}>
+          <div className="section wrap reveal" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26, textAlign: 'center' }}>
+            <Logo size={46} />
+            <h2 className="display h2" style={{ margin: 0, maxWidth: 760 }}>
+              Deja de llevar tu gimnasio en un cuaderno
             </h2>
-            <p className="body" style={{ margin: 0, maxWidth: 490, fontSize: 16, lineHeight: '24px' }}>
-              Tú decides cuántos días de gracia da tu local. Mientras duren, el alumno entra y
-              ve lo que debe. Cuando vencen, el escáner deja de validar su código y el motivo
-              sale escrito — nunca «acceso denegado» a secas.
+            <p className="lead" style={{ margin: 0, maxWidth: 460 }}>
+              Monta tu padrón esta semana. Tus alumnos lo ven desde el primer día.
             </p>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', paddingTop: 6 }}>
-              <div style={{ width: 3, background: 'var(--bad)', borderRadius: 2, flex: 'none' }} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span className="display" style={{ fontSize: 34, color: 'var(--bad)', lineHeight: 1 }}>S/ 1,500</span>
-                <p className="body" style={{ margin: 0, maxWidth: 400 }}>
-                  al mes es lo que pierde un local de 60 alumnos con 20% de morosidad: gente que
-                  entrena y no paga.
-                </p>
-              </div>
-            </div>
+            <StoreButtons />
           </div>
-          <div className="center-mobile" style={{ flex: 'none', display: 'flex' }}><DeniedScreen /></div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Planes */}
-      <section id="planes" className="section wrap reveal" style={{ display: 'flex', flexDirection: 'column', gap: 38 }}>
-        <div className="stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span className="eyebrow">Planes</span>
-            <h2 className="display h2" style={{ fontSize: 44, margin: 0, maxWidth: 540 }}>
-              Precio fijo al mes. Ni un sol por transacción.
-            </h2>
+      <footer style={{ borderTop: '1px solid var(--hairline)' }}>
+        <div
+          className="wrap foot"
+          style={{
+            padding: '30px var(--gutter)', display: 'flex',
+            justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <Logo size={18} color="var(--text-tertiary)" />
+            <span style={{ fontSize: 11 }} className="tertiary">Sinchi · Lima, Perú</span>
           </div>
-          <p className="body" style={{ margin: 0, maxWidth: 380 }}>
-            Se cuenta por <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>alumnos activos</strong> — los que
-            marcaron asistencia o pagaron ese mes—, no por los registrados. Un alumno que se
-            fue en marzo no te cuesta en abril.
-          </p>
-        </div>
-        <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 20 }}>
-          {PLANS.map((plan) => (
-            <div
-              key={plan.tier}
-              className="card"
-              style={{
-                padding: '26px 24px', display: 'flex', flexDirection: 'column', gap: 12,
-                borderColor: plan.featured ? 'var(--ok)' : 'var(--hairline)',
-              }}
-            >
-              {plan.featured ? (
-                <span className="pill" style={{ background: 'rgba(47,209,109,.13)', color: 'var(--ok)', alignSelf: 'flex-start' }}>
-                  El más común
-                </span>
-              ) : null}
-              <span className="eyebrow">{plan.tier}</span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span className="display" style={{ fontSize: 42 }}>S/ {plan.price}</span>
-                <span className="body">/ mes</span>
-              </div>
-              <p className="body" style={{ margin: 0 }}>{plan.detail}</p>
-            </div>
-          ))}
-        </div>
-        <p className="body" style={{ margin: 0, fontSize: 13 }}>
-          El alumno te paga a ti, no a nosotros. Nosotros te cobramos con el mismo motor con
-          el que tú le cobras a él: si falla, nos enteramos antes que tú.
-        </p>
-      </section>
-
-      {/* Cierre */}
-      <section id="contacto" style={{ background: 'var(--screen)' }}>
-        <div className="section wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26, textAlign: 'center' }}>
-          <Logo size={46} />
-          <h2 className="display h2" style={{ fontSize: 50, margin: 0, maxWidth: 760 }}>
-            Deja de llevar tu gimnasio en un cuaderno
-          </h2>
-          <p className="lead" style={{ margin: 0, maxWidth: 460 }}>
-            Monta tu padrón esta semana. Tus alumnos lo ven desde el primer día.
-          </p>
-          <StoreButtons />
-        </div>
-      </section>
-
-      <footer className="wrap" style={{ borderTop: '1px solid var(--hairline)', padding: '30px 96px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <Logo size={18} color="var(--text-tertiary)" />
-          <span style={{ fontSize: 11 }} className="tertiary">Sinchi · Lima, Perú</span>
-        </div>
-        <div style={{ display: 'flex', gap: 24 }}>
-          <a href="#" style={{ fontSize: 11 }} className="tertiary">Términos</a>
-          <a href="#" style={{ fontSize: 11 }} className="tertiary">Privacidad</a>
-          <a href="mailto:soporte@sinchi.pe" style={{ fontSize: 11 }} className="tertiary">soporte@sinchi.pe</a>
+          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+            <a href="#" style={{ fontSize: 11 }} className="tertiary">Términos</a>
+            <a href="#" style={{ fontSize: 11 }} className="tertiary">Privacidad</a>
+            <a href="mailto:soporte@sinchi.pe" style={{ fontSize: 11 }} className="tertiary">soporte@sinchi.pe</a>
+          </div>
         </div>
       </footer>
-    </main>
+    </>
   );
 }

@@ -17,12 +17,16 @@ export function Logo({ size = 28, color = 'var(--ink)' }: { readonly size?: numb
 export function Phone({
   children,
   background = 'var(--screen)',
+  className,
 }: {
   readonly children: React.ReactNode;
   readonly background?: string;
+  /** Para que quien lo coloca decida si flota, si hace paralaje o si no se mueve. */
+  readonly className?: string;
 }) {
   return (
     <div
+      className={className === undefined ? 'phone-shell' : `phone-shell ${className}`}
       style={{
         width: 258,
         flex: 'none',

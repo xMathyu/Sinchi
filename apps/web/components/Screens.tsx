@@ -60,9 +60,12 @@ function RosterRow({
   );
 }
 
-export function RosterScreen() {
+/** Lo que las cuatro pantallas aceptan: cómo se mueve el marco donde se coloca. */
+type ScreenProps = { readonly className?: string };
+
+export function RosterScreen({ className }: ScreenProps) {
   return (
-    <Phone>
+    <Phone {...(className === undefined ? {} : { className })}>
       <div style={{ ...screenPad, gap: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span className="eyebrow">Padrón</span>
@@ -92,7 +95,7 @@ export function RosterScreen() {
 }
 
 /* --- Plan: lo que ve el alumno, con su próximo pago ----------------------- */
-export function PlanScreen() {
+export function PlanScreen({ className }: ScreenProps) {
   const days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'] as const;
   const todayClasses = [
     { name: 'Funcional', time: '07:00 – 08:00' },
@@ -101,7 +104,7 @@ export function PlanScreen() {
   const lastCheckIns = ['Lunes 25 · 19:04', 'Viernes 22 · 07:12'];
 
   return (
-    <Phone>
+    <Phone {...(className === undefined ? {} : { className })}>
       <div style={{ ...screenPad, gap: 14 }}>
         <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.5 }}>Club Kaizen</span>
 
@@ -187,10 +190,10 @@ export function PlanScreen() {
 }
 
 /* --- Mi QR: el código que rota de verdad ---------------------------------- */
-export function QrScreen() {
+export function QrScreen({ className }: ScreenProps) {
   const seconds = Array.from({ length: 31 }, (_, i) => 30 - i);
   return (
-    <Phone background="linear-gradient(160deg,#FF9E5C,#E0641C)">
+    <Phone background="linear-gradient(160deg,#FF9E5C,#E0641C)" {...(className === undefined ? {} : { className })}>
       <div style={{ ...screenPad, gap: 12, padding: '20px 16px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(10,10,11,.10)', padding: '5px 10px 5px 6px', borderRadius: 'var(--r-pill)' }}>
@@ -250,9 +253,9 @@ export function QrScreen() {
 }
 
 /* --- El corte: la consecuencia -------------------------------------------- */
-export function DeniedScreen() {
+export function DeniedScreen({ className }: ScreenProps) {
   return (
-    <Phone background="linear-gradient(160deg,#FF6161,#C22B2B)">
+    <Phone background="linear-gradient(160deg,#FF6161,#C22B2B)" {...(className === undefined ? {} : { className })}>
       <div style={{ ...screenPad, gap: 14, padding: '22px 16px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <span style={{ fontSize: 9.5, color: '#380B0B', fontWeight: 800, letterSpacing: 1.6 }}>ACCESO DENEGADO</span>

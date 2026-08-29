@@ -18,15 +18,42 @@ const archivo = Archivo({
   display: 'swap',
 });
 
+/**
+ * Sin esto, `og:image` sale como una ruta relativa y ni WhatsApp ni Twitter la
+ * resuelven: la vista previa aparece sin imagen. El dominio se puede fijar por
+ * entorno para poder previsualizar desde una URL de pruebas.
+ */
+const SITE = process.env['NEXT_PUBLIC_SITE_URL'] ?? 'https://sinchi.pe';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE),
   title: 'Sinchi · Quién entrena, quién paga y cuándo le toca',
   description:
     'Sinchi lleva el padrón de tu gimnasio, marca la asistencia de cada clase y cobra las mensualidades. Tú lo ves en el mostrador y tu alumno en su teléfono.',
+  applicationName: 'Sinchi',
+  // Los dos van declarados: en cuanto se nombra uno, Next deja de anadir el
+  // que detecta solo, y la pestana se quedaria pidiendo un /favicon.ico que no
+  // existe.
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: '/apple-icon.png',
+  },
   openGraph: {
-    title: 'Sinchi',
+    title: 'Sinchi · Quién entrena, quién paga y cuándo le toca',
     description: 'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app.',
+    siteName: 'Sinchi',
+    url: SITE,
     locale: 'es_PE',
     type: 'website',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Sinchi · Quién entrena, quién paga y cuándo le toca' }],
+  },
+  twitter: {
+    // `summary_large_image` y no `summary`: con la tarjeta pequeña el logo sale
+    // recortado en un cuadrado de 120 px y no se lee nada.
+    card: 'summary_large_image',
+    title: 'Sinchi · Quién entrena, quién paga y cuándo le toca',
+    description: 'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app.',
+    images: ['/og.png'],
   },
 };
 
