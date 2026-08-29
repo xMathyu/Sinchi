@@ -7,6 +7,17 @@
  */
 import { z } from 'zod';
 
+/**
+ * Una variable puesta a cadena vacia cuenta como ausente.
+ *
+ * Es lo que queda al copiar `.env.example` y no rellenar una linea, y sin esto
+ * `URL_DE_LA_TIENDA=""` tumbaria el arranque por «no es una URL» — un fallo
+ * absurdo para un dato opcional.
+ */
+function vacioEsAusente<T extends z.ZodTypeAny>(esquema: T) {
+  return z.preprocess((valor) => (valor === '' ? undefined : valor), esquema);
+}
+
 const schema = z.object({
   DATABASE_URL: z
     .string()
@@ -116,6 +127,28 @@ const schema = z.object({
    * fallo es silencioso —nadie recibe un error— y solo se nota semanas despues,
    * cuando el panel muestra morosos que ya pagaron.
    */
+  /**
+   * Ficha de la app en el App Store.
+   *
+   * Sin defecto POSIBLE: Apple direcciona por un id numerico que solo existe
+   * cuando la app esta publicada, y no se puede derivar del bundle. Mientras
+   * falte, la pagina de la invitacion no ensena un boton roto — dice que la app
+   * todavia no esta ahi, que es cierto.
+   */
+  IOS_STORE_URL: vacioEsAusente(z.string().url().optional()),
+
+  /**
+   * Ficha en Google Play.
+   *
+   * Esta si se deriva: Play direcciona por el nombre del paquete, que es el
+   * mismo desde el primer dia (`apps/mobile/app.json`). El defecto es correcto
+   * en cuanto la app se publica, y hasta entonces la tienda dice que no existe
+   * — que es tambien lo que pasa.
+   */
+  ANDROID_STORE_URL: vacioEsAusente(
+    z.string().url().default('https://play.google.com/store/apps/details?id=pe.sinchi.app'),
+  ),
+
   SCHEDULER_MODE: z.enum(['in_process', 'external']).default('in_process'),
 
   /**

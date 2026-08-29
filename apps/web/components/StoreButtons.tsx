@@ -4,7 +4,19 @@
  * Propios, no las insignias oficiales de Apple y Google: esas son marcas
  * registradas con sus propias reglas de uso, y usarlas mal es peor que no
  * usarlas. Se sustituyen por las de verdad el día que la app esté publicada.
+ *
+ * Las URLs son las MISMAS que sirve la página de la invitación (`IOS_STORE_URL`
+ * y `ANDROID_STORE_URL` en la api). Google Play direcciona por el nombre del
+ * paquete, así que su enlace ya es correcto; Apple direcciona por un id numérico
+ * que solo existe cuando la app está publicada, y hasta entonces el botón NO es
+ * un enlace: mandar a alguien a una tienda que dice «no encontrado» es peor que
+ * decirle que todavía no está.
  */
+const IOS = process.env['NEXT_PUBLIC_IOS_STORE_URL'] ?? null;
+const ANDROID =
+  process.env['NEXT_PUBLIC_ANDROID_STORE_URL'] ??
+  'https://play.google.com/store/apps/details?id=pe.sinchi.app';
+
 const GLYPHS = {
   ios: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--canvas)" strokeWidth={2} strokeLinecap="round" aria-hidden>
@@ -21,30 +33,44 @@ const GLYPHS = {
   ),
 } as const;
 
+const SHELL = {
+  display: 'flex', alignItems: 'center', gap: 12,
+  background: 'var(--ink)', color: 'var(--canvas)',
+  borderRadius: 14, padding: '13px 20px',
+} as const;
+
 function StoreButton({
   store,
   kicker,
   glyph,
+  href,
 }: {
   readonly store: string;
   readonly kicker: string;
   readonly glyph: keyof typeof GLYPHS;
+  readonly href: string | null;
 }) {
-  return (
-    <a
-      href="#"
-      className="store-btn"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        background: 'var(--ink)', color: 'var(--canvas)',
-        borderRadius: 14, padding: '13px 20px',
-      }}
-    >
+  const inner = (
+    <>
       {GLYPHS[glyph]}
       <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
         <span style={{ fontSize: 11, letterSpacing: 0.4, opacity: 0.62 }}>{kicker}</span>
         <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3 }}>{store}</span>
       </span>
+    </>
+  );
+
+  if (href === null) {
+    return (
+      <span className="store-btn" style={{ ...SHELL, opacity: 0.5, cursor: 'default' }}>
+        {inner}
+      </span>
+    );
+  }
+
+  return (
+    <a className="store-btn" href={href} style={SHELL}>
+      {inner}
     </a>
   );
 }
@@ -52,8 +78,13 @@ function StoreButton({
 export function StoreButtons({ column = false }: { readonly column?: boolean }) {
   return (
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flexDirection: column ? 'column' : 'row' }}>
-      <StoreButton store="App Store" kicker="Descargar en el" glyph="ios" />
-      <StoreButton store="Google Play" kicker="Disponible en" glyph="android" />
+      <StoreButton
+        store="App Store"
+        kicker={IOS === null ? 'Muy pronto en el' : 'Descargar en el'}
+        glyph="ios"
+        href={IOS}
+      />
+      <StoreButton store="Google Play" kicker="Disponible en" glyph="android" href={ANDROID} />
     </div>
   );
 }

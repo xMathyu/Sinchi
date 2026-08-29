@@ -216,7 +216,7 @@ export default function Landing() {
         {/* Cierre */}
         <section id="contacto" style={{ background: 'var(--screen)' }}>
           <div className="section wrap reveal" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26, textAlign: 'center' }}>
-            <Logo size={46} />
+            <Logo size={54} barColor="var(--screen)" />
             <h2 className="display h2" style={{ margin: 0, maxWidth: 760 }}>
               Deja de llevar tu gimnasio en un cuaderno
             </h2>

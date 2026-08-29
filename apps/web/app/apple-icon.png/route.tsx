@@ -2,16 +2,21 @@
  * El icono de «añadir a pantalla de inicio» en iOS.
  *
  * Safari no acepta SVG ahí —solo PNG— así que el `icon.svg` que sirve para el
- * resto de navegadores no vale. Se dibuja con la misma geometría de la marca,
+ * resto de navegadores no vale. Se dibuja con la geometría de `@sinchi/ui`,
  * sobre el fondo de la app: iOS no respeta la transparencia y la recorta contra
- * blanco, y el logo es claro.
+ * blanco, y la marca es clara.
+ *
+ * El glifo al 62% y subido un 2.2%, igual que `generar-iconos.mjs`: la máscara
+ * de iOS se come las esquinas, y la punta de lanza pesa abajo.
  */
 import { ImageResponse } from 'next/og';
-import { colors } from '@sinchi/ui';
+import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX, colors } from '@sinchi/ui';
 
 export const dynamic = 'force-static';
 
-const SIZE = { width: 180, height: 180 };
+const LADO = 180;
+/** El glifo mide 84 de alto dentro de un viewBox de 100: el marco compensa. */
+const MARCO = Math.round((LADO * 0.62 * 100) / 84);
 
 export function GET() {
   return new ImageResponse(
@@ -23,15 +28,15 @@ export function GET() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: colors.canvas,
+          background: colors.screen,
         }}
       >
-        <svg width="108" height="108" viewBox="0 0 64 64">
-          <path d="M32 6 L54 52 L32 41 L10 52 Z" fill={colors.ink} />
-          <path d="M32 41 L32 24" stroke={colors.canvas} strokeWidth={5} />
+        <svg width={MARCO} height={MARCO} viewBox={LOGO_VIEWBOX} style={{ marginBottom: LADO * 0.044 }}>
+          <path d={LOGO_OUTLINE_PATH} fill={colors.ink} />
+          <path d={LOGO_BAR_PATH} stroke={colors.screen} strokeWidth={LOGO_BAR_WIDTH} />
         </svg>
       </div>
     ),
-    SIZE,
+    { width: LADO, height: LADO },
   );
 }

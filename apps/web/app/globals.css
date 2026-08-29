@@ -253,8 +253,8 @@ a { color: var(--ok); text-decoration: none; }
 .lift:hover { transform: translateY(-5px); border-color: var(--border); }
 
 .store-btn { transition: transform 0.22s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.22s ease; }
-.store-btn:hover { transform: translateY(-2px); opacity: 0.92; }
-.store-btn:active { transform: translateY(0); }
+a.store-btn:hover { transform: translateY(-2px); opacity: 0.92; }
+a.store-btn:active { transform: translateY(0); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
