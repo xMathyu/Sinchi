@@ -642,9 +642,14 @@ suite('alta de alumnos', () => {
       })
       .expect(409);
 
-    // Que diga "ya tiene una membresia" y no "los datos no coinciden" es la
+    // Que diga "ya esta en el padron" y no "los datos no coinciden" es la
     // prueba de que reconocio a la persona por su celular y documento.
-    expect(JSON.stringify(body)).toMatch(/ya tiene una membres/i);
+    expect(JSON.stringify(body)).toMatch(/ya está en el padrón/i);
+
+    // Y devuelve CUAL es su ficha. Sin esto el mostrador lee "ya existe" y se
+    // queda sin saber a donde ir, que es justo el caso de quien cancelo y
+    // vuelve: lo que toca es reinscribirlo, no darlo de alta otra vez.
+    expect(body.membershipId).toEqual(expect.any(String));
   });
 
   it('inscribe a alguien nuevo y arranca con el primer periodo por cobrar', async () => {
