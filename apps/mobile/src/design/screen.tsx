@@ -66,11 +66,20 @@ export function TintedScreen({
   gradient,
   ink,
   watermark,
+  /**
+   * Fuerza de la marca de agua.
+   *
+   * En la pantalla de resultado se lee de lejos y aguanta el 0.08 del diseno.
+   * Detras del QR del alumno compite con lo unico que hay que mirar, asi que
+   * ahi se baja: la marca no tiene que ganarle al codigo.
+   */
+  watermarkOpacity,
   children,
 }: {
   readonly gradient: readonly [string, string];
   readonly ink: string;
   readonly watermark?: string;
+  readonly watermarkOpacity?: number;
   readonly children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
@@ -82,7 +91,9 @@ export function TintedScreen({
         end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      {watermark === undefined ? null : <Watermark label={watermark} ink={ink} />}
+      {watermark === undefined ? null : (
+        <Watermark label={watermark} ink={ink} opacity={watermarkOpacity} />
+      )}
       <View
         style={[
           styles.fill,
@@ -105,26 +116,42 @@ export function TintedScreen({
  * Estatica a proposito: el diseno la anima, pero una animacion infinita detras
  * de la pantalla que mas se usa en la puerta gasta bateria todo el turno.
  */
-function Watermark({ label, ink }: { readonly label: string; readonly ink: string }) {
+function Watermark({
+  label,
+  ink,
+  opacity = 0.08,
+}: {
+  readonly label: string;
+  readonly ink: string;
+  readonly opacity?: number;
+}) {
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.watermarkClip]}>
       <View style={styles.watermarkGrid}>
         {Array.from({ length: WATERMARK_TILES }, (_, index) => (
-          <WatermarkTile key={index} label={label} ink={ink} />
+          <WatermarkTile key={index} label={label} ink={ink} opacity={opacity} />
         ))}
       </View>
     </View>
   );
 }
 
-function WatermarkTile({ label, ink }: { readonly label: string; readonly ink: string }) {
+function WatermarkTile({
+  label,
+  ink,
+  opacity,
+}: {
+  readonly label: string;
+  readonly ink: string;
+  readonly opacity: number;
+}) {
   return (
     <Text
       variant="hero"
       weight="black"
       color={ink}
       style={{
-        opacity: 0.08,
+        opacity,
         paddingHorizontal: 18,
         paddingVertical: 26,
         letterSpacing: 52 * WORDMARK_TRACKING_RATIO,
