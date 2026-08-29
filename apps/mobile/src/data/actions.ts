@@ -518,6 +518,23 @@ export async function bajasDelGimnasio(): Promise<readonly RosterEntry[]> {
  * es global y un alumno que ya entrena en otro local NO se registra otra vez, se
  * le suma este gimnasio a la billetera que ya tiene (MD 5).
  */
+/**
+ * La persona ya esta en el padron de este gimnasio.
+ *
+ * Lleva la ficha porque el caso normal no es "te equivocaste": es alguien que
+ * cancelo y vuelve. Sin el id, el mostrador lee "ya existe" y se queda sin saber
+ * a donde ir.
+ */
+export class YaEnElPadron extends Error {
+  constructor(
+    message: string,
+    readonly membershipId: string | null,
+  ) {
+    super(message);
+    this.name = 'YaEnElPadron';
+  }
+}
+
 export async function inscribirAlumno(input: {
   readonly name: string;
   readonly documentId: string;
@@ -528,7 +545,17 @@ export async function inscribirAlumno(input: {
   const sesion = conServidor();
   if (sesion === null) throw new Error('Inscribir necesita una sesión de turno abierta.');
 
-  const salida = await enrollMember(input);
+  let salida;
+  try {
+    salida = await enrollMember(input);
+  } catch (causa) {
+    if (causa instanceof ApiError && causa.status === 409) {
+      const cuerpo = causa.body as { readonly membershipId?: unknown } | null;
+      const id = typeof cuerpo?.membershipId === 'string' ? cuerpo.membershipId : null;
+      throw new YaEnElPadron(causa.message, id);
+    }
+    throw causa;
+  }
   await refrescarPadron(sesion);
   return {
     membershipId: salida.view.membership.id,
