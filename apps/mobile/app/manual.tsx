@@ -20,13 +20,13 @@ import {
   Row,
   Stack,
   Text,
-} from '../../src/design/primitives';
-import { Screen } from '../../src/design/screen';
-import { useTheme } from '../../src/design/theme';
-import { useRoster, useStore, useToday } from '../../src/data/hooks';
-import type { RosterEntry } from '../../src/data/store';
-import { marcarAsistencia } from '../../src/data/actions';
-import { formatDocument, initials } from '../../src/lib/format';
+} from '../src/design/primitives';
+import { Screen } from '../src/design/screen';
+import { useTheme } from '../src/design/theme';
+import { useRoster, useStore, useToday } from '../src/data/hooks';
+import type { RosterEntry } from '../src/data/store';
+import { marcarAsistencia } from '../src/data/actions';
+import { formatDocument, initials } from '../src/lib/format';
 
 export default function ManualCheckInScreen() {
   const theme = useTheme();

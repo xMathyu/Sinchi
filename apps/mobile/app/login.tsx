@@ -241,7 +241,7 @@ export default function LoginScreen() {
 
           <View style={{ height: 1, alignSelf: 'stretch', backgroundColor: theme.colors.hairline }} />
 
-          <Pressable onPress={() => router.push('/staff/shift')} hitSlop={14}>
+          <Pressable onPress={() => router.push('/shift')} hitSlop={14}>
             <Text variant="caption" color={theme.colors.textSecondary}>
               Soy staff — abrir turno
             </Text>

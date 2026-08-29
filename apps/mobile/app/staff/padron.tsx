@@ -103,7 +103,7 @@ export default function PadronScreen() {
             <Pressable
               accessibilityRole="button"
               hitSlop={12}
-              onPress={() => router.push('/staff/claims')}
+              onPress={() => router.push('/claims')}
             >
               <Card
                 radius={theme.radii.pill}
@@ -123,7 +123,7 @@ export default function PadronScreen() {
             accessibilityRole="button"
             accessibilityLabel="Inscribir un alumno"
             hitSlop={12}
-            onPress={() => router.push('/staff/enroll')}
+            onPress={() => router.push('/enroll')}
           >
             <Card
               radius={theme.radii.pill}
@@ -212,7 +212,7 @@ export default function PadronScreen() {
           {/* Un vacío que dice qué falta y no ofrece hacerlo deja a quien lo lee
               buscando el botón por la app. */}
           {query.trim().length === 0 && !viendoBajas && (
-            <Button label="Inscribir alumno" onPress={() => router.push('/staff/enroll')} />
+            <Button label="Inscribir alumno" onPress={() => router.push('/enroll')} />
           )}
         </Stack>
       </Card>

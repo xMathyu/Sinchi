@@ -17,12 +17,12 @@ import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { withAlpha } from '@sinchi/ui';
-import { Avatar, Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { Screen } from '../../src/design/screen';
-import { useTheme } from '../../src/design/theme';
-import { useClaims, useRoster } from '../../src/data/hooks';
-import { vincularCuenta, type Vinculacion } from '../../src/data/actions';
-import { formatDocument, initials } from '../../src/lib/format';
+import { Avatar, Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
+import { Screen } from '../src/design/screen';
+import { useTheme } from '../src/design/theme';
+import { useClaims, useRoster } from '../src/data/hooks';
+import { vincularCuenta, type Vinculacion } from '../src/data/actions';
+import { formatDocument, initials } from '../src/lib/format';
 
 export default function ClaimsScreen() {
   const theme = useTheme();
