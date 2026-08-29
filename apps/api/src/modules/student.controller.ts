@@ -96,6 +96,27 @@ export class StudentController {
     };
   }
 
+  /**
+   * Horario de clases del gimnasio.
+   *
+   * El alumno no podia verlo desde ningun sitio: `/staff/schedules` es del
+   * mostrador y `/me` no lo devolvia. Y sin el, el escaner le rechaza por "fuera
+   * de horario" sin que haya tenido forma de saber cuando puede ir — la app
+   * conocia la regla y no la compartia con quien tiene que cumplirla.
+   *
+   * Va por membresia y no suelto porque el horario es del LOCAL: un alumno con
+   * tres gimnasios tiene tres horarios distintos, y `resolveOwnMembership`
+   * comprueba ademas que la membresia sea suya.
+   */
+  @Get('memberships/:membershipId/schedules')
+  async schedules(
+    @CurrentSession() session: Session,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ) {
+    const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
+    return this.checkin.schedules(tenantId);
+  }
+
   @Get('memberships/:membershipId/plans')
   async availablePlans(
     @CurrentSession() session: Session,

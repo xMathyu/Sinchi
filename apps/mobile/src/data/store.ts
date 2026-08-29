@@ -203,8 +203,8 @@ export const getState = (): State => state;
 /**
  * Lo que la api puede llenar del estado.
  *
- * No es todo: `staff`, `schedules` y la cola de sincronizacion no vienen de
- * `/me`, y el rol lo dicta la sesion. Se enumera en vez de aceptar un `State`
+ * No es todo: `staff` y la cola de sincronizacion no vienen de `/me`, y el rol
+ * lo dicta la sesion. Se enumera en vez de aceptar un `State`
  * parcial para que anadir un campo al store obligue a decidir si la api lo trae
  * — un `Partial<State>` dejaria campos de demostracion vivos sin que nadie lo
  * note.
@@ -218,6 +218,7 @@ export interface RemoteData {
   readonly plans: State['plans'];
   readonly charges: State['charges'];
   readonly attendances: State['attendances'];
+  readonly schedules: State['schedules'];
   readonly activeTenantId: string;
 }
 
@@ -301,9 +302,10 @@ export function applyRemoteData(data: RemoteData): void {
   setState({
     ...state,
     ...data,
-    // Sin datos de demostracion detras: el staff y los horarios llegaran cuando
-    // haya endpoints que los sirvan, y hasta entonces vacios es la verdad.
-    schedules: [],
+    // El staff no viene de `/me` —un alumno no lo tiene— y vacio es la verdad.
+    // Los horarios SI vienen ahora: sin ellos la validacion local del alumno
+    // creia que su gimnasio no controla horarios y le decia "puedes entrar" a
+    // cualquier hora, mientras la puerta le rechazaba por fuera de horario.
     queue: [],
     // Si sobreviviera, un alumno veria el padron del staff que uso el telefono
     // antes que el.

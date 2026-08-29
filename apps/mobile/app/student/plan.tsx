@@ -6,16 +6,22 @@
  * pintan siempre, incluso en planes ilimitados, porque es la pregunta que el
  * alumno hace en la puerta.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { allWeekdays, formatPENShort, weekdayInitial } from '@sinchi/shared';
+import {
+  allWeekdays,
+  formatPENShort,
+  isoWeekday,
+  weekdayInitial,
+  weekdayName,
+} from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
-import { useStore, useWallet } from '../../src/data/hooks';
+import { useStore, useToday, useWallet } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { cancelarSuscripcion } from '../../src/data/actions';
 import { formatShortDate } from '../../src/lib/format';
@@ -110,6 +116,8 @@ export default function PlanScreen() {
           })}
         </Row>
       </Stack>
+
+      <Horario entry={entry} />
 
       <Card radius={theme.radii.xl} style={{ marginTop: 18 }}>
         <Stack gap={12}>
@@ -325,5 +333,108 @@ function CancelButton({
         {cancelando ? 'Cancelando…' : 'Cancelar suscripción'}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * Horario de clases del gimnasio.
+ *
+ * No se veia en ninguna pantalla, y su ausencia tiene consecuencia: el escaner
+ * rechaza por "fuera de horario" a quien llega a deshora, y el alumno no tenia
+ * forma de saber cuando podia ir. La app conocia la regla y no la compartia con
+ * quien tiene que cumplirla.
+ *
+ * Se ensena el horario ENTERO del local, no solo los dias que el plan habilita:
+ * un alumno de 2 por semana tiene que poder ver que hay judo el sabado antes de
+ * decidir si sube de plan. Los dias que su plan no cubre se marcan, no se
+ * esconden.
+ */
+function Horario({ entry }: { readonly entry: MembershipView }) {
+  const theme = useTheme();
+  const hoy = useToday();
+  const todas = useStore((state) => state.schedules);
+
+  const delLocal = useMemo(
+    () => todas.filter((clase) => clase.tenantId === entry.tenant.id),
+    [todas, entry.tenant.id],
+  );
+
+  if (delLocal.length === 0) return null;
+
+  const diaDeHoy = isoWeekday(hoy);
+  const permitidos = entry.plan.allowedDays;
+
+  const porDia = allWeekdays()
+    .map((dia) => ({
+      dia,
+      clases: delLocal
+        .filter((clase) => clase.weekday === dia)
+        .slice()
+        .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    }))
+    .filter((grupo) => grupo.clases.length > 0);
+
+  return (
+    <Stack gap={10} style={{ marginTop: 18 }}>
+      {/* Sin el nombre del gimnasio: ya es el titulo de la pantalla, y en
+          versalitas ocupaba dos renglones para repetirlo. */}
+      <Eyebrow>Horario de clases</Eyebrow>
+      <Card padded={false} radius={theme.radii.xl}>
+        {porDia.map((grupo, indice) => {
+          const esHoy = grupo.dia === diaDeHoy;
+          const tuDia = permitidos === null || permitidos.includes(grupo.dia);
+          const nombre = weekdayName(grupo.dia);
+
+          return (
+            <View key={grupo.dia}>
+              {indice === 0 ? null : <Divider />}
+              <Stack gap={7} style={{ paddingHorizontal: 16, paddingVertical: 13 }}>
+                <Row justify="flex-start" gap={8}>
+                  <Text
+                    variant="captionSmall"
+                    weight="bold"
+                    color={esHoy ? theme.semaphore.ok : theme.colors.textSecondary}
+                  >
+                    {`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)}`}
+                  </Text>
+                  {esHoy ? (
+                    <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
+                      HOY
+                    </Text>
+                  ) : null}
+                  {tuDia ? null : (
+                    <Text variant="micro" color={theme.colors.textTertiary}>
+                      fuera de tu plan
+                    </Text>
+                  )}
+                </Row>
+
+                {grupo.clases.map((clase) => (
+                  <Row key={clase.id} gap={12}>
+                    <Text
+                      variant="bodySmall"
+                      style={{ flex: 1 }}
+                      color={tuDia ? theme.colors.ink : theme.colors.textTertiary}
+                    >
+                      {clase.name}
+                    </Text>
+                    <Text
+                      variant="bodySmall"
+                      weight="semibold"
+                      color={tuDia ? theme.colors.textStrong : theme.colors.textTertiary}
+                    >
+                      {clase.startTime} – {clase.endTime}
+                    </Text>
+                  </Row>
+                ))}
+              </Stack>
+            </View>
+          );
+        })}
+      </Card>
+      <Text variant="micro" color={theme.colors.textFaint}>
+        El escáner valida solo dentro del horario, con media hora de margen antes y después.
+      </Text>
+    </Stack>
   );
 }

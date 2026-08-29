@@ -18,7 +18,13 @@
  * parecen.
  */
 import { asId, type Attendance, type Charge, type Plan, type Tenant } from '@sinchi/shared';
-import { fetchMe, fetchMembership, fetchRoster, fetchSchedules } from './api';
+import {
+  fetchMe,
+  fetchMembership,
+  fetchMySchedules,
+  fetchRoster,
+  fetchSchedules,
+} from './api';
 import { applyRemoteData, applyRemoteRoster, type RemoteData } from './store';
 
 /**
@@ -36,6 +42,23 @@ export async function loadFromApi(): Promise<RemoteData> {
   const detalles = await Promise.all(
     me.wallet.map((entrada) => fetchMembership(entrada.membership.id)),
   );
+
+  // El horario es del LOCAL, asi que se pide uno por gimnasio y no por
+  // membresia: un alumno con dos membresias en el mismo dojo pediria dos veces
+  // lo mismo. Se traga el error porque un gimnasio sin horarios configurados es
+  // legitimo —significa que no los controla— y no puede impedir que cargue la
+  // billetera.
+  const porLocal = new Map<string, string>();
+  for (const detalle of detalles) {
+    if (!porLocal.has(detalle.tenant.id)) porLocal.set(detalle.tenant.id, detalle.membership.id);
+  }
+  const horarios = (
+    await Promise.all(
+      [...porLocal.values()].map((membershipId) =>
+        fetchMySchedules(membershipId).catch(() => []),
+      ),
+    )
+  ).flat();
 
   const tenants: Tenant[] = [];
   const plans: Plan[] = [];
@@ -61,6 +84,7 @@ export async function loadFromApi(): Promise<RemoteData> {
     plans,
     charges,
     attendances,
+    schedules: horarios,
     activeTenantId: tenants[0]?.id ?? '',
   };
 }
