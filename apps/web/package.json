@@ -1,0 +1,24 @@
+{
+  "name": "@sinchi/web",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.1",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sinchi/ui": "link:../../packages/ui",
+    "next": "16.3.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -13,6 +13,8 @@ apps/mobile/android/
 apps/mobile/.expo/
 
 .next/
+# Next exporta la landing estatica a apps/web/out
+out/
 .nest/
 
 .env
