@@ -18,7 +18,7 @@ import {
   type Plan,
 } from '@sinchi/shared';
 import { hmacSha256, loadSecret } from './crypto';
-import { fetchRecentCheckIns, type SummaryDto } from './api';
+import { fetchCheckInPreview, fetchRecentCheckIns, type CheckInPreviewDto, type SummaryDto } from './api';
 import {
   bajasDelGimnasio,
   cargarDetalleAlumno,
@@ -101,10 +101,45 @@ export function useMembership(membershipId: string): MembershipView {
 export function useCheckInPreview(membershipId: string | null): CheckInPreview | null {
   const today = useToday();
   const version = useStore((s) => s.charges.length + s.attendances.length + s.subscriptions.length);
-  return useMemo(
+  const [remoto, setRemoto] = useState<CheckInPreviewDto | null>(null);
+
+  const local = useMemo(
     () => (membershipId === null ? null : previewCheckIn(membershipId, today)),
     [membershipId, today, version],
   );
+
+  /**
+   * El veredicto de verdad lo da el servidor.
+   *
+   * `/me/.../checkin-preview` promete en su propia documentacion que "si aqui
+   * dice que puede entrar, en la puerta pasa", y la app lo calculaba en local
+   * con `state.schedules` VACIO —`/me` no devuelve los horarios del gimnasio—.
+   * Con la lista vacia `validateCheckIn` entiende "este local no controla
+   * horarios" y dice que si a cualquier hora, mientras la puerta rechaza por
+   * fuera de horario. El alumno llegaba con un "puedes entrar" en la mano.
+   *
+   * Se conserva el calculo local como respaldo: sin conexion es lo unico que
+   * hay, y sigue acertando en lo que no depende del horario —mora y cupo—.
+   */
+  useEffect(() => {
+    if (membershipId === null || getSessionState().status !== 'signed_in') {
+      setRemoto(null);
+      return;
+    }
+    let cancelado = false;
+    void fetchCheckInPreview(membershipId)
+      .then((dto) => {
+        if (!cancelado) setRemoto(dto);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [membershipId, version]);
+
+  if (local === null) return null;
+  if (remoto === null) return local;
+  return { ...local, result: remoto.result, message: remoto.message };
 }
 
 export function useRoster(): readonly RosterEntry[] {

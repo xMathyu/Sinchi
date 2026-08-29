@@ -18,7 +18,7 @@
  * parecen.
  */
 import { asId, type Attendance, type Charge, type Plan, type Tenant } from '@sinchi/shared';
-import { fetchMe, fetchMembership, fetchRoster } from './api';
+import { fetchMe, fetchMembership, fetchRoster, fetchSchedules } from './api';
 import { applyRemoteData, applyRemoteRoster, type RemoteData } from './store';
 
 /**
@@ -98,7 +98,16 @@ export async function hydrateStaff(session: {
   readonly tenantId: string | null;
   readonly role: 'front_desk' | 'owner';
 }): Promise<void> {
-  const [roster, me] = await Promise.all([fetchRoster(), fetchMe()]);
+  // Los horarios van en el mismo viaje: la validacion sin conexion los necesita
+  // para poder rechazar "fuera de horario", y sin ellos el dispositivo de la
+  // puerta dice que si a quien el servidor rechaza. Se traga su error porque un
+  // gimnasio sin horarios configurados es legitimo —significa que no los
+  // controla— y no puede impedir que el padron cargue.
+  const [roster, me, schedules] = await Promise.all([
+    fetchRoster(),
+    fetchMe(),
+    fetchSchedules().catch(() => []),
+  ]);
 
   applyRemoteRoster(
     roster.map((entrada) => ({
@@ -117,5 +126,6 @@ export async function hydrateStaff(session: {
       role: session.role,
       displayName: me.user.name,
     },
+    schedules,
   );
 }

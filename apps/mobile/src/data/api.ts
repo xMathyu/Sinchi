@@ -18,6 +18,7 @@ import type {
   Attendance,
   Charge,
   CheckInResult,
+  ClassSchedule,
   DelinquencyState,
   Membership,
   Plan,
@@ -434,6 +435,18 @@ export const enrollMember = async (input: {
   const out = await request<EnrollResultDto>('/staff/members', { method: 'POST', body: input });
   return { ...out, view: reviveView(out.view) };
 };
+
+/**
+ * Horarios de clase del local.
+ *
+ * Los necesita la validacion SIN CONEXION. Con la lista vacia, `validateCheckIn`
+ * entiende "este gimnasio no controla horarios" y deja pasar a cualquier hora —
+ * asi que el dispositivo de la puerta decia que si a quien el servidor rechaza
+ * por fuera de horario. Es exactamente la divergencia que el modo offline no
+ * puede tener (MD 4.6).
+ */
+export const fetchSchedules = (): Promise<readonly ClassSchedule[]> =>
+  request('/staff/schedules');
 
 /** Planes del local. Los del staff, no los del alumno: `/me/...` es su billetera. */
 export const fetchStaffPlans = (): Promise<readonly Plan[]> => request('/staff/plans');

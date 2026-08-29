@@ -38,6 +38,7 @@ import {
   type Receivable,
   type Staff,
   type Subscription,
+  type ClassSchedule,
   type Tenant,
   type User,
   type AppRole,
@@ -250,7 +251,11 @@ export function marcarIntentoTerminado(): void {
  * `tenantId` y `role`, y pedir otra vez lo que ya se tiene firmado seria una
  * ida y vuelta de mas.
  */
-export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff): void {
+export function applyRemoteRoster(
+  roster: readonly RosterEntry[],
+  staff: Staff,
+  schedules: readonly ClassSchedule[] = [],
+): void {
   // El gimnasio sale del padron, que ya lo trae en cada entrada. Sin esto
   // `state.tenants` se quedaba vacio con sesion de staff —`/me` es la billetera
   // del alumno y no dice donde trabaja— y la puerta no sabia en que local
@@ -267,6 +272,9 @@ export function applyRemoteRoster(roster: readonly RosterEntry[], staff: Staff):
     // Un padron vacio no trae tenant, y perder el que ya se sabia solo para
     // reemplazarlo por nada haria parpadear la cabecera al inscribir al primero.
     tenants: tenants.length > 0 ? tenants : state.tenants,
+    // Sin ellos, la validacion sin conexion cree que el gimnasio no controla
+    // horarios y deja pasar a cualquier hora.
+    schedules: schedules.length > 0 ? schedules : state.schedules,
     cargado: true,
     lastSyncAt: new Date(),
   });
