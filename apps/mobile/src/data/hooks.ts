@@ -5,7 +5,8 @@
  * frontera con la api futura, y mantenerlo fuera de React deja el cambio a
  * peticiones reales contenido en un archivo.
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   TZ_LIMA,
   encodeQrPayload,
@@ -21,6 +22,7 @@ import { fetchRecentCheckIns, type SummaryDto } from './api';
 import {
   cargarDetalleAlumno,
   planesPara,
+  refrescarDatos,
   resumenDelGimnasio,
   vinculacionesPendientes,
   type Vinculacion,
@@ -439,4 +441,37 @@ export function useOwnerSummary(): SummaryDto | null {
   }, [roster]);
 
   return resumen;
+}
+
+/**
+ * Refresco manual y al volver a la pantalla.
+ *
+ * Las dos vías hacen falta y responden a cosas distintas. Volver a la pestaña
+ * cubre el caso normal —el mostrador entra al padrón después de que algo pasó
+ * fuera— y el tirón hacia abajo cubre el otro: alguien está MIRANDO la lista
+ * mientras cambia, y sin un gesto no tiene forma de pedirla otra vez.
+ */
+export function useRefresco(): {
+  readonly refrescando: boolean;
+  readonly refrescar: () => void;
+} {
+  const [refrescando, setRefrescando] = useState(false);
+
+  const refrescar = useCallback(() => {
+    setRefrescando(true);
+    // El error se traga: refrescar es un extra sobre datos que ya están en
+    // pantalla, y un aviso rojo por no haber podido actualizar algo que se
+    // sigue viendo bien enseña a ignorar los avisos.
+    void refrescarDatos()
+      .catch(() => {})
+      .finally(() => setRefrescando(false));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refrescarDatos().catch(() => {});
+    }, []),
+  );
+
+  return { refrescando, refrescar };
 }

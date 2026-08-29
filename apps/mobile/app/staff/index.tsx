@@ -20,7 +20,7 @@ import { withAlpha } from '@sinchi/ui';
 import { Avatar, Button, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useRecentCheckIns, useRoster, useStore } from '../../src/data/hooks';
+import { useRecentCheckIns, useRefresco, useRoster, useStore } from '../../src/data/hooks';
 import { setOnline } from '../../src/data/store';
 import { evaluarQr } from '../../src/data/actions';
 import { formatClock, initials } from '../../src/lib/format';
@@ -32,6 +32,8 @@ export default function ScannerScreen() {
   const online = useStore((state) => state.online);
   const roster = useRoster();
   const recent = useRecentCheckIns();
+  // Al volver a la puerta se relee el padrón: puede haber cambiado fuera.
+  useRefresco();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -216,23 +218,14 @@ export default function ScannerScreen() {
             setScanning((value) => !value);
           }}
         />
-        {/* El cobro solo se alcanzaba DESPUES de un check-in, asi que para
-            cobrarle a alguien que viene a pagar sin entrenar habia que fingir
-            una asistencia primero. */}
-        <Row gap={10}>
-          <Button
-            label="Marcar manual"
-            variant="secondary"
-            style={{ flex: 1 }}
-            onPress={() => router.push('/staff/manual')}
-          />
-          <Button
-            label="Padrón y cobros"
-            variant="secondary"
-            style={{ flex: 1 }}
-            onPress={() => router.push('/staff/padron')}
-          />
-        </Row>
+        {/* El padrón ya es una pestaña, así que aquí solo queda el atajo que
+            de verdad pertenece a la puerta: el alumno sin celular que está
+            esperando delante. */}
+        <Button
+          label="Marcar manual"
+          variant="secondary"
+          onPress={() => router.push('/staff/manual')}
+        />
         {/* Recorre el padron sin camara. Es una herramienta de desarrollo: en un
             local de verdad, un boton que inventa escaneos ensucia la asistencia
             y el cupo de alguien real. */}
