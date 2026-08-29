@@ -103,8 +103,13 @@ export function useCheckInPreview(membershipId: string | null): CheckInPreview |
   const version = useStore((s) => s.charges.length + s.attendances.length + s.subscriptions.length);
   const [remoto, setRemoto] = useState<CheckInPreviewDto | null>(null);
 
+  // Voz de alumno: esta pantalla es la suya. El respaldo local tiene que decir
+  // lo mismo que dice el servidor, y el servidor ya responde en su voz.
   const local = useMemo(
-    () => (membershipId === null ? null : previewCheckIn(membershipId, today)),
+    () =>
+      membershipId === null
+        ? null
+        : previewCheckIn(membershipId, today, new Date(), 'student'),
     [membershipId, today, version],
   );
 

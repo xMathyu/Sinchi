@@ -8,6 +8,7 @@
  */
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
+import { accessMessage } from '@sinchi/shared';
 import { CurrentSession } from '../auth/auth.guard';
 import type { Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
@@ -83,8 +84,16 @@ export class StudentController {
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ) {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
-    const { result, message, view } = await this.checkin.evaluate(tenantId, membershipId);
-    return { result, message, quota: view.quota, receivable: view.receivable };
+    const { result, view } = await this.checkin.evaluate(tenantId, membershipId);
+    // El mensaje se rearma en la voz del alumno: `evaluate` lo devuelve en la
+    // del staff, que es quien lee la mayoria. Es el mismo veredicto —el mismo
+    // `result`— dicho a quien lo esta mirando.
+    return {
+      result,
+      message: accessMessage(result, 'student'),
+      quota: view.quota,
+      receivable: view.receivable,
+    };
   }
 
   @Get('memberships/:membershipId/plans')

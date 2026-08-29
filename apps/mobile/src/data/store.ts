@@ -25,6 +25,7 @@ import {
   parseQrPayload,
   type AccessLevel,
   type AccessMessage,
+  type AccessVoice,
   type Attendance,
   type Charge,
   type ChargeType,
@@ -456,6 +457,8 @@ export function previewCheckIn(
   membershipId: string,
   hoy: PlainDate = today(),
   now: Date = new Date(),
+  /** A quien se le habla. La puerta lee del alumno; su app le lee a el. */
+  voice: AccessVoice = 'staff',
 ): CheckInPreview {
   const { view, remota } = lookupView(membershipId, hoy);
   const result = validateCheckIn({
@@ -475,7 +478,7 @@ export function previewCheckIn(
     debtCents: view.receivable.amountCents,
     daysPastDue: view.delinquency.daysPastDue,
   });
-  return { result, message: accessMessage(result), view };
+  return { result, message: accessMessage(result, voice), view };
 }
 
 // ---------------------------------------------------------------------------

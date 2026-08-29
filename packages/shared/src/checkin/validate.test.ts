@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateCheckIn, type CheckInContext } from './validate.js';
+import { validateCheckIn, type CheckInContext, type CheckInResult } from './validate.js';
 import { accessMessage } from './messages.js';
 import { computeQuota, weeklyLimit } from './quota.js';
 import { fromSoles } from '../money/cents.js';
@@ -299,5 +299,53 @@ describe('cupo precalculado', () => {
       contexto({ plan: makeWeeklyPlan(2), attendances: makeAttendances(JUEVES, 2) }),
     );
     expect(r.allowed).toBe(false);
+  });
+});
+
+describe('las dos voces del mismo veredicto', () => {
+  // El punto de que las dos vivan aqui: si cada pantalla escribiera la suya, el
+  // alumno leeria una cosa y el recepcionista otra del MISMO check-in, y el que
+  // discute en la puerta es el recepcionista.
+  const conCupoAgotado = (): CheckInResult => ({
+    allowed: false,
+    level: 'alert',
+    reason: {
+      code: 'quota_exhausted',
+      level: 'alert',
+      limit: 2,
+      used: 2,
+      offerDropIn: false,
+      dropInPriceCents: null,
+    },
+    quota: null,
+  });
+
+  it('describe al alumno para el staff y le habla a el en su app', () => {
+    const paraElStaff = accessMessage(conCupoAgotado());
+    const paraElAlumno = accessMessage(conCupoAgotado(), 'student');
+
+    // El hecho es el mismo: mismo nivel, mismo titular.
+    expect(paraElAlumno.level).toBe(paraElStaff.level);
+    expect(paraElAlumno.title).toBe(paraElStaff.title);
+
+    expect(paraElStaff.detail).toContain('no le quedan sesiones');
+    expect(paraElAlumno.detail).toContain('no te quedan sesiones');
+  });
+
+  it('no le ofrece al alumno acciones que solo hace el mostrador', () => {
+    const permitido: CheckInResult = {
+      allowed: true,
+      level: 'ok',
+      warning: null,
+      quota: { limit: null, used: 0, remaining: null, exhausted: false, isLastSession: false, isoWeek: '2026-W01' },
+      classScheduleId: null,
+    };
+
+    // "Confirmar ingreso" lo pulsa quien esta en la puerta, no quien entra.
+    expect(accessMessage(permitido).action).toBe('Confirmar ingreso');
+    expect(accessMessage(permitido, 'student').action).toBeNull();
+
+    expect(accessMessage(permitido).title).toBe('Puede pasar');
+    expect(accessMessage(permitido, 'student').title).toBe('Puedes entrar');
   });
 });

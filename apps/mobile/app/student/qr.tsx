@@ -230,7 +230,7 @@ export default function QrScreen() {
         >
           <Dot color={semaphore.color} size={9} />
           <Text variant="bodySmall" weight="bold" color="#FFFFFF">
-            {studentTitle(preview.message.title, preview.result.allowed)}
+            {preview.message.title}
           </Text>
         </Row>
         <Text variant="captionSmall" color={ink} align="center" style={{ opacity: 0.72 }}>
@@ -242,20 +242,13 @@ export default function QrScreen() {
   );
 }
 
-/**
- * Los mensajes del dominio estan escritos para el staff ("Puede pasar"). Al
- * alumno se le habla en segunda persona.
+/*
+ * `studentTitle` vivia aqui traduciendo "Puede pasar" a "Puedes entrar" con una
+ * tabla, y solo cubria el titular: el motivo y el detalle seguian en tercera
+ * persona —"ya no LE quedan sesiones"— en la pantalla del propio alumno. Ahora
+ * las dos voces salen del dominio, que es donde tienen que estar para que digan
+ * lo mismo del mismo hecho.
  */
-function studentTitle(title: string, allowed: boolean): string {
-  const map: Readonly<Record<string, string>> = {
-    'Puede pasar': 'Puedes entrar',
-    'Le queda 1 sesión': 'Te queda 1 sesión',
-    'Puede pasar, pero debe': 'Entra, pero debes',
-    'Hoy no es su día': 'Hoy no es tu día',
-    'Acceso suspendido': 'Acceso suspendido',
-  };
-  return map[title] ?? (allowed ? title : title);
-}
 
 /** Anillo de cuenta regresiva de la ventana TOTP. */
 function CountdownRing({
