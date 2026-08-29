@@ -1,0 +1,12 @@
+{
+  "extends": "../../packages/ui/tsconfig.build.cjs.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@sinchi/shared": [
+        "packages/shared/dist/esm/index.d.ts"
+      ]
+    },
+    "noEmitOnError": true
+  }
+}
