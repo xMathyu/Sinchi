@@ -19,6 +19,7 @@ import {
   ApiError,
   cancelMembership,
   changePlan as changePlanRemote,
+  enrollMember,
   confirmClaim,
   fetchClaims,
   fetchPlansFor,
@@ -502,4 +503,35 @@ export async function bajasDelGimnasio(): Promise<readonly RosterEntry[]> {
   return todos
     .filter((entrada) => entrada.subscription.status === 'canceled')
     .map((entrada) => ({ user: entrada.user, view: { ...entrada, attendances: [], charges: [] } }));
+}
+
+/**
+ * Da de alta a un alumno en el local.
+ *
+ * Faltaba entera. `POST /staff/members` llevaba escrito desde el principio y
+ * ninguna pantalla lo llamaba, asi que un gimnasio recien montado no podia
+ * inscribir a nadie desde la app — y el resto del producto da por hecho que el
+ * padron ya existe: vincular cuentas exige una ficha contra la que vincular, y
+ * el escaner valida contra un padron que nadie podia llenar.
+ *
+ * Devuelve si la identidad se reutilizo. Importa decirlo: en Sinchi la persona
+ * es global y un alumno que ya entrena en otro local NO se registra otra vez, se
+ * le suma este gimnasio a la billetera que ya tiene (MD 5).
+ */
+export async function inscribirAlumno(input: {
+  readonly name: string;
+  readonly documentId: string;
+  readonly phone: string;
+  readonly email?: string;
+  readonly planId: string;
+}): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
+  const sesion = conServidor();
+  if (sesion === null) throw new Error('Inscribir necesita una sesión de turno abierta.');
+
+  const salida = await enrollMember(input);
+  await refrescarPadron(sesion);
+  return {
+    membershipId: salida.view.membership.id,
+    identidadReutilizada: salida.reusedIdentity,
+  };
 }
