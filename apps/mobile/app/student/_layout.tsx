@@ -28,16 +28,16 @@ export default function StudentLayout() {
       <TabList asChild>
         <TabBarShell>
           <TabTrigger name="wallet" href="/student" asChild>
-            <TabButton icon="card" label="Billetera" />
+            <TabButton icon="wallet" label="Billetera" />
           </TabTrigger>
           <TabTrigger name="qr" href="/student/qr" asChild>
             <TabButton icon="qr" label="Mi QR" />
           </TabTrigger>
           <TabTrigger name="plan" href="/student/plan" asChild>
-            <TabButton icon="circle" label="Plan" />
+            <TabButton icon="plan" label="Plan" />
           </TabTrigger>
           <TabTrigger name="history" href="/student/history" asChild>
-            <TabButton icon="lines" label="Historial" />
+            <TabButton icon="history" label="Historial" />
           </TabTrigger>
         </TabBarShell>
       </TabList>

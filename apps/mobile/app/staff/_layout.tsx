@@ -45,13 +45,13 @@ export default function StaffLayout() {
       <TabList asChild>
         <TabBarShell>
           <TabTrigger name="door" href="/staff" asChild>
-            <TabButton icon="viewfinder" label="Puerta" />
+            <TabButton icon="door" label="Puerta" />
           </TabTrigger>
           <TabTrigger name="padron" href="/staff/padron" asChild>
-            <TabButton icon="lines" label="Padrón" />
+            <TabButton icon="roster" label="Padrón" />
           </TabTrigger>
           <TabTrigger name="device" href="/staff/device" asChild>
-            <TabButton icon="circle" label="Dispositivo" />
+            <TabButton icon="device" label="Dispositivo" />
           </TabTrigger>
         </TabBarShell>
       </TabList>
