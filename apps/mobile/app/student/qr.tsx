@@ -7,7 +7,7 @@
  * alumno lee "puedes entrar" aqui, en la puerta va a pasar.
  */
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX } from '@sinchi/ui';
@@ -32,6 +32,11 @@ export default function QrScreen() {
   );
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  // El QR se mide contra la pantalla, no en duro. A 212 fijos se salia en un
+  // iPhone con barra de pestanas —la tarjeta de abajo quedaba pegada a ella— y
+  // en un telefono pequeno el codigo quedaba mas grande que el hueco.
+  const { width, height } = useWindowDimensions();
+  const qr = Math.round(Math.max(180, Math.min(width - 84, height * 0.30)));
   const code = useAccessCode();
   const preview = useCheckInPreview(selected?.membership.id ?? null);
 
@@ -50,7 +55,7 @@ export default function QrScreen() {
   const { brand } = splitGymName(selected.tenant.name);
 
   return (
-    <TintedScreen gradient={semaphore.gradient} ink={ink} watermark="SINCHI">
+    <TintedScreen gradient={semaphore.gradient} ink={ink} watermark="SINCHI" watermarkOpacity={0.045}>
       <Row>
         <Pressable
           accessibilityRole="button"
@@ -118,53 +123,45 @@ export default function QrScreen() {
         </Stack>
       ) : null}
 
-      <Stack gap={18} style={{ marginTop: 26, alignItems: 'center' }}>
+      {/* La identidad va en una fila, no en una columna centrada. Ocupaba 264px
+          —foto de 112, el nombre en tipografia de titular y la insignia— en una
+          pantalla que no hace scroll, y eso dejaba al QR sin sitio: lo que el
+          recepcionista tiene que escanear salia comprimido para que cupiera el
+          nombre en grande. La foto sigue estando porque es lo unico que impide
+          prestar el telefono (MD 4.6), pero al lado del nombre, no encima. */}
+      <Row gap={14} justify="flex-start" style={{ marginTop: 20 }}>
         <PhotoCircle
           name={user.name}
           photoUrl={user.photoUrl}
-          size={112}
+          size={64}
           ringColor="rgba(255,255,255,0.55)"
+          ringWidth={3}
         />
-        <Stack gap={5} style={{ alignItems: 'center' }}>
-          <Text variant="display" weight="extrabold" color={ink} uppercase align="center">
+        <Stack gap={3} style={{ flex: 1 }}>
+          <Text variant="titleSmall" weight="bold" color={ink} numberOfLines={1}>
             {user.name}
           </Text>
-          <Text variant="caption" weight="semibold" color={ink} style={{ opacity: 0.62 }}>
-            {selected.plan.name} · {selected.tenant.name}
+          <Text variant="captionSmall" weight="semibold" color={ink} style={{ opacity: 0.62 }}>
+            {selected.plan.name} · {brand}
           </Text>
         </Stack>
-        <Row
-          gap={9}
-          justify="center"
-          style={{
-            backgroundColor: 'rgba(10,10,11,0.92)',
-            paddingHorizontal: 18,
-            paddingVertical: 9,
-            borderRadius: theme.radii.pill,
-          }}
-        >
-          <Dot color={semaphore.color} size={9} />
-          <Text variant="bodySmall" weight="bold" color="#FFFFFF">
-            {studentTitle(preview.message.title, preview.result.allowed)}
-          </Text>
-        </Row>
-      </Stack>
+      </Row>
 
       <View
         style={{
-          marginTop: 26,
+          marginTop: 18,
           backgroundColor: '#FFFFFF',
           borderRadius: theme.radii.xxxl,
-          padding: 20,
+          padding: 18,
           alignItems: 'center',
-          gap: 14,
+          gap: 12,
         }}
       >
-        <View style={{ width: 212, height: 212, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: qr, height: qr, alignItems: 'center', justifyContent: 'center' }}>
           {code.ready ? (
             <QRCode
               value={code.payload}
-              size={212}
+              size={qr}
               backgroundColor="#FFFFFF"
               color={theme.colors.inkOnLight}
               // Nivel Q: la etiqueta central tapa parte de la matriz y aun asi
@@ -211,25 +208,30 @@ export default function QrScreen() {
         </Row>
       </View>
 
-      <View
-        style={{
-          marginTop: 'auto',
-          backgroundColor: 'rgba(10,10,11,0.10)',
-          borderRadius: theme.radii.xl,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          gap: 6,
-        }}
-      >
-        <Text variant="caption" weight="bold" color={ink}>
-          {preview.message.reason}
-        </Text>
-        {preview.message.detail === null ? null : (
-          <Text variant="captionSmall" color={ink} style={{ opacity: 0.62 }}>
-            {preview.message.detail}
+      {/* El veredicto estaba dos veces: una pastilla arriba con "Puedes entrar" y
+          una tarjeta abajo con "Suscripcion al dia". Es el mismo hecho dicho
+          dos veces, y entre las dos se comian el aire que le falta al QR. */}
+      <Stack gap={8} style={{ marginTop: 'auto', paddingTop: 18, alignItems: 'center' }}>
+        <Row
+          gap={9}
+          justify="center"
+          style={{
+            backgroundColor: 'rgba(10,10,11,0.92)',
+            paddingHorizontal: 18,
+            paddingVertical: 9,
+            borderRadius: theme.radii.pill,
+          }}
+        >
+          <Dot color={semaphore.color} size={9} />
+          <Text variant="bodySmall" weight="bold" color="#FFFFFF">
+            {studentTitle(preview.message.title, preview.result.allowed)}
           </Text>
-        )}
-      </View>
+        </Row>
+        <Text variant="captionSmall" color={ink} align="center" style={{ opacity: 0.72 }}>
+          {preview.message.reason}
+          {preview.message.detail === null ? '' : ` ${preview.message.detail}`}
+        </Text>
+      </Stack>
     </TintedScreen>
   );
 }
