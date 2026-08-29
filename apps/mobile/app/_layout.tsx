@@ -21,7 +21,8 @@ import { useFonts } from 'expo-font';
 import { colors } from '@sinchi/ui';
 import { DISPLAY_FONTS } from '../src/design/fonts';
 import { ThemeProvider } from '../src/design/theme';
-import { setCredentialProvider } from '../src/data/api';
+import Constants from 'expo-constants';
+import { setApiBase, setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { useSession } from '../src/data/session-hooks';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
@@ -37,6 +38,26 @@ import { CargandoSeccion } from '../src/design/loading';
  * donde las dos mitades se unen.
  */
 setCredentialProvider({ getToken: currentToken, getDeviceToken });
+
+/**
+ * `EXPO_PUBLIC_API_URL=auto`: la api local de la maquina que sirve el bundle.
+ *
+ * La IP del Mac cambia con cada wifi, y con ella se caen a la vez Metro y la
+ * api. Metro ya sabe su propio host y lo publica en `hostUri`, y la api corre
+ * en la misma maquina: derivarla de ahi hace que la direccion siga a la red
+ * sola, igual para el simulador que para un telefono por wifi.
+ *
+ * Se resuelve aqui y no en `api.ts` porque necesita `expo-constants`, y aquel
+ * archivo se prueba en Node contra una api de verdad — un modulo nativo dentro
+ * romperia el unico test que detecta que el cliente y el servidor se separen.
+ *
+ * Solo en `__DEV__`: en un build publicado no hay servidor de desarrollo del
+ * que heredar nada.
+ */
+if (__DEV__ && process.env.EXPO_PUBLIC_API_URL === 'auto') {
+  const maquina = Constants.expoConfig?.hostUri?.split(':')[0];
+  if (maquina !== undefined && maquina.length > 0) setApiBase(`http://${maquina}:3000/v1`);
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(DISPLAY_FONTS);
