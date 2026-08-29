@@ -10,78 +10,64 @@
  */
 import { forwardRef, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
+// Uno a uno, no desde el indice. Metro no hace tree-shaking: importar del barrel
+// mete los mas de mil iconos de Lucide en el bundle —medido: +1.8 MB por estos
+// siete— y es exactamente el coste que el comentario anterior temia. Por la
+// puerta de `./icons/*` son 7 archivos y nada mas.
+import CalendarDays from 'lucide-react-native/icons/calendar-days';
+// `History` es un alias: el archivo se llama por su forma, no por su uso.
+import History from 'lucide-react-native/icons/rotate-ccw-clock';
+import QrCode from 'lucide-react-native/icons/qr-code';
+import ScanLine from 'lucide-react-native/icons/scan-line';
+import Smartphone from 'lucide-react-native/icons/smartphone';
+import Users from 'lucide-react-native/icons/users';
+import Wallet from 'lucide-react-native/icons/wallet';
+import type { LucideIcon } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from './primitives';
 import { useTheme } from './theme';
 
-export type TabIconShape = 'card' | 'qr' | 'circle' | 'lines' | 'viewfinder' | 'search';
-
 /**
- * Icono de trazo dibujado con bordes.
+ * Iconos de las pestanas.
  *
- * Sin libreria de iconos a proposito: son seis formas, y una dependencia de
- * megas para seis rectangulos no se paga.
+ * Antes eran seis formas dibujadas con `View` —un rectangulo, un circulo, tres
+ * lineas— y el comentario decia que una libreria de iconos "para seis
+ * rectangulos" no se pagaba. Tenia razon sobre el coste y no sobre el resultado:
+ * dos de las seis eran literalmente un circulo, asi que «Plan» y «Dispositivo»
+ * se distinguian por su etiqueta y nada mas. Un icono que no significa nada es
+ * peor que ninguno, porque ocupa el sitio del que si.
+ *
+ * Se usa Lucide y no un pack de fuente: dibuja SVG sobre `react-native-svg`, que
+ * ya es dependencia del QR y de la marca, en vez de cargar una fuente de iconos
+ * entera para gastar siete glifos. Y su rejilla —24 puntos, trazo de 2— es la
+ * misma que ya usaban las formas a mano, asi que no hay que reajustar nada.
+ *
+ * Los nombres dicen la PANTALLA, no el dibujo. `card` y `lines` no sobrevivian a
+ * cambiar de icono; `wallet` y `history` si.
  */
+export type TabIconShape =
+  | 'wallet'
+  | 'qr'
+  | 'plan'
+  | 'history'
+  | 'door'
+  | 'roster'
+  | 'device';
+
+const ICONS: Readonly<Record<TabIconShape, LucideIcon>> = {
+  wallet: Wallet,
+  qr: QrCode,
+  plan: CalendarDays,
+  history: History,
+  door: ScanLine,
+  roster: Users,
+  device: Smartphone,
+};
+
 function TabIcon({ shape, color }: { readonly shape: TabIconShape; readonly color: string }) {
-  switch (shape) {
-    case 'card':
-      return (
-        <View style={[styles.stroke, { width: 20, height: 16, borderRadius: 4, borderColor: color }]} />
-      );
-    case 'qr':
-      return (
-        <View style={[styles.stroke, { width: 18, height: 18, borderRadius: 3, borderColor: color }]}>
-          <View style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: color }} />
-        </View>
-      );
-    case 'circle':
-      return (
-        <View style={[styles.stroke, { width: 18, height: 18, borderRadius: 9, borderColor: color }]} />
-      );
-    case 'lines':
-      return (
-        <View style={{ width: 18, height: 14, justifyContent: 'space-between' }}>
-          <View style={{ height: 2, backgroundColor: color }} />
-          <View style={{ height: 2, width: 12, backgroundColor: color }} />
-          <View style={{ height: 2, backgroundColor: color }} />
-        </View>
-      );
-    case 'viewfinder':
-      return (
-        <View style={{ width: 20, height: 20 }}>
-          <View
-            style={[styles.corner, { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2, borderColor: color }]}
-          />
-          <View
-            style={[styles.corner, { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2, borderColor: color }]}
-          />
-          <View
-            style={[styles.corner, { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: color }]}
-          />
-          <View
-            style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2, borderColor: color }]}
-          />
-        </View>
-      );
-    case 'search':
-      return (
-        <View style={{ width: 19, height: 19 }}>
-          <View style={[styles.stroke, { width: 14, height: 14, borderRadius: 7, borderColor: color }]} />
-          <View
-            style={{
-              position: 'absolute',
-              right: 0,
-              bottom: 1,
-              width: 7,
-              height: 2,
-              backgroundColor: color,
-              transform: [{ rotate: '45deg' }],
-            }}
-          />
-        </View>
-      );
-  }
+  const Icon = ICONS[shape];
+  return <Icon size={21} color={color} strokeWidth={2} />;
 }
 
 /**
@@ -171,6 +157,4 @@ export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
 const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 5 },
   tabLabel: { letterSpacing: 0, fontSize: 10.5 },
-  stroke: { borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  corner: { position: 'absolute', width: 7, height: 7 },
 });
