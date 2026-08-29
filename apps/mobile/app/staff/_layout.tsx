@@ -13,6 +13,13 @@
  *
  * Marcar manual no pierde nada: sigue a un toque desde la puerta, que es donde
  * se usa, y la ficha de cada alumno tambien lo ofrece.
+ *
+ * AQUI SOLO VIVEN LAS PESTANAS. `TabSlot` pinta la pestana enfocada, y una ruta
+ * bajo `app/staff/` sin su `TabTrigger` no puede enfocarse: `router.push` navega
+ * y no se ve absolutamente nada. Falla en silencio —sin error, sin ruta
+ * desconocida, sin nada en el log— y ese silencio se cobro cuatro pantallas
+ * (inscribir, vincular, marcar manual y abrir turno) mas el viejo boton "Padron
+ * y cobros", que nunca funciono. Todas viven ahora en el Stack raiz.
  */
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';
 import { TabBarShell, TabButton, TabContent } from '../../src/design/tab-bar';

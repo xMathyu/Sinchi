@@ -81,6 +81,10 @@ export default function RootLayout() {
           <Stack.Screen name="plan-change/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="charge/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="member/[membershipId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="enroll" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="claims" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="shift" options={{ animation: 'fade' }} />
           <Stack.Screen
             name="result/[membershipId]"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
@@ -172,7 +176,7 @@ function DataLoader() {
 const RUTAS_COMPARTIDAS = new Set(['settings']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
-  staff: new Set(['charge', 'result', 'member']),
+  staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual']),
   student: new Set(['pay', 'plan-change']),
 };
 
@@ -220,7 +224,7 @@ function SessionRouter() {
     const enLogin = primero === 'login' || primero === 'link';
     // El registro del equipo y la apertura de turno se hacen SIN sesion: son
     // justamente lo que produce una.
-    const enTurno = primero === 'staff' && segments[1] === 'shift';
+    const enTurno = primero === 'shift';
     // La puerta de desarrollo tambien: es de donde sale el modo demostracion.
     // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
     // devolvia a /login en el mismo instante — se veia como que no pasaba nada.

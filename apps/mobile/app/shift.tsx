@@ -14,12 +14,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { withAlpha } from '@sinchi/ui';
-import { Screen } from '../../src/design/screen';
-import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { useTheme } from '../../src/design/theme';
-import { registerThisDevice, shiftCandidates, startShift } from '../../src/data/auth';
-import { getDeviceToken } from '../../src/data/session';
-import type { ShiftCandidate } from '../../src/data/api';
+import { Screen } from '../src/design/screen';
+import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
+import { useTheme } from '../src/design/theme';
+import { registerThisDevice, shiftCandidates, startShift } from '../src/data/auth';
+import { getDeviceToken } from '../src/data/session';
+import type { ShiftCandidate } from '../src/data/api';
 
 export default function ShiftScreen() {
   const theme = useTheme();

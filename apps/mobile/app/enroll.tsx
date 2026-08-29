@@ -22,11 +22,11 @@ import { Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatPEN } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { Screen } from '../../src/design/screen';
-import { useTheme } from '../../src/design/theme';
-import { usePlanesDelGimnasio } from '../../src/data/hooks';
-import { inscribirAlumno } from '../../src/data/actions';
+import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
+import { Screen } from '../src/design/screen';
+import { useTheme } from '../src/design/theme';
+import { usePlanesDelGimnasio } from '../src/data/hooks';
+import { inscribirAlumno } from '../src/data/actions';
 
 export default function EnrollScreen() {
   const theme = useTheme();

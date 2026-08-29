@@ -224,7 +224,7 @@ export default function ScannerScreen() {
         <Button
           label="Marcar manual"
           variant="secondary"
-          onPress={() => router.push('/staff/manual')}
+          onPress={() => router.push('/manual')}
         />
         {/* Recorre el padron sin camara. Es una herramienta de desarrollo: en un
             local de verdad, un boton que inventa escaneos ensucia la asistencia
