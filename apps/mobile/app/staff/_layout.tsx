@@ -7,12 +7,24 @@
  */
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';
 import { TabBarShell, TabButton, TabContent } from '../../src/design/tab-bar';
+import { CargandoSeccion } from '../../src/design/loading';
+import { useStore } from '../../src/data/hooks';
+import { useSession } from '../../src/data/session-hooks';
 
 export default function StaffLayout() {
+  const sesion = useSession();
+  const cargado = useStore((estado) => estado.cargado);
+  // Solo con sesión real: en demostración el store ya viene lleno, y sin sesión
+  // no hay nada que esperar.
+  const esperando = sesion.status === 'signed_in' && !cargado;
+
   return (
     <Tabs>
       <TabContent>
-        <TabSlot />
+        {/* La barra de pestañas se queda puesta: la espera es del contenido,
+            no de la app. Tapar la pantalla entera hacía que dos segundos
+            parecieran un arranque fallido. */}
+        {esperando ? <CargandoSeccion texto="Trayendo el padrón…" /> : <TabSlot />}
       </TabContent>
       <TabList asChild>
         <TabBarShell>
