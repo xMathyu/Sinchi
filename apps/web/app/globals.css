@@ -1,0 +1,103 @@
+/*
+ * Estilos de la landing.
+ *
+ * Los colores y los radios NO se escriben aquí: salen de `@sinchi/ui` por las
+ * variables que inyecta `tokens.ts`. Lo que vive en este archivo es lo que la
+ * app no tiene y la web sí — la retícula, los puntos de ruptura y el
+ * movimiento.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ok); text-decoration: none; }
+a:hover { color: #1FA855; }
+
+.display {
+  font-family: var(--font-display), 'Helvetica Neue', sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+}
+
+.eyebrow {
+  font-size: 11px; letter-spacing: 1.5px; font-weight: 700;
+  text-transform: uppercase; color: var(--text-tertiary);
+}
+.lead { font-size: 19px; line-height: 27px; color: var(--text-secondary); }
+.body { font-size: 15px; line-height: 22px; color: var(--text-secondary); }
+.secondary { color: var(--text-secondary); }
+.tertiary { color: var(--text-tertiary); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xxl);
+}
+
+.pill {
+  border-radius: var(--r-pill); padding: 5px 10px; font-size: 10px;
+  letter-spacing: 0.9px; font-weight: 700; text-transform: uppercase;
+}
+
+/* La retícula: 96px de margen en escritorio, 22 en móvil. */
+.section { padding: 84px 96px; }
+.wrap { max-width: 1280px; margin: 0 auto; }
+
+/* ---------------------------------------------------------------------------
+   Movimiento
+
+   Dos cosas, y las dos se ganan el sitio.
+
+   Las secciones entran al ENTRAR EN PANTALLA, no al cargar: aquí sí hay scroll
+   de verdad —a diferencia de la maqueta, que vive en un marco fijo— así que se
+   usa `animation-timeline: view()`. Donde el navegador no lo soporta no pasa
+   nada: el contenido se queda visible, que es el fallo correcto.
+
+   El anillo del QR es la única en bucle, y no decora: el código del alumno rota
+   de verdad cada 30 segundos.
+   --------------------------------------------------------------------------- */
+@keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 26%;
+    }
+  }
+}
+
+@keyframes drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 88; } }
+@keyframes tick { from { transform: translateY(0); } to { transform: translateY(-390px); } }
+
+.ring { animation: drain 30s linear infinite; }
+.counter { height: 13px; overflow: hidden; }
+.counter > div { animation: tick 30s steps(30) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .ring, .counter > div { animation: none; }
+}
+
+/* --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .section { padding: 48px 22px; }
+  .stack { flex-direction: column !important; align-items: stretch !important; gap: 32px !important; }
+  .stack-reverse { flex-direction: column-reverse !important; align-items: stretch !important; gap: 32px !important; }
+  .grid-3 { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; }
+  .h1 { font-size: 40px !important; }
+  .h2 { font-size: 31px !important; }
+  .center-mobile { justify-content: center !important; }
+  .hide-mobile { display: none !important; }
+}

@@ -30,6 +30,7 @@ jobs:
       shared: ${{ steps.filter.outputs.shared }}
       api: ${{ steps.filter.outputs.api }}
       mobile: ${{ steps.filter.outputs.mobile }}
+      web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -57,6 +58,14 @@ jobs:
               - 'apps/mobile/**'
               - 'packages/**'
               - 'package-lock.json'
+              - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
+            # La landing no esta en el workspace de npm y no depende de
+            # `package-lock.json`, pero si de `@sinchi/ui`: los tokens de la
+            # pagina salen de ahi.
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
               - 'tsconfig.base.json'
               - '.github/workflows/ci.yml'
 
@@ -189,12 +198,51 @@ jobs:
         run: npx expo export --platform ios --output-dir /tmp/expo-ci
 
   # ---------------------------------------------------------------------------
+  # Landing
+  # ---------------------------------------------------------------------------
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # La landing usa pnpm y vive FUERA del workspace de npm, pero consume
+      # `@sinchi/ui` por `link:`. Hay que compilar el paquete con npm antes de
+      # que pnpm lo enlace: sin `dist/` la pagina no encuentra los tokens.
+      - run: npm ci
+      - run: npm run build -w @sinchi/shared
+      - run: npm run build -w @sinchi/ui
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.1
+
+      - name: Instalar
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+
+      - name: La landing se exporta
+        # `output: 'export'` genera HTML estatico: si algo del arbol pide un
+        # servidor, falla aqui y no en el hosting.
+        working-directory: apps/web
+        run: pnpm build
+
+  # ---------------------------------------------------------------------------
   # Resumen
   # ---------------------------------------------------------------------------
   resumen:
     # `always()` para que corra tambien cuando algo fallo o se salto.
     if: always()
-    needs: [changes, shared, api, mobile]
+    needs: [changes, shared, api, mobile, web]
     runs-on: ubuntu-latest
     steps:
       - name: Decir en voz alta que se ejecuto
@@ -220,13 +268,20 @@ jobs:
             echo "| dominio (packages) | $(estado '${{ needs.shared.result }}') |"
             echo "| api | $(estado '${{ needs.api.result }}') |"
             echo "| app | $(estado '${{ needs.mobile.result }}') |"
+            echo "| landing | $(estado '${{ needs.web.result }}') |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "${{ needs.shared.result }}" = "failure" ]             || [ "${{ needs.api.result }}" = "failure" ]             || [ "${{ needs.mobile.result }}" = "failure" ]; then
+          if [ "${{ needs.shared.result }}" = "failure" ] \
+             || [ "${{ needs.api.result }}" = "failure" ] \
+             || [ "${{ needs.mobile.result }}" = "failure" ] \
+             || [ "${{ needs.web.result }}" = "failure" ]; then
             echo "Algun area fallo."
             exit 1
           fi
 
-          if [ "${{ needs.shared.result }}" = "skipped" ]             && [ "${{ needs.api.result }}" = "skipped" ]             && [ "${{ needs.mobile.result }}" = "skipped" ]; then
+          if [ "${{ needs.shared.result }}" = "skipped" ] \
+             && [ "${{ needs.api.result }}" = "skipped" ] \
+             && [ "${{ needs.mobile.result }}" = "skipped" ] \
+             && [ "${{ needs.web.result }}" = "skipped" ]; then
             echo "::notice::Ningun test corrio: este commit no toco codigo. El verde no dice nada sobre el codigo."
           fi
