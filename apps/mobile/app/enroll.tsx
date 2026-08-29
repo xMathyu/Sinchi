@@ -26,7 +26,7 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitive
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { usePlanesDelGimnasio } from '../src/data/hooks';
-import { inscribirAlumno } from '../src/data/actions';
+import { inscribirAlumno, YaEnElPadron } from '../src/data/actions';
 
 export default function EnrollScreen() {
   const theme = useTheme();
@@ -39,6 +39,10 @@ export default function EnrollScreen() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cuando la persona ya está en el padrón, la api dice cuál es su ficha. Es el
+  // caso normal —alguien que canceló y vuelve— y no tiene sentido dejar al
+  // mostrador leyendo "ya existe" sin un camino.
+  const [fichaExistente, setFichaExistente] = useState<string | null>(null);
 
   const plan = planes.find((p) => p.id === planId) ?? null;
   const listo =
@@ -178,6 +182,7 @@ export default function EnrollScreen() {
                 // alguien con ese celular o ese documento"—. Reescribirlo aquí
                 // solo lo empeoraría.
                 setError(causa instanceof Error ? causa.message : 'No se pudo inscribir.');
+                setFichaExistente(causa instanceof YaEnElPadron ? causa.membershipId : null);
               })
               .finally(() => setGuardando(false));
           }}
@@ -186,6 +191,18 @@ export default function EnrollScreen() {
           <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
             {error}
           </Text>
+        )}
+        {fichaExistente === null ? null : (
+          <Button
+            label="Abrir su ficha"
+            variant="secondary"
+            onPress={() =>
+              router.replace({
+                pathname: '/member/[membershipId]',
+                params: { membershipId: fichaExistente },
+              })
+            }
+          />
         )}
       </Stack>
     </Screen>

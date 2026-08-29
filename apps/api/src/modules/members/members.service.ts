@@ -10,7 +10,7 @@
  * todo el sistema y es la llave con la que la persona se reconoce.
  */
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { eq, or } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { firstPeriod, parsePlainDate } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, withoutTenantIsolation, type Database } from '../../db/client';
@@ -121,7 +121,27 @@ export class MembersService {
         .returning({ id: schema.memberships.id });
 
       if (membership === undefined) {
-        throw new ConflictException('Esa persona ya tiene una membresía en este gimnasio.');
+        // El índice único la rechazó: ya está en el padrón. Devolver solo "ya
+        // existe" es un callejón sin salida — es justo lo que pasa cuando
+        // alguien canceló y vuelve, que es el caso normal, no el raro. Se manda
+        // el `membershipId` para que el mostrador pueda abrir su ficha y
+        // reinscribirla, que es lo que hay que hacer.
+        const [existente] = await tx
+          .select({ id: schema.memberships.id })
+          .from(schema.memberships)
+          .where(
+            and(
+              eq(schema.memberships.userId, userId),
+              eq(schema.memberships.tenantId, tenantId),
+            ),
+          )
+          .limit(1);
+
+        throw new ConflictException({
+          message:
+            'Esa persona ya está en el padrón de este gimnasio. Si canceló, se reinscribe desde su ficha: dar de alta otra vez le partiría el historial en dos.',
+          membershipId: existente?.id ?? null,
+        });
       }
 
       await tx.insert(schema.subscriptions).values({
