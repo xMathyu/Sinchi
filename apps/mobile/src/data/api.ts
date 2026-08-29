@@ -393,11 +393,34 @@ export const linkDevice = (rotate = false): Promise<DeviceLinkDto> =>
 
 export interface RosterEntryDto extends MembershipViewDto {}
 
-export const fetchRoster = async (): Promise<readonly RosterEntryDto[]> =>
-  (await request<readonly RosterEntryDto[]>('/staff/roster')).map(reviveView);
+/**
+ * Padron del local.
+ *
+ * `incluirBajas` trae tambien a quien cancelo. No entra en el padron normal —el
+ * mostrador mira "quien entrena aqui" todo el dia— pero hace falta poder verlas:
+ * sin ellas, `resubscribe` no tiene forma de recibir un `membershipId`.
+ */
+export const fetchRoster = async (incluirBajas = false): Promise<readonly RosterEntryDto[]> =>
+  (
+    await request<readonly RosterEntryDto[]>(
+      incluirBajas ? '/staff/roster?includeCanceled=true' : '/staff/roster',
+    )
+  ).map(reviveView);
 
 export const fetchStaffMember = async (membershipId: string): Promise<MembershipDetailDto> =>
   reviveDetail(await request<MembershipDetailDto>(`/staff/members/${membershipId}`));
+
+/** Planes del local. Los del staff, no los del alumno: `/me/...` es su billetera. */
+export const fetchStaffPlans = (): Promise<readonly Plan[]> => request('/staff/plans');
+
+/**
+ * Vuelve a suscribir a alguien que canceló, sin volver a registrarlo.
+ *
+ * La ficha y el historial siguen ahí: cancelar apaga la suscripción, no borra a
+ * la persona. Por eso esto existe y no es un alta nueva.
+ */
+export const resubscribe = (membershipId: string, planId: string): Promise<unknown> =>
+  request(`/staff/members/${membershipId}/resubscribe`, { method: 'POST', body: { planId } });
 
 /**
  * Marcados de las ultimas horas en este local.

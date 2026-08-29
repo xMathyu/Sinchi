@@ -119,10 +119,20 @@ export class StaffController {
    * Es lo que el dispositivo de la puerta descarga para validar sin conexión, y
    * se sirve en dos consultas: con 150 alumnos, un N+1 aquí serían 150 viajes
    * por la red del gimnasio, que es justo la que no funciona (MD 4.6).
+   *
+   * `?includeCanceled=true` trae además las bajas. Sin eso, cancelar dejaba a la
+   * persona sin salida: desaparece del padrón y su `membershipId` deja de ser
+   * alcanzable, así que `resubscribe` —que existe justo para volver— no se podía
+   * llamar desde ninguna pantalla.
    */
   @Get('roster')
-  roster(@CurrentSession() session: Session) {
-    return this.views.roster(assertStaffSession(session).tenantId);
+  roster(
+    @CurrentSession() session: Session,
+    @Query('includeCanceled') includeCanceled?: string,
+  ) {
+    return this.views.roster(assertStaffSession(session).tenantId, undefined, {
+      includeCanceled: includeCanceled === 'true',
+    });
   }
 
   @Get('roster/search')
@@ -139,12 +149,20 @@ export class StaffController {
     );
   }
 
+  /**
+   * Ficha del alumno para el mostrador.
+   *
+   * Incluye las bajas: si el mostrador puede verlas en el padrón, tiene que
+   * poder abrirlas — es desde aquí desde donde se reactiva a alguien que canceló.
+   */
   @Get('members/:membershipId')
   membership(
     @CurrentSession() session: Session,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ) {
-    return this.views.detail(assertStaffSession(session).tenantId, membershipId);
+    return this.views.detail(assertStaffSession(session).tenantId, membershipId, {
+      includeCanceled: true,
+    });
   }
 
   @Post('members')

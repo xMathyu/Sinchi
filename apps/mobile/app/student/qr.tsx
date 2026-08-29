@@ -14,7 +14,8 @@ import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX } from '
 import { semaphoreStyle } from '@sinchi/ui';
 import { Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
-import { TintedScreen } from '../../src/design/screen';
+import { Screen, TintedScreen } from '../../src/design/screen';
+import { EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import { useAccessCode, useCheckInPreview, useStore, useWallet } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
@@ -41,12 +42,17 @@ export default function QrScreen() {
   const preview = useCheckInPreview(selected?.membership.id ?? null);
 
   if (selected === undefined || preview === null) {
+    // Fondo normal, no el ámbar del semáforo: no tener membresías no es una
+    // advertencia sobre tu acceso, es que todavía no hay nada que enseñar. Pintar
+    // media pantalla de ámbar decía que algo iba mal.
     return (
-      <TintedScreen gradient={theme.semaphoreGradient.warn} ink={theme.colors.inkOnLight}>
-        <Text variant="title" color={theme.colors.inkOnLight}>
-          Todavía no tienes membresías.
-        </Text>
-      </TintedScreen>
+      <Screen>
+        <EstadoVacio
+          titulo="Todavía no tienes un código"
+          cuerpo="Tu código aparece aquí en cuanto un gimnasio te agregue a su padrón. Es lo que el recepcionista escanea en la puerta."
+          pie="Acércate al mostrador con tu DNI: te dan de alta en un minuto."
+        />
+      </Screen>
     );
   }
 

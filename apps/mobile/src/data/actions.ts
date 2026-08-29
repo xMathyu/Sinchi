@@ -24,8 +24,11 @@ import {
   fetchPlansFor,
   fetchSummary,
   fetchStaffMember,
+  fetchRoster,
+  fetchStaffPlans,
   markManual,
   recordPayment,
+  resubscribe,
   scanQr,
   setOwnPin,
   type CheckInOutcomeDto,
@@ -43,6 +46,7 @@ import {
   setScanVerdict,
   viewMembership,
   type MembershipView,
+  type RosterEntry,
 } from './store';
 import { hydrate, hydrateStaff } from './hydrate';
 
@@ -454,4 +458,48 @@ export async function refrescarDatos(): Promise<void> {
     return;
   }
   await hydrateStaff({ userId, tenantId, role });
+}
+
+/**
+ * Reactiva a alguien que canceló.
+ *
+ * Estaba sin salida: el alumno cancela desde su app —o el mostrador lo hace por
+ * él— y a partir de ahí no había forma de volver. Ni el alumno, porque unirse a
+ * un gimnasio no es algo que haga por su cuenta en este producto, ni el
+ * mostrador, porque `/staff/members/:id/resubscribe` existía en la api y la app
+ * ni siquiera lo declaraba. La única salida era entrar a la base a mano.
+ *
+ * No es un alta: la ficha y el historial siguen ahí, y por eso hay un endpoint
+ * aparte. Volver a registrar a la persona le crearía una segunda identidad en el
+ * mismo local.
+ */
+export async function reactivarSuscripcion(
+  membershipId: string,
+  planId: string,
+): Promise<void> {
+  const sesion = conServidor();
+  if (sesion === null) throw new Error('Reactivar necesita una sesión de turno abierta.');
+  await resubscribe(membershipId, planId);
+  await refrescarPadron(sesion);
+}
+
+/** Planes activos del local. Para el mostrador, no para la billetera del alumno. */
+export async function planesDelGimnasio(): Promise<readonly Plan[]> {
+  if (conServidor() === null) return getState().plans.filter((plan) => plan.active);
+  return (await fetchStaffPlans()).filter((plan) => plan.active);
+}
+
+/**
+ * Quienes cancelaron y siguen con ficha en el local.
+ *
+ * Son las unicas personas para las que `reactivarSuscripcion` tiene sentido, y
+ * hasta ahora no habia forma de llegar a ellas: cancelar las sacaba del padron y
+ * su `membershipId` dejaba de aparecer en ninguna respuesta.
+ */
+export async function bajasDelGimnasio(): Promise<readonly RosterEntry[]> {
+  if (conServidor() === null) return [];
+  const todos = await fetchRoster(true);
+  return todos
+    .filter((entrada) => entrada.subscription.status === 'canceled')
+    .map((entrada) => ({ user: entrada.user, view: { ...entrada, attendances: [], charges: [] } }));
 }

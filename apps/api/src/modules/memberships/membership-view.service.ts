@@ -87,7 +87,18 @@ export class MembershipViewService {
    * pago y devolver el estado resultante tiene que ser atómico, o el
    * recepcionista ve un estado que ya cambió.
    */
-  async viewInTx(tx: Tx, membershipId: string, today?: PlainDate): Promise<MembershipView> {
+  /**
+   * `includeCanceled` solo lo pide la ficha del mostrador.
+   *
+   * El check-in NO lo pasa a proposito: ahi una suscripcion cancelada tiene que
+   * seguir sin aparecer, y el dominio ya la rechaza con su propio motivo.
+   */
+  async viewInTx(
+    tx: Tx,
+    membershipId: string,
+    today?: PlainDate,
+    options: { readonly includeCanceled?: boolean } = {},
+  ): Promise<MembershipView> {
     const [row] = await tx
       .select({
         membership: schema.memberships,
@@ -101,10 +112,12 @@ export class MembershipViewService {
       .innerJoin(schema.tenants, eq(schema.tenants.id, schema.memberships.tenantId))
       .innerJoin(
         schema.subscriptions,
-        and(
-          eq(schema.subscriptions.membershipId, schema.memberships.id),
-          sql`${schema.subscriptions.status} <> 'canceled'`,
-        ),
+        options.includeCanceled === true
+          ? eq(schema.subscriptions.membershipId, schema.memberships.id)
+          : and(
+              eq(schema.subscriptions.membershipId, schema.memberships.id),
+              sql`${schema.subscriptions.status} <> 'canceled'`,
+            ),
       )
       .innerJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
       .where(eq(schema.memberships.id, membershipId))
@@ -148,9 +161,13 @@ export class MembershipViewService {
   }
 
   /** Vista completa, con historial. Alimenta la pantalla de plan y el historial. */
-  async detail(tenantId: string, membershipId: string): Promise<MembershipDetail> {
+  async detail(
+    tenantId: string,
+    membershipId: string,
+    options: { readonly includeCanceled?: boolean } = {},
+  ): Promise<MembershipDetail> {
     return withTenant(this.db, tenantId, async (tx) => {
-      const view = await this.viewInTx(tx, membershipId);
+      const view = await this.viewInTx(tx, membershipId, undefined, options);
 
       const [chargeRows, attendanceRows] = await Promise.all([
         tx
@@ -250,7 +267,22 @@ export class MembershipViewService {
    * que no puede ser un N+1: con 150 alumnos serían 150 viajes por la red del
    * gimnasio, que es justo la que no funciona.
    */
-  async roster(tenantId: string, today?: PlainDate): Promise<readonly MembershipView[]> {
+  /**
+   * Padron del local.
+   *
+   * `includeCanceled` existe porque cancelar dejaba a la persona sin salida: la
+   * suscripcion se apaga, deja de aparecer aqui, y entonces `resubscribe` es
+   * inalcanzable — su `membershipId` no lo devuelve ninguna ruta. La ficha y el
+   * historial siguen en la base; lo que faltaba era poder verlos.
+   *
+   * Por defecto NO vienen: el padron es "quien entrena aqui", y mezclar las
+   * bajas en la lista que recepcion mira todo el dia la ensucia.
+   */
+  async roster(
+    tenantId: string,
+    today?: PlainDate,
+    options: { readonly includeCanceled?: boolean } = {},
+  ): Promise<readonly MembershipView[]> {
     return withTenant(this.db, tenantId, async (tx) => {
       const rows = await tx
         .select({
@@ -265,10 +297,12 @@ export class MembershipViewService {
         .innerJoin(schema.tenants, eq(schema.tenants.id, schema.memberships.tenantId))
         .innerJoin(
           schema.subscriptions,
-          and(
-            eq(schema.subscriptions.membershipId, schema.memberships.id),
-            sql`${schema.subscriptions.status} <> 'canceled'`,
-          ),
+          options.includeCanceled === true
+            ? eq(schema.subscriptions.membershipId, schema.memberships.id)
+            : and(
+                eq(schema.subscriptions.membershipId, schema.memberships.id),
+                sql`${schema.subscriptions.status} <> 'canceled'`,
+              ),
         )
         .innerJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
         .where(eq(schema.memberships.status, 'active'));

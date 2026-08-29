@@ -22,6 +22,7 @@ import {
   Wordmark,
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
+import { EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import { useRefresco, useStore, useWallet } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
@@ -61,44 +62,40 @@ export default function WalletScreen() {
         </Text>
       </Stack>
 
-      <Stack gap={12} style={{ marginTop: 18 }}>
-        <Eyebrow>Tus gimnasios</Eyebrow>
-        {wallet.map((entry) => (
-          <GymCard key={entry.membership.id} entry={entry} />
-        ))}
-      </Stack>
-
-      <Stack gap={10} style={{ marginTop: 22 }}>
-        <View
-          style={{
-            borderWidth: 1,
-            borderStyle: 'dashed',
-            borderColor: theme.colors.borderDashed,
-            borderRadius: theme.radii.lg,
-            padding: 14,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: theme.radii.xs,
-              backgroundColor: theme.colors.surfaceHigher,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text variant="titleSmall" color={theme.colors.textSecondary}>
-              +
-            </Text>
-          </View>
-          <Text variant="bodySmall" color={theme.colors.textSecondary}>
-            Unirme a otro gimnasio
-          </Text>
+      {wallet.length === 0 ? (
+        <View style={{ flex: 1, minHeight: 380 }}>
+          <EstadoVacio
+            titulo="Tu billetera está vacía"
+            cuerpo="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
+            pie="Para entrar a uno, el local te agrega a su padrón con tu DNI. No hace falta que crees nada."
+          />
         </View>
+      ) : (
+        <Stack gap={12} style={{ marginTop: 18 }}>
+          <Eyebrow>Tus gimnasios</Eyebrow>
+          {wallet.map((entry) => (
+            <GymCard key={entry.membership.id} entry={entry} />
+          ))}
+        </Stack>
+      )}
+
+      {/* Antes esto era un recuadro punteado con un «+» que decía «Unirme a otro
+          gimnasio» y NO era pulsable: un `View` suelto, sin `onPress`. Prometía
+          una acción que el producto no tiene — en Sinchi el gimnasio te agrega a
+          su padrón, no al revés (`docs/autenticacion.md`). Ahora lo dice en vez
+          de fingir un botón. */}
+      <Stack gap={8} style={{ marginTop: 22 }}>
+        <Card radius={theme.radii.lg} tone="sunken">
+          <Stack gap={5}>
+            <Text variant="bodySmall" weight="semibold">
+              ¿Entrenas en otro gimnasio?
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              Dale tu DNI en el mostrador y te agregan a su padrón. La membresía aparece
+              aquí sola, sin instalar nada más.
+            </Text>
+          </Stack>
+        </Card>
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           Una sola identidad Sinchi. Tu DNI y tu QR funcionan en cualquier local de la red.
         </Text>

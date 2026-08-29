@@ -20,7 +20,9 @@ import {
 import { hmacSha256, loadSecret } from './crypto';
 import { fetchRecentCheckIns, type SummaryDto } from './api';
 import {
+  bajasDelGimnasio,
   cargarDetalleAlumno,
+  planesDelGimnasio,
   planesPara,
   refrescarDatos,
   resumenDelGimnasio,
@@ -474,4 +476,53 @@ export function useRefresco(): {
   );
 
   return { refrescando, refrescar };
+}
+
+/** Quienes cancelaron y conservan ficha. Se piden solo al abrirlas. */
+export function useBajas(activo: boolean): {
+  readonly bajas: readonly RosterEntry[];
+  readonly cargando: boolean;
+} {
+  const [bajas, setBajas] = useState<readonly RosterEntry[]>([]);
+  const [cargando, setCargando] = useState(false);
+  const roster = useRoster();
+
+  useEffect(() => {
+    if (!activo) return;
+    let cancelado = false;
+    setCargando(true);
+    void bajasDelGimnasio()
+      .then((lista) => {
+        if (!cancelado) setBajas(lista);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+    // `roster` en las dependencias: reactivar a alguien lo saca de esta lista.
+  }, [activo, roster]);
+
+  return { bajas, cargando };
+}
+
+/** Planes activos del local, para el mostrador. */
+export function usePlanesDelGimnasio(): readonly Plan[] {
+  const [planes, setPlanes] = useState<readonly Plan[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    void planesDelGimnasio()
+      .then((lista) => {
+        if (!cancelado) setPlanes(lista);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  return planes;
 }

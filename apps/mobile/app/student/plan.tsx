@@ -13,6 +13,7 @@ import { allWeekdays, formatPENShort, weekdayInitial } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
+import { EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import { useStore, useWallet } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
@@ -33,7 +34,11 @@ export default function PlanScreen() {
   if (entry === undefined) {
     return (
       <Screen>
-        <Text variant="title">Todavía no tienes un plan activo.</Text>
+        <EstadoVacio
+          titulo="Todavía no tienes un plan"
+          cuerpo="Cuando te inscribas en un gimnasio verás aquí tu plan, tu cupo de la semana y cuándo te toca renovar."
+          pie="Si cancelaste y quieres volver, pídelo en el mostrador: tu ficha y tu historial siguen ahí."
+        />
       </Screen>
     );
   }
