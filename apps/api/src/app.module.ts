@@ -18,6 +18,7 @@ import { JobsController } from './jobs/jobs.controller';
 import { RefreshDelinquencyJob } from './jobs/refresh-delinquency.job';
 import { BillingService } from './modules/billing/billing.service';
 import { MailService } from './modules/mail/mail.service';
+import { BrandController } from './modules/brand.controller';
 import { CheckInService } from './modules/checkin/checkin.service';
 import { HealthController } from './modules/health.controller';
 import { IdentityService } from './modules/identity/identity.service';
@@ -29,6 +30,7 @@ import { StudentController } from './modules/student.controller';
 @Module({
   imports: [DbModule, CommonModule, AuthModule, ScheduleModule.forRoot()],
   controllers: [
+    BrandController,
     HealthController,
     StudentController,
     StaffController,

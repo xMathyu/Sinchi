@@ -89,13 +89,19 @@ const schema = z.object({
   MAIL_FROM: z.string().default('Sinchi <onboarding@resend.dev>'),
 
   /**
-   * Donde aterriza el enlace de la invitacion.
+   * De donde cuelgan las URLs que salen de aqui hacia fuera.
    *
-   * Por defecto el esquema de la app, que solo funciona en un telefono que ya la
-   * tiene instalada. Cuando exista una pagina que redirija a la tienda, se
-   * cambia esta variable y ni el correo ni la app se enteran.
+   * El enlace de la invitacion y el logo del correo tienen que ser direcciones
+   * PUBLICAS: un cliente de correo no abre `sinchi://` —no linkifica esquemas
+   * propios, y aunque lo hiciera no sabria que hacer sin la app— ni pinta una
+   * imagen de `localhost`.
+   *
+   * Por defecto apunta al servicio desplegado incluso corriendo en local, y eso
+   * es correcto: la api local y Cloud Run comparten la misma base, asi que un
+   * token emitido aqui vale alli. Un correo enviado desde el portatil lleva
+   * enlaces que funcionan.
    */
-  INVITE_LINK_BASE: z.string().default('sinchi:///invite/'),
+  PUBLIC_BASE_URL: z.string().url().default('https://sinchi-api-961173851857.us-east4.run.app'),
 
   /**
    * Quien dispara los trabajos programados.

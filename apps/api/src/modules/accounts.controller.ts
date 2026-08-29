@@ -94,7 +94,7 @@ export class AccountsController {
     // deshace: el enlace ya es válido y se puede compartir por donde sea. El
     // correo es entrega, no la fuente del vínculo — si Resend estuviera caído,
     // impedir el alta de alguien que espera en el mostrador sería peor.
-    const enlace = `${loadEnv().INVITE_LINK_BASE}${invitacion.token}`;
+    const enlace = `${loadEnv().PUBLIC_BASE_URL}/v1/invites/${invitacion.token}/abrir`;
     let correo = { enviado: false, motivo: 'Sin correo: comparte el enlace.' as string | null };
 
     if (body.email !== undefined && this.mail.disponible) {

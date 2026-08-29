@@ -5,13 +5,15 @@
  * dos las llama alguien que todavia no tiene sesion ni gimnasio. Es justo lo que
  * el enlace va a decidir.
  */
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { Public } from '../auth/auth.guard';
 import { parseWith } from '../common/zod.pipe';
 import { InviteService } from '../auth/invite.service';
 import { AuthService, type IssuedSession } from '../auth/auth.service';
 import { FirebaseVerifier } from '../auth/firebase';
+import { paginaCaducada, paginaInvitacion } from './invite-page';
 
 const claimSchema = z.object({
   /** El mismo ID token de Firebase que consume `/auth/google`. */
@@ -36,6 +38,41 @@ export class InvitesController {
   @Get(':token')
   preview(@Param('token') token: string) {
     return this.invites.preview(token);
+  }
+
+  /**
+   * La pagina que abre el enlace del correo.
+   *
+   * Hace falta porque `sinchi://` NO es un enlace que un cliente de correo pueda
+   * abrir: Gmail no convierte esquemas propios en enlaces, y aunque lo hiciera,
+   * en un ordenador no hay nada que responda. Asi que el correo lleva una URL
+   * https de verdad, y es esta pagina la que salta a la app.
+   *
+   * Se sirve desde la api y no desde un sitio aparte porque es la unica
+   * direccion publica y estable que el proyecto ya tiene. El dia que exista
+   * `apps/web`, esta ruta se convierte en una redireccion de una linea.
+   *
+   * Un token vencido o inventado tiene su propia pagina: un 404 en blanco deja
+   * a quien lo abre sin saber si se equivoco de enlace o si llego tarde.
+   */
+  @Public()
+  @Get(':token/abrir')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  async abrir(@Param('token') token: string, @Res() res: Response) {
+    const enlaceApp = `sinchi:///invite/${token}`;
+    try {
+      const invitacion = await this.invites.preview(token);
+      res.end(
+        paginaInvitacion({
+          gimnasio: invitacion.gymName,
+          nombre: invitacion.fullName,
+          plan: invitacion.planName,
+          enlaceApp,
+        }),
+      );
+    } catch {
+      res.end(paginaCaducada());
+    }
   }
 
   /**
