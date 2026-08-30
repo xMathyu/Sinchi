@@ -114,7 +114,12 @@ export default function ExploreScreen() {
         </View>
       ) : error !== null && gimnasios.length === 0 ? (
         <View style={{ minHeight: 340 }}>
-          <EstadoSinConexion error={error} onReintentar={recargar} />
+          <EstadoSinConexion
+            titulo="No se pudo traer la lista"
+            cuerpo="No llegamos al servidor. Los gimnasios siguen ahí; es la conexión la que falló."
+            error={error}
+            onReintentar={recargar}
+          />
         </View>
       ) : gimnasios.length === 0 ? (
         <View style={{ minHeight: 340 }}>

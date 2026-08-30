@@ -59,6 +59,8 @@ export default function GymScreen() {
         </Row>
         <View style={{ flex: 1 }}>
           <EstadoSinConexion
+            titulo="No se pudo abrir este gimnasio"
+            cuerpo="No llegamos al servidor. Vuelve a intentarlo en un momento."
             error={error ?? 'Este gimnasio no está disponible.'}
             onReintentar={recargar}
           />
