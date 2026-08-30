@@ -114,10 +114,18 @@ export interface Tiendas {
  * Es el mecanismo del sistema para exactamente esto: si la app está instalada,
  * la abre; si no, Chrome navega solo a `browser_fallback_url`. Sin temporizadores
  * y sin adivinar — que es como se hace en iOS por no tener nada equivalente.
+ *
+ * Solo se usa CUANDO HAY tienda a la que caer: sin `browser_fallback_url`, un
+ * Android sin la app se queda mirando una página de error de Chrome, que es peor
+ * que un `sinchi://` que simplemente no hace nada.
  */
-function intentAndroid(ruta: string, respaldo: string | null): string {
-  const partes = ['Intent', 'scheme=sinchi', 'package=pe.sinchi.app'];
-  if (respaldo !== null) partes.push(`S.browser_fallback_url=${encodeURIComponent(respaldo)}`);
+function intentAndroid(ruta: string, respaldo: string): string {
+  const partes = [
+    'Intent',
+    'scheme=sinchi',
+    'package=pe.sinchi.app',
+    `S.browser_fallback_url=${encodeURIComponent(respaldo)}`,
+  ];
   return `intent://${ruta}#${partes.join(';')};end`;
 }
 
@@ -134,10 +142,11 @@ export function paginaInvitacion(input: {
   // El esquema sobra en la ruta del intent: Android lo lee de `scheme=`.
   const ruta = input.enlaceApp.replace(/^sinchi:\/\/\/?/, '');
 
-  const abrir =
-    sistema === 'android'
-      ? `<a class="boton" id="abrir" href="${escapar(intentAndroid(ruta, tiendas.android))}">Abrir en Sinchi</a>`
-      : `<a class="boton" id="abrir" href="${escapar(input.enlaceApp)}">Abrir en Sinchi</a>`;
+  const destino =
+    sistema === 'android' && tiendas.android !== null
+      ? intentAndroid(ruta, tiendas.android)
+      : input.enlaceApp;
+  const abrir = `<a class="boton" id="abrir" href="${escapar(destino)}">Abrir en Sinchi</a>`;
 
   const tienda = (url: string, etiqueta: string, glifo: string) =>
     `<a class="tienda" href="${escapar(url)}">${glifo}${etiqueta}</a>`;

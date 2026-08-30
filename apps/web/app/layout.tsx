@@ -40,7 +40,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'Sinchi · Quién entrena, quién paga y cuándo le toca',
-    description: 'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app.',
+    description:
+      'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app. El primer mes es gratis.',
     siteName: 'Sinchi',
     url: SITE,
     locale: 'es_PE',
@@ -52,7 +53,8 @@ export const metadata: Metadata = {
     // recortado en un cuadrado de 120 px y no se lee nada.
     card: 'summary_large_image',
     title: 'Sinchi · Quién entrena, quién paga y cuándo le toca',
-    description: 'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app.',
+    description:
+      'El padrón, la asistencia y el cobro de tu gimnasio, en una sola app. El primer mes es gratis.',
     images: ['/og.png'],
   },
 };

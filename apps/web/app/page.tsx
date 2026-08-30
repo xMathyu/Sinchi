@@ -67,7 +67,8 @@ export default function Landing() {
             </p>
             <StoreButtons />
             <p className="body" style={{ margin: 0, fontSize: 13 }}>
-              Desde S/ 149 al mes por local · Yape, efectivo y transferencia
+              <strong style={{ color: 'var(--ok)', fontWeight: 700 }}>Primer mes gratis.</strong>{' '}
+              Después, desde S/ 149 al mes por local · Yape, efectivo y transferencia
             </p>
           </div>
 
@@ -183,6 +184,27 @@ export default function Landing() {
               fue en marzo no te cuesta en abril.
             </p>
           </div>
+          {/* Antes de los precios y no después: es lo que decide si alguien se
+              para a mirarlos. Y dice qué se lleva gratis, no solo que es gratis. */}
+          <div
+            className="card"
+            style={{
+              display: 'flex', gap: 18, alignItems: 'center', padding: '20px 24px',
+              borderColor: 'rgba(47,209,109,.35)', background: 'rgba(47,209,109,.06)',
+            }}
+          >
+            <div style={{ width: 3, alignSelf: 'stretch', background: 'var(--ok)', borderRadius: 2, flex: 'none' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <span className="display" style={{ fontSize: 24, color: 'var(--ok)' }}>
+                El primer mes no lo pagas
+              </span>
+              <p className="body" style={{ margin: 0, maxWidth: 640 }}>
+                Monta tu padrón, marca la asistencia de un mes entero y cobra las mensualidades. Si
+                al final no te sirve, te vas sin haber pagado nada — y tus datos se van contigo.
+              </p>
+            </div>
+          </div>
+
           <div className="grid-3 stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 20 }}>
             {PLANS.map((plan) => (
               <div
@@ -203,6 +225,9 @@ export default function Landing() {
                   <span className="display" style={{ fontSize: 42 }}>S/ {plan.price}</span>
                   <span className="body">/ mes</span>
                 </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ok)' }}>
+                  El primer mes, gratis
+                </span>
                 <p className="body" style={{ margin: 0 }}>{plan.detail}</p>
               </div>
             ))}
@@ -220,8 +245,9 @@ export default function Landing() {
             <h2 className="display h2" style={{ margin: 0, maxWidth: 760 }}>
               Deja de llevar tu gimnasio en un cuaderno
             </h2>
-            <p className="lead" style={{ margin: 0, maxWidth: 460 }}>
-              Monta tu padrón esta semana. Tus alumnos lo ven desde el primer día.
+            <p className="lead" style={{ margin: 0, maxWidth: 480 }}>
+              Monta tu padrón esta semana y tus alumnos lo ven desde el primer día.{' '}
+              <strong style={{ color: 'var(--ok)', fontWeight: 600 }}>El primer mes es gratis.</strong>
             </p>
             <StoreButtons />
           </div>

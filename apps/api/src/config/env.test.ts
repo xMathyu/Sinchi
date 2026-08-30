@@ -30,7 +30,7 @@ describe('loadEnv', () => {
     // en el despliegue y no en el portatil de nadie.
     const env = loadEnv({ ...valid, IOS_STORE_URL: '', ANDROID_STORE_URL: '' });
     expect(env.IOS_STORE_URL).toBeUndefined();
-    expect(env.ANDROID_STORE_URL).toContain('play.google.com');
+    expect(env.ANDROID_STORE_URL).toBeUndefined();
   });
 
   it('rechaza un secreto de firma corto', () => {
