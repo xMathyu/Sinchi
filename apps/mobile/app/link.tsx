@@ -51,8 +51,8 @@ export default function LinkScreen() {
             Un paso más
           </Text>
           <Text variant="body" color={theme.colors.textSecondary} align="center">
-            Muéstrale este código a recepción para conectar tu cuenta con tu ficha
-            del gimnasio.
+            Si tu gimnasio ya tiene tu ficha, muéstrale este código a recepción y tu
+            membresía aparece en la app.
           </Text>
         </Stack>
 
@@ -97,29 +97,15 @@ export default function LinkScreen() {
           </Stack>
         </Card>
 
-        {/* La otra mitad de esta pantalla, y la que faltaba.
-            El código de arriba solo sirve si ya hay un gimnasio esperándote. A
-            quien instaló la app sin entrenar en ninguno —que es justo a quien
-            este producto quiere— esta pantalla no le ofrecía absolutamente
-            nada: un número que nadie va a confirmar y ninguna salida. */}
-        <Card>
-          <Stack gap={10}>
-            <Stack gap={5}>
-              <Text variant="bodySmall" weight="semibold">
-                ¿Todavía no entrenas en ninguno?
-              </Text>
-              <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                Mira las escuelas de la red, con sus horarios y sus precios, y
-                reserva una clase gratis el día y la hora que te venga bien.
-              </Text>
-            </Stack>
-            <Button
-              label="Explorar gimnasios"
-              variant="secondary"
-              onPress={() => router.push('/explore')}
-            />
-          </Stack>
-        </Card>
+        {/* Ya no hace falta ofrecer el directorio desde aquí: esta pantalla dejó
+            de ser la puerta de entrada. Quien acaba de crear su cuenta aterriza
+            en los gimnasios, y llega a este código solo si lo busca — que es lo
+            que pasa cuando recepción se lo pide. */}
+        <Button
+          label="Volver a los gimnasios"
+          variant="secondary"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/explore'))}
+        />
 
         <Pressable
           onPress={() => {

@@ -280,10 +280,22 @@ function SessionRouter() {
     }
 
     if (state.status === 'unlinked') {
-      // Con la cuenta creada y sin ficha, el directorio es lo UNICO que esta
-      // persona puede hacer: es justo a quien la clase gratis va dirigida. Sin
-      // esta salida, /link es una pantalla con un codigo y ningun camino.
-      if (primero !== 'link' && !enDirectorio) router.replace('/link');
+      /**
+       * Cuenta creada y sin ficha en ningun padron: aterriza en el DIRECTORIO,
+       * no en el codigo de seis digitos.
+       *
+       * Antes lo primero que veia quien acababa de instalar la app era un numero
+       * que solo sirve si ya hay un gimnasio esperandolo con su ficha hecha. Al
+       * que todavia no entrena en ningun sitio —que es justo a quien este
+       * producto quiere— la app le abria con una pared.
+       *
+       * El codigo NO desaparece: sigue en `/link`, a un toque desde el
+       * directorio. Hace falta para el alumno al que su gimnasio dio de alta por
+       * DNI sin invitarlo, que es el unico camino que le queda para que esa
+       * ficha llegue a su app — el auto-vinculo por correo solo existe para el
+       * dueno (`tryLinkOwnerByEmail`).
+       */
+      if (primero !== 'link' && !enDirectorio) router.replace('/explore');
       return;
     }
 
