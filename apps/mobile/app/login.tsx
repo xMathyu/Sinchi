@@ -32,6 +32,11 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Solo al crear la cuenta. Es la ÚNICA vez que se piden: de aquí salen el
+  // nombre y el celular con los que se reserva una clase gratis, y por eso esa
+  // pantalla ya no vuelve a preguntarlos.
+  const [nombre, setNombre] = useState('');
+  const [celular, setCelular] = useState('+51');
   // "Entrar" o "crear cuenta": el mismo formulario, porque los campos son los
   // mismos y separarlos en dos pantallas solo añade un paso.
   const [creating, setCreating] = useState(false);
@@ -68,7 +73,7 @@ export default function LoginScreen() {
     }
 
     let cancelled = false;
-    void completeGoogleSignIn(idToken).then((outcome) => {
+    void completeGoogleSignIn(idToken, { phone: celular.trim() }).then((outcome) => {
       if (cancelled) return;
       setWorking(false);
 
@@ -90,7 +95,12 @@ export default function LoginScreen() {
   const submitEmail = (): void => {
     setError(null);
     setWorking(true);
-    void completeEmailSignIn(email, password, creating ? 'signUp' : 'signIn').then((outcome) => {
+    void completeEmailSignIn(
+      email,
+      password,
+      creating ? 'signUp' : 'signIn',
+      creating ? { fullName: nombre.trim(), phone: celular.trim() } : {},
+    ).then((outcome) => {
       setWorking(false);
       if (outcome.kind === 'error') {
         setError(outcome.message);
@@ -105,7 +115,9 @@ export default function LoginScreen() {
   const emailReady = firebaseConfigured();
   // Seis es el minimo que exige Firebase; comprobarlo aqui evita un viaje de red
   // para que el servidor conteste lo mismo.
-  const canSubmit = email.trim().length > 3 && password.length >= 6 && !working;
+  const datosCompletos = nombre.trim().length >= 2 && celular.trim().length >= 8;
+  const canSubmit =
+    email.trim().length > 3 && password.length >= 6 && (!creating || datosCompletos) && !working;
 
   return (
     <Screen scroll>
@@ -179,6 +191,61 @@ export default function LoginScreen() {
                 }}
               />
             </Stack>
+
+            {/* Al crear la cuenta, y solo entonces. Preguntarlos aquí es lo que
+                permite que reservar una clase gratis no vuelva a pedirlos: la
+                queja legítima era «si ya me registré, ¿por qué me lo preguntas
+                otra vez?». */}
+            {creating ? (
+              <>
+                <Stack gap={4}>
+                  <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                    Tu nombre
+                  </Text>
+                  <TextInput
+                    value={nombre}
+                    onChangeText={setNombre}
+                    autoCapitalize="words"
+                    autoComplete="name"
+                    editable={!working}
+                    placeholder="Nombre y apellido"
+                    placeholderTextColor={theme.colors.textPlaceholder}
+                    style={{
+                      color: theme.colors.ink,
+                      fontSize: 16,
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.hairline,
+                    }}
+                  />
+                </Stack>
+
+                <Stack gap={4}>
+                  <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                    Tu celular
+                  </Text>
+                  <TextInput
+                    value={celular}
+                    onChangeText={setCelular}
+                    keyboardType="phone-pad"
+                    autoComplete="tel"
+                    editable={!working}
+                    placeholder="+51987654321"
+                    placeholderTextColor={theme.colors.textPlaceholder}
+                    style={{
+                      color: theme.colors.ink,
+                      fontSize: 16,
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.hairline,
+                    }}
+                  />
+                  <Text variant="micro" color={theme.colors.textFaint}>
+                    Es con lo que el gimnasio te reconoce cuando llegas a probar.
+                  </Text>
+                </Stack>
+              </>
+            ) : null}
 
             <Button
               label={

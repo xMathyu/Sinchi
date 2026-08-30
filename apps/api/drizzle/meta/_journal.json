@@ -50,6 +50,13 @@
       "when": 1787549919403,
       "tag": "0006_clase_gratis",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787549919404,
+      "tag": "0007_datos_de_la_cuenta_nueva",
+      "breakpoints": true
     }
   ]
 }

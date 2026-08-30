@@ -27,7 +27,7 @@ import {
   type BookTrialDto,
   type TrialBookingDto,
 } from './api';
-import { currentFirebaseToken, getSessionState } from './session';
+import { currentAccountDetails, currentFirebaseToken, getSessionState } from './session';
 
 /** Con qué credencial se puede reservar ahora mismo. */
 export type CuentaParaReservar =
@@ -45,12 +45,23 @@ export function cuentaParaReservar(): CuentaParaReservar {
 }
 
 /**
- * `true` si hará falta preguntarle el nombre y el celular.
+ * `true` solo si de verdad no sabemos quién es.
  *
- * Con identidad Sinchi ya se saben, y volver a preguntarlos dejaría dos
- * versiones de la misma persona en la lista del gimnasio.
+ * Con identidad Sinchi los datos ya están en el padrón. Sin ficha, están en lo
+ * que escribió al crear la cuenta. Preguntar otra vez lo que la persona acaba de
+ * dar es la forma más rápida de que la reserva parezca un trámite — y de dejar
+ * dos versiones de la misma persona en la lista del gimnasio.
  */
-export const necesitaDatos = (): boolean => cuentaParaReservar().kind === 'guest';
+export function necesitaDatos(): boolean {
+  if (cuentaParaReservar().kind !== 'guest') return false;
+
+  const datos = currentAccountDetails();
+  return (
+    datos === null ||
+    (datos.fullName ?? '').trim().length < 2 ||
+    (datos.phone ?? '').trim().length < 6
+  );
+}
 
 export class SinCuenta extends Error {
   constructor() {
@@ -74,11 +85,18 @@ export async function reservarClaseGratis(input: {
   }
   if (cuenta.kind === 'none') throw new SinCuenta();
 
+  // Lo que la pantalla haya recogido manda; si no recogió nada, se usa lo que la
+  // persona escribió al registrarse — y si tampoco, la api lo resuelve por su
+  // cuenta contra el código pendiente.
+  const guardado = currentAccountDetails();
+  const fullName = (input.fullName ?? guardado?.fullName ?? '').trim();
+  const phone = (input.phone ?? guardado?.phone ?? '').trim();
+
   return bookTrialAsGuest({
     slug: input.slug,
     idToken: cuenta.idToken,
-    fullName: (input.fullName ?? '').trim(),
-    phone: (input.phone ?? '').trim(),
+    fullName,
+    phone,
     classScheduleId: input.slot.scheduleId,
     date,
   });

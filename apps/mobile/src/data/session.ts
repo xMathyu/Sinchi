@@ -51,6 +51,14 @@ export type SessionState =
        * Google para ahorrarse un toque.
        */
       readonly idToken: string;
+      /**
+       * Lo que escribió al crear la cuenta.
+       *
+       * Vive aquí para que reservar una clase gratis no vuelva a preguntárselo:
+       * si la app ya lo sabe, el formulario de la reserva no aparece.
+       */
+      readonly fullName: string | null;
+      readonly phone: string | null;
     }
   | { readonly status: 'signed_in'; readonly session: Session }
   /**
@@ -186,11 +194,23 @@ export function enterDemoMode(): void {
   emit({ status: 'demo' });
 }
 
-export function setUnlinked(code: string, expiresAt: number, idToken: string): void {
+export function setUnlinked(input: {
+  readonly code: string;
+  readonly expiresAt: number;
+  readonly idToken: string;
+  readonly fullName: string | null;
+  readonly phone: string | null;
+}): void {
   // No se persiste: el código dura diez minutos y el servidor devuelve el mismo
-  // mientras siga vivo, así que volver a entrar lo recupera.
-  emit({ status: 'unlinked', code, expiresAt, idToken });
+  // mientras siga vivo, así que volver a entrar lo recupera — con sus datos.
+  emit({ status: 'unlinked', ...input });
 }
+
+/** Nombre y celular de quien todavía no tiene ficha. `null` si no los dio. */
+export const currentAccountDetails = (): {
+  readonly fullName: string | null;
+  readonly phone: string | null;
+} | null => (state.status === 'unlinked' ? { fullName: state.fullName, phone: state.phone } : null);
 
 /**
  * La credencial de quien entró pero todavía no tiene ficha.

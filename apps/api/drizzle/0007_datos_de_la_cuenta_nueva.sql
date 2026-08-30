@@ -1,0 +1,20 @@
+-- Nombre y celular de quien crea su cuenta sin ficha en ningun padron.
+--
+-- Hasta aqui, registrarse en la app daba UNA cosa: un correo. El nombre lo pone
+-- Google cuando se entra con Google, y con correo y contrasena ni eso. Asi que
+-- al reservar la clase gratis habia que pedir nombre y celular otra vez, y desde
+-- fuera eso se lee como que la app no guarda lo que le acabas de dar.
+--
+-- Ahora se piden UNA vez, al crear la cuenta, y viven aqui — que es donde ya
+-- vivia lo poco que sabemos de una cuenta sin ficha.
+--
+-- `display_name` cambia de significado y conviene decirlo: era «lo que dijo
+-- Google» y pasa a ser «como se presenta esta persona» — el nombre que escribio
+-- al registrarse si lo hizo, y el de Google si no.
+--
+-- Sin restriccion de unicidad a proposito. `users.phone` si es unico —es la
+-- llave del alumno en el padron— pero esto no es un alumno todavia: es una
+-- cuenta a medio camino, y dos intentos de registro con el mismo celular no
+-- pueden bloquearse aqui. Lo que si es unico es la reserva por gimnasio, y eso
+-- ya lo garantiza `trial_bookings_one_per_phone`.
+ALTER TABLE "account_claims" ADD COLUMN IF NOT EXISTS "phone" text;

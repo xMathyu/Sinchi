@@ -291,6 +291,13 @@ Ahora una cuenta sin ficha aterriza en el **directorio de gimnasios**, que es lo
 único que esa persona puede hacer hoy: mirar horarios y precios, y reservar su
 primera clase gratis.
 
+Crear la cuenta pide además **nombre y celular**, y esa es la única vez que se
+piden. No autentican nada —eso lo hace el token de Firebase— y no tocan `users`:
+viven con el código pendiente (`account_claims.display_name` y `phone`) hasta que
+haya una ficha a la que atarlos. Existen por una razón concreta: sin ellos,
+reservar una clase gratis volvía a preguntar lo que la persona acababa de
+escribir, y eso se lee como que la app no guarda nada.
+
 El código no desaparece, y no puede: es el único camino para el alumno al que su
 gimnasio dio de alta **por DNI y sin invitarlo**. El auto-vínculo por correo
 verificado existe solo para el dueño (`tryLinkOwnerByEmail`), a propósito — el

@@ -139,7 +139,20 @@ export const accountClaims = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     firebaseUid: text('firebase_uid').notNull(),
     email: text('email'),
+    /**
+     * Como se presenta esta persona: el nombre que escribio al crear la cuenta
+     * si lo hizo, y el que dijo Google si no.
+     */
     displayName: text('display_name'),
+    /**
+     * Celular, si lo dio al registrarse.
+     *
+     * Sin unicidad a proposito: `users.phone` es la llave del alumno en el
+     * padron, pero esto todavia no es un alumno — es una cuenta a medio camino.
+     * Lo unico que tiene que ser unico es la reserva por gimnasio, y de eso se
+     * encarga `trial_bookings_one_per_phone`.
+     */
+    phone: text('phone'),
     /** 6 digitos: se dicta en voz alta en el mostrador. */
     code: text('code').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

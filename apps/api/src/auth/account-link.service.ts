@@ -20,7 +20,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { InjectDb } from '../db/db.module';
 import {
   adoptUser,
@@ -47,6 +47,20 @@ export interface PendingClaim {
   readonly expiresAt: Date;
   readonly email: string | null;
   readonly displayName: string | null;
+  /** Lo dio al crear la cuenta. Es con lo que reserva su clase gratis. */
+  readonly phone: string | null;
+}
+
+/**
+ * Lo que la persona escribio al crear su cuenta.
+ *
+ * Va aparte de `VerifiedIdentity` a proposito: eso es lo que CERTIFICA Google
+ * —quien controla ese buzon— y esto es lo que la persona dice de si misma. No
+ * autentica nada; solo evita volver a preguntarselo al reservar.
+ */
+export interface DatosDeRegistro {
+  readonly fullName?: string | undefined;
+  readonly phone?: string | undefined;
 }
 
 export interface ClaimSummary {
@@ -159,14 +173,23 @@ export class AccountLinkService {
    * deliberado: si el alumno cierra y abre la app mientras espera en la cola, el
    * número que tiene en la mano tiene que seguir sirviendo.
    */
-  async issueClaim(identity: VerifiedIdentity): Promise<PendingClaim> {
+  async issueClaim(
+    identity: VerifiedIdentity,
+    datos: DatosDeRegistro = {},
+  ): Promise<PendingClaim> {
+    const nombre = datos.fullName?.trim();
+    const celular = datos.phone?.trim();
+
     return withoutTenantIsolation(this.db, async (tx) => {
       await this.purgeExpired(tx);
 
       const [existing] = await tx
         .select({
+          id: schema.accountClaims.id,
           code: schema.accountClaims.code,
           expiresAt: schema.accountClaims.expiresAt,
+          displayName: schema.accountClaims.displayName,
+          phone: schema.accountClaims.phone,
         })
         .from(schema.accountClaims)
         .where(
@@ -178,11 +201,25 @@ export class AccountLinkService {
         .limit(1);
 
       if (existing !== undefined) {
+        // Si esta vez llegan datos y la fila no los tenia, se completan: quien
+        // entro con Google y luego escribio su celular no deberia tener que
+        // repetirlo al reservar.
+        const displayName = nombre !== undefined && nombre.length > 0 ? nombre : existing.displayName;
+        const phone = celular !== undefined && celular.length > 0 ? celular : existing.phone;
+
+        if (displayName !== existing.displayName || phone !== existing.phone) {
+          await tx
+            .update(schema.accountClaims)
+            .set({ displayName, phone })
+            .where(eq(schema.accountClaims.id, existing.id));
+        }
+
         return {
           code: existing.code,
           expiresAt: existing.expiresAt,
           email: identity.email,
-          displayName: identity.displayName,
+          displayName,
+          phone,
         };
       }
 
@@ -199,7 +236,10 @@ export class AccountLinkService {
           .values({
             firebaseUid: identity.uid,
             email: identity.email,
-            displayName: identity.displayName,
+            // El nombre que escribio manda sobre el de Google: es como quiere
+            // que lo llamen, y con correo y contrasena Google no da ninguno.
+            displayName: nombre !== undefined && nombre.length > 0 ? nombre : identity.displayName,
+            phone: celular !== undefined && celular.length > 0 ? celular : null,
             code,
             expiresAt,
           })
@@ -211,7 +251,9 @@ export class AccountLinkService {
             code: inserted.code,
             expiresAt,
             email: identity.email,
-            displayName: identity.displayName,
+            displayName:
+              nombre !== undefined && nombre.length > 0 ? nombre : identity.displayName,
+            phone: celular ?? null,
           };
         }
       }
@@ -219,6 +261,36 @@ export class AccountLinkService {
       throw new ConflictException(
         'No se pudo generar un código de vinculación. Intenta de nuevo.',
       );
+    });
+  }
+
+  /**
+   * Lo que la persona dijo de si misma al registrarse, si sigue vigente.
+   *
+   * Lo usa la reserva de clase gratis para no volver a preguntarle el nombre y
+   * el celular a quien acaba de escribirlos. `account_claims` no lleva RLS —una
+   * cuenta sin ficha no pertenece a ningun gimnasio— y la busqueda es por el uid
+   * que Firebase ya verifico.
+   */
+  async datosDeRegistro(
+    firebaseUid: string,
+  ): Promise<{ readonly fullName: string | null; readonly phone: string | null } | null> {
+    return withoutTenantIsolation(this.db, async (tx) => {
+      const [row] = await tx
+        .select({
+          fullName: schema.accountClaims.displayName,
+          phone: schema.accountClaims.phone,
+        })
+        .from(schema.accountClaims)
+        .where(
+          and(
+            eq(schema.accountClaims.firebaseUid, firebaseUid),
+            isNull(schema.accountClaims.consumedAt),
+          ),
+        )
+        .orderBy(desc(schema.accountClaims.createdAt))
+        .limit(1);
+      return row ?? null;
     });
   }
 

@@ -46,12 +46,27 @@ export type SignInOutcome =
  * necesita hooks de React. Aquí queda todo lo que no es interfaz, que es lo que
  * se puede razonar y probar por separado.
  */
-export async function completeGoogleSignIn(googleIdToken: string): Promise<SignInOutcome> {
+export async function completeGoogleSignIn(
+  googleIdToken: string,
+  datos: DatosDeRegistro = {},
+): Promise<SignInOutcome> {
   try {
-    return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken));
+    return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken), datos);
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }
+}
+
+/**
+ * Lo que la persona escribe al CREAR su cuenta.
+ *
+ * Se manda una sola vez, al registrarse, y la api lo guarda con el código
+ * pendiente. Es lo que evita la pregunta absurda: pedirle otra vez, al reservar
+ * una clase gratis, el nombre y el celular que acaba de dar.
+ */
+export interface DatosDeRegistro {
+  readonly fullName?: string;
+  readonly phone?: string;
 }
 
 /**
@@ -66,9 +81,10 @@ export async function completeEmailSignIn(
   email: string,
   password: string,
   mode: 'signIn' | 'signUp',
+  datos: DatosDeRegistro = {},
 ): Promise<SignInOutcome> {
   try {
-    return await exchangeForSinchiSession(await signInWithEmail(email, password, mode));
+    return await exchangeForSinchiSession(await signInWithEmail(email, password, mode), datos);
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }
@@ -81,14 +97,24 @@ export async function completeEmailSignIn(
  * el estado normal de quien acaba de instalar la app, y se resuelve con el código
  * que confirma recepción.
  */
-async function exchangeForSinchiSession(firebaseIdToken: string): Promise<SignInOutcome> {
-  const result = await signInWithGoogle(firebaseIdToken);
+async function exchangeForSinchiSession(
+  firebaseIdToken: string,
+  datos: DatosDeRegistro = {},
+): Promise<SignInOutcome> {
+  const result = await signInWithGoogle(firebaseIdToken, datos);
 
   if (!result.linked) {
     // El token de Firebase se conserva: es la unica credencial de quien todavia
     // no tiene ficha, y con ella puede reservar una clase gratis mientras
-    // recepcion confirma el codigo.
-    setUnlinked(result.claim.code, new Date(result.claim.expiresAt).getTime(), firebaseIdToken);
+    // recepcion confirma el codigo. Con el viajan sus datos, para no volver a
+    // preguntarselos al reservar.
+    setUnlinked({
+      code: result.claim.code,
+      expiresAt: new Date(result.claim.expiresAt).getTime(),
+      idToken: firebaseIdToken,
+      fullName: result.claim.displayName,
+      phone: result.claim.phone,
+    });
     return { kind: 'needs_link', code: result.claim.code };
   }
 

@@ -46,6 +46,7 @@ import {
 } from '../../db/client';
 import { toClassSchedule, toPlan, toTrialBooking } from '../../common/mappers';
 import { Clock } from '../../common/clock';
+import { AccountLinkService } from '../../auth/account-link.service';
 import { MailService } from '../mail/mail.service';
 
 /** Ficha del gimnasio en la lista. Lo justo para decidir si abrirlo. */
@@ -161,6 +162,7 @@ export class TrialsService {
     @InjectDb() private readonly db: Database,
     private readonly clock: Clock,
     private readonly mail: MailService,
+    private readonly accountLink: AccountLinkService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -496,8 +498,24 @@ export class TrialsService {
       throw new NotFoundException('No encontramos tu cuenta.');
     }
 
-    const fullName = (input.fullName ?? input.account.displayName ?? '').trim();
-    const phone = normalizePhone(input.phone ?? '');
+    /**
+     * De donde salen el nombre y el celular, en orden.
+     *
+     * Lo primero que se mira es lo que la persona ESCRIBIO AL REGISTRARSE, que
+     * es lo que evita la pregunta absurda: pedirle otra vez, al reservar, lo que
+     * acaba de dar al crear su cuenta. El cuerpo de la peticion manda por si
+     * quiere corregirlo, y el nombre de Google queda de ultimo recurso.
+     */
+    const registro = await this.accountLink.datosDeRegistro(input.account.uid);
+
+    const fullName = (
+      input.fullName ??
+      registro?.fullName ??
+      input.account.displayName ??
+      ''
+    ).trim();
+    const phone = normalizePhone(input.phone ?? registro?.phone ?? '');
+
     if (fullName.length < 2 || phone.length < 6) {
       // Nombre y celular no son burocracia: son lo unico con lo que el gimnasio
       // puede reconocer y llamar a quien dijo que vendria.

@@ -25,6 +25,16 @@ export const DEVICE_TOKEN_HEADER = 'x-device-token';
 const googleSchema = z.object({
   /** ID token que devuelve Firebase en el cliente. */
   idToken: z.string().min(100).max(4096),
+  /**
+   * Lo que la persona escribio al CREAR su cuenta, si la esta creando.
+   *
+   * No autentica nada —eso lo hace el token— y no toca `users`: se guarda con el
+   * codigo pendiente para que reservar una clase gratis no le vuelva a preguntar
+   * el nombre y el celular que acaba de escribir. Opcionales porque quien ya
+   * tiene cuenta no los manda.
+   */
+  fullName: z.string().min(2).max(120).optional(),
+  phone: z.string().min(6).max(20).optional(),
 });
 
 const shiftSchema = z.object({
@@ -52,7 +62,10 @@ export class AuthController {
   signInWithGoogle(
     @Body(parseWith(googleSchema)) body: z.infer<typeof googleSchema>,
   ): Promise<IssuedSession | UnlinkedAccount> {
-    return this.auth.signInWithGoogle(body.idToken);
+    return this.auth.signInWithGoogle(body.idToken, {
+      fullName: body.fullName,
+      phone: body.phone,
+    });
   }
 
   /** Quiénes pueden abrir turno en este equipo. Alimenta el selector. */

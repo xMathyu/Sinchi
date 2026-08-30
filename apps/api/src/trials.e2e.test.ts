@@ -284,6 +284,37 @@ suite('reservar la clase gratis', () => {
     expect(body.reason.code).toBe('slot_not_available');
   });
 
+  /**
+   * La pregunta que no hay que hacer dos veces.
+   *
+   * Registrarse ya pide nombre y celular; volver a pedirlos al reservar es lo
+   * que hace que la app parezca no guardar lo que le acaban de dar.
+   */
+  it('quien los dio al registrarse no los repite al reservar', async () => {
+    const token = declareIdentity(`prospecto-${runId}-19`);
+    const phone = nextPhone();
+
+    const cuenta = await http
+      .post('/v1/auth/google')
+      .send({ idToken: token, fullName: 'Registrada Condatos', phone })
+      .expect(201);
+
+    // La app los recibe de vuelta: es como sabe que ya no tiene que preguntarlos.
+    expect(cuenta.body.linked).toBe(false);
+    expect(cuenta.body.claim.displayName).toBe('Registrada Condatos');
+    expect(cuenta.body.claim.phone).toBe(phone);
+
+    const { body } = await http.post('/v1/gyms/nova-bjj/trial').send({
+      idToken: token,
+      classScheduleId: nova.slots[0]!.scheduleId,
+      date: iso(nova.slots[0]!.date),
+    });
+
+    expect(body.booked).toBe(true);
+    expect(body.booking.fullName).toBe('Registrada Condatos');
+    expect(body.booking.phone).toBe(phone);
+  });
+
   it('sin nombre ni celular no se puede avisar a nadie', async () => {
     await http
       .post('/v1/gyms/nova-bjj/trial')
