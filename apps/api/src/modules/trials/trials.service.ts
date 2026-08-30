@@ -288,6 +288,57 @@ export class TrialsService {
   }
 
   // -------------------------------------------------------------------------
+  // El interruptor del gimnasio
+  // -------------------------------------------------------------------------
+
+  /** Si este gimnasio ofrece la clase gratis. Lo lee la pantalla del mostrador. */
+  async settings(tenantId: string): Promise<{ readonly trialClassEnabled: boolean }> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .select({ trialClassEnabled: schema.tenants.trialClassEnabled })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
+
+  /**
+   * Enciende o apaga la clase gratis.
+   *
+   * No todos los gimnasios la dan: es una decision comercial suya, no una regla
+   * del producto, y por eso tiene que poder cambiarse desde la app y no con un
+   * UPDATE a mano en la base.
+   *
+   * Apagarla **no cancela lo ya reservado**. Quien eligio venir el martes lo
+   * hizo con una promesa delante, y borrarla por un cambio de politica lo deja
+   * presentandose en un local que no lo espera. Lo que corta es lo de adelante:
+   * el gimnasio deja de ofrecer horas en el directorio y una reserva nueva
+   * vuelve con `not_offered`.
+   *
+   * `tenants` no lleva RLS —es la tabla que dice que gimnasios existen— asi que
+   * la unica proteccion de este UPDATE es que `tenantId` salga SIEMPRE del token
+   * de staff y nunca del cliente.
+   */
+  async setTrialClassEnabled(
+    tenantId: string,
+    enabled: boolean,
+  ): Promise<{ readonly trialClassEnabled: boolean }> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .update(schema.tenants)
+        .set({ trialClassEnabled: enabled })
+        .where(eq(schema.tenants.id, tenantId))
+        .returning({ trialClassEnabled: schema.tenants.trialClassEnabled });
+
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
+
+  // -------------------------------------------------------------------------
   // Reservar
   // -------------------------------------------------------------------------
 

@@ -154,6 +154,8 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
 | `GET` | `/staff/trials` | Quién viene a probar. `?includePast=true` trae el historial. |
+| `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
+| `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
 | `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
 | `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |

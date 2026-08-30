@@ -14,7 +14,7 @@
  * también.
  */
 import { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Pressable, Switch, View } from 'react-native';
 import type { TrialBooking, TrialBookingStatus } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Card, Eyebrow, Row, SegmentedControl, Stack, Text } from '../../src/design/primitives';
@@ -22,8 +22,8 @@ import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useClasesGratisDelGimnasio } from '../../src/data/hooks';
-import { setTrialStatus } from '../../src/data/api';
+import { useClasesGratisDelGimnasio, useOfreceClaseGratis, useStore } from '../../src/data/hooks';
+import { setTrialClassEnabled, setTrialStatus } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
 
 type Vista = 'proximas' | 'pasadas';
@@ -47,6 +47,8 @@ export default function TrialsScreen() {
           Quién viene a probar. Todavía no son alumnos de nadie.
         </Text>
       </Stack>
+
+      <Interruptor />
 
       <View style={{ marginTop: 18 }}>
         <SegmentedControl<Vista>
@@ -90,6 +92,92 @@ export default function TrialsScreen() {
         </Stack>
       )}
     </Screen>
+  );
+}
+
+/**
+ * El interruptor de la clase gratis.
+ *
+ * No todos los gimnasios la dan, y esa es una decisión suya: hasta ahora la
+ * columna existía en la base y no había forma de tocarla sin un UPDATE a mano,
+ * que es lo mismo que no poder.
+ *
+ * Apagarlo NO cancela lo ya reservado —esa promesa ya se hizo, y borrarla deja a
+ * alguien presentándose en un local que no lo espera—: corta lo de adelante, el
+ * gimnasio deja de aparecer con horas para probar.
+ */
+function Interruptor() {
+  const theme = useTheme();
+  const rol = useStore((estado) => estado.staff.role);
+  const { datos: remoto, error, recargar } = useOfreceClaseGratis();
+  const [local, setLocal] = useState<boolean | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  // Lo que se pinta es lo último decidido aquí, si lo hay; si no, lo que dijo el
+  // servidor. `null` = todavía no se sabe, y el interruptor no puede adivinar.
+  const activa = local ?? remoto;
+  const esDueño = rol === 'owner';
+
+  const cambiar = (valor: boolean): void => {
+    setLocal(valor);
+    setGuardando(true);
+
+    void setTrialClassEnabled(valor)
+      .then((salida) => setLocal(salida.trialClassEnabled))
+      .catch((causa: unknown) => {
+        // Se revierte: dejar el interruptor donde el dedo lo puso, cuando el
+        // servidor no lo aceptó, es mentirle al dueño sobre su propio gimnasio.
+        setLocal(null);
+        recargar();
+        Alert.alert(
+          'No se pudo cambiar',
+          causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+        );
+      })
+      .finally(() => setGuardando(false));
+  };
+
+  return (
+    <Card radius={theme.radii.xl} style={{ marginTop: 18 }}>
+      <Stack gap={10}>
+        <Row align="flex-start" style={{ gap: 12 }}>
+          <Stack gap={5} style={{ flex: 1 }}>
+            <Text variant="bodySmall" weight="semibold">
+              Ofrecemos la primera clase gratis
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {activa === false
+                ? 'Tu gimnasio sale en la lista de la app con sus horarios y precios, pero sin clase de prueba.'
+                : 'Quien te encuentre en la app puede reservar una clase para conocerte, el día y la hora que elija.'}
+            </Text>
+          </Stack>
+          <Switch
+            value={activa === true}
+            onValueChange={cambiar}
+            disabled={!esDueño || activa === null || guardando}
+            accessibilityLabel="Ofrecer la primera clase gratis"
+            trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
+            thumbColor={theme.colors.ink}
+          />
+        </Row>
+
+        {!esDueño ? (
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Solo el dueño puede cambiarlo.
+          </Text>
+        ) : activa === false ? (
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Las clases ya reservadas siguen en pie: abajo están.
+          </Text>
+        ) : null}
+
+        {error !== null && activa === null ? (
+          <Text variant="micro" color={theme.semaphore.alert}>
+            {error}
+          </Text>
+        ) : null}
+      </Stack>
+    </Card>
   );
 }
 
