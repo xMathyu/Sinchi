@@ -18,6 +18,7 @@ import { MembershipViewService } from './memberships/membership-view.service';
 import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
 import { MembersService } from './members/members.service';
+import { TrialsService } from './trials/trials.service';
 
 const qrScanSchema = z.object({
   /** Contenido crudo del QR: `SINCHI1:u:<userId>:<code>`. */
@@ -69,6 +70,17 @@ const enrollSchema = z.object({
 const resubscribeSchema = z.object({ planId: z.string().uuid() });
 
 /**
+ * Que paso con quien reservo una clase gratis.
+ *
+ * `no_show` va separado de `canceled` porque no son lo mismo para el gimnasio:
+ * quien avisa que no viene sigue siendo un interesado; quien no aparece sin
+ * avisar es otro dato sobre el mismo posible alumno.
+ */
+const trialStatusSchema = z.object({
+  status: z.enum(['booked', 'attended', 'no_show', 'canceled']),
+});
+
+/**
  * Cola offline.
  *
  * Un solo viaje para subir todo lo acumulado. En una red de gimnasio, veinte
@@ -114,6 +126,7 @@ export class StaffController {
     private readonly checkin: CheckInService,
     private readonly billing: BillingService,
     private readonly members: MembersService,
+    private readonly trials: TrialsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -223,6 +236,39 @@ export class StaffController {
   @Get('schedules')
   schedules(@CurrentSession() session: Session) {
     return this.checkin.schedules(assertStaffSession(session).tenantId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Clases gratis
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quien viene a probar.
+   *
+   * Es la lista de posibles alumnos: gente que encontro el gimnasio en la app y
+   * dijo a que hora vendria. Por defecto solo lo que falta —el mostrador la abre
+   * para saber a quien espera— y con `?includePast=true` sale el historial, que
+   * es donde se ve cuantos vinieron de verdad.
+   */
+  @Get('trials')
+  trialBookings(@CurrentSession() session: Session, @Query('includePast') includePast?: string) {
+    return this.trials.forTenant(assertStaffSession(session).tenantId, {
+      includePast: includePast === 'true',
+    });
+  }
+
+  /** Vino, no vino, o canceló. Es lo que convierte la lista en un dato. */
+  @Post('trials/:bookingId/status')
+  setTrialStatus(
+    @CurrentSession() session: Session,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body(parseWith(trialStatusSchema)) body: z.infer<typeof trialStatusSchema>,
+  ) {
+    return this.trials.setStatus(
+      assertStaffSession(session).tenantId,
+      bookingId,
+      body.status,
+    );
   }
 
   // -------------------------------------------------------------------------

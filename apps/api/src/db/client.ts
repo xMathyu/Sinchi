@@ -86,6 +86,16 @@ export interface QueryContext {
   readonly deviceTokenHash?: string;
   readonly inviteTokenHash?: string;
   readonly inviteEmail?: string;
+  /**
+   * Cuenta de Firebase ya verificada de quien todavia no tiene ficha.
+   *
+   * Habilita una sola cosa: leer sus propias reservas de clase gratis. Es la
+   * misma excepcion que el token de equipo y el de invitacion —puedes leer las
+   * filas cuyo secreto presentaste— y aqui hace falta porque quien reserva no
+   * tiene gimnasio ni identidad global: si no, no podria volver a ver la clase
+   * que reservo.
+   */
+  readonly trialAccount?: string;
 }
 
 /**
@@ -114,6 +124,9 @@ export async function withContext<T>(
     );
     await tx.execute(
       sql`select set_config('app.invite_email', ${context.inviteEmail ?? ''}, true)`,
+    );
+    await tx.execute(
+      sql`select set_config('app.trial_account', ${context.trialAccount ?? ''}, true)`,
     );
     return run(tx);
   });
@@ -190,6 +203,20 @@ export function withInviteEmail<T>(
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   return withContext(db, { inviteEmail: email.toLowerCase() }, run);
+}
+
+/**
+ * Contexto de quien reservo una clase gratis sin tener ficha todavia.
+ *
+ * Mismo patron que `withInviteEmail`: presentar la cuenta —ya verificada contra
+ * Firebase— abre exactamente sus reservas y nada mas.
+ */
+export function withTrialAccount<T>(
+  db: Database,
+  firebaseUid: string,
+  run: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return withContext(db, { trialAccount: firebaseUid }, run);
 }
 
 export function withInviteToken<T>(

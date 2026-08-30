@@ -50,6 +50,9 @@ export default function StaffLayout() {
           <TabTrigger name="padron" href="/staff/padron" asChild>
             <TabButton icon="roster" label="Padrón" />
           </TabTrigger>
+          <TabTrigger name="trials" href="/staff/trials" asChild>
+            <TabButton icon="trials" label="Clases gratis" />
+          </TabTrigger>
           <TabTrigger name="device" href="/staff/device" asChild>
             <TabButton icon="device" label="Dispositivo" />
           </TabTrigger>

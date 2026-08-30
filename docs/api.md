@@ -115,8 +115,27 @@ arrancar con esa bandera en producción.
 | `GET` | `/me/memberships/:id` | Detalle con historial de pagos y asistencia. |
 | `GET` | `/me/memberships/:id/checkin-preview` | Qué pasaría si marcara ahora. |
 | `GET` | `/me/memberships/:id/plans` | Planes a los que puede cambiar. |
+| `GET` `POST` | `/me/trials` | Sus clases gratis reservadas, y reservar una nueva. |
+| `POST` | `/me/trials/:id/cancel` | Cancela una reserva suya. |
 | `POST` | `/me/memberships/:id/plan` | Cambio de plan. Devuelve la decisión completa. |
 | `POST` | `/me/memberships/:id/cancel` | Cancela. Sin congelamiento en el MVP. |
+
+### Directorio y clase gratis (`/gyms`)
+
+Las únicas rutas públicas que devuelven datos de negocio. Las llama alguien que
+todavía no tiene sesión de Sinchi —y muchas veces ni ficha en ningún padrón—,
+que es exactamente la persona que la clase gratis quiere convertir en alumno.
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y si dan clase gratis. Anónima. |
+| `GET` | `/gyms/:slug` | Horarios, precios y las clases concretas —con fecha— que se pueden reservar. Anónima. |
+| `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
+| `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
+| `POST` | `/gyms/trials/:id/cancel` | Cancela la suya. Libera el cupo del gimnasio. |
+
+Con sesión de alumno hay dos equivalentes que no vuelven a pedir el nombre ni el
+celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel`.
 
 ### Staff (`/staff`)
 
@@ -134,6 +153,8 @@ arrancar con esa bandera en producción.
 | `POST` | `/staff/payments` | Registra un pago en mostrador. |
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
+| `GET` | `/staff/trials` | Quién viene a probar. `?includePast=true` trae el historial. |
+| `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
 | `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
 | `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |
 | `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
@@ -156,6 +177,10 @@ caída de Neon, que es justo lo que no ayuda.
 ## Decisiones que se notan al usarla
 
 ### Un rechazo de check-in devuelve 200
+
+Lo mismo vale para la reserva de una clase gratis: `booked: false` con el motivo
+—ya la usaste, el gimnasio no la ofrece, esa clase ya no existe— y cada uno
+tiene una salida distinta para quien lo lee.
 
 No es un error de la petición: es el resultado del negocio. El staff necesita el
 motivo estructurado en pantalla para saber qué hacer, y un 4xx lo convierte en un

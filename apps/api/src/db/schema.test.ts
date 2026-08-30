@@ -431,6 +431,134 @@ describe('horarios', () => {
   });
 });
 
+describe('clase gratis', () => {
+  /** Contexto de quien reservó sin tener ficha: lo abre su cuenta de Firebase. */
+  const setTrialAccount = async (uid: string | null): Promise<void> => {
+    await db.query(`select set_config('app.trial_account', $1, false)`, [uid ?? '']);
+  };
+
+  const reservar = async (
+    tenant: string,
+    phone: string,
+    overrides: { readonly userId?: string; readonly uid?: string; readonly date?: string } = {},
+  ) =>
+    db.query<{ id: string }>(
+      `insert into trial_bookings
+         (tenant_id, user_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time)
+       values ($1, $2, $3, 'Interesado', $4, 'Fundamentos', $5, '19:00', '20:30') returning id`,
+      [
+        tenant,
+        overrides.userId ?? null,
+        overrides.uid ?? 'firebase-uid-1',
+        phone,
+        overrides.date ?? '2026-09-01',
+      ],
+    );
+
+  it('una clase gratis por persona y por gimnasio', async () => {
+    await setContext(TENANT, null);
+    await reservar(TENANT, '+51900000001');
+
+    // La regla del producto, garantizada por la base: dos peticiones a la vez
+    // pasan el `select` previo del servicio y solo el índice las separa.
+    await expectRejection(
+      () => reservar(TENANT, '+51900000001'),
+      /trial_bookings_one_per_phone/,
+    );
+  });
+
+  it('cancelar libera el cupo', async () => {
+    await setContext(TENANT, null);
+    await db.query(
+      `update trial_bookings set status = 'canceled', canceled_at = now() where phone = $1`,
+      ['+51900000001'],
+    );
+
+    // Quien avisa que no puede el martes tiene que poder venir el jueves.
+    const otra = await reservar(TENANT, '+51900000001', { date: '2026-09-08' });
+    expect(otra.rows).toHaveLength(1);
+  });
+
+  it('el mismo celular sí puede probar OTRO gimnasio', async () => {
+    await setContext(OTHER_TENANT, null);
+    const result = await reservar(OTHER_TENANT, '+51900000001');
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it('una reserva sin cuenta detrás no se puede guardar', async () => {
+    // Sin identidad ni cuenta, la reserva no pertenece a nadie: el gimnasio no
+    // puede reconocer a quien viene y la persona no puede volver a verla.
+    await setContext(TENANT, null);
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into trial_bookings
+             (tenant_id, full_name, phone, class_name, local_date, start_time, end_time)
+           values ($1, 'Fantasma', '+51900000009', 'Fundamentos', '2026-09-01', '19:00', '20:30')`,
+          [TENANT],
+        ),
+      /trial_bookings_has_account/,
+    );
+  });
+
+  it('cancelada implica fecha de cancelación', async () => {
+    await setContext(TENANT, null);
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into trial_bookings
+             (tenant_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time, status)
+           values ($1, 'uid-x', 'Sin Fecha', '+51900000010', 'Fundamentos', '2026-09-01', '19:00', '20:30', 'canceled')`,
+          [TENANT],
+        ),
+      /trial_bookings_canceled_has_date/,
+    );
+  });
+
+  /**
+   * Aquí se comprueba la POLÍTICA, no el filtrado.
+   *
+   * PGlite corre como superusuario y un superusuario se salta RLS aunque la
+   * tabla la tenga forzada, así que un test de "el otro gimnasio no ve nada"
+   * pasaría en verde sin probar nada. El filtrado de verdad se prueba en
+   * `trials.e2e.test.ts`, contra Postgres y con un rol sin BYPASSRLS.
+   *
+   * Lo que sí se puede comprobar aquí es que existan las tres puertas, que es lo
+   * que se rompería al editar la política sin darse cuenta.
+   */
+  it('la política deja pasar al gimnasio, al dueño de la reserva y a su cuenta', async () => {
+    const { rows } = await db.query<{ qual: string; withcheck: string | null }>(
+      `select pg_get_expr(polqual, polrelid) as qual,
+              pg_get_expr(polwithcheck, polrelid) as withcheck
+         from pg_policy where polrelid = 'trial_bookings'::regclass`,
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.qual).toContain('app_current_tenant()');
+    expect(rows[0]!.qual).toContain('app_current_user()');
+    expect(rows[0]!.qual).toContain('app_trial_account()');
+    // Escribir sigue exigiendo gimnasio: la reserva nace dentro de uno.
+    expect(rows[0]!.withcheck).toContain('app_current_tenant()');
+    expect(rows[0]!.withcheck).not.toContain('app_trial_account()');
+  });
+
+  it('la cuenta de Firebase se lee de la variable de sesión', async () => {
+    await setTrialAccount('firebase-uid-1');
+    const { rows } = await db.query<{ cuenta: string | null }>(
+      `select app_trial_account() as cuenta`,
+    );
+    expect(rows[0]!.cuenta).toBe('firebase-uid-1');
+
+    await setTrialAccount(null);
+    const vacia = await db.query<{ cuenta: string | null }>(
+      `select app_trial_account() as cuenta`,
+    );
+    // Falla cerrado: sin cuenta, la comparación da NULL y no abre ninguna fila.
+    expect(vacia.rows[0]!.cuenta).toBeNull();
+    await setContext(TENANT, USER);
+  });
+});
+
 describe('aislamiento por tenant', () => {
   it('las políticas quedan creadas y forzadas', async () => {
     const { rows } = await db.query<{
@@ -461,6 +589,7 @@ describe('aislamiento por tenant', () => {
       'attendance',
       'checkin_devices',
       'tenant_gateway',
+      'trial_bookings',
     ]) {
       const entry = byTable.get(table);
       expect(entry, `${table} debería tener RLS`).toBeDefined();

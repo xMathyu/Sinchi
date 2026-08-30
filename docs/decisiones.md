@@ -118,3 +118,47 @@ decoración:
 - **Los textos del semáforo viven en `shared`** (`accessMessage`). Si el alumno
   lee «te queda 1 sesión» y el staff lee «cupo agotado», el que discute en la
   puerta es el recepcionista.
+
+## 7. La clase gratis: la única puerta que abre desde afuera
+
+Hasta aquí, todos los caminos de alta empezaban **dentro** del gimnasio: el
+mostrador crea la ficha, o manda una invitación. Los dos nacen en el mostrador.
+Quien instalaba la app por su cuenta llegaba a la pantalla del código de seis
+dígitos y ahí se acababa el producto: un número que nadie iba a confirmar.
+
+Ahora hay un directorio público (`GET /gyms`) y una reserva de clase gratis. Las
+decisiones que lo sostienen:
+
+- **Reservar NO exige ficha en ningún padrón.** Quien reserva es exactamente la
+  persona que todavía no es de nadie. Pedirle el DNI para mirar un horario mata
+  el alta antes de empezar, así que la reserva viaja con nombre y celular, que
+  es lo único que el gimnasio necesita para atender a alguien el martes. Lo que
+  sí exige es una cuenta —Google o correo, verificada por Firebase— porque sin
+  ella la lista del mostrador se llena de reservas inventadas y deja de servir.
+- **La credencial es el ID token de Firebase**, igual que al aceptar una
+  invitación. En la app se conserva en memoria mientras la cuenta está sin
+  vincular: es lo único que tiene esa persona, y sin ello `/link` seguiría sin
+  salida. No se persiste en el llavero — dura una hora y volver a entrar lo
+  renueva.
+- **Una clase gratis por persona y por gimnasio, contada por celular.** Por
+  celular y no por cuenta porque volver a entrar con otra cuenta de Google es
+  cuestión de un minuto, y el celular ya es la llave con la que el alumno se
+  reconoce en el resto del sistema. La regla vive en un índice único parcial: el
+  `select` previo del servicio no ve la reserva que otra petición está
+  insertando en ese mismo instante.
+- **Cancelar libera el cupo.** El índice solo mira las vigentes. Quien avisa que
+  no puede el martes merece poder venir el jueves, y la fila cancelada se
+  conserva para poder ver qué pasó.
+- **El aviso al gimnasio va por correo**, al dueño. No hay canal de push
+  todavía (sigue pendiente, igual que para la morosidad), y una reserva de la
+  que el dueño se entera cuando ya pasó no sirve de nada. El fallo del correo no
+  deshace la reserva: `notified_at` deja ver cuál sí salió, y la lista está en
+  la app del mostrador de todas formas.
+- **El gimnasio puede no ofrecerla** (`tenants.trial_class_enabled`, por defecto
+  sí). Un local que sale en el directorio y no deja probar desperdicia la visita,
+  pero la decisión es comercial y es suya.
+
+Lo que **no** hace, a propósito: no controla aforo. Una reserva de clase gratis
+no ocupa plaza, así que MD 8.3 sigue abierto igual que antes. Con los números de
+un dojo —una o dos pruebas por semana— cobrar el aforo aquí sería construir el
+sistema de reservas entero para el caso menos frecuente.

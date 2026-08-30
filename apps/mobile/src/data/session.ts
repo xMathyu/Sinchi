@@ -34,7 +34,24 @@ export type SessionState =
    * padrón. No es un error: es el estado normal del alumno nuevo, y lo resuelve
    * la recepcionista confirmando el código.
    */
-  | { readonly status: 'unlinked'; readonly code: string; readonly expiresAt: number }
+  | {
+      readonly status: 'unlinked';
+      readonly code: string;
+      readonly expiresAt: number;
+      /**
+       * El ID token de Firebase con el que entró.
+       *
+       * Se conserva porque es la única credencial que tiene quien todavía no
+       * está vinculado, y con ella puede hacer lo único que le queda por hacer:
+       * explorar gimnasios y reservar una clase gratis. Sin esto, el estado
+       * `unlinked` es una pantalla con un código y ninguna salida.
+       *
+       * Solo en memoria, igual que el código: dura una hora y volver a entrar lo
+       * renueva. Guardarlo en el llavero sería persistir una credencial de
+       * Google para ahorrarse un toque.
+       */
+      readonly idToken: string;
+    }
   | { readonly status: 'signed_in'; readonly session: Session }
   /**
    * Recorrer la app sin api ni sesión, contra los datos de demostración.
@@ -169,11 +186,20 @@ export function enterDemoMode(): void {
   emit({ status: 'demo' });
 }
 
-export function setUnlinked(code: string, expiresAt: number): void {
+export function setUnlinked(code: string, expiresAt: number, idToken: string): void {
   // No se persiste: el código dura diez minutos y el servidor devuelve el mismo
   // mientras siga vivo, así que volver a entrar lo recupera.
-  emit({ status: 'unlinked', code, expiresAt });
+  emit({ status: 'unlinked', code, expiresAt, idToken });
 }
+
+/**
+ * La credencial de quien entró pero todavía no tiene ficha.
+ *
+ * Es lo que firma la reserva de una clase gratis. `null` en cualquier otro
+ * estado: con sesión de Sinchi se usa el token de Sinchi, que dice mucho más.
+ */
+export const currentFirebaseToken = (): string | null =>
+  state.status === 'unlinked' ? state.idToken : null;
 
 export async function clearSession(): Promise<void> {
   await Promise.all([

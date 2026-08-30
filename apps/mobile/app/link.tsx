@@ -14,7 +14,7 @@ import { Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../src/design/screen';
-import { Card, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
+import { Button, Card, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
 import { useSession } from '../src/data/session-hooks';
 import { signOut } from '../src/data/auth';
@@ -94,6 +94,30 @@ export default function LinkScreen() {
               podría escribir— es lo que impide que alguien más reclame tu
               membresía.
             </Text>
+          </Stack>
+        </Card>
+
+        {/* La otra mitad de esta pantalla, y la que faltaba.
+            El código de arriba solo sirve si ya hay un gimnasio esperándote. A
+            quien instaló la app sin entrenar en ninguno —que es justo a quien
+            este producto quiere— esta pantalla no le ofrecía absolutamente
+            nada: un número que nadie va a confirmar y ninguna salida. */}
+        <Card>
+          <Stack gap={10}>
+            <Stack gap={5}>
+              <Text variant="bodySmall" weight="semibold">
+                ¿Todavía no entrenas en ninguno?
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                Mira las escuelas de la red, con sus horarios y sus precios, y
+                reserva una clase gratis el día y la hora que te venga bien.
+              </Text>
+            </Stack>
+            <Button
+              label="Explorar gimnasios"
+              variant="secondary"
+              onPress={() => router.push('/explore')}
+            />
           </Stack>
         </Card>
 

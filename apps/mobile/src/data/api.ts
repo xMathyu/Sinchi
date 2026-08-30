@@ -26,6 +26,10 @@ import type {
   Receivable,
   Subscription,
   Tenant,
+  TrialBooking,
+  TrialBookingStatus,
+  TrialDenialReason,
+  TrialSlot,
   User,
 } from '@sinchi/shared';
 /**
@@ -255,6 +259,137 @@ export const claimInvite = (token: string, idToken: string): Promise<IssuedSessi
     method: 'POST',
     body: { idToken },
     anonymous: true,
+  });
+
+// ---------------------------------------------------------------------------
+// Directorio y clase gratis
+// ---------------------------------------------------------------------------
+
+/**
+ * Las rutas por las que alguien llega a Sinchi SIN pertenecer a ningun gimnasio.
+ *
+ * Van todas `anonymous: true` a proposito: quien busca dojo todavia no tiene
+ * sesion de Sinchi, y varias de estas se llaman justamente para conseguirle una.
+ * Lo que autentica al reservar es el ID token de Firebase, igual que al aceptar
+ * una invitacion.
+ */
+export interface GymCardDto {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly trialClassEnabled: boolean;
+  readonly fromPriceCents: number | null;
+  readonly weeklyClasses: number;
+  readonly disciplines: readonly string[];
+}
+
+export interface GymDetailDto extends GymCardDto {
+  readonly timezone: string;
+  readonly enrollmentFeeCents: number;
+  readonly dropInPriceCents: number | null;
+  readonly plans: readonly Plan[];
+  readonly schedules: readonly ClassSchedule[];
+  /** Las clases concretas que se pueden reservar, ya con fecha. */
+  readonly slots: readonly TrialSlot[];
+}
+
+export interface TrialBookingDto extends TrialBooking {
+  readonly gymName: string;
+  readonly gymSlug: string;
+}
+
+/**
+ * Resultado de reservar.
+ *
+ * Union discriminada porque el servidor responde 200 tambien cuando rechaza: no
+ * es un error de la peticion sino el resultado del negocio, y la pantalla
+ * necesita el motivo para decir si elegir otra hora o si ya la habia usado.
+ */
+export type BookTrialDto =
+  | { readonly booked: true; readonly booking: TrialBookingDto }
+  | {
+      readonly booked: false;
+      readonly reason: TrialDenialReason;
+      readonly message: { readonly title: string; readonly detail: string };
+    };
+
+const reviveTrial = <T extends TrialBooking>(b: T): T => ({ ...b, createdAt: fecha(b.createdAt) });
+
+const reviveBooking = (out: BookTrialDto): BookTrialDto =>
+  out.booked ? { ...out, booking: reviveTrial(out.booking) } : out;
+
+export const fetchGyms = (): Promise<readonly GymCardDto[]> =>
+  request('/gyms', { anonymous: true });
+
+export const fetchGym = (slug: string): Promise<GymDetailDto> =>
+  request(`/gyms/${encodeURIComponent(slug)}`, { anonymous: true });
+
+/**
+ * Reserva sin ficha en ningun padron.
+ *
+ * Nombre y celular viajan porque no hay de donde sacarlos: es lo unico con lo
+ * que el gimnasio puede reconocer y llamar a quien dijo que vendria.
+ */
+export const bookTrialAsGuest = async (input: {
+  readonly slug: string;
+  readonly idToken: string;
+  readonly fullName: string;
+  readonly phone: string;
+  readonly classScheduleId: string;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+}): Promise<BookTrialDto> =>
+  reviveBooking(
+    await request<BookTrialDto>(`/gyms/${encodeURIComponent(input.slug)}/trial`, {
+      method: 'POST',
+      anonymous: true,
+      body: {
+        idToken: input.idToken,
+        fullName: input.fullName,
+        phone: input.phone,
+        classScheduleId: input.classScheduleId,
+        date: input.date,
+      },
+    }),
+  );
+
+/** Reserva con sesion: el nombre y el celular ya se saben. */
+export const bookTrial = async (input: {
+  readonly slug: string;
+  readonly classScheduleId: string;
+  readonly date: string;
+}): Promise<BookTrialDto> =>
+  reviveBooking(await request<BookTrialDto>('/me/trials', { method: 'POST', body: input }));
+
+export const fetchMyTrials = async (): Promise<readonly TrialBookingDto[]> =>
+  (await request<readonly TrialBookingDto[]>('/me/trials')).map(reviveTrial);
+
+/**
+ * Las reservas de quien todavia es solo una cuenta.
+ *
+ * Va POST con el token en el cuerpo y no GET con el token en la URL: un ID token
+ * en la query string acaba en los logs del balanceador.
+ */
+export const fetchGuestTrials = async (idToken: string): Promise<readonly TrialBookingDto[]> =>
+  (
+    await request<readonly TrialBookingDto[]>('/gyms/trials/mine', {
+      method: 'POST',
+      anonymous: true,
+      body: { idToken },
+    })
+  ).map(reviveTrial);
+
+export const cancelTrial = (bookingId: string): Promise<{ readonly canceled: true }> =>
+  request(`/me/trials/${bookingId}/cancel`, { method: 'POST' });
+
+export const cancelGuestTrial = (
+  bookingId: string,
+  idToken: string,
+): Promise<{ readonly canceled: true }> =>
+  request(`/gyms/trials/${bookingId}/cancel`, {
+    method: 'POST',
+    anonymous: true,
+    body: { idToken },
   });
 
 export const staffForDevice = (): Promise<readonly ShiftCandidate[]> =>
@@ -598,6 +733,31 @@ export const confirmClaim = (code: string, membershipId: string): Promise<unknow
 
 export const setOwnPin = (pin: string): Promise<unknown> =>
   request('/staff/pin', { method: 'POST', body: { pin } });
+
+/**
+ * Quien viene a probar. La lista de posibles alumnos del local.
+ *
+ * Por defecto solo lo que falta: el mostrador la abre para saber a quien espera,
+ * no para leer el historial.
+ */
+export const fetchTrials = async (incluirPasadas = false): Promise<readonly TrialBooking[]> =>
+  (
+    await request<readonly TrialBooking[]>(
+      incluirPasadas ? '/staff/trials?includePast=true' : '/staff/trials',
+    )
+  ).map(reviveTrial);
+
+/** Vino, no vino, o canceló. Es lo que convierte la lista en un dato. */
+export const setTrialStatus = async (
+  bookingId: string,
+  status: TrialBookingStatus,
+): Promise<TrialBooking> =>
+  reviveTrial(
+    await request<TrialBooking>(`/staff/trials/${bookingId}/status`, {
+      method: 'POST',
+      body: { status },
+    }),
+  );
 
 /**
  * Sube la cola acumulada sin conexión.

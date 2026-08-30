@@ -5,8 +5,9 @@
  * frontera con la api futura, y mantenerlo fuera de React deja el cambio a
  * peticiones reales contenido en un archivo.
  */
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useFocusEffect } from 'expo-router';
+import type { TrialBooking } from '@sinchi/shared';
 import {
   TZ_LIMA,
   encodeQrPayload,
@@ -18,7 +19,19 @@ import {
   type Plan,
 } from '@sinchi/shared';
 import { hmacSha256, loadSecret } from './crypto';
-import { fetchCheckInPreview, fetchRecentCheckIns, type CheckInPreviewDto, type SummaryDto } from './api';
+import {
+  fetchCheckInPreview,
+  fetchGym,
+  fetchGyms,
+  fetchRecentCheckIns,
+  fetchTrials,
+  type CheckInPreviewDto,
+  type GymCardDto,
+  type GymDetailDto,
+  type SummaryDto,
+  type TrialBookingDto,
+} from './api';
+import { misClasesGratis } from './trials';
 import {
   bajasDelGimnasio,
   cargarDetalleAlumno,
@@ -582,4 +595,109 @@ export function useErrorDeCarga(): {
     void refrescarDatos().catch(() => {});
   }, []);
   return { error, reintentar };
+}
+
+// ---------------------------------------------------------------------------
+// Directorio y clase gratis
+// ---------------------------------------------------------------------------
+
+/** Estado de una carga puntual contra la api. Lo comparten los tres de abajo. */
+export interface Carga<T> {
+  readonly datos: T;
+  readonly cargando: boolean;
+  readonly error: string | null;
+  readonly recargar: () => void;
+}
+
+/**
+ * El directorio de gimnasios.
+ *
+ * Es la única pantalla de la app que **no depende de tener sesión**: quien busca
+ * dojo todavía no tiene cuenta, y pedirle que se registre para mirar una lista
+ * es perderlo antes de empezar.
+ */
+export function useGyms(): Carga<readonly GymCardDto[]> {
+  return useCargaRemota<readonly GymCardDto[]>(fetchGyms, [], 'No se pudo traer la lista de gimnasios.');
+}
+
+export function useGym(slug: string): Carga<GymDetailDto | null> {
+  const pedir = useCallback(() => fetchGym(slug), [slug]);
+  return useCargaRemota<GymDetailDto | null>(pedir, null, 'No se pudo abrir este gimnasio.');
+}
+
+/** Las clases gratis que la persona tiene reservadas, con o sin ficha. */
+export function useMisClasesGratis(): Carga<readonly TrialBookingDto[]> {
+  return useCargaRemota<readonly TrialBookingDto[]>(
+    misClasesGratis,
+    [],
+    'No se pudieron traer tus clases gratis.',
+  );
+}
+
+/** Quién viene a probar. La lista del mostrador. */
+export function useClasesGratisDelGimnasio(incluirPasadas = false): Carga<readonly TrialBooking[]> {
+  const pedir = useCallback(() => fetchTrials(incluirPasadas), [incluirPasadas]);
+  return useCargaRemota<readonly TrialBooking[]>(
+    pedir,
+    [],
+    'No se pudo traer la lista de clases gratis.',
+  );
+}
+
+/**
+ * Una carga de la api con recarga manual y al volver a la pantalla.
+ *
+ * Las dos vías por el mismo motivo que `useRefresco`: volver a la pestaña cubre
+ * el caso normal —algo cambió fuera— y el gesto cubre el otro, alguien mirando
+ * la lista mientras cambia.
+ */
+function useCargaRemota<T>(
+  pedir: () => Promise<T>,
+  inicial: T,
+  mensajeDeError: string,
+): Carga<T> {
+  const [datos, setDatos] = useState<T>(inicial);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    setError(null);
+
+    void pedir()
+      .then((valor) => {
+        if (!cancelado) setDatos(valor);
+      })
+      .catch((causa: unknown) => {
+        // Se conserva lo que ya había en pantalla: sin conexión, el último
+        // estado conocido es mejor que una pantalla vacía.
+        if (!cancelado) setError(causa instanceof Error ? causa.message : mensajeDeError);
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [pedir, intento, mensajeDeError]);
+
+  const recargar = useCallback(() => setIntento((n) => n + 1), []);
+
+  // Al montar ya carga el efecto de arriba; sin este candado, entrar a la
+  // pantalla dispararía dos peticiones idénticas.
+  const yaMontado = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!yaMontado.current) {
+        yaMontado.current = true;
+        return;
+      }
+      setIntento((n) => n + 1);
+    }, []),
+  );
+
+  return { datos, cargando, error, recargar };
 }

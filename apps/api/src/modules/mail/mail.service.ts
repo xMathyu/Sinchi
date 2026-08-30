@@ -101,4 +101,83 @@ export class MailService {
       return { enviado: false, motivo };
     }
   }
+
+  /**
+   * Avisa al gimnasio de que alguien reservó su clase gratis.
+   *
+   * Es el correo que convierte la función en producto: sin aviso, la reserva es
+   * una fila en una tabla que nadie mira, y el interesado aparece en la puerta
+   * un martes sin que nadie lo espere.
+   *
+   * Va en texto plano y sin plantilla HTML a propósito. La invitación tiene una
+   * porque la lee un alumno y hay que convencerlo de instalar algo; esta la lee
+   * el dueño en el móvil entre clase y clase, y lo único que necesita es el
+   * nombre, el celular y cuándo viene. Un botón verde no ayudaría.
+   *
+   * Como el resto de este archivo: **no puede tumbar lo que lo llama**. La
+   * reserva ya existe y sale en la app del mostrador aunque Resend esté caído.
+   */
+  async avisarClaseGratis(input: {
+    readonly para: string;
+    readonly gimnasio: string;
+    readonly nombre: string;
+    readonly telefono: string;
+    readonly clase: string;
+    /** "martes 2 de setiembre", ya formateado por quien conoce la zona. */
+    readonly cuando: string;
+    readonly hora: string;
+  }): Promise<ResultadoEnvio> {
+    const env = loadEnv();
+    if (env.RESEND_API_KEY === undefined) {
+      return { enviado: false, motivo: 'El envío por correo no está configurado.' };
+    }
+
+    const texto = [
+      `${input.nombre} reservó una clase gratis en ${input.gimnasio}.`,
+      '',
+      `Clase:    ${input.clase}`,
+      `Cuándo:   ${input.cuando}, ${input.hora}`,
+      `Celular:  ${input.telefono}`,
+      '',
+      'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
+      'de Sinchi y eligió este horario.',
+      '',
+      'La lista completa de quién viene está en la app, en Puerta → Clases gratis.',
+    ].join('\n');
+
+    try {
+      const respuesta = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: env.MAIL_FROM,
+          to: [input.para],
+          // El asunto se lee entero en la notificación del móvil, que es donde
+          // de verdad se lee: nombre y día, sin adornos.
+          subject: `Clase gratis: ${input.nombre} viene el ${input.cuando}`,
+          text: texto,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (!respuesta.ok) {
+        const cuerpo: unknown = await respuesta.json().catch(() => null);
+        const motivo =
+          typeof cuerpo === 'object' && cuerpo !== null && 'message' in cuerpo
+            ? String((cuerpo as { message: unknown }).message)
+            : `Resend respondió ${respuesta.status}.`;
+        this.logger.warn(`No se pudo avisar a ${input.para}: ${motivo}`);
+        return { enviado: false, motivo };
+      }
+
+      return { enviado: true, motivo: null };
+    } catch (error) {
+      const motivo = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
+      this.logger.warn(`No se pudo avisar a ${input.para}: ${motivo}`);
+      return { enviado: false, motivo };
+    }
+  }
 }

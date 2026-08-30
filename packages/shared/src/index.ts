@@ -30,5 +30,9 @@ export * from './checkin/quota.js';
 export * from './checkin/validate.js';
 export * from './checkin/messages.js';
 
+// Clase gratis
+export * from './trial/slots.js';
+export * from './trial/validate.js';
+
 // Seguridad
 export * from './security/totp.js';

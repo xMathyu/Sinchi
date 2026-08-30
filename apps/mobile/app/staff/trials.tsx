@@ -1,0 +1,194 @@
+/**
+ * S4 · Clases gratis.
+ *
+ * La lista de posibles alumnos: gente que encontró el gimnasio en la app, eligió
+ * un horario y dijo que vendría. Es la contraparte del directorio — sin esta
+ * pantalla, la reserva es una fila en una tabla que nadie mira y el interesado
+ * aparece un martes sin que nadie lo espere.
+ *
+ * Se ordena por CUÁNDO VIENEN, no por cuándo reservaron: lo que el mostrador
+ * pregunta al abrirla es "¿a quién espero hoy?".
+ *
+ * El celular va grande y visible a propósito. Es lo único que convierte la lista
+ * en algo accionable: quien no aparece se merece una llamada, y quien vino,
+ * también.
+ */
+import { useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
+import type { TrialBooking, TrialBookingStatus } from '@sinchi/shared';
+import { withAlpha } from '@sinchi/ui';
+import { Badge, Card, Eyebrow, Row, SegmentedControl, Stack, Text } from '../../src/design/primitives';
+import { Screen } from '../../src/design/screen';
+import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
+import { CargandoSeccion } from '../../src/design/loading';
+import { useTheme } from '../../src/design/theme';
+import { useClasesGratisDelGimnasio } from '../../src/data/hooks';
+import { setTrialStatus } from '../../src/data/api';
+import { formatWeekdayAndDay } from '../../src/lib/format';
+
+type Vista = 'proximas' | 'pasadas';
+
+export default function TrialsScreen() {
+  const theme = useTheme();
+  const [vista, setVista] = useState<Vista>('proximas');
+  const { datos: reservas, cargando, error, recargar } = useClasesGratisDelGimnasio(
+    vista === 'pasadas',
+  );
+
+  const vigentes = reservas.filter((reserva) => reserva.status !== 'canceled');
+
+  return (
+    <Screen scroll>
+      <Stack gap={3} style={{ paddingTop: 8 }}>
+        <Text variant="titleSmall" weight="bold">
+          Clases gratis
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          Quién viene a probar. Todavía no son alumnos de nadie.
+        </Text>
+      </Stack>
+
+      <View style={{ marginTop: 18 }}>
+        <SegmentedControl<Vista>
+          options={[
+            { value: 'proximas', label: 'Por venir' },
+            { value: 'pasadas', label: 'Historial' },
+          ]}
+          value={vista}
+          onChange={setVista}
+        />
+      </View>
+
+      {cargando && reservas.length === 0 ? (
+        <View style={{ minHeight: 320 }}>
+          <CargandoSeccion texto="Trayendo la lista…" />
+        </View>
+      ) : error !== null && reservas.length === 0 ? (
+        <View style={{ minHeight: 320 }}>
+          <EstadoSinConexion error={error} onReintentar={recargar} />
+        </View>
+      ) : vigentes.length === 0 ? (
+        <View style={{ minHeight: 320 }}>
+          <EstadoVacio
+            titulo={vista === 'proximas' ? 'Nadie viene a probar todavía' : 'Sin historial'}
+            cuerpo={
+              vista === 'proximas'
+                ? 'Cuando alguien reserve su clase gratis desde la app, aparecerá aquí con el día y la hora a la que llegará.'
+                : 'Aquí quedan las clases gratis que ya pasaron, con quién vino y quién no.'
+            }
+            pie="Tu gimnasio sale en la lista de la app mientras la clase gratis esté activa."
+          />
+        </View>
+      ) : (
+        <Stack gap={12} style={{ marginTop: 20 }}>
+          <Eyebrow>
+            {vigentes.length} {vigentes.length === 1 ? 'persona' : 'personas'}
+          </Eyebrow>
+          {vigentes.map((reserva) => (
+            <TrialCard key={reserva.id} reserva={reserva} onCambio={recargar} />
+          ))}
+        </Stack>
+      )}
+    </Screen>
+  );
+}
+
+function TrialCard({
+  reserva,
+  onCambio,
+}: {
+  readonly reserva: TrialBooking;
+  readonly onCambio: () => void;
+}) {
+  const theme = useTheme();
+  const [guardando, setGuardando] = useState(false);
+
+  const marcar = (status: TrialBookingStatus): void => {
+    setGuardando(true);
+    void setTrialStatus(reserva.id, status)
+      .then(() => onCambio())
+      .catch((causa: unknown) => {
+        Alert.alert(
+          'No se pudo guardar',
+          causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+        );
+      })
+      .finally(() => setGuardando(false));
+  };
+
+  const color =
+    reserva.status === 'attended'
+      ? theme.semaphore.ok
+      : reserva.status === 'no_show'
+        ? theme.semaphore.alert
+        : theme.colors.textTertiary;
+
+  return (
+    <Card accent={color} radius={theme.radii.xl}>
+      <Stack gap={10}>
+        <Row align="flex-start" style={{ gap: 10 }}>
+          <Stack gap={2} style={{ flex: 1 }}>
+            <Text variant="heading" weight="bold" numberOfLines={1}>
+              {reserva.fullName}
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {reserva.phone}
+            </Text>
+          </Stack>
+          {reserva.status === 'booked' ? null : (
+            <Badge
+              label={reserva.status === 'attended' ? 'VINO' : 'NO VINO'}
+              color={color}
+              background={withAlpha(color, 0.14)}
+            />
+          )}
+        </Row>
+
+        <Text variant="bodySmall">
+          {formatWeekdayAndDay(reserva.date)} · {reserva.startTime}–{reserva.endTime}
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textTertiary}>
+          {reserva.className}
+        </Text>
+
+        {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
+            el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
+        <Row justify="flex-start" style={{ gap: 18, marginTop: 2 }}>
+          <Accion
+            etiqueta={reserva.status === 'attended' ? '· vino' : 'Vino'}
+            activa={reserva.status !== 'attended' && !guardando}
+            onPress={() => marcar('attended')}
+          />
+          <Accion
+            etiqueta={reserva.status === 'no_show' ? '· no vino' : 'No vino'}
+            activa={reserva.status !== 'no_show' && !guardando}
+            onPress={() => marcar('no_show')}
+          />
+        </Row>
+      </Stack>
+    </Card>
+  );
+}
+
+function Accion({
+  etiqueta,
+  activa,
+  onPress,
+}: {
+  readonly etiqueta: string;
+  readonly activa: boolean;
+  readonly onPress: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable accessibilityRole="button" disabled={!activa} onPress={onPress} hitSlop={10}>
+      <Text
+        variant="caption"
+        weight="semibold"
+        color={activa ? theme.colors.textSecondary : theme.colors.textFaint}
+      >
+        {etiqueta}
+      </Text>
+    </Pressable>
+  );
+}

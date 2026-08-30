@@ -19,7 +19,12 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ApiError,
+  bookTrial,
+  fetchGym,
+  fetchGyms,
   fetchMe,
+  fetchMyTrials,
+  fetchTrials,
   fetchMembership,
   fetchRoster,
   fetchStaffMember,
@@ -322,6 +327,90 @@ suite('rutas del staff', () => {
     const roster = await fetchRoster();
     const detail = await fetchStaffMember(roster[0]!.membership.id);
     expect(detail.membership.id).toBe(roster[0]!.membership.id);
+  });
+});
+
+suite('directorio y clase gratis', () => {
+  it('la lista de gimnasios se sirve sin sesión', async () => {
+    // Es la única ruta de la app que atiende a alguien sin cuenta. Si dejara de
+    // ser pública, el directorio se vería vacío y nadie sabría por qué.
+    active = 'none';
+    const gimnasios = await fetchGyms();
+
+    expect(gimnasios.length).toBeGreaterThan(0);
+    for (const gimnasio of gimnasios) {
+      expect(gimnasio.slug).toBeTruthy();
+      expect(gimnasio.name).toBeTruthy();
+      expect(typeof gimnasio.trialClassEnabled).toBe('boolean');
+      expect(typeof gimnasio.weeklyClasses).toBe('number');
+    }
+  });
+
+  it('la página del gimnasio trae precios, horarios y clases con fecha', async () => {
+    active = 'none';
+    const gimnasios = await fetchGyms();
+    const conClases = gimnasios.find((gimnasio) => gimnasio.weeklyClasses > 0);
+    if (conClases === undefined) return; // el seed no dejó ninguno con horarios
+
+    const gym = await fetchGym(conClases.slug);
+
+    expect(gym.plans.length).toBeGreaterThan(0);
+    expect(gym.schedules.length).toBeGreaterThan(0);
+
+    if (gym.trialClassEnabled) {
+      expect(gym.slots.length).toBeGreaterThan(0);
+      for (const slot of gym.slots) {
+        // La fecha viaja como `PlainDate` —tres enteros— y no como cadena ISO:
+        // es lo que la pantalla necesita para pintar "jueves 20".
+        expect(Number.isInteger(slot.date.year)).toBe(true);
+        expect(Number.isInteger(slot.date.month)).toBe(true);
+        expect(slot.startTime).toMatch(/^\d{2}:\d{2}$/);
+        expect(slot.scheduleId).toBeTruthy();
+      }
+    }
+  });
+
+  it('un rechazo de reserva llega con 200 y motivo, no como error', async () => {
+    // Mathyu ya entrena en los tres gimnasios sembrados, así que su reserva se
+    // rechaza siempre por `already_member`: la clase gratis es para conocer un
+    // local nuevo. Es el caso determinista con el que se comprueba que el
+    // rechazo NO viaja como excepción.
+    active = 'none';
+    const gimnasios = await fetchGyms();
+    const gym = await fetchGym(
+      (gimnasios.find((g) => g.weeklyClasses > 0) ?? gimnasios[0]!).slug,
+    );
+    if (gym.slots.length === 0) return;
+
+    active = 'student';
+    const salida = await bookTrial({
+      slug: gym.slug,
+      classScheduleId: gym.slots[0]!.scheduleId,
+      date: `${gym.slots[0]!.date.year}-${String(gym.slots[0]!.date.month).padStart(2, '0')}-${String(gym.slots[0]!.date.day).padStart(2, '0')}`,
+    });
+
+    expect(salida.booked).toBe(false);
+    if (!salida.booked) {
+      expect(salida.reason.code).toBeTruthy();
+      expect(salida.message.title.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('el alumno puede pedir sus clases gratis', async () => {
+    active = 'student';
+    expect(Array.isArray(await fetchMyTrials())).toBe(true);
+  });
+
+  it('el mostrador ve la lista de quién viene a probar', async () => {
+    active = 'staff';
+    const reservas = await fetchTrials();
+
+    expect(Array.isArray(reservas)).toBe(true);
+    for (const reserva of reservas) {
+      expect(reserva.fullName).toBeTruthy();
+      expect(reserva.phone).toBeTruthy();
+      expect(['booked', 'attended', 'no_show', 'canceled']).toContain(reserva.status);
+    }
   });
 });
 
