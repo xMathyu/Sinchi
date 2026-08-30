@@ -34,12 +34,7 @@ import { useTheme } from '../../src/design/theme';
 import { usePlanesDelGimnasio, useStaffMember } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { marcarAsistencia, reactivarSuscripcion } from '../../src/data/actions';
-import {
-  formatCheckInMoment,
-  formatDocument,
-  formatLongDate,
-  formatShortDate,
-} from '../../src/lib/format';
+import { formatCheckInMoment, formatLongDate, formatShortDate } from '../../src/lib/format';
 
 type Pestana = 'attendance' | 'payments';
 
@@ -127,7 +122,7 @@ function Ficha({
             {user.name}
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            DNI {formatDocument(user.documentId)} · {view.tenant.name}
+            DNI {user.documentId} · {view.tenant.name}
           </Text>
           <Badge label={view.badge.toUpperCase()} color={semaphore.color} />
         </Stack>

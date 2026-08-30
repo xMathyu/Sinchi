@@ -27,7 +27,7 @@ import { useTheme } from '../../src/design/theme';
 import { useErrorDeCarga, useRefresco, useStore, useWallet } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import type { MembershipView } from '../../src/data/store';
-import { formatDocument, formatShortDate, initials, splitGymName } from '../../src/lib/format';
+import { formatShortDate, initials, splitGymName } from '../../src/lib/format';
 
 export default function WalletScreen() {
   const theme = useTheme();
@@ -58,7 +58,7 @@ export default function WalletScreen() {
           {user.name}
         </Text>
         <Text variant="caption" color={theme.colors.textSecondary}>
-          DNI {formatDocument(user.documentId)} · {active}{' '}
+          DNI {user.documentId} · {active}{' '}
           {active === 1 ? 'membresía activa' : 'membresías activas'}
         </Text>
       </Stack>

@@ -22,7 +22,7 @@ import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { useClaims, useRoster } from '../src/data/hooks';
 import { vincularCuenta, type Vinculacion } from '../src/data/actions';
-import { formatDocument, initials } from '../src/lib/format';
+import { initials } from '../src/lib/format';
 
 export default function ClaimsScreen() {
   const theme = useTheme();
@@ -145,7 +145,7 @@ export default function ClaimsScreen() {
                           {entrada.user.name}
                         </Text>
                         <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                          DNI {formatDocument(entrada.user.documentId)} · {entrada.view.plan.name}
+                          DNI {entrada.user.documentId} · {entrada.view.plan.name}
                         </Text>
                       </Stack>
                     </Row>

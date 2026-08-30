@@ -80,13 +80,6 @@ export function initials(name: string): string {
   return `${first}${second}`.toUpperCase();
 }
 
-/** `71 448 902`, como se lee un DNI peruano. */
-export function formatDocument(documentId: string): string {
-  const digits = documentId.replace(/\D/g, '');
-  if (digits.length !== 8) return documentId;
-  return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
-}
-
 /** Parte el nombre del gimnasio en marca y distrito: "Nova BJJ" + "Surco". */
 export function splitGymName(name: string): { readonly brand: string; readonly area: string } {
   const parts = name.trim().split(/\s+/);

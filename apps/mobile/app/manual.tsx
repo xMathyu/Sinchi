@@ -26,7 +26,7 @@ import { useTheme } from '../src/design/theme';
 import { useRoster, useStore, useToday } from '../src/data/hooks';
 import type { RosterEntry } from '../src/data/store';
 import { marcarAsistencia } from '../src/data/actions';
-import { formatDocument, initials } from '../src/lib/format';
+import { initials } from '../src/lib/format';
 
 export default function ManualCheckInScreen() {
   const theme = useTheme();
@@ -264,7 +264,7 @@ function MemberRow({
               {entry.user.name}
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              DNI {formatDocument(entry.user.documentId)} · {entry.view.plan.name}
+              DNI {entry.user.documentId} · {entry.view.plan.name}
             </Text>
           </Stack>
           <Badge label={shortBadge(entry)} color={semaphore.color} />
