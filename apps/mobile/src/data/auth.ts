@@ -23,13 +23,20 @@ import {
   staffForDevice,
   type ShiftCandidate,
 } from './api';
-import { exchangeGoogleToken, signInWithEmail } from './firebase';
+import {
+  exchangeGoogleToken,
+  refreshIdToken,
+  signInWithEmail,
+  type FirebaseSignIn,
+} from './firebase';
 import {
   clearSession,
   forgetDeviceToken,
   loadAccountDetails,
+  loadFirebaseCredential,
   saveAccountDetails,
   saveDeviceToken,
+  saveFirebaseCredential,
   saveSession,
   setUnlinked,
 } from './session';
@@ -100,9 +107,15 @@ export async function completeEmailSignIn(
  * que confirma recepción.
  */
 async function exchangeForSinchiSession(
-  firebaseIdToken: string,
+  firebase: FirebaseSignIn,
   datos: DatosDeRegistro = {},
 ): Promise<SignInOutcome> {
+  const firebaseIdToken = firebase.idToken;
+
+  // La credencial se guarda ANTES de saber si hay ficha: sirve en los dos casos.
+  // Sin ficha es la única sesión que esa persona tiene; con ficha, es lo que
+  // permite renovar el token de Sinchi cuando venza, sin volver a pedir nada.
+  if (firebase.refreshToken !== null) await saveFirebaseCredential(firebase.refreshToken);
   /**
    * Lo que se sabe de esta persona, en orden: lo que acaba de escribir al
    * registrarse, y si no, lo que quedó guardado en el dispositivo.
@@ -147,6 +160,28 @@ async function exchangeForSinchiSession(
   });
 
   return { kind: 'signed_in' };
+}
+
+/**
+ * Vuelve a entrar con la credencial de Firebase guardada.
+ *
+ * Es lo que sostiene la sesión de quien NO tiene ficha: su sesión no es un token
+ * de Sinchi —no lo tiene, no hay ficha a la que atarlo— sino la de Firebase, y
+ * sin esto cerrar la app (o una recarga de Metro en desarrollo) lo devolvía al
+ * login cada vez.
+ *
+ * Devuelve `false` cuando no hay credencial, cuando ya no vale, o cuando no se
+ * llegó a la api: en los tres casos lo correcto es mostrar el login.
+ */
+export async function restaurarCuentaDeFirebase(): Promise<boolean> {
+  const refreshToken = await loadFirebaseCredential();
+  if (refreshToken === null) return false;
+
+  const idToken = await refreshIdToken(refreshToken);
+  if (idToken === null) return false;
+
+  const outcome = await exchangeForSinchiSession({ idToken, refreshToken });
+  return outcome.kind !== 'error';
 }
 
 /**
