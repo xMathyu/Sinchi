@@ -17,8 +17,15 @@ import { MembershipViewService } from './memberships/membership-view.service';
 import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
 import { MembersService } from './members/members.service';
+import { TrialsService } from './trials/trials.service';
 
 const planChangeSchema = z.object({ planId: z.string().uuid() });
+const trialSchema = z.object({
+  /** El gimnasio se nombra por su slug: es lo que la app tiene del directorio. */
+  slug: z.string().min(2).max(80),
+  classScheduleId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+});
 const linkDeviceSchema = z.object({
   /** `true` cuando el alumno perdió el celular: invalida los códigos viejos. */
   rotate: z.boolean().optional(),
@@ -32,6 +39,7 @@ export class StudentController {
     private readonly checkin: CheckInService,
     private readonly billing: BillingService,
     private readonly members: MembersService,
+    private readonly trials: TrialsService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -140,6 +148,51 @@ export class StudentController {
   ) {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
     return this.billing.changePlan(tenantId, membershipId, body.planId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Clase gratis
+  // -------------------------------------------------------------------------
+
+  /**
+   * Las clases gratis que reservo, en toda la red.
+   *
+   * Existe aqui —y no solo en la ruta publica— porque un alumno de un gimnasio
+   * es tambien un posible alumno de otro: la billetera y el directorio son el
+   * mismo producto visto de los dos lados.
+   */
+  @Get('trials')
+  myTrials(@CurrentSession() session: Session) {
+    return this.trials.forUser(session.sub);
+  }
+
+  /**
+   * Reserva con la sesion puesta.
+   *
+   * No pide nombre ni celular: ya los sabemos, y volver a preguntarlos dejaria
+   * dos versiones de la misma persona en la lista del gimnasio. El resto —una
+   * por gimnasio, no si ya entrenas ahi— lo decide la misma funcion pura que
+   * usa la ruta publica.
+   */
+  @Post('trials')
+  bookTrial(
+    @CurrentSession() session: Session,
+    @Body(parseWith(trialSchema)) body: z.infer<typeof trialSchema>,
+  ) {
+    return this.trials.book({
+      slug: body.slug,
+      account: { kind: 'user', userId: session.sub },
+      classScheduleId: body.classScheduleId,
+      date: body.date,
+    });
+  }
+
+  @Post('trials/:bookingId/cancel')
+  cancelTrial(
+    @CurrentSession() session: Session,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+  ) {
+    return this.trials.cancelOwn({ kind: 'user', userId: session.sub }, bookingId);
   }
 
   @Post('memberships/:membershipId/cancel')

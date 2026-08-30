@@ -31,6 +31,7 @@ export type ChargeId = Id<'charge'>;
 export type PaymentMethodId = Id<'payment_method'>;
 export type ClassScheduleId = Id<'class_schedule'>;
 export type AttendanceId = Id<'attendance'>;
+export type TrialBookingId = Id<'trial_booking'>;
 export type DeviceId = Id<'device'>;
 export type StaffId = Id<'staff'>;
 
@@ -228,6 +229,46 @@ export interface ClassSchedule {
   readonly endTime: LocalTime;
   readonly capacity: number | null;
   readonly instructor: string | null;
+}
+
+/**
+ * Estado de una clase gratis reservada.
+ *
+ * `no_show` existe separado de `canceled` porque no son lo mismo para el
+ * gimnasio: quien avisa que no viene sigue siendo un interesado; quien no
+ * aparece sin avisar es un dato distinto sobre el mismo lead.
+ */
+export type TrialBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
+
+/**
+ * La clase de prueba que alguien reservo desde la app.
+ *
+ * No hay `membershipId` ni `userId` obligatorio a proposito: quien reserva
+ * todavia NO es alumno de este gimnasio, y muchas veces todavia no es nadie en
+ * Sinchi — es una cuenta de Google recien creada, sin ficha en ningun padron. Lo
+ * unico que el gimnasio necesita para atenderlo es como se llama, su celular y a
+ * que clase dijo que iria.
+ *
+ * `className`, `startTime` y `endTime` van copiados y no resueltos por
+ * `classScheduleId`: el gimnasio puede reordenar su horario entre la reserva y
+ * el dia de la clase, y la lista del mostrador tiene que seguir diciendo lo que
+ * se le prometio a la persona.
+ */
+export interface TrialBooking {
+  readonly id: TrialBookingId;
+  readonly tenantId: TenantId;
+  readonly classScheduleId: ClassScheduleId | null;
+  /** Identidad Sinchi, cuando ya la tiene. `null` mientras solo es una cuenta. */
+  readonly userId: UserId | null;
+  readonly fullName: string;
+  readonly phone: string;
+  readonly email: string | null;
+  readonly className: string;
+  readonly date: PlainDate;
+  readonly startTime: LocalTime;
+  readonly endTime: LocalTime;
+  readonly status: TrialBookingStatus;
+  readonly createdAt: Date;
 }
 
 export type CheckInMethod = 'qr' | 'manual';

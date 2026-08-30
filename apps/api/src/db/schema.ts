@@ -74,6 +74,12 @@ export const paymentRailEnum = pgEnum('payment_rail', [
   'bank_transfer',
 ]);
 export const checkInMethodEnum = pgEnum('check_in_method', ['qr', 'manual']);
+export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
+  'booked',
+  'attended',
+  'no_show',
+  'canceled',
+]);
 
 // ---------------------------------------------------------------------------
 // Identidad global
@@ -180,6 +186,13 @@ export const tenants = pgTable(
     dropInPriceCents: integer('drop_in_price_cents'),
     /** Matricula: se cobra una vez al inscribirse. 0 = el gimnasio no cobra. */
     enrollmentFeeCents: integer('enrollment_fee_cents').notNull().default(0),
+    /**
+     * Ofrece la primera clase gratis a quien lo descubre desde la app.
+     *
+     * Por defecto si: un local que sale en el directorio y no deja probar
+     * desperdicia la visita. Es configuracion del gimnasio, no del producto.
+     */
+    trialClassEnabled: boolean('trial_class_enabled').notNull().default(true),
     status: tenantStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -577,6 +590,7 @@ export const TENANT_SCOPED_TABLES = [
   'attendance',
   'checkin_devices',
   'tenant_gateway',
+  'trial_bookings',
 ] as const;
 
 /**
@@ -627,5 +641,64 @@ export const invites = pgTable(
       .on(t.tokenHash)
       .where(sql`consumed_at is null and revoked_at is null`),
     index('invites_tenant_idx').on(t.tenantId),
+  ],
+);
+
+/**
+ * Clase gratis reservada desde la app.
+ *
+ * Es el unico camino de alta que empieza FUERA del gimnasio: quien lo descubre
+ * en el directorio reserva una clase, y el local se entera de que existe. Las
+ * razones de que `user_id` sea opcional —y de que el nombre de la clase viaje
+ * copiado— estan en la migracion 0006.
+ */
+export const trialBookings = pgTable(
+  'trial_bookings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    /** Se conserva la reserva aunque el gimnasio borre el bloque de horario. */
+    classScheduleId: uuid('class_schedule_id').references(() => classSchedules.id, {
+      onDelete: 'set null',
+    }),
+    /** Identidad Sinchi, cuando ya la tiene. `null` mientras solo es una cuenta. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Cuenta de Firebase de quien todavia no tiene ficha en ningun padron. */
+    firebaseUid: text('firebase_uid'),
+    fullName: text('full_name').notNull(),
+    phone: text('phone').notNull(),
+    email: text('email'),
+    /** Copiados del horario: el gimnasio puede reordenarlo antes del dia. */
+    className: text('class_name').notNull(),
+    localDate: date('local_date').notNull(),
+    startTime: text('start_time').notNull(),
+    endTime: text('end_time').notNull(),
+    status: trialBookingStatusEnum('status').notNull().default('booked'),
+    /** Cuando se le aviso al gimnasio. Sin esto no se sabe si el correo salio. */
+    notifiedAt: timestamp('notified_at', { withTimezone: true }),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /**
+     * UNA por persona y por gimnasio, contada por celular.
+     *
+     * Va en la base y no solo en el servicio: reservar dos veces desde dos
+     * telefonos a la vez es justo la carrera que un `select` previo no atrapa.
+     * Parcial sobre las vigentes — cancelar libera el cupo.
+     */
+    uniqueIndex('trial_bookings_one_per_phone')
+      .on(t.tenantId, t.phone)
+      .where(sql`status <> 'canceled'`),
+    uniqueIndex('trial_bookings_one_per_user')
+      .on(t.tenantId, t.userId)
+      .where(sql`user_id is not null and status <> 'canceled'`),
+    // "Quien viene esta semana": la consulta del mostrador.
+    index('trial_bookings_tenant_date_idx').on(t.tenantId, t.localDate),
+    index('trial_bookings_account_idx')
+      .on(t.firebaseUid)
+      .where(sql`firebase_uid is not null`),
   ],
 );

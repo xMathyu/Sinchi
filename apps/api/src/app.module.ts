@@ -26,6 +26,8 @@ import { MembersService } from './modules/members/members.service';
 import { MembershipViewService } from './modules/memberships/membership-view.service';
 import { StaffController } from './modules/staff.controller';
 import { StudentController } from './modules/student.controller';
+import { GymsController } from './modules/gyms.controller';
+import { TrialsService } from './modules/trials/trials.service';
 
 @Module({
   imports: [DbModule, CommonModule, AuthModule, ScheduleModule.forRoot()],
@@ -34,6 +36,7 @@ import { StudentController } from './modules/student.controller';
     HealthController,
     StudentController,
     StaffController,
+    GymsController,
     AccountsController,
     InvitesController,
     JobsController,
@@ -46,6 +49,7 @@ import { StudentController } from './modules/student.controller';
     CheckInService,
     BillingService,
     MailService,
+    TrialsService,
     RefreshDelinquencyJob,
   ],
 })

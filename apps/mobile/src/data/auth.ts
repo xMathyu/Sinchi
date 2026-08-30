@@ -85,7 +85,10 @@ async function exchangeForSinchiSession(firebaseIdToken: string): Promise<SignIn
   const result = await signInWithGoogle(firebaseIdToken);
 
   if (!result.linked) {
-    setUnlinked(result.claim.code, new Date(result.claim.expiresAt).getTime());
+    // El token de Firebase se conserva: es la unica credencial de quien todavia
+    // no tiene ficha, y con ella puede reservar una clase gratis mientras
+    // recepcion confirma el codigo.
+    setUnlinked(result.claim.code, new Date(result.claim.expiresAt).getTime(), firebaseIdToken);
     return { kind: 'needs_link', code: result.claim.code };
   }
 

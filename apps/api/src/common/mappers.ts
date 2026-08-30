@@ -22,6 +22,7 @@ import {
   type Staff,
   type Subscription,
   type Tenant,
+  type TrialBooking,
   type User,
 } from '@sinchi/shared';
 import type { InferSelectModel } from 'drizzle-orm';
@@ -36,6 +37,7 @@ type SubscriptionRow = InferSelectModel<typeof schema.subscriptions>;
 type ChargeRow = InferSelectModel<typeof schema.charges>;
 type ClassScheduleRow = InferSelectModel<typeof schema.classSchedules>;
 type AttendanceRow = InferSelectModel<typeof schema.attendance>;
+type TrialBookingRow = InferSelectModel<typeof schema.trialBookings>;
 
 /** Columnas `date` de Postgres llegan como `YYYY-MM-DD`. */
 const toDate = (value: string): PlainDate => parsePlainDate(value);
@@ -187,5 +189,30 @@ export function toAttendance(row: AttendanceRow): Attendance {
     recordedBy: row.recordedBy === null ? null : asId(row.recordedBy),
     overrodeDenial: row.overrodeDenial,
     syncedAt: row.syncedAt,
+  };
+}
+
+/**
+ * Reserva de clase gratis.
+ *
+ * `userId` sale opcional porque casi siempre lo es: quien reserva todavia no
+ * tiene ficha en ningun padron, y ese es justo el caso que la funcion existe
+ * para atender.
+ */
+export function toTrialBooking(row: TrialBookingRow): TrialBooking {
+  return {
+    id: asId(row.id),
+    tenantId: asId(row.tenantId),
+    classScheduleId: row.classScheduleId === null ? null : asId(row.classScheduleId),
+    userId: row.userId === null ? null : asId(row.userId),
+    fullName: row.fullName,
+    phone: row.phone,
+    email: row.email,
+    className: row.className,
+    date: toDate(row.localDate),
+    startTime: row.startTime,
+    endTime: row.endTime,
+    status: row.status,
+    createdAt: row.createdAt,
   };
 }

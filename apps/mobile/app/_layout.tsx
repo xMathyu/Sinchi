@@ -96,6 +96,8 @@ export default function RootLayout() {
           <Stack.Screen name="login" options={{ animation: 'fade' }} />
           <Stack.Screen name="link" options={{ animation: 'fade' }} />
           <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="explore/index" />
+          <Stack.Screen name="explore/[slug]" />
           <Stack.Screen name="student" />
           <Stack.Screen name="staff" />
           <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
@@ -200,7 +202,13 @@ function DataLoader() {
  * es el fallo seguro. Al reves, olvidarse la dejaria accesible al rol
  * equivocado sin que nadie lo note.
  */
-const RUTAS_COMPARTIDAS = new Set(['settings']);
+/**
+ * `explore` es compartida por una razon que no es de comodidad: el directorio de
+ * gimnasios se puede mirar SIN sesion, con la cuenta a medio vincular y con
+ * sesion de alumno. Es la unica pantalla del producto que atiende a alguien que
+ * todavia no es de ningun gimnasio.
+ */
+const RUTAS_COMPARTIDAS = new Set(['settings', 'explore']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual']),
@@ -260,14 +268,22 @@ function SessionRouter() {
     // en la lista. Es la misma trampa que ya se pago con /dev: sin esto, el
     // enlace navegaba y este efecto lo devolvia a /login en el mismo instante.
     const enInvitacion = primero === 'invite';
+    // El directorio se mira sin cuenta: quien busca dojo todavia no tiene una, y
+    // exigirsela para ver una lista es perderlo en la primera pantalla.
+    const enDirectorio = primero === 'explore';
 
     if (state.status === 'signed_out') {
-      if (!enLogin && !enTurno && !enDev && !enInvitacion) router.replace('/login');
+      if (!enLogin && !enTurno && !enDev && !enInvitacion && !enDirectorio) {
+        router.replace('/login');
+      }
       return;
     }
 
     if (state.status === 'unlinked') {
-      if (primero !== 'link') router.replace('/link');
+      // Con la cuenta creada y sin ficha, el directorio es lo UNICO que esta
+      // persona puede hacer: es justo a quien la clase gratis va dirigida. Sin
+      // esta salida, /link es una pantalla con un codigo y ningun camino.
+      if (primero !== 'link' && !enDirectorio) router.replace('/link');
       return;
     }
 

@@ -269,6 +269,10 @@ export async function runSeed(options: SeedOptions = {}): Promise<void> {
             graceDays: 5,
             quotaOverflowPolicy: 'block',
             dropInPriceCents: fromSoles(25),
+            // El unico que NO ofrece clase gratis: opera con horario libre y no
+            // tiene clases a las que invitar. Sirve para ver el directorio con
+            // los dos casos.
+            trialClassEnabled: false,
           },
           {
             name: 'Nova BJJ Surco',
@@ -403,6 +407,38 @@ export async function runSeed(options: SeedOptions = {}): Promise<void> {
         role: 'owner',
         displayName: 'Sergio Paz',
       });
+
+      // Horarios de mañana y de noche: con dos gimnasios que publican clases, el
+      // directorio y la reserva de la clase gratis se pueden recorrer enteros.
+      await tx.insert(schema.classSchedules).values([
+        {
+          tenantId: iron,
+          name: 'Muay Thai principiantes',
+          weekday: 2,
+          startTime: '07:00',
+          endTime: '08:00',
+          capacity: 18,
+          instructor: 'Kru Salas',
+        },
+        {
+          tenantId: iron,
+          name: 'Muay Thai principiantes',
+          weekday: 4,
+          startTime: '07:00',
+          endTime: '08:00',
+          capacity: 18,
+          instructor: 'Kru Salas',
+        },
+        {
+          tenantId: iron,
+          name: 'Clinch y rodillas',
+          weekday: 6,
+          startTime: '10:00',
+          endTime: '11:30',
+          capacity: 14,
+          instructor: 'Kru Salas',
+        },
+      ]);
       await enroll(tx, iron, userId('Mathyu Quispe'), plans('2x'), date(-43), date(-12));
     });
 

@@ -21,6 +21,7 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | horario de clase | `ClassSchedule` |
 | asistencia | `Attendance` |
 | staff / recepción / dueño | `Staff`, `front_desk`, `owner` |
+| clase gratis reservada | `TrialBooking` |
 
 ## Conceptos de cobro
 
@@ -55,6 +56,19 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | cupo agotado | `quota_exhausted` |
 | fuera de horario | `outside_schedule` |
 | marcado manual | `CheckInMethod = 'manual'` |
+
+## Conceptos de la clase gratis
+
+| Negocio | Código |
+|---|---|
+| clase gratis / clase de prueba | `trial` |
+| directorio de gimnasios | `directory` / `GymCard` |
+| clase concreta con fecha (lo que se reserva) | `TrialSlot` |
+| el gimnasio la ofrece | `trialClassEnabled` |
+| vino / no vino | `TrialBookingStatus` (`attended`, `no_show`) |
+| motivo de rechazo de la reserva | `TrialDenialReason` / `TrialDenialCode` |
+| ya la usó en este gimnasio | `already_booked` |
+| ya entrena aquí | `already_member` |
 
 ## Nota sobre el MD
 

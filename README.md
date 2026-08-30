@@ -13,7 +13,7 @@ gimnasios a los que asiste.
 |---|---|
 | `packages/shared` — dominio y reglas puras | **Completo y con tests** (147 tests) |
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
-| `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes), sobre datos de demostración |
+| `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio y clase gratis) |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (81 tests, 37 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
@@ -55,6 +55,12 @@ fuente. Después de tocarlos, `npm run build` antes de recargar la app.
 
 Abre en **modo alumno**. Para llegar al modo staff: toca el avatar arriba a la
 derecha en Billetera → Ajustes → Rol de la sesión → Recepción.
+
+Desde la billetera, «¿Entrenas en otro gimnasio?» abre el **directorio**: los
+gimnasios activos de la red con sus horarios y sus precios, y la reserva de la
+primera clase gratis eligiendo día y hora. Es el único camino de alta que empieza
+fuera del gimnasio, y el que atiende a quien todavía no entrena en ninguno. Lo
+que reserva sale en el modo staff, en la pestaña «Clases gratis».
 
 En el modo staff, «Simular escaneo» recorre el padrón, que está sembrado para
 que salgan los cuatro veredictos del semáforo: al día, última sesión, cupo
@@ -164,7 +170,9 @@ Las cuatro reglas que sostienen el producto:
    lo único que falta para que la autenticación funcione de punta a punta. Ver
    [docs/autenticacion.md](docs/autenticacion.md).
 4. **Notificaciones.** El cron de morosidad ya detecta cuándo alguien entra en
-   gracia o se suspende; falta el canal.
+   gracia o se suspende; falta el canal. La reserva de clase gratis avisa al
+   dueño por correo porque no puede esperar a que ese canal exista — un
+   interesado del que el gimnasio se entera tarde no es un interesado.
 5. **Culqi.** Antes de construir encima: sandbox completo (tokenizar, cobrar,
    cobrar con tarjeta rechazada, recibir webhook) y anotar los códigos de error
    reales para corregir la tabla de `billing/dunning.ts`, que hoy sale de la

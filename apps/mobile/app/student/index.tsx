@@ -13,6 +13,7 @@ import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import {
   Avatar,
   Badge,
+  Button,
   Card,
   Eyebrow,
   Logo,
@@ -24,10 +25,16 @@ import {
 import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
-import { useErrorDeCarga, useRefresco, useStore, useWallet } from '../../src/data/hooks';
+import {
+  useErrorDeCarga,
+  useMisClasesGratis,
+  useRefresco,
+  useStore,
+  useWallet,
+} from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import type { MembershipView } from '../../src/data/store';
-import { formatShortDate, initials, splitGymName } from '../../src/lib/format';
+import { formatShortDate, formatWeekdayAndDay, initials, splitGymName } from '../../src/lib/format';
 
 export default function WalletScreen() {
   const theme = useTheme();
@@ -36,6 +43,9 @@ export default function WalletScreen() {
   useRefresco();
   const { error: errorDeCarga, reintentar } = useErrorDeCarga();
   const active = wallet.filter((entry) => entry.subscription.status !== 'canceled').length;
+  // Las clases gratis reservadas viven aqui y no en el directorio: es un
+  // compromiso con una fecha, y esta es la pantalla que el alumno abre.
+  const clasesGratis = useMisClasesGratis().datos.filter((clase) => clase.status === 'booked');
 
   return (
     <Screen scroll>
@@ -72,7 +82,10 @@ export default function WalletScreen() {
           <EstadoVacio
             titulo="Tu billetera está vacía"
             cuerpo="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
-            pie="Para entrar a uno, el local te agrega a su padrón con tu DNI. No hace falta que crees nada."
+            pie="¿Todavía no entrenas en ninguno? Mira los de la red y prueba uno gratis."
+            accion={
+              <Button label="Explorar gimnasios" onPress={() => router.push('/explore')} />
+            }
           />
         </View>
       ) : (
@@ -84,23 +97,73 @@ export default function WalletScreen() {
         </Stack>
       )}
 
+      {clasesGratis.length > 0 ? (
+        <Stack gap={10} style={{ marginTop: 22 }}>
+          <Eyebrow>Vas a probar</Eyebrow>
+          {clasesGratis.map((clase) => (
+            <Pressable
+              key={clase.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Clase gratis en ${clase.gymName}`}
+              onPress={() =>
+                router.push({ pathname: '/explore/[slug]', params: { slug: clase.gymSlug } })
+              }
+            >
+              <Card
+                accent={theme.semaphore.ok}
+                borderColor={withAlpha(theme.semaphore.ok, 0.26)}
+                radius={theme.radii.xl}
+              >
+                <Stack gap={5}>
+                  <Row>
+                    <Text variant="bodySmall" weight="semibold" numberOfLines={1}>
+                      {clase.gymName}
+                    </Text>
+                    <Badge
+                      label="CLASE GRATIS"
+                      color={theme.semaphoreInk.ok}
+                      background={theme.semaphore.ok}
+                    />
+                  </Row>
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    {clase.className} · {formatWeekdayAndDay(clase.date)} a las {clase.startTime}
+                  </Text>
+                </Stack>
+              </Card>
+            </Pressable>
+          ))}
+        </Stack>
+      ) : null}
+
       {/* Antes esto era un recuadro punteado con un «+» que decía «Unirme a otro
           gimnasio» y NO era pulsable: un `View` suelto, sin `onPress`. Prometía
-          una acción que el producto no tiene — en Sinchi el gimnasio te agrega a
-          su padrón, no al revés (`docs/autenticacion.md`). Ahora lo dice en vez
-          de fingir un botón. */}
+          una acción que el producto no tenía. Ahora sí la tiene, y es esta: el
+          directorio de la red, con la primera clase gratis. El camino del
+          mostrador sigue existiendo y se dice debajo, porque sigue siendo el
+          normal para quien ya eligió gimnasio. */}
       <Stack gap={8} style={{ marginTop: 22 }}>
-        <Card radius={theme.radii.lg} tone="sunken">
-          <Stack gap={5}>
-            <Text variant="bodySmall" weight="semibold">
-              ¿Entrenas en otro gimnasio?
-            </Text>
-            <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              Dale tu DNI en el mostrador y te agregan a su padrón. La membresía aparece
-              aquí sola, sin instalar nada más.
-            </Text>
-          </Stack>
-        </Card>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Explorar los gimnasios de la red"
+          onPress={() => router.push('/explore')}
+        >
+          <Card radius={theme.radii.lg}>
+            <Row style={{ gap: 12 }}>
+              <Stack gap={5} style={{ flex: 1 }}>
+                <Text variant="bodySmall" weight="semibold">
+                  ¿Entrenas en otro gimnasio?
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Mira los horarios y los precios de las escuelas de la red, y prueba una
+                  clase gratis en la que te interese.
+                </Text>
+              </Stack>
+              <Text variant="title" color={theme.colors.textFaint}>
+                ›
+              </Text>
+            </Row>
+          </Card>
+        </Pressable>
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           Una sola identidad Sinchi. Tu DNI y tu QR funcionan en cualquier local de la red.
         </Text>

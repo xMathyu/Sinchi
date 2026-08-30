@@ -15,6 +15,7 @@ import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 // siete— y es exactamente el coste que el comentario anterior temia. Por la
 // puerta de `./icons/*` son 7 archivos y nada mas.
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
+import CalendarCheck from 'lucide-react-native/icons/calendar-check';
 // `History` es un alias: el archivo se llama por su forma, no por su uso.
 import History from 'lucide-react-native/icons/rotate-ccw-clock';
 import QrCode from 'lucide-react-native/icons/qr-code';
@@ -53,11 +54,13 @@ export type TabIconShape =
   | 'history'
   | 'door'
   | 'roster'
+  | 'trials'
   | 'device';
 
 const ICONS: Readonly<Record<TabIconShape, LucideIcon>> = {
   wallet: Wallet,
   qr: QrCode,
+  trials: CalendarCheck,
   plan: CalendarDays,
   history: History,
   door: ScanLine,
