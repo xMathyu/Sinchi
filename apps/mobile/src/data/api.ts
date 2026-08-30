@@ -747,6 +747,21 @@ export const fetchTrials = async (incluirPasadas = false): Promise<readonly Tria
     )
   ).map(reviveTrial);
 
+/**
+ * ¿Este gimnasio ofrece la clase gratis?
+ *
+ * La lee también recepción, que no puede cambiarla: la pantalla tiene que poder
+ * decir por qué no llega nadie a probar.
+ */
+export const fetchTrialSettings = (): Promise<{ readonly trialClassEnabled: boolean }> =>
+  request('/staff/trials/settings');
+
+/** Enciende o apaga la clase gratis del local. Solo el dueño. */
+export const setTrialClassEnabled = (
+  enabled: boolean,
+): Promise<{ readonly trialClassEnabled: boolean }> =>
+  request('/staff/trials/settings', { method: 'POST', body: { enabled } });
+
 /** Vino, no vino, o canceló. Es lo que convierte la lista en un dato. */
 export const setTrialStatus = async (
   bookingId: string,

@@ -98,6 +98,8 @@ const reservar = async (
 
 let novaFrontDesk = '';
 let shotokanFrontDesk = '';
+/** Sergio es el ÚNICO `owner` sembrado, y en Iron: el interruptor es suyo. */
+let ironOwner = '';
 let nova: GymDetail;
 
 beforeAll(async () => {
@@ -133,6 +135,7 @@ beforeAll(async () => {
 
   novaFrontDesk = await login('+51987000222'); // Carlos, Nova BJJ
   shotokanFrontDesk = await login('+51987000111'); // Ana, Dojo Shotokan
+  ironOwner = await login('+51987000333'); // Sergio, dueño de Iron Muay Thai
 
   const { body } = await http.get('/v1/gyms/nova-bjj').expect(200);
   nova = body as GymDetail;
@@ -453,5 +456,77 @@ suite('lo que ve quien reservo', () => {
       .post(`/v1/gyms/trials/${reserva.booking.id}/cancel`)
       .send({ idToken: declareIdentity(`prospecto-${runId}-17`) })
       .expect(404);
+  });
+});
+
+/**
+ * El interruptor del gimnasio.
+ *
+ * No todos dan clase de prueba, así que tiene que poder apagarse — y apagarlo no
+ * puede llevarse por delante lo que ya se prometió. Va sobre Iron porque Sergio
+ * es el único `owner` de la siembra, y la decisión es del dueño.
+ */
+suite('activar y desactivar la clase gratis', () => {
+  const iron = async (): Promise<GymDetail> =>
+    (await http.get('/v1/gyms/iron-muay-thai').expect(200)).body as GymDetail;
+
+  const cambiar = (token: string, enabled: boolean) =>
+    http.post('/v1/staff/trials/settings').set(auth(token)).send({ enabled });
+
+  it('el dueño la apaga y el gimnasio deja de ofrecer horas', async () => {
+    const antes = await iron();
+    expect(antes.trialClassEnabled).toBe(true);
+    expect(antes.slots.length).toBeGreaterThan(0);
+
+    const { body } = await cambiar(ironOwner, false).expect(201);
+    expect(body.trialClassEnabled).toBe(false);
+
+    const despues = await iron();
+    expect(despues.trialClassEnabled).toBe(false);
+    // Sin horas que ofrecer: una lista de horarios reservables en un local que
+    // no da clase gratis promete algo que la reserva rechazaría.
+    expect(despues.slots).toEqual([]);
+  });
+
+  it('apagada, una reserva nueva vuelve con el motivo', async () => {
+    const { body } = await http.post('/v1/gyms/iron-muay-thai/trial').send({
+      idToken: declareIdentity(`prospecto-${runId}-18`),
+      fullName: 'Llegó Tarde',
+      phone: nextPhone(),
+      classScheduleId: nova.slots[0]!.scheduleId,
+      date: iso(nova.slots[0]!.date),
+    });
+
+    expect(body.booked).toBe(false);
+    expect(body.reason.code).toBe('not_offered');
+  });
+
+  it('lo ya reservado sigue en pie', async () => {
+    // Apagar es una decisión hacia adelante. Quien eligió venir el martes lo
+    // hizo con una promesa delante: borrarla lo deja presentándose en un local
+    // que no lo espera.
+    const { body } = await http.get('/v1/staff/trials').set(auth(ironOwner)).expect(200);
+    const vivas = (body as { status: string }[]).filter((row) => row.status === 'booked');
+
+    expect(vivas.length).toBeGreaterThan(0);
+  });
+
+  it('recepción puede leerlo pero no cambiarlo', async () => {
+    // Es una decisión comercial, del mismo orden que el precio de los planes.
+    await http.get('/v1/staff/trials/settings').set(auth(novaFrontDesk)).expect(200);
+    await cambiar(novaFrontDesk, false).expect(403);
+  });
+
+  it('sin sesión de staff no se toca', async () => {
+    await http.post('/v1/staff/trials/settings').send({ enabled: false }).expect(401);
+  });
+
+  it('el dueño la vuelve a encender y el gimnasio reaparece con horas', async () => {
+    const { body } = await cambiar(ironOwner, true).expect(201);
+    expect(body.trialClassEnabled).toBe(true);
+
+    const despues = await iron();
+    expect(despues.trialClassEnabled).toBe(true);
+    expect(despues.slots.length).toBeGreaterThan(0);
   });
 });

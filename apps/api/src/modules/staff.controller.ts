@@ -80,6 +80,9 @@ const trialStatusSchema = z.object({
   status: z.enum(['booked', 'attended', 'no_show', 'canceled']),
 });
 
+/** El interruptor de la clase gratis. No todos los gimnasios la dan. */
+const trialClassSchema = z.object({ enabled: z.boolean() });
+
 /**
  * Cola offline.
  *
@@ -255,6 +258,39 @@ export class StaffController {
     return this.trials.forTenant(assertStaffSession(session).tenantId, {
       includePast: includePast === 'true',
     });
+  }
+
+  /**
+   * ¿Este gimnasio ofrece la clase gratis?
+   *
+   * Lo lee recepción también, aunque no pueda cambiarlo: la pantalla tiene que
+   * poder decir por qué no llega nadie a probar.
+   */
+  @Get('trials/settings')
+  trialSettings(@CurrentSession() session: Session) {
+    return this.trials.settings(assertStaffSession(session).tenantId);
+  }
+
+  /**
+   * Enciende o apaga la clase gratis del local.
+   *
+   * Del dueño, no de recepción: es una decisión comercial, del mismo orden que
+   * el precio de los planes.
+   *
+   * Apagarla no cancela lo ya reservado —esa promesa ya se hizo— sino que corta
+   * lo de adelante: el gimnasio deja de ofrecer horas y una reserva nueva vuelve
+   * con `not_offered`.
+   */
+  @OwnerOnly()
+  @Post('trials/settings')
+  setTrialClass(
+    @CurrentSession() session: Session,
+    @Body(parseWith(trialClassSchema)) body: z.infer<typeof trialClassSchema>,
+  ) {
+    return this.trials.setTrialClassEnabled(
+      assertStaffSession(session).tenantId,
+      body.enabled,
+    );
   }
 
   /** Vino, no vino, o canceló. Es lo que convierte la lista en un dato. */

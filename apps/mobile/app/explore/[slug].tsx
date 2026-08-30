@@ -193,7 +193,10 @@ export default function GymScreen() {
         </Card>
       ) : (
         <Stack gap={12} style={{ marginTop: 24 }}>
-          <Eyebrow>Tu primera clase, gratis</Eyebrow>
+          {/* El titulillo cambia con el interruptor del gimnasio: «Tu primera
+              clase, gratis» encima de «este gimnasio no la ofrece» se
+              contradice a sí mismo. */}
+          <Eyebrow>{gym.trialClassEnabled ? 'Tu primera clase, gratis' : 'Clase de prueba'}</Eyebrow>
 
           {!gym.trialClassEnabled ? (
             <Card tone="sunken" radius={theme.radii.lg}>

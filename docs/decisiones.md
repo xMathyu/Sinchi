@@ -156,7 +156,14 @@ decisiones que lo sostienen:
   la app del mostrador de todas formas.
 - **El gimnasio puede no ofrecerla** (`tenants.trial_class_enabled`, por defecto
   sí). Un local que sale en el directorio y no deja probar desperdicia la visita,
-  pero la decisión es comercial y es suya.
+  pero la decisión es comercial y es suya, así que se enciende y se apaga desde
+  la app —pestaña «Clases gratis» del modo staff— y solo el dueño puede hacerlo:
+  es del mismo orden que el precio de los planes. Una columna que solo se puede
+  cambiar con un `UPDATE` a mano es lo mismo que no poder cambiarla.
+- **Apagarla no cancela lo ya reservado.** Quien eligió venir el martes lo hizo
+  con una promesa delante; borrarla por un cambio de política lo deja
+  presentándose en un local que no lo espera. Lo que corta es lo de adelante: el
+  gimnasio deja de ofrecer horas y una reserva nueva vuelve con `not_offered`.
 
 Lo que **no** hace, a propósito: no controla aforo. Una reserva de clase gratis
 no ocupa plaza, así que MD 8.3 sigue abierto igual que antes. Con los números de

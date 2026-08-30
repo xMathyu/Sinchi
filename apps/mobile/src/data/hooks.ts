@@ -24,6 +24,7 @@ import {
   fetchGym,
   fetchGyms,
   fetchRecentCheckIns,
+  fetchTrialSettings,
   fetchTrials,
   type CheckInPreviewDto,
   type GymCardDto,
@@ -641,6 +642,28 @@ export function useClasesGratisDelGimnasio(incluirPasadas = false): Carga<readon
     pedir,
     [],
     'No se pudo traer la lista de clases gratis.',
+  );
+}
+
+/**
+ * Si el gimnasio ofrece la clase gratis.
+ *
+ * `null` mientras no se sabe: el interruptor no puede pintarse en «no» antes de
+ * preguntar, porque eso le dice al dueño que su gimnasio está fuera del
+ * directorio cuando a lo mejor no lo está.
+ *
+ * La función va a nivel de módulo y no en línea: `useCargaRemota` la lleva en
+ * sus dependencias, y una flecha nueva en cada render sería un bucle de
+ * peticiones.
+ */
+const leerClaseGratis = async (): Promise<boolean | null> =>
+  (await fetchTrialSettings()).trialClassEnabled;
+
+export function useOfreceClaseGratis(): Carga<boolean | null> {
+  return useCargaRemota<boolean | null>(
+    leerClaseGratis,
+    null,
+    'No se pudo leer si el gimnasio ofrece clase gratis.',
   );
 }
 
