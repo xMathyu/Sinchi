@@ -280,6 +280,26 @@ iba a `logger.debug`, que Cloud Run no muestra: los logs salían vacíos. Ahora
 
 ---
 
+## Dónde aterriza quien entra sin ficha
+
+El código de 6 dígitos **ya no es la primera pantalla**. Lo era, y para quien
+instalaba la app sin entrenar en ningún sitio —justo a quien el producto quiere
+llegar— era una pared: un número que solo sirve si un gimnasio ya tiene su ficha
+hecha y alguien va a confirmarlo.
+
+Ahora una cuenta sin ficha aterriza en el **directorio de gimnasios**, que es lo
+único que esa persona puede hacer hoy: mirar horarios y precios, y reservar su
+primera clase gratis.
+
+El código no desaparece, y no puede: es el único camino para el alumno al que su
+gimnasio dio de alta **por DNI y sin invitarlo**. El auto-vínculo por correo
+verificado existe solo para el dueño (`tryLinkOwnerByEmail`), a propósito — el
+correo de un alumno lo escribe otra persona con prisa en un mostrador, y un typo
+entregaría una membresía ajena. Así que el código vive a un toque, en el
+directorio: «¿Tu gimnasio ya te registró? Muéstrale tu código a recepción».
+
+---
+
 ## Invitación por enlace
 
 El código de 6 dígitos funciona, pero tiene un coste real: alguien tiene que

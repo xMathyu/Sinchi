@@ -77,8 +77,9 @@ export default function LoginScreen() {
         return;
       }
       // Cuando queda vinculado, el layout raíz enruta solo al ver la sesión.
-      // Aquí solo hace falta mandar a la pantalla del código.
-      if (outcome.kind === 'needs_link') router.replace('/link');
+      // Sin ficha en ningún padrón, al directorio: es lo único que esa persona
+      // puede hacer hoy, y su código sigue a un toque desde ahí.
+      if (outcome.kind === 'needs_link') router.replace('/explore');
     });
 
     return () => {
@@ -95,7 +96,7 @@ export default function LoginScreen() {
         setError(outcome.message);
         return;
       }
-      if (outcome.kind === 'needs_link') router.replace('/link');
+      if (outcome.kind === 'needs_link') router.replace('/explore');
       // Si quedo dentro, el layout raiz enruta solo al ver la sesion.
     });
   };
@@ -234,9 +235,13 @@ export default function LoginScreen() {
         {working && <ActivityIndicator color={theme.colors.ink} />}
 
         <Stack gap={12} style={{ alignItems: 'center', marginTop: 6 }}>
+          {/* Antes esto prometía el código de 6 dígitos, que era lo primero que
+              veía quien entraba. Ya no: quien no entrena en ningún sitio aterriza
+              en el directorio, y el código está a un toque para cuando el
+              mostrador lo pida. */}
           <Text variant="captionSmall" color={theme.colors.textFaint} align="center">
-            Si es tu primera vez, al entrar te daremos un código de 6 dígitos para
-            que recepción lo confirme.
+            ¿Primera vez? Al entrar verás los gimnasios de la red y podrás reservar
+            tu primera clase gratis.
           </Text>
 
           <View style={{ height: 1, alignSelf: 'stretch', backgroundColor: theme.colors.hairline }} />
