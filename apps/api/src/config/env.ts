@@ -140,14 +140,12 @@ const schema = z.object({
   /**
    * Ficha en Google Play.
    *
-   * Esta si se deriva: Play direcciona por el nombre del paquete, que es el
-   * mismo desde el primer dia (`apps/mobile/app.json`). El defecto es correcto
-   * en cuanto la app se publica, y hasta entonces la tienda dice que no existe
-   * — que es tambien lo que pasa.
+   * Tampoco tiene defecto, y no por no poder: Play direcciona por el nombre del
+   * paquete, asi que la URL se sabe de antemano. Pero la app no esta publicada,
+   * y una URL que se sabe correcta para una ficha que todavia no existe manda a
+   * la gente a un «no encontrado». Vacia, la pagina lo dice con palabras.
    */
-  ANDROID_STORE_URL: vacioEsAusente(
-    z.string().url().default('https://play.google.com/store/apps/details?id=pe.sinchi.app'),
-  ),
+  ANDROID_STORE_URL: vacioEsAusente(z.string().url().optional()),
 
   SCHEDULER_MODE: z.enum(['in_process', 'external']).default('in_process'),
 

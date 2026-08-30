@@ -80,6 +80,15 @@ describe('paginaInvitacion', () => {
     expect(html).toContain('sinchi:///invite/abc123');
   });
 
+  // Un `intent://` sin `browser_fallback_url` deja a un Android sin la app
+  // mirando una pagina de error de Chrome. Peor que un enlace que no hace nada.
+  it('sin URL de Play no usa el intent, que se quedaria sin salida', () => {
+    const html = pagina('android', { ios: IOS, android: null });
+    expect(html).not.toContain('intent://');
+    expect(html).toContain('sinchi:///invite/abc123');
+    expect(html).not.toContain('Google Play');
+  });
+
   it('el salto a la tienda de iOS se cancela si la app se lleva el foco', () => {
     const html = pagina('ios');
     // Sin esto, quien SÍ tiene la app abriría la app y encima acabaría en la

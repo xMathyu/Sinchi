@@ -6,16 +6,14 @@
  * usarlas. Se sustituyen por las de verdad el día que la app esté publicada.
  *
  * Las URLs son las MISMAS que sirve la página de la invitación (`IOS_STORE_URL`
- * y `ANDROID_STORE_URL` en la api). Google Play direcciona por el nombre del
- * paquete, así que su enlace ya es correcto; Apple direcciona por un id numérico
- * que solo existe cuando la app está publicada, y hasta entonces el botón NO es
- * un enlace: mandar a alguien a una tienda que dice «no encontrado» es peor que
- * decirle que todavía no está.
+ * y `ANDROID_STORE_URL` en la api), y mientras falten el botón NO es un enlace:
+ * la app todavía no está publicada en ninguna de las dos tiendas, y mandar a
+ * alguien a una ficha que dice «no encontrado» es peor que decirle que todavía
+ * no está. Se quedan puestos porque son la promesa de la página; el día que se
+ * publique, cada uno se enciende con su variable.
  */
 const IOS = process.env['NEXT_PUBLIC_IOS_STORE_URL'] ?? null;
-const ANDROID =
-  process.env['NEXT_PUBLIC_ANDROID_STORE_URL'] ??
-  'https://play.google.com/store/apps/details?id=pe.sinchi.app';
+const ANDROID = process.env['NEXT_PUBLIC_ANDROID_STORE_URL'] ?? null;
 
 const GLYPHS = {
   ios: (
@@ -62,7 +60,7 @@ function StoreButton({
 
   if (href === null) {
     return (
-      <span className="store-btn" style={{ ...SHELL, opacity: 0.5, cursor: 'default' }}>
+      <span className="store-btn" style={{ ...SHELL, opacity: 0.66, cursor: 'default' }}>
         {inner}
       </span>
     );
@@ -84,7 +82,12 @@ export function StoreButtons({ column = false }: { readonly column?: boolean }) 
         glyph="ios"
         href={IOS}
       />
-      <StoreButton store="Google Play" kicker="Disponible en" glyph="android" href={ANDROID} />
+      <StoreButton
+        store="Google Play"
+        kicker={ANDROID === null ? 'Muy pronto en' : 'Disponible en'}
+        glyph="android"
+        href={ANDROID}
+      />
     </div>
   );
 }

@@ -77,7 +77,7 @@ export class InvitesController {
           sistema: detectarSistema(req.get('user-agent')),
           tiendas: {
             ios: env.IOS_STORE_URL ?? null,
-            android: env.ANDROID_STORE_URL,
+            android: env.ANDROID_STORE_URL ?? null,
           },
         }),
       );

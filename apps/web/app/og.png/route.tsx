@@ -112,7 +112,9 @@ export function GET() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
           <div style={{ width: 15, height: 15, borderRadius: 8, background: SEMAPHORE_DEFAULT.ok, display: 'flex' }} />
           <span style={{ fontSize: 25, color: colors.textTertiary }}>
-            Gimnasios y escuelas de artes marciales · Lima, Perú
+            <span style={{ color: SEMAPHORE_DEFAULT.ok }}>Primer mes gratis</span>
+            {/* Satori se come el espacio del principio de una cadena suelta. */}
+            <span style={{ marginLeft: 9 }}>· Gimnasios y escuelas de artes marciales</span>
           </span>
         </div>
       </div>
