@@ -323,6 +323,17 @@ export default function GymScreen() {
                   </Text>
                 </Row>
               ))}
+              {/* La clase suelta no es un plan —no crea suscripción ni fecha de
+                  cobro— pero es media lista de precios en un gimnasio que vende
+                  por sesión, y sin esto no salía por ningún lado. */}
+              {gym.dropInPriceCents !== null && gym.dropInPriceCents > 0 ? (
+                <Row>
+                  <Text variant="bodySmall">Clase suelta</Text>
+                  <Text variant="bodySmall" weight="semibold">
+                    {formatPEN(cents(gym.dropInPriceCents))}
+                  </Text>
+                </Row>
+              ) : null}
               {gym.enrollmentFeeCents > 0 ? (
                 <Row>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
