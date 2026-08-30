@@ -100,7 +100,14 @@ export default function GymScreen() {
     setReservando(true);
     setSalida(null);
 
-    void reservarClaseGratis({ slug: gym.slug, slot, fullName: nombre, phone: celular })
+    // Solo se mandan si la pantalla los pidió. Mandar los campos vacíos —que es
+    // lo que hay cuando no se enseñaron— tapaba lo que ya sabíamos de la persona
+    // y la api rechazaba la reserva por «nombre demasiado corto».
+    void reservarClaseGratis({
+      slug: gym.slug,
+      slot,
+      ...(pideDatos ? { fullName: nombre, phone: celular } : {}),
+    })
       .then((resultado) => {
         setSalida(resultado);
         if (resultado.booked) {

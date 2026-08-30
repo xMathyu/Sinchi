@@ -125,9 +125,23 @@ async function exchangeForSinchiSession(
    * entrar los perdía y la reserva preguntaba otra vez.
    */
   const guardado = await loadAccountDetails();
+
+  /**
+   * Solo se manda lo que la api va a aceptar.
+   *
+   * El celular arranca con «+51» en los formularios, y mandarlo asi hacia que
+   * `/auth/google` respondiera 400 por «datos invalidos» — en el arranque, donde
+   * ese fallo dejaba la app colgada en el splash. Un dato a medias no vale menos:
+   * vale CERO, y hay que tratarlo como ausente.
+   */
+  const util = (valor: string | null | undefined, minimo: number): string | undefined => {
+    const limpio = (valor ?? '').trim();
+    return limpio.length >= minimo ? limpio : undefined;
+  };
+
   const conDatos: DatosDeRegistro = {
-    fullName: datos.fullName ?? guardado.fullName ?? undefined,
-    phone: datos.phone ?? guardado.phone ?? undefined,
+    fullName: util(datos.fullName, 2) ?? util(guardado.fullName, 2),
+    phone: util(datos.phone, 6) ?? util(guardado.phone, 6),
   };
 
   const result = await signInWithGoogle(firebaseIdToken, conDatos);
@@ -174,14 +188,21 @@ async function exchangeForSinchiSession(
  * llegó a la api: en los tres casos lo correcto es mostrar el login.
  */
 export async function restaurarCuentaDeFirebase(): Promise<boolean> {
-  const refreshToken = await loadFirebaseCredential();
-  if (refreshToken === null) return false;
+  // NADA de aqui puede lanzar. Esto corre en el arranque, antes de que exista
+  // una pantalla: una excepcion deja la sesion en `loading` y la app colgada en
+  // el splash para siempre. Pasó — con un 400 por mandar un celular a medias.
+  try {
+    const refreshToken = await loadFirebaseCredential();
+    if (refreshToken === null) return false;
 
-  const idToken = await refreshIdToken(refreshToken);
-  if (idToken === null) return false;
+    const idToken = await refreshIdToken(refreshToken);
+    if (idToken === null) return false;
 
-  const outcome = await exchangeForSinchiSession({ idToken, refreshToken });
-  return outcome.kind !== 'error';
+    const outcome = await exchangeForSinchiSession({ idToken, refreshToken });
+    return outcome.kind !== 'error';
+  } catch {
+    return false;
+  }
 }
 
 /**
