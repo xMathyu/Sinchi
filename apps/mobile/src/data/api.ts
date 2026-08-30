@@ -222,12 +222,30 @@ export interface UnlinkedAccountDto {
     readonly code: string;
     readonly expiresAt: string;
     readonly email: string | null;
+    /** Como se presenta: lo que escribió al registrarse, o lo que dijo Google. */
     readonly displayName: string | null;
+    /** Lo dio al crear la cuenta. Es con lo que reserva su clase gratis. */
+    readonly phone: string | null;
   };
 }
 
-export const signInWithGoogle = (idToken: string): Promise<IssuedSessionDto | UnlinkedAccountDto> =>
-  request('/auth/google', { method: 'POST', body: { idToken }, anonymous: true });
+/**
+ * Entra, y de paso guarda lo que escribió al crear la cuenta.
+ *
+ * `fullName` y `phone` solo viajan al REGISTRARSE. No autentican nada —eso lo
+ * hace el token de Firebase— y no tocan el padrón de nadie: quedan con el código
+ * pendiente para que reservar una clase gratis no le vuelva a preguntar lo que
+ * acaba de escribir.
+ */
+export const signInWithGoogle = (
+  idToken: string,
+  datos: { readonly fullName?: string; readonly phone?: string } = {},
+): Promise<IssuedSessionDto | UnlinkedAccountDto> =>
+  request('/auth/google', {
+    method: 'POST',
+    body: { idToken, ...datos },
+    anonymous: true,
+  });
 
 export interface ShiftCandidate {
   readonly id: string;

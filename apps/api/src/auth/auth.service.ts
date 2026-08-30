@@ -34,7 +34,11 @@ import { schema } from '../db/client';
 import { loadEnv } from '../config/env';
 import type { SessionClaims } from './session';
 import { FirebaseVerifier } from './firebase';
-import { AccountLinkService, type PendingClaim } from './account-link.service';
+import {
+  AccountLinkService,
+  type DatosDeRegistro,
+  type PendingClaim,
+} from './account-link.service';
 import { InviteService } from './invite.service';
 import { hashDeviceToken, hashPin, issueDeviceToken, verifyPin } from './secrets';
 
@@ -105,7 +109,10 @@ export class AuthService {
    * Si la cuenta no esta vinculada a una ficha del padron no se emite sesion: se
    * devuelve un codigo para que la recepcionista lo confirme.
    */
-  async signInWithGoogle(idToken: string): Promise<IssuedSession | UnlinkedAccount> {
+  async signInWithGoogle(
+    idToken: string,
+    datos: DatosDeRegistro = {},
+  ): Promise<IssuedSession | UnlinkedAccount> {
     const identity = await this.firebase.verify(idToken);
 
     let userId = await this.accountLink.findLinkedUser(identity.uid);
@@ -121,7 +128,10 @@ export class AuthService {
     userId ??= await this.invites.claimByVerifiedEmail(identity);
 
     if (userId === null) {
-      return { linked: false, claim: await this.accountLink.issueClaim(identity) };
+      // Los datos van al codigo pendiente, no a `users`: todavia no hay ficha a
+      // la que atarlos. Sirven para que reservar una clase gratis no le vuelva a
+      // preguntar lo que acaba de escribir.
+      return { linked: false, claim: await this.accountLink.issueClaim(identity, datos) };
     }
 
     return this.issueForUser(userId);

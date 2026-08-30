@@ -99,7 +99,7 @@ arrancar con esa bandera en producción.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve código de vinculación. |
+| `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve código de vinculación. Al registrarse acepta `fullName` y `phone`, que quedan con el código para no volver a pedirlos al reservar. |
 | `GET` | `/auth/shift/staff` | Quiénes pueden abrir turno en este equipo (`X-Device-Token`). |
 | `POST` | `/auth/shift` | Abre turno: token del equipo + PIN. Sesión de 12 h. |
 | `POST` | `/auth/switch-to-student` | El dueño del dojo también entrena en él: puede mirar su propia billetera. |

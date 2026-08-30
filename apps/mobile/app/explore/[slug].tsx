@@ -13,10 +13,22 @@
  * ofrece aquí (`@sinchi/shared`), así que lo que la pantalla muestra es lo que
  * la api acepta.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { cents, formatPEN, formatPENShort, weekdayName, type TrialSlot } from '@sinchi/shared';
+import {
+  allWeekdays,
+  cents,
+  formatPEN,
+  formatPENShort,
+  formatPlainDate,
+  isoWeekday,
+  weekdayInitial,
+  weekdayName,
+  type IsoWeekday,
+  type PlainDate,
+  type TrialSlot,
+} from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
@@ -24,9 +36,9 @@ import { EstadoSinConexion } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import { useGym, useMisClasesGratis, useWallet } from '../../src/data/hooks';
-import { cuentaParaReservar, reservarClaseGratis } from '../../src/data/trials';
+import { cuentaParaReservar, necesitaDatos, reservarClaseGratis } from '../../src/data/trials';
 import type { BookTrialDto } from '../../src/data/api';
-import { formatWeekdayAndDay } from '../../src/lib/format';
+import { formatLongDate, formatWeekdayAndDay } from '../../src/lib/format';
 
 export default function GymScreen() {
   const theme = useTheme();
@@ -42,9 +54,10 @@ export default function GymScreen() {
   const [salida, setSalida] = useState<BookTrialDto | null>(null);
 
   const cuenta = cuentaParaReservar();
-  // Con identidad Sinchi el nombre y el celular ya se saben: volver a pedirlos
-  // dejaría dos versiones de la misma persona en la lista del gimnasio.
-  const pideDatos = cuenta.kind === 'guest';
+  // Solo si de verdad no sabemos quién es. Con identidad Sinchi los datos están
+  // en el padrón; sin ficha, en lo que escribió al crear su cuenta. Preguntar
+  // otra vez lo que la persona acaba de dar convierte la reserva en un trámite.
+  const pideDatos = necesitaDatos();
   const yaReservada = reservas.datos.find(
     (reserva) => reserva.gymSlug === slug && reserva.status === 'booked',
   );
@@ -230,16 +243,7 @@ export default function GymScreen() {
                 instante.
               </Text>
 
-              <Stack gap={8}>
-                {gym.slots.slice(0, 12).map((opcion) => (
-                  <SlotRow
-                    key={`${opcion.scheduleId}-${opcion.date.month}-${opcion.date.day}-${opcion.startTime}`}
-                    slot={opcion}
-                    selected={esLaMisma(slot, opcion)}
-                    onPress={() => setSlot(opcion)}
-                  />
-                ))}
-              </Stack>
+              <Horario slots={gym.slots} elegida={slot} onElegir={setSlot} />
 
               {pideDatos ? (
                 <Card radius={theme.radii.xl}>
@@ -360,6 +364,182 @@ export default function GymScreen() {
 }
 
 /**
+ * El horario, con la misma forma que ve el alumno ya inscrito.
+ *
+ * Antes era una lista plana de doce filas «Jueves 20 · 19:00 · Fundamentos», y
+ * leerla entera para responder «¿cuándo puedo ir?» es justo el trabajo que la
+ * pantalla del alumno resolvió: una tira de días arriba, y debajo las clases del
+ * día que tocas. Copiarla no es coherencia decorativa — el que reserva su clase
+ * gratis hoy es el mismo que mañana mira su horario, y no debería aprender dos
+ * lenguajes para la misma pregunta.
+ *
+ * Lo que cambia respecto de aquella: aquí cada día lleva FECHA. Reservar es un
+ * compromiso con un martes concreto, no con «los martes», y de cada día de la
+ * semana se ofrece su próxima fecha con clases — que puede ser hoy mismo, o el
+ * martes que viene si el de hoy ya empezó.
+ */
+function Horario({
+  slots,
+  elegida,
+  onElegir,
+}: {
+  readonly slots: readonly TrialSlot[];
+  readonly elegida: TrialSlot | null;
+  readonly onElegir: (slot: TrialSlot) => void;
+}) {
+  const theme = useTheme();
+
+  /** Las disciplinas que de verdad tienen hueco, no todas las del gimnasio. */
+  const disciplinas = useMemo(
+    () => [...new Set(slots.map((slot) => slot.name))].sort(),
+    [slots],
+  );
+  const [filtro, setFiltro] = useState<string | null>(null);
+
+  const visibles = useMemo(
+    () => (filtro === null ? slots : slots.filter((slot) => slot.name === filtro)),
+    [slots, filtro],
+  );
+
+  /**
+   * Por día de la semana, su PRÓXIMA fecha con clases.
+   *
+   * No es siempre «dentro de menos de siete días»: si las clases de hoy ya
+   * empezaron, el próximo lunes es el de la semana que viene, y la cabecera lo
+   * dice con su fecha en vez de dejar el día vacío.
+   */
+  const proximas = useMemo(() => {
+    const mapa = new Map<IsoWeekday, readonly TrialSlot[]>();
+    for (const dia of allWeekdays()) {
+      const delDia = visibles.filter((slot) => isoWeekday(slot.date) === dia);
+      if (delDia.length === 0) continue;
+
+      const primera = delDia.reduce((a, b) => (formatPlainDate(a.date) <= formatPlainDate(b.date) ? a : b));
+      const fecha = formatPlainDate(primera.date);
+      mapa.set(
+        dia,
+        delDia
+          .filter((slot) => formatPlainDate(slot.date) === fecha)
+          .sort((a, b) => a.startTime.localeCompare(b.startTime)),
+      );
+    }
+    return mapa;
+  }, [visibles]);
+
+  // El primer día con clases, para no abrir en uno vacío.
+  const primerDia = allWeekdays().find((dia) => proximas.has(dia)) ?? null;
+  const [tocado, setTocado] = useState<IsoWeekday | null>(null);
+  const dia = tocado !== null && proximas.has(tocado) ? tocado : primerDia;
+  const delDia = dia === null ? [] : (proximas.get(dia) ?? []);
+  const fecha: PlainDate | null = delDia[0]?.date ?? null;
+
+  return (
+    <Stack gap={10}>
+      {/* El filtro solo aparece cuando hay algo que filtrar. En un dojo con una
+          sola disciplina son cuatro chips que no deciden nada. */}
+      {disciplinas.length > 1 ? (
+        <Row justify="flex-start" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <Chip label="Todas" selected={filtro === null} onPress={() => setFiltro(null)} />
+          {disciplinas.map((nombre) => (
+            <Chip
+              key={nombre}
+              label={nombre}
+              selected={filtro === nombre}
+              onPress={() => {
+                setFiltro(nombre);
+                setTocado(null);
+              }}
+            />
+          ))}
+        </Row>
+      ) : null}
+
+      <Row gap={6} justify="flex-start">
+        {allWeekdays().map((cada) => {
+          const hay = proximas.has(cada);
+          const activo = cada === dia;
+
+          return (
+            <Pressable
+              key={cada}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activo, disabled: !hay }}
+              accessibilityLabel={`${weekdayName(cada)}${hay ? '' : ', sin clases'}`}
+              onPress={hay ? () => setTocado(cada) : undefined}
+              style={{
+                flex: 1,
+                aspectRatio: 1,
+                borderRadius: theme.radii.sm,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 3,
+                backgroundColor: hay ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
+                borderWidth: activo ? 1.5 : hay ? 0 : 1,
+                borderStyle: activo || hay ? 'solid' : 'dashed',
+                borderColor: activo ? theme.semaphore.ok : theme.colors.borderStrong,
+              }}
+            >
+              <Text
+                variant="caption"
+                weight={hay ? 'bold' : 'semibold'}
+                color={hay ? theme.colors.ink : theme.colors.textDisabled}
+              >
+                {weekdayInitial(cada)}
+              </Text>
+              {/* El punto dice que ese día hay clase a la que apuntarse: sin él,
+                  un día vacío y uno lleno se ven igual hasta tocarlos. */}
+              <View
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: hay ? theme.semaphore.ok : 'transparent',
+                }}
+              />
+            </Pressable>
+          );
+        })}
+      </Row>
+
+      {delDia.length === 0 || fecha === null ? (
+        <Card tone="sunken" radius={theme.radii.lg}>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            {filtro === null
+              ? 'No hay clases para reservar en las próximas dos semanas.'
+              : `No hay ${filtro} en las próximas dos semanas.`}
+          </Text>
+        </Card>
+      ) : (
+        <Card padded={false} radius={theme.radii.xl}>
+          <Row
+            style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 4 }}
+            gap={8}
+            justify="flex-start"
+          >
+            {/* Con mes: la reserva puede caer en la semana que cruza de agosto a
+                setiembre, y «Martes 1» a secas no dice cuál. */}
+            <Text variant="captionSmall" weight="bold" color={theme.colors.textSecondary}>
+              {mayuscula(weekdayName(isoWeekday(fecha)))} {formatLongDate(fecha)}
+            </Text>
+          </Row>
+
+          <Stack gap={9} style={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 4 }}>
+            {delDia.map((opcion) => (
+              <SlotRow
+                key={`${opcion.scheduleId}-${opcion.startTime}`}
+                slot={opcion}
+                selected={esLaMisma(elegida, opcion)}
+                onPress={() => onElegir(opcion)}
+              />
+            ))}
+          </Stack>
+        </Card>
+      )}
+    </Stack>
+  );
+}
+
+/**
  * Dos opciones son la misma clase si coinciden horario Y fecha.
  *
  * El `scheduleId` solo no basta —un horario se repite cada semana— y la fecha
@@ -388,7 +568,13 @@ function Volver() {
   );
 }
 
-/** Una clase concreta: día, hora y nombre. Es lo que se reserva. */
+/**
+ * Una clase del día elegido.
+ *
+ * Misma fila que el horario del alumno inscrito —nombre a la izquierda, hora a
+ * la derecha— pero aquí se toca: es lo que se reserva. La fecha no se repite en
+ * cada fila porque ya está en la cabecera del día.
+ */
 function SlotRow({
   slot,
   selected,
@@ -403,34 +589,37 @@ function SlotRow({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${slot.name}, ${formatWeekdayAndDay(slot.date)} a las ${slot.startTime}`}
+      accessibilityLabel={`${slot.name}, ${formatWeekdayAndDay(slot.date)} de ${slot.startTime} a ${slot.endTime}`}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: selected
-          ? withAlpha(theme.semaphore.ok, 0.14)
-          : theme.colors.surfaceRaised,
+        backgroundColor: selected ? withAlpha(theme.semaphore.ok, 0.14) : 'transparent',
         borderWidth: 1,
-        borderColor: selected ? withAlpha(theme.semaphore.ok, 0.5) : theme.colors.hairline,
+        borderColor: selected ? withAlpha(theme.semaphore.ok, 0.5) : 'transparent',
         borderRadius: theme.radii.lg,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 10,
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      <Row>
+      <Row gap={12}>
         <Stack gap={2} style={{ flex: 1 }}>
           <Text variant="bodySmall" weight={selected ? 'semibold' : 'regular'}>
-            {formatWeekdayAndDay(slot.date)} · {slot.startTime}
-          </Text>
-          <Text variant="captionSmall" color={theme.colors.textTertiary} numberOfLines={1}>
             {slot.name}
           </Text>
+          {slot.instructor === null ? null : (
+            <Text variant="micro" color={theme.colors.textFaint}>
+              {slot.instructor}
+            </Text>
+          )}
         </Stack>
         {selected ? (
           <Text variant="captionSmall" weight="bold" color={theme.semaphore.ok}>
             ELEGIDA
           </Text>
         ) : null}
+        <Text variant="bodySmall" weight="semibold" color={theme.colors.textStrong}>
+          {slot.startTime} – {slot.endTime}
+        </Text>
       </Row>
     </Pressable>
   );

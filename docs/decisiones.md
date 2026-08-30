@@ -135,6 +135,12 @@ decisiones que lo sostienen:
   es lo único que el gimnasio necesita para atender a alguien el martes. Lo que
   sí exige es una cuenta —Google o correo, verificada por Firebase— porque sin
   ella la lista del mostrador se llena de reservas inventadas y deja de servir.
+- **Nombre y celular se piden UNA vez, al crear la cuenta.** Viven en
+  `account_claims` —no en `users`: todavía no hay ficha a la que atarlos— y la
+  reserva los lee de ahí. Preguntarlos otra vez al reservar era la queja
+  evidente: «si acabo de registrarme, ¿por qué me lo preguntas de nuevo?». Solo
+  vuelven a aparecer si de verdad faltan, que es el caso de quien entró con
+  Google sin llegar a escribir su celular.
 - **La credencial es el ID token de Firebase**, igual que al aceptar una
   invitación. En la app se conserva en memoria mientras la cuenta está sin
   vincular: es lo único que tiene esa persona, y sin ello `/link` seguiría sin
