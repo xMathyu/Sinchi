@@ -31,6 +31,21 @@ Variables obligatorias:
 Perder `ENCRYPTION_KEY` invalida todos los QR emitidos: los alumnos tendrían que
 volver a vincular su dispositivo. Va en un gestor de secretos, no en el repo.
 
+### Dar de alta un gimnasio real
+
+`db:seed` es de demostración: **borra y rehace**. Para un cliente de verdad hay
+un script por gimnasio con sus datos —planes, precios y horarios salen de sus
+flyers— sobre el alta común de `seed-gym.ts`, que es idempotente por slug y no
+borra nada:
+
+```bash
+npm run db:seed:kaizen -w @sinchi/api          # Asociación Deportiva Club Kaizen
+npm run db:seed:fa-meng-chuen -w @sinchi/api   # Fa Meng Chuen
+```
+
+Volver a correrlo no actualiza nada: si el slug ya existe, lo dice y se va. Un
+gimnasio que cambia de precios se toca desde el panel, no desde aquí.
+
 ### Por qué dos roles, y por qué no es opcional
 
 **El rol que Neon crea por defecto tiene `BYPASSRLS = true`.** Conectando la api
