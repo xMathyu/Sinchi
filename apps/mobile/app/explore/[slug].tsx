@@ -23,16 +23,17 @@ import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGym, useMisClasesGratis } from '../../src/data/hooks';
+import { useGym, useMisClasesGratis, useWallet } from '../../src/data/hooks';
 import { cuentaParaReservar, reservarClaseGratis } from '../../src/data/trials';
 import type { BookTrialDto } from '../../src/data/api';
-import { formatWeekdayAndDay, splitGymName } from '../../src/lib/format';
+import { formatWeekdayAndDay } from '../../src/lib/format';
 
 export default function GymScreen() {
   const theme = useTheme();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { datos: gym, cargando, error, recargar } = useGym(slug ?? '');
   const reservas = useMisClasesGratis();
+  const billetera = useWallet();
 
   const [slot, setSlot] = useState<TrialSlot | null>(null);
   const [nombre, setNombre] = useState('');
@@ -66,8 +67,18 @@ export default function GymScreen() {
     );
   }
 
-  const { brand, area } = splitGymName(gym.name);
   const puedeReservar = gym.trialClassEnabled && gym.slots.length > 0;
+  /**
+   * Ya entrena aquí.
+   *
+   * La api lo rechaza igual —`already_member`, la clase gratis es para conocer
+   * un local nuevo— pero enterarse DESPUÉS de elegir día y hora es que la
+   * pantalla te haga trabajar para nada. La billetera ya sabe la respuesta.
+   */
+  const esAlumno = billetera.some(
+    (entrada) =>
+      entrada.tenant.id === gym.id && entrada.subscription.status !== 'canceled',
+  );
 
   const confirmar = (): void => {
     if (slot === null) return;
@@ -110,12 +121,14 @@ export default function GymScreen() {
         ) : null}
       </Row>
 
+      {/* El nombre entero, sin partirlo en marca y distrito: quien abre esta
+          pantalla todavía no conoce el gimnasio y el nombre es lo único que
+          tiene para reconocerlo. */}
       <Stack gap={3} style={{ marginTop: 18 }}>
         <Text variant="title" weight="bold">
-          {brand}
+          {gym.name}
         </Text>
         <Text variant="caption" color={theme.colors.textSecondary}>
-          {area.length > 0 ? `${area} · ` : ''}
           {gym.weeklyClasses} {gym.weeklyClasses === 1 ? 'clase' : 'clases'} por semana
         </Text>
       </Stack>
@@ -129,7 +142,19 @@ export default function GymScreen() {
       ) : null}
 
       {/* --- La clase gratis ------------------------------------------------ */}
-      {yaReservada !== undefined ? (
+      {esAlumno ? (
+        <Card tone="sunken" radius={theme.radii.xl} style={{ marginTop: 22 }}>
+          <Stack gap={6}>
+            <Text variant="bodySmall" weight="semibold">
+              Ya entrenas aquí
+            </Text>
+            <Text variant="caption" color={theme.colors.textSecondary}>
+              Tu membresía está en la billetera. La clase gratis es para conocer un
+              gimnasio nuevo.
+            </Text>
+          </Stack>
+        </Card>
+      ) : yaReservada !== undefined ? (
         <Card
           accent={theme.semaphore.ok}
           borderColor={withAlpha(theme.semaphore.ok, 0.26)}

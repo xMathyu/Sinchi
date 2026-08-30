@@ -36,6 +36,7 @@ import { InjectDb } from '../../db/db.module';
 import {
   adoptTenant,
   schema,
+  withContext,
   withTenant,
   withTrialAccount,
   withUser,
@@ -551,10 +552,30 @@ export class TrialsService {
     });
   }
 
-  /** Las reservas de quien ya tiene identidad Sinchi, en toda la red. */
+  /**
+   * Las reservas de quien ya tiene identidad Sinchi, en toda la red.
+   *
+   * Se buscan por identidad Y por cuenta de Firebase, y esa segunda mitad no es
+   * redundante: quien reservo ANTES de tener ficha dejo la fila con `user_id`
+   * nulo, y cuando recepcion vincula su cuenta, esa reserva —la que lo trajo al
+   * gimnasio— desapareceria de su app justo el dia que se inscribe.
+   *
+   * Las dos puertas de la politica se abren a la vez con el mismo contexto: la
+   * de identidad y la de cuenta. La segunda solo se abre si `users` dice que esa
+   * cuenta es suya, asi que no alcanza nada ajeno.
+   */
   async forUser(userId: string): Promise<readonly TrialBookingView[]> {
-    return withUser(this.db, userId, (tx) =>
-      this.withGymNames(tx, eq(schema.trialBookings.userId, userId)),
+    const uid = await this.firebaseUidOf(userId);
+    const condition =
+      uid === null
+        ? eq(schema.trialBookings.userId, userId)
+        : or(
+            eq(schema.trialBookings.userId, userId),
+            eq(schema.trialBookings.firebaseUid, uid),
+          )!;
+
+    return withContext(this.db, uid === null ? { userId } : { userId, trialAccount: uid }, (tx) =>
+      this.withGymNames(tx, condition),
     );
   }
 
@@ -625,18 +646,28 @@ export class TrialsService {
     account: TrialAccount,
     bookingId: string,
   ): Promise<{ readonly canceled: true }> {
+    // Con sesion vale tambien lo que reservo ANTES de tener ficha: es la misma
+    // persona. La segunda puerta solo se abre si `users` dice que esa cuenta es
+    // suya, asi que no alcanza ninguna reserva ajena.
+    const uid =
+      account.kind === 'user' ? await this.firebaseUidOf(account.userId) : account.uid;
+
+    const suya =
+      account.kind === 'user'
+        ? uid === null
+          ? eq(schema.trialBookings.userId, account.userId)
+          : or(
+              eq(schema.trialBookings.userId, account.userId),
+              eq(schema.trialBookings.firebaseUid, uid),
+            )!
+        : eq(schema.trialBookings.firebaseUid, account.uid);
+
     const run = async (tx: Tx): Promise<{ readonly canceled: true }> => {
       const [row] = await tx
         .select({ id: schema.trialBookings.id, tenantId: schema.trialBookings.tenantId })
         .from(schema.trialBookings)
         .where(
-          and(
-            eq(schema.trialBookings.id, bookingId),
-            ne(schema.trialBookings.status, 'canceled'),
-            account.kind === 'user'
-              ? eq(schema.trialBookings.userId, account.userId)
-              : eq(schema.trialBookings.firebaseUid, account.uid),
-          ),
+          and(eq(schema.trialBookings.id, bookingId), ne(schema.trialBookings.status, 'canceled'), suya),
         )
         .limit(1);
 
@@ -651,9 +682,24 @@ export class TrialsService {
       return { canceled: true };
     };
 
-    return account.kind === 'user'
-      ? withUser(this.db, account.userId, run)
-      : withTrialAccount(this.db, account.uid, run);
+    if (account.kind !== 'user') return withTrialAccount(this.db, account.uid, run);
+    return withContext(
+      this.db,
+      uid === null ? { userId: account.userId } : { userId: account.userId, trialAccount: uid },
+      run,
+    );
+  }
+
+  /** La cuenta de Google de esa identidad, si tiene una vinculada. */
+  private async firebaseUidOf(userId: string): Promise<string | null> {
+    const [row] = await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .select({ firebaseUid: schema.users.firebaseUid })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1),
+    );
+    return row?.firebaseUid ?? null;
   }
 
   // -------------------------------------------------------------------------

@@ -23,7 +23,7 @@ import { useTheme } from '../../src/design/theme';
 import { useGyms, useMisClasesGratis } from '../../src/data/hooks';
 import { cancelarClaseGratis } from '../../src/data/trials';
 import type { GymCardDto } from '../../src/data/api';
-import { formatWeekdayAndDay, splitGymName } from '../../src/lib/format';
+import { formatWeekdayAndDay } from '../../src/lib/format';
 
 export default function ExploreScreen() {
   const theme = useTheme();
@@ -144,7 +144,6 @@ export default function ExploreScreen() {
  */
 function GymCard({ gym }: { readonly gym: GymCardDto }) {
   const theme = useTheme();
-  const { brand, area } = splitGymName(gym.name);
 
   return (
     <Pressable
@@ -154,16 +153,17 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
     >
       <Card radius={theme.radii.xl}>
         <Stack gap={11}>
+          {/* El nombre ENTERO, en dos líneas si hace falta.
+              La billetera lo parte en marca y distrito («Nova BJJ» + «Surco»)
+              porque son gimnasios que el alumno ya conoce. Aquí no conoce
+              ninguno, y esa heurística le hacía perder justo la palabra que
+              importa: «Asociación Deportiva Club Kaizen» salía como
+              «Asociación Deportiva C…» con «Kaizen» de subtítulo. */}
           <Row align="flex-start" style={{ gap: 10 }}>
             <Stack gap={2} style={{ flex: 1 }}>
-              <Text variant="heading" weight="bold" numberOfLines={1}>
-                {brand}
+              <Text variant="heading" weight="bold" numberOfLines={2}>
+                {gym.name}
               </Text>
-              {area.length > 0 ? (
-                <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  {area}
-                </Text>
-              ) : null}
             </Stack>
             {gym.trialClassEnabled ? (
               <Badge
