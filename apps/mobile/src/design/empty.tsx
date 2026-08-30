@@ -23,19 +23,30 @@ import { useTheme } from './theme';
  * Los dos se veian igual —"todavia no tienes un plan"— y eso le dice a alguien
  * que SI tiene plan que sus datos desaparecieron. Cuando la carga falla, la
  * pantalla tiene que decir que fallo y ofrecer reintentar, no inventar un vacio.
+ *
+ * El texto por defecto habla de LO SUYO —"tus datos", "tu informacion"— porque
+ * nacio en la billetera, y ahi tranquilizar es justo lo que hace falta. En el
+ * directorio no vale: lo que no cargo es la pagina de un gimnasio ajeno, y
+ * decirle a alguien que su informacion sigue ahi cuando lo que falta es un
+ * horario que nunca fue suyo suena a que se perdio algo. Por eso las dos lineas
+ * se pueden cambiar.
  */
 export function EstadoSinConexion({
   error,
   onReintentar,
+  titulo = 'No se pudieron traer tus datos',
+  cuerpo = 'Tu información sigue ahí: es la conexión con el servidor la que falló.',
 }: {
   readonly error: string;
   readonly onReintentar: () => void;
+  readonly titulo?: string;
+  readonly cuerpo?: string;
 }) {
   const theme = useTheme();
   return (
     <EstadoVacio
-      titulo="No se pudieron traer tus datos"
-      cuerpo="Tu información sigue ahí: es la conexión con el servidor la que falló."
+      titulo={titulo}
+      cuerpo={cuerpo}
       pie={error}
       accion={
         <Pressable accessibilityRole="button" onPress={onReintentar}>
