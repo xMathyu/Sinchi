@@ -68,6 +68,20 @@ export function necesitaDatos(): boolean {
   );
 }
 
+/**
+ * Vacío es AUSENTE.
+ *
+ * `??` solo cae con `null` y `undefined`, así que una cadena vacía —que es lo
+ * que trae un campo que ni se enseñó— pasaba como si fuera un dato y tapaba lo
+ * que sí sabíamos. Se coló entera hasta la api, que rechazó la reserva por
+ * «nombre demasiado corto», y de paso dejó guardado un celular de tres
+ * caracteres encima del bueno.
+ */
+const dato = (valor: string | null | undefined): string | null => {
+  const limpio = (valor ?? '').trim();
+  return limpio.length === 0 ? null : limpio;
+};
+
 export class SinCuenta extends Error {
   constructor() {
     super('Entra con tu correo o con Google para reservar tu clase gratis.');
@@ -94,14 +108,14 @@ export async function reservarClaseGratis(input: {
   // persona escribió al registrarse — y si tampoco, la api lo resuelve por su
   // cuenta contra el código pendiente.
   const guardado = currentAccountDetails();
-  const fullName = (input.fullName ?? guardado?.fullName ?? '').trim();
-  const phone = (input.phone ?? guardado?.phone ?? '').trim();
+  const fullName = dato(input.fullName) ?? dato(guardado?.fullName) ?? '';
+  const phone = dato(input.phone) ?? dato(guardado?.phone) ?? '';
 
   // Se recuerdan en el dispositivo: si esta vez hubo que preguntarlos —porque la
   // cuenta se creó fuera del formulario de registro, o entró con Google sin
   // escribir su celular— la siguiente reserva, en este gimnasio o en otro, ya no
   // pregunta nada.
-  await saveAccountDetails({ fullName: fullName || null, phone: phone || null });
+  await saveAccountDetails({ fullName: dato(fullName), phone: dato(phone) });
 
   return bookTrialAsGuest({
     slug: input.slug,

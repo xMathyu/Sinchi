@@ -148,7 +148,12 @@ export async function restoreSession(
    * que se ve como un parpadeo y se lee como que la sesión se cayó.
    */
   const caer = async (): Promise<void> => {
-    if (recuperarCuentaSinFicha !== undefined && (await recuperarCuentaSinFicha())) return;
+    try {
+      if (recuperarCuentaSinFicha !== undefined && (await recuperarCuentaSinFicha())) return;
+    } catch {
+      // El intento de recuperar no puede impedir que la app arranque: si falla,
+      // se muestra el login, que es exactamente lo que hay que hacer.
+    }
     emit({ status: 'signed_out' });
   };
 
@@ -293,10 +298,22 @@ export async function loadAccountDetails(): Promise<AccountDetails> {
  * y la pantalla decide eso mirando la sesión, no el llavero.
  */
 export async function saveAccountDetails(details: AccountDetails): Promise<void> {
+  /**
+   * Un valor demasiado corto para servir no puede pisar a uno bueno.
+   *
+   * El celular arranca con «+51» en los formularios, y sin esta guarda un envío
+   * a medias dejaba eso guardado encima del número de verdad — y la siguiente
+   * reserva volvía a preguntar.
+   */
+  const util = (valor: string | null, minimo: number): string | null => {
+    const limpio = (valor ?? '').trim();
+    return limpio.length >= minimo ? limpio : null;
+  };
+
   const previo = await loadAccountDetails();
   const merged: AccountDetails = {
-    fullName: details.fullName ?? previo.fullName,
-    phone: details.phone ?? previo.phone,
+    fullName: util(details.fullName, 2) ?? previo.fullName,
+    phone: util(details.phone, 6) ?? previo.phone,
   };
 
   if (merged.fullName === null && merged.phone === null) return;
