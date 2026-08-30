@@ -27,6 +27,8 @@ import { exchangeGoogleToken, signInWithEmail } from './firebase';
 import {
   clearSession,
   forgetDeviceToken,
+  loadAccountDetails,
+  saveAccountDetails,
   saveDeviceToken,
   saveSession,
   setUnlinked,
@@ -101,19 +103,37 @@ async function exchangeForSinchiSession(
   firebaseIdToken: string,
   datos: DatosDeRegistro = {},
 ): Promise<SignInOutcome> {
-  const result = await signInWithGoogle(firebaseIdToken, datos);
+  /**
+   * Lo que se sabe de esta persona, en orden: lo que acaba de escribir al
+   * registrarse, y si no, lo que quedó guardado en el dispositivo.
+   *
+   * Lo segundo hace falta porque del otro lado los datos viven con el código
+   * pendiente, que caduca a los diez minutos: sin esto, cerrar la app y volver a
+   * entrar los perdía y la reserva preguntaba otra vez.
+   */
+  const guardado = await loadAccountDetails();
+  const conDatos: DatosDeRegistro = {
+    fullName: datos.fullName ?? guardado.fullName ?? undefined,
+    phone: datos.phone ?? guardado.phone ?? undefined,
+  };
+
+  const result = await signInWithGoogle(firebaseIdToken, conDatos);
 
   if (!result.linked) {
     // El token de Firebase se conserva: es la unica credencial de quien todavia
     // no tiene ficha, y con ella puede reservar una clase gratis mientras
     // recepcion confirma el codigo. Con el viajan sus datos, para no volver a
     // preguntarselos al reservar.
+    const fullName = result.claim.displayName ?? conDatos.fullName ?? null;
+    const phone = result.claim.phone ?? conDatos.phone ?? null;
+    await saveAccountDetails({ fullName, phone });
+
     setUnlinked({
       code: result.claim.code,
       expiresAt: new Date(result.claim.expiresAt).getTime(),
       idToken: firebaseIdToken,
-      fullName: result.claim.displayName,
-      phone: result.claim.phone,
+      fullName,
+      phone,
     });
     return { kind: 'needs_link', code: result.claim.code };
   }

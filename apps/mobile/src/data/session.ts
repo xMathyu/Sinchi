@@ -16,6 +16,17 @@ const TOKEN_KEY = 'sinchi.session.token.v1';
 const META_KEY = 'sinchi.session.meta.v1';
 /** Token del equipo del mostrador. Sobrevive a los cambios de turno. */
 const DEVICE_KEY = 'sinchi.device.token.v1';
+/**
+ * Nombre y celular de quien todavía no tiene ficha.
+ *
+ * Se guardan en el dispositivo porque del otro lado viven con el código
+ * pendiente, y ese **caduca a los diez minutos**: registrarse, cerrar la app y
+ * volver a entrar los perdía, y la reserva volvía a preguntar justo lo que la
+ * persona ya había escrito. Aquí no son un secreto —son sus propios datos, en su
+ * propio teléfono— pero van al mismo llavero que el resto por no abrir un
+ * almacén más.
+ */
+const DETAILS_KEY = 'sinchi.account.details.v1';
 
 export interface Session {
   readonly accessToken: string;
@@ -207,10 +218,57 @@ export function setUnlinked(input: {
 }
 
 /** Nombre y celular de quien todavía no tiene ficha. `null` si no los dio. */
-export const currentAccountDetails = (): {
+export const currentAccountDetails = (): AccountDetails | null =>
+  state.status === 'unlinked' ? { fullName: state.fullName, phone: state.phone } : null;
+
+export interface AccountDetails {
   readonly fullName: string | null;
   readonly phone: string | null;
-} | null => (state.status === 'unlinked' ? { fullName: state.fullName, phone: state.phone } : null);
+}
+
+/**
+ * Lo que esta persona dijo de sí misma, guardado en el dispositivo.
+ *
+ * Sobrevive a cerrar la app, que es justo lo que el código pendiente no hace.
+ * Se manda en cada login para que el servidor lo tenga otra vez.
+ */
+export async function loadAccountDetails(): Promise<AccountDetails> {
+  try {
+    const raw = await SecureStore.getItemAsync(DETAILS_KEY);
+    if (raw === null) return { fullName: null, phone: null };
+    return JSON.parse(raw) as AccountDetails;
+  } catch {
+    return { fullName: null, phone: null };
+  }
+}
+
+/**
+ * Guarda lo que falte, sin borrar lo que ya había, y lo refleja en la sesión.
+ *
+ * Lo segundo importa dentro de la misma sesión: quien escribe su nombre al
+ * reservar en un gimnasio no debería volver a escribirlo al abrir el siguiente,
+ * y la pantalla decide eso mirando la sesión, no el llavero.
+ */
+export async function saveAccountDetails(details: AccountDetails): Promise<void> {
+  const previo = await loadAccountDetails();
+  const merged: AccountDetails = {
+    fullName: details.fullName ?? previo.fullName,
+    phone: details.phone ?? previo.phone,
+  };
+
+  if (merged.fullName === null && merged.phone === null) return;
+
+  if (state.status === 'unlinked') {
+    emit({ ...state, fullName: merged.fullName, phone: merged.phone });
+  }
+
+  try {
+    await SecureStore.setItemAsync(DETAILS_KEY, JSON.stringify(merged));
+  } catch {
+    // Un llavero que no acepta escrituras no puede impedir una reserva: lo peor
+    // que pasa es que la próxima vez se pregunte otra vez.
+  }
+}
 
 /**
  * La credencial de quien entró pero todavía no tiene ficha.
@@ -225,6 +283,9 @@ export async function clearSession(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(TOKEN_KEY),
     SecureStore.deleteItemAsync(META_KEY),
+    // Salir de la cuenta también borra sus datos: el siguiente que entre en este
+    // teléfono no debe encontrar el nombre y el celular de otro.
+    SecureStore.deleteItemAsync(DETAILS_KEY),
   ]);
   emit({ status: 'signed_out' });
 }
