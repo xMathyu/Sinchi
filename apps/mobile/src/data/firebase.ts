@@ -71,7 +71,22 @@ export class FirebaseAuthError extends Error {
 
 interface SignInWithIdpResponse {
   readonly idToken?: string;
+  readonly refreshToken?: string;
   readonly error?: { readonly message?: string; readonly code?: number };
+}
+
+/**
+ * Lo que devuelve entrar, con las dos credenciales que importan.
+ *
+ * El `idToken` dura una hora y es el que la api verifica. El `refreshToken` no
+ * caduca solo y sirve para pedir uno nuevo — es lo que permite que la sesión de
+ * quien todavía no tiene ficha sobreviva a cerrar la app. Sin él, esa persona
+ * volvía al login en cada arranque, porque su sesión no es un token de Sinchi
+ * (no lo tiene: no hay ficha a la que atarlo) sino este.
+ */
+export interface FirebaseSignIn {
+  readonly idToken: string;
+  readonly refreshToken: string | null;
 }
 
 /**
@@ -81,7 +96,7 @@ interface SignInWithIdpResponse {
  * ante *nuestro proyecto*, y es el único que la api sabe verificar. Sin este
  * paso, `/auth/google` rechazaría el token con 401 — el `aud` no coincidiría.
  */
-export async function exchangeGoogleToken(googleIdToken: string): Promise<string> {
+export async function exchangeGoogleToken(googleIdToken: string): Promise<FirebaseSignIn> {
   if (!firebaseConfigured()) {
     throw new FirebaseAuthError(
       'Falta la configuración de Firebase en este build (ver .env.example).',
@@ -118,7 +133,7 @@ export async function exchangeGoogleToken(googleIdToken: string): Promise<string
     throw new FirebaseAuthError(humanize(raw), raw);
   }
 
-  return payload.idToken;
+  return { idToken: payload.idToken, refreshToken: payload.refreshToken ?? null };
 }
 
 /**
@@ -158,7 +173,7 @@ export async function signInWithEmail(
   email: string,
   password: string,
   mode: 'signIn' | 'signUp',
-): Promise<string> {
+): Promise<FirebaseSignIn> {
   if (!firebaseConfigured()) {
     throw new FirebaseAuthError(
       'Falta la configuración de Firebase en este build (ver .env.example).',
@@ -194,7 +209,41 @@ export async function signInWithEmail(
     throw new FirebaseAuthError(humanizeEmail(raw), raw);
   }
 
-  return payload.idToken;
+  return { idToken: payload.idToken, refreshToken: payload.refreshToken ?? null };
+}
+
+/**
+ * Cambia un refresh token por un ID token nuevo.
+ *
+ * Es el endpoint estándar de Secure Token, y la `apiKey` que usa es la misma que
+ * el resto del archivo: identifica el proyecto y no autoriza nada por sí sola.
+ *
+ * Devuelve `null` cuando el refresh ya no vale —la cuenta se borró, se revocó la
+ * sesión, cambió la contraseña— y entonces lo correcto es volver al login, no
+ * insistir.
+ */
+export async function refreshIdToken(refreshToken: string): Promise<string | null> {
+  if (!firebaseConfigured()) return null;
+
+  const url =
+    'https://securetoken.googleapis.com/v1/token?key=' +
+    encodeURIComponent(firebaseConfig.apiKey);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
+    });
+
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { readonly id_token?: string };
+    return typeof payload.id_token === 'string' ? payload.id_token : null;
+  } catch {
+    // Sin red no se puede refrescar, y eso no es "tu sesión murió": la app
+    // muestra el login y con conexión vuelve a entrar.
+    return null;
+  }
 }
 
 /**

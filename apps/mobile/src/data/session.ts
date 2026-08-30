@@ -27,6 +27,16 @@ const DEVICE_KEY = 'sinchi.device.token.v1';
  * almacén más.
  */
 const DETAILS_KEY = 'sinchi.account.details.v1';
+/**
+ * Refresh token de Firebase de quien todavía no tiene ficha.
+ *
+ * Es LA credencial de esa persona. Quien ya está vinculado tiene un token de
+ * Sinchi guardado y con eso vuelve a entrar solo; quien no, no tiene ninguno —
+ * su sesión es la de Firebase— y sin guardar esto volvía al login cada vez que
+ * se cerraba la app o Metro recargaba. Se guarda en el mismo llavero que el
+ * token de sesión porque es exactamente lo mismo: una llave de larga vida.
+ */
+const PROSPECT_KEY = 'sinchi.account.firebase.v1';
 
 export interface Session {
   readonly accessToken: string;
@@ -127,7 +137,21 @@ interface StoredMeta {
  * intenta renovar: no hay refresh token porque el de Google se puede volver a
  * pedir sin fricción, y guardar uno más solo suma superficie que proteger.
  */
-export async function restoreSession(): Promise<void> {
+export async function restoreSession(
+  recuperarCuentaSinFicha?: () => Promise<boolean>,
+): Promise<void> {
+  /**
+   * Antes de darse por vencido, el intento de la cuenta sin ficha.
+   *
+   * Va aquí dentro y no en el arranque para no pasar por `signed_out`: emitirlo
+   * y corregirlo después manda la app al login y la saca un instante más tarde,
+   * que se ve como un parpadeo y se lee como que la sesión se cayó.
+   */
+  const caer = async (): Promise<void> => {
+    if (recuperarCuentaSinFicha !== undefined && (await recuperarCuentaSinFicha())) return;
+    emit({ status: 'signed_out' });
+  };
+
   try {
     const [token, rawMeta] = await Promise.all([
       SecureStore.getItemAsync(TOKEN_KEY),
@@ -135,13 +159,19 @@ export async function restoreSession(): Promise<void> {
     ]);
 
     if (token === null || rawMeta === null) {
-      emit({ status: 'signed_out' });
+      await caer();
       return;
     }
 
     const meta = JSON.parse(rawMeta) as StoredMeta;
     if (meta.expiresAt <= Date.now()) {
-      await clearSession();
+      // Se tira el token vencido pero NO la credencial de Firebase: con ella se
+      // puede pedir una sesión nueva sin volver a pedirle la contraseña.
+      await Promise.all([
+        SecureStore.deleteItemAsync(TOKEN_KEY),
+        SecureStore.deleteItemAsync(META_KEY),
+      ]);
+      await caer();
       return;
     }
 
@@ -158,7 +188,20 @@ export async function restoreSession(): Promise<void> {
   } catch {
     // Un llavero ilegible (dispositivo recién restaurado, permisos raros) no
     // debe dejar la app en `loading` para siempre.
-    emit({ status: 'signed_out' });
+    await caer();
+  }
+}
+
+/** La credencial con la que vuelve a entrar quien no tiene ficha. */
+export const loadFirebaseCredential = (): Promise<string | null> =>
+  SecureStore.getItemAsync(PROSPECT_KEY);
+
+export async function saveFirebaseCredential(refreshToken: string): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(PROSPECT_KEY, refreshToken);
+  } catch {
+    // Sin llavero, la sesión dura lo que dure la app. No es motivo para fallar
+    // el login que acaba de funcionar.
   }
 }
 
@@ -283,9 +326,11 @@ export async function clearSession(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(TOKEN_KEY),
     SecureStore.deleteItemAsync(META_KEY),
-    // Salir de la cuenta también borra sus datos: el siguiente que entre en este
-    // teléfono no debe encontrar el nombre y el celular de otro.
+    // Salir de la cuenta también borra sus datos y su credencial: el siguiente
+    // que entre en este teléfono no debe encontrar el nombre, el celular ni la
+    // sesión de otro.
     SecureStore.deleteItemAsync(DETAILS_KEY),
+    SecureStore.deleteItemAsync(PROSPECT_KEY),
   ]);
   emit({ status: 'signed_out' });
 }

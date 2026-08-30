@@ -24,6 +24,7 @@ import { ThemeProvider } from '../src/design/theme';
 import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
+import { restaurarCuentaDeFirebase } from '../src/data/auth';
 import { useSession } from '../src/data/session-hooks';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
 import { marcarHidratando, marcarIntentoTerminado } from '../src/data/store';
@@ -70,9 +71,12 @@ export default function RootLayout() {
     }
   }, [fontError]);
 
-  // Recuperar la sesion del llavero antes de decidir a donde va la app.
+  // Recuperar la sesion del llavero antes de decidir a donde va la app. Si no
+  // hay token de Sinchi, se intenta con la credencial de Firebase: es la unica
+  // sesion que tiene quien todavia no esta vinculado a ninguna ficha, y sin este
+  // segundo intento volvia al login en cada arranque.
   useEffect(() => {
-    void restoreSession();
+    void restoreSession(restaurarCuentaDeFirebase);
   }, []);
 
   if (!fontsLoaded && fontError === null) {
