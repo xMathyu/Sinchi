@@ -27,7 +27,12 @@ import {
   type BookTrialDto,
   type TrialBookingDto,
 } from './api';
-import { currentAccountDetails, currentFirebaseToken, getSessionState } from './session';
+import {
+  currentAccountDetails,
+  currentFirebaseToken,
+  getSessionState,
+  saveAccountDetails,
+} from './session';
 
 /** Con qué credencial se puede reservar ahora mismo. */
 export type CuentaParaReservar =
@@ -91,6 +96,12 @@ export async function reservarClaseGratis(input: {
   const guardado = currentAccountDetails();
   const fullName = (input.fullName ?? guardado?.fullName ?? '').trim();
   const phone = (input.phone ?? guardado?.phone ?? '').trim();
+
+  // Se recuerdan en el dispositivo: si esta vez hubo que preguntarlos —porque la
+  // cuenta se creó fuera del formulario de registro, o entró con Google sin
+  // escribir su celular— la siguiente reserva, en este gimnasio o en otro, ya no
+  // pregunta nada.
+  await saveAccountDetails({ fullName: fullName || null, phone: phone || null });
 
   return bookTrialAsGuest({
     slug: input.slug,
