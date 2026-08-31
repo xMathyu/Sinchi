@@ -11,17 +11,16 @@ import 'dotenv/config';
 import { DOM, SAB, seedGym, type GimnasioSpec } from './seed-gym';
 
 /**
- * Vende de las dos formas, y en el modelo son dos cosas distintas:
+ * Vende de las dos formas, y en el modelo son tres cosas distintas:
  *
  *  · las DOS MODALIDADES son mensualidades, cada una con su precio;
- *  · la «clase libre» de S/40 NO es un plan sino el precio de la clase suelta
- *    del local (`drop_in`). Un plan crea suscripcion y fecha de cobro; una clase
- *    suelta es un cargo y se acaba ahi, que es exactamente lo que el flyer
- *    vende: "toma una clase suelta y vive el entrenamiento por un dia".
- *
- * Por eso tampoco ofrece la clase GRATIS de la app: su prueba ya tiene precio, y
- * regalarla seria vender por debajo de su propia lista. El dueno puede
- * encenderla cuando quiera desde «Clases gratis» en la app.
+ *  · la «clase libre» de S/40 es el precio de la clase suelta del local
+ *    (`drop_in`): un plan crea suscripcion y fecha de cobro, y esto es un cargo
+ *    que se acaba ahi — "toma una clase suelta y vive el entrenamiento por un
+ *    dia", dice su flyer;
+ *  · y esa misma clase libre es su CLASE DE PRUEBA, que aqui se puede reservar
+ *    desde la app aunque no sea gratis. Se reserva el sitio y se paga al llegar:
+ *    el gimnasio se entera de quien viene, que es de lo que se trata.
  */
 const FA_MENG_CHUEN: GimnasioSpec = {
   slug: 'fa-meng-chuen',
@@ -32,7 +31,11 @@ const FA_MENG_CHUEN: GimnasioSpec = {
   dropInSoles: 40,
   // "Sin matrícula sorpresa", dice su propio flyer.
   enrollmentSoles: 0,
-  trialClassEnabled: false,
+  trialClassEnabled: true,
+  // Su prueba es de pago: se reserva por la app y se cobra en el local. Antes
+  // esto estaba apagado porque la reserva solo sabia ser gratis, y encenderla
+  // habria sido regalarles su propio producto.
+  trialSoles: 40,
   planes: [
     { name: 'Sanda', type: 'unlimited', sessionsPerWeek: null, soles: 240 },
     { name: 'Tai Chi', type: 'unlimited', sessionsPerWeek: null, soles: 220 },

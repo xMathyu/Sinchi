@@ -289,6 +289,10 @@ export async function runSeed(options: SeedOptions = {}): Promise<void> {
             graceDays: 5,
             quotaOverflowPolicy: 'block',
             dropInPriceCents: fromSoles(30),
+            // Su clase de prueba se PAGA. Es el tercer caso del directorio —uno
+            // que no la ofrece, uno que la regala y uno que la cobra— y sin él
+            // el camino de la prueba de pago no lo prueba nadie.
+            trialClassPriceCents: fromSoles(30),
           },
         ])
         .returning({ id: schema.tenants.id, slug: schema.tenants.slug }),

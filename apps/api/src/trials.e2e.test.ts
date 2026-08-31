@@ -254,6 +254,38 @@ suite('reservar la clase gratis', () => {
     expect(otra.body.booked).toBe(true);
   });
 
+  /**
+   * La prueba que se paga.
+   *
+   * Un gimnasio cuya clase suelta ES su prueba no puede regalarla, y sin este
+   * camino solo se podia elegir entre regalar o quedarse fuera del directorio.
+   * El precio viaja congelado en la reserva: si el gimnasio sube la tarifa entre
+   * hoy y el dia de la clase, se respeta lo que se prometio.
+   */
+  it('la clase de prueba puede tener precio, y queda congelado en la reserva', async () => {
+    const { body: iron } = await http.get('/v1/gyms/iron-muay-thai').expect(200);
+    expect((iron as GymDetail & { trialClassPriceCents: number }).trialClassPriceCents).toBe(3000);
+
+    const { body } = await reservar('iron-muay-thai', {
+      token: declareIdentity(`prospecto-${runId}-20`),
+      slot: (iron as GymDetail).slots[0]!,
+      fullName: 'Paga Sullegada',
+    });
+
+    expect(body.booked).toBe(true);
+    expect(body.booking.priceCents).toBe(3000);
+  });
+
+  it('la clase gratis sigue siendo gratis donde lo es', async () => {
+    const { body } = await reservar('nova-bjj', {
+      token: declareIdentity(`prospecto-${runId}-21`),
+      slot: nova.slots[0]!,
+    });
+
+    expect(body.booked).toBe(true);
+    expect(body.booking.priceCents).toBe(0);
+  });
+
   it('un gimnasio que no la ofrece no la da igual', async () => {
     const { body: shotokan } = await http.get('/v1/gyms/dojo-shotokan').expect(200);
     // Sin horarios publicados no hay ni que elegir; se manda uno de Nova para

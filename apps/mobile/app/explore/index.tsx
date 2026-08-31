@@ -70,12 +70,12 @@ export default function ExploreScreen() {
 
       <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
         Escuelas y dojos de la red. Entra a cualquiera para ver sus horarios y sus
-        precios, y reserva tu primera clase gratis.
+        precios, y reserva tu primera clase.
       </Text>
 
       {proximas.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
-          <Eyebrow>Tu clase gratis</Eyebrow>
+          <Eyebrow>Vas a probar</Eyebrow>
           {proximas.map((reserva) => (
             <Card
               key={reserva.id}
@@ -98,7 +98,7 @@ export default function ExploreScreen() {
                     // Confirmar antes de soltar el cupo: es una sola por
                     // gimnasio y deshacerlo exige volver a elegir hora.
                     Alert.alert(
-                      'Cancelar tu clase gratis',
+                      'Cancelar tu clase de prueba',
                       `${reserva.gymName} dejará de esperarte. Podrás reservar otro día.`,
                       [
                         { text: 'No', style: 'cancel' },
@@ -230,7 +230,7 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${gym.name}${gym.trialClassEnabled ? ', ofrece una clase gratis' : ''}`}
+      accessibilityLabel={`${gym.name}${gym.trialClassEnabled ? ', acepta reservas de clase de prueba' : ''}`}
       onPress={() => router.push({ pathname: '/explore/[slug]', params: { slug: gym.slug } })}
     >
       <Card radius={theme.radii.xl}>
@@ -247,9 +247,15 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
                 {gym.name}
               </Text>
             </Stack>
+            {/* Con precio cuando lo tiene: «1 CLASE GRATIS» en un local que
+                cobra S/40 por probar promete algo que la reserva desmiente. */}
             {gym.trialClassEnabled ? (
               <Badge
-                label="1 CLASE GRATIS"
+                label={
+                  (gym.trialClassPriceCents ?? 0) === 0
+                    ? '1 CLASE GRATIS'
+                    : `PRUEBA ${formatPENShort(cents(gym.trialClassPriceCents))}`
+                }
                 color={theme.semaphoreInk.ok}
                 background={theme.semaphore.ok}
               />

@@ -55,6 +55,8 @@ export interface GymCard {
   readonly slug: string;
   readonly name: string;
   readonly trialClassEnabled: boolean;
+  /** Cuanto cuesta la clase de prueba. 0 = gratis. */
+  readonly trialClassPriceCents: number;
   /** Plan mas barato. `null` si el gimnasio todavia no publico ninguno. */
   readonly fromPriceCents: number | null;
   /** Bloques de horario a la semana: dice si el local esta vivo. */
@@ -193,6 +195,7 @@ export class TrialsService {
           slug: schema.tenants.slug,
           name: schema.tenants.name,
           trialClassEnabled: schema.tenants.trialClassEnabled,
+          trialClassPriceCents: schema.tenants.trialClassPriceCents,
         })
         .from(schema.tenants)
         .where(eq(schema.tenants.status, 'active'))
@@ -266,6 +269,7 @@ export class TrialsService {
         slug: gym.slug,
         name: gym.name,
         trialClassEnabled: gym.trialClassEnabled,
+        trialClassPriceCents: gym.trialClassPriceCents,
         timezone: gym.timezone,
         enrollmentFeeCents: gym.enrollmentFeeCents,
         dropInPriceCents: gym.dropInPriceCents,
@@ -419,6 +423,9 @@ export class TrialsService {
             localDate: formatPlainDate(verdict.slot.date),
             startTime: verdict.slot.startTime,
             endTime: verdict.slot.endTime,
+            // Congelado: si el gimnasio sube la tarifa entre la reserva y el dia
+            // de la clase, se respeta lo que se le prometio a la persona.
+            priceCents: gym.trialClassPriceCents,
           })
           .returning();
 
@@ -554,7 +561,7 @@ export class TrialsService {
       const para = destinatarios.find((row) => row.email !== null)?.email;
       if (para === undefined || para === null || !this.mail.disponible) return;
 
-      const enviado = await this.mail.avisarClaseGratis({
+      const enviado = await this.mail.avisarClaseDePrueba({
         para,
         gimnasio: gym.name,
         nombre: booking.fullName,
@@ -562,6 +569,7 @@ export class TrialsService {
         clase: booking.className,
         cuando: describeDate(booking.date),
         hora: booking.startTime,
+        precioCents: booking.priceCents,
       });
 
       if (enviado.enviado) {
@@ -784,6 +792,7 @@ export class TrialsService {
           timezone: schema.tenants.timezone,
           status: schema.tenants.status,
           trialClassEnabled: schema.tenants.trialClassEnabled,
+          trialClassPriceCents: schema.tenants.trialClassPriceCents,
           enrollmentFeeCents: schema.tenants.enrollmentFeeCents,
           dropInPriceCents: schema.tenants.dropInPriceCents,
         })

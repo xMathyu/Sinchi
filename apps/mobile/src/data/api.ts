@@ -296,6 +296,8 @@ export interface GymCardDto {
   readonly slug: string;
   readonly name: string;
   readonly trialClassEnabled: boolean;
+  /** Lo que cuesta la clase de prueba. 0 = gratis. */
+  readonly trialClassPriceCents: number;
   readonly fromPriceCents: number | null;
   readonly weeklyClasses: number;
   readonly disciplines: readonly string[];

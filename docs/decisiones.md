@@ -160,6 +160,16 @@ decisiones que lo sostienen:
   que el dueño se entera cuando ya pasó no sirve de nada. El fallo del correo no
   deshace la reserva: `notified_at` deja ver cuál sí salió, y la lista está en
   la app del mostrador de todas formas.
+- **La clase de prueba puede tener PRECIO** (`tenants.trial_class_price_cents`,
+  0 = gratis). Nació gratis porque el primer gimnasio la regalaba; el segundo la
+  vende —Fa Meng Chuen cobra S/40 y esa clase suelta *es* su prueba—, así que la
+  elección no es «la ofrezco o no» sino «cuánto cuesta». Con solo el interruptor,
+  un local así tenía que quedarse fuera del directorio para no regalar su
+  producto, que es lo contrario de lo que el directorio busca. Es columna propia
+  y no `drop_in_price_cents` aunque a veces coincidan: uno lo paga el alumno que
+  agota su cupo y otro quien viene a conocer el local, y regalar la primera y
+  cobrar las siguientes es el caso más común de los dos. El precio se **congela**
+  en la reserva, como el de la invitación.
 - **El gimnasio puede no ofrecerla** (`tenants.trial_class_enabled`, por defecto
   sí). Un local que sale en el directorio y no deja probar desperdicia la visita,
   pero la decisión es comercial y es suya, así que se enciende y se apaga desde
@@ -170,6 +180,13 @@ decisiones que lo sostienen:
   con una promesa delante; borrarla por un cambio de política lo deja
   presentándose en un local que no lo espera. Lo que corta es lo de adelante: el
   gimnasio deja de ofrecer horas y una reserva nueva vuelve con `not_offered`.
+
+Y lo que el gimnasio recibe con la reserva es **el nombre, el celular y un
+enlace de WhatsApp**: es por donde se coordina de verdad en este mercado —
+confirmar, mover la hora, explicar cómo llegar— y el dueño lee el aviso en el
+móvil. Un chat propio dentro de la app resolvería lo mismo peor: exige presencia,
+notificaciones push (que todavía no existen), moderación y que las dos partes lo
+abran, mientras que WhatsApp ya está abierto en los dos teléfonos.
 
 Lo que **no** hace, a propósito: no controla aforo. Una reserva de clase gratis
 no ocupa plaza, así que MD 8.3 sigue abierto igual que antes. Con los números de

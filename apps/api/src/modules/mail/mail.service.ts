@@ -103,7 +103,7 @@ export class MailService {
   }
 
   /**
-   * Avisa al gimnasio de que alguien reservó su clase gratis.
+   * Avisa al gimnasio de que alguien reservó una clase de prueba.
    *
    * Es el correo que convierte la función en producto: sin aviso, la reserva es
    * una fila en una tabla que nadie mira, y el interesado aparece en la puerta
@@ -117,7 +117,7 @@ export class MailService {
    * Como el resto de este archivo: **no puede tumbar lo que lo llama**. La
    * reserva ya existe y sale en la app del mostrador aunque Resend esté caído.
    */
-  async avisarClaseGratis(input: {
+  async avisarClaseDePrueba(input: {
     readonly para: string;
     readonly gimnasio: string;
     readonly nombre: string;
@@ -126,23 +126,34 @@ export class MailService {
     /** "martes 2 de setiembre", ya formateado por quien conoce la zona. */
     readonly cuando: string;
     readonly hora: string;
+    /** Lo que esa clase le cuesta. 0 = gratis. */
+    readonly precioCents: number;
   }): Promise<ResultadoEnvio> {
     const env = loadEnv();
     if (env.RESEND_API_KEY === undefined) {
       return { enviado: false, motivo: 'El envío por correo no está configurado.' };
     }
 
+    // Enlace de WhatsApp: es por donde se coordina de verdad en este mercado, y
+    // el dueño lee este correo en el móvil. Sin esto tendría que copiar el
+    // número a mano justo cuando quiere responder rápido.
+    const soloDigitos = input.telefono.replace(/\D/g, '');
+    const whatsapp = soloDigitos.length >= 9 ? `https://wa.me/${soloDigitos}` : null;
+    const gratis = input.precioCents === 0;
+
     const texto = [
-      `${input.nombre} reservó una clase gratis en ${input.gimnasio}.`,
+      `${input.nombre} reservó una clase de prueba en ${input.gimnasio}.`,
       '',
       `Clase:    ${input.clase}`,
       `Cuándo:   ${input.cuando}, ${input.hora}`,
       `Celular:  ${input.telefono}`,
+      `Cobro:    ${gratis ? 'gratis' : `S/ ${(input.precioCents / 100).toFixed(2)} al llegar`}`,
+      ...(whatsapp === null ? [] : ['', `Escríbele: ${whatsapp}`]),
       '',
       'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
       'de Sinchi y eligió este horario.',
       '',
-      'La lista completa de quién viene está en la app, en Puerta → Clases gratis.',
+      'La lista completa de quién viene está en la app, en Clases de prueba.',
     ].join('\n');
 
     try {
@@ -157,7 +168,7 @@ export class MailService {
           to: [input.para],
           // El asunto se lee entero en la notificación del móvil, que es donde
           // de verdad se lee: nombre y día, sin adornos.
-          subject: `Clase gratis: ${input.nombre} viene el ${input.cuando}`,
+          subject: `Clase de prueba: ${input.nombre} viene el ${input.cuando}`,
           text: texto,
         }),
         signal: AbortSignal.timeout(10_000),

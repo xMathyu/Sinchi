@@ -206,6 +206,15 @@ export const tenants = pgTable(
      * desperdicia la visita. Es configuracion del gimnasio, no del producto.
      */
     trialClassEnabled: boolean('trial_class_enabled').notNull().default(true),
+    /**
+     * Cuanto cuesta esa primera clase. 0 = gratis.
+     *
+     * Columna propia y no `drop_in_price_cents` aunque a veces coincidan: uno es
+     * lo que paga el ALUMNO que agota su cupo y otro lo que paga quien VIENE A
+     * CONOCER el local. Regalar la primera y cobrar las siguientes es el caso
+     * mas comun, y con una sola columna no se puede ni escribir.
+     */
+    trialClassPriceCents: integer('trial_class_price_cents').notNull().default(0),
     status: tenantStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -688,6 +697,8 @@ export const trialBookings = pgTable(
     localDate: date('local_date').notNull(),
     startTime: text('start_time').notNull(),
     endTime: text('end_time').notNull(),
+    /** Congelado al reservar: se respeta lo que se le prometio a la persona. */
+    priceCents: integer('price_cents').notNull().default(0),
     status: trialBookingStatusEnum('status').notNull().default('booked'),
     /** Cuando se le aviso al gimnasio. Sin esto no se sabe si el correo salio. */
     notifiedAt: timestamp('notified_at', { withTimezone: true }),

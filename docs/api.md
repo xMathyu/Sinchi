@@ -143,7 +143,7 @@ que es exactamente la persona que la clase gratis quiere convertir en alumno.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y si dan clase gratis. Anónima. |
+| `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y qué cuesta su clase de prueba (0 = gratis). Anónima. |
 | `GET` | `/gyms/:slug` | Horarios, precios y las clases concretas —con fecha— que se pueden reservar. Anónima. |
 | `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
@@ -170,7 +170,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
 | `GET` | `/staff/trials` | Quién viene a probar. `?includePast=true` trae el historial. |
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
-| `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. |
+| `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
 | `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
 | `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |

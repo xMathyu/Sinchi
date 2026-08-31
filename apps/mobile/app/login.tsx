@@ -308,7 +308,7 @@ export default function LoginScreen() {
               mostrador lo pida. */}
           <Text variant="captionSmall" color={theme.colors.textFaint} align="center">
             ¿Primera vez? Al entrar verás los gimnasios de la red y podrás reservar
-            tu primera clase gratis.
+            tu primera clase.
           </Text>
 
           <View style={{ height: 1, alignSelf: 'stretch', backgroundColor: theme.colors.hairline }} />

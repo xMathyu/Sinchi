@@ -14,8 +14,8 @@
  * también.
  */
 import { useState } from 'react';
-import { Alert, Pressable, Switch, View } from 'react-native';
-import type { TrialBooking, TrialBookingStatus } from '@sinchi/shared';
+import { Alert, Linking, Pressable, Switch, View } from 'react-native';
+import { formatPENShort, type TrialBooking, type TrialBookingStatus } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Card, Eyebrow, Row, SegmentedControl, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
@@ -41,7 +41,7 @@ export default function TrialsScreen() {
     <Screen scroll>
       <Stack gap={3} style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
-          Clases gratis
+          Clases de prueba
         </Text>
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
           Quién viene a probar. Todavía no son alumnos de nadie.
@@ -75,8 +75,8 @@ export default function TrialsScreen() {
             titulo={vista === 'proximas' ? 'Nadie viene a probar todavía' : 'Sin historial'}
             cuerpo={
               vista === 'proximas'
-                ? 'Cuando alguien reserve su clase gratis desde la app, aparecerá aquí con el día y la hora a la que llegará.'
-                : 'Aquí quedan las clases gratis que ya pasaron, con quién vino y quién no.'
+                ? 'Cuando alguien reserve su clase de prueba desde la app, aparecerá aquí con el día, la hora y su WhatsApp.'
+                : 'Aquí quedan las clases de prueba que ya pasaron, con quién vino y quién no.'
             }
             pie="Tu gimnasio sale en la lista de la app mientras la clase gratis esté activa."
           />
@@ -143,12 +143,12 @@ function Interruptor() {
         <Row align="flex-start" style={{ gap: 12 }}>
           <Stack gap={5} style={{ flex: 1 }}>
             <Text variant="bodySmall" weight="semibold">
-              Ofrecemos la primera clase gratis
+              Aceptamos reservas de clase de prueba
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
               {activa === false
                 ? 'Tu gimnasio sale en la lista de la app con sus horarios y precios, pero sin clase de prueba.'
-                : 'Quien te encuentre en la app puede reservar una clase para conocerte, el día y la hora que elija.'}
+                : 'Quien te encuentre en la app puede reservar una clase para conocerte, el día y la hora que elija. Si tu prueba tiene precio, lo cobras al llegar.'}
             </Text>
           </Stack>
           <Switch
@@ -219,9 +219,26 @@ function TrialCard({
             <Text variant="heading" weight="bold" numberOfLines={1}>
               {reserva.fullName}
             </Text>
-            <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {reserva.phone}
-            </Text>
+            {/* El celular ABRE WhatsApp. Es por donde se coordina de verdad en
+                este mercado —confirmar, mover la hora, decir cómo llegar— y sin
+                esto había que copiar el número a mano justo cuando el mostrador
+                quiere responder rápido. */}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Escribir por WhatsApp a ${reserva.fullName}`}
+              hitSlop={8}
+              onPress={() => {
+                const digitos = reserva.phone.replace(/\D/g, '');
+                if (digitos.length < 9) return;
+                void Linking.openURL(`https://wa.me/${digitos}`).catch(() => {
+                  Alert.alert('No se pudo abrir WhatsApp', reserva.phone);
+                });
+              }}
+            >
+              <Text variant="captionSmall" color={theme.semaphore.ok}>
+                {reserva.phone} · WhatsApp
+              </Text>
+            </Pressable>
           </Stack>
           {reserva.status === 'booked' ? null : (
             <Badge
@@ -235,9 +252,16 @@ function TrialCard({
         <Text variant="bodySmall">
           {formatWeekdayAndDay(reserva.date)} · {reserva.startTime}–{reserva.endTime}
         </Text>
-        <Text variant="captionSmall" color={theme.colors.textTertiary}>
-          {reserva.className}
-        </Text>
+        <Row justify="flex-start" gap={8}>
+          <Text variant="captionSmall" color={theme.colors.textTertiary}>
+            {reserva.className}
+          </Text>
+          {reserva.priceCents > 0 ? (
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              · cobrar {formatPENShort(reserva.priceCents)}
+            </Text>
+          ) : null}
+        </Row>
 
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
