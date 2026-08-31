@@ -16,7 +16,7 @@
  * para no ofrecer lo que va a fallar. Aqui solo se le dan los hechos.
  */
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, gte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
   formatPlainDate,
   parsePlainDate,
@@ -594,13 +594,22 @@ export class TrialsService {
   /**
    * Quien viene a probar. La lista del mostrador.
    *
-   * Por defecto solo lo que falta: el dueno abre esto para saber a quien espera
-   * esta semana, no para leer el historial. `includePast` trae lo anterior, que
-   * es donde se ve cuantos vinieron de verdad.
+   * Dos listas que NO se solapan, y eso es el punto: por defecto lo que falta
+   * —el dueno abre esto para saber a quien espera esta semana— y con `onlyPast`
+   * lo que ya paso, que es donde se ve cuantos vinieron de verdad.
+   *
+   * Antes `onlyPast` era `includePast` y traia TODO, asi que una reserva de
+   * manana salia en las dos pestanas a la vez: la de «Historial» prometia «las
+   * clases que ya pasaron» y mostraba una de manana. Contar los que vinieron
+   * sobre una lista que incluye a los que todavia no han venido no cuenta nada.
+   *
+   * El corte es por DIA, no por hora: quien tenia clase hoy a las 8 sigue en «por
+   * venir» hasta medianoche, porque para el mostrador sigue siendo el trabajo de
+   * hoy —confirmar que vino, marcarlo, cobrarle si toca.
    */
   async forTenant(
     tenantId: string,
-    options: { readonly includePast?: boolean } = {},
+    options: { readonly onlyPast?: boolean } = {},
   ): Promise<readonly TrialBooking[]> {
     return withTenant(this.db, tenantId, async (tx) => {
       const [gym] = await tx
@@ -611,19 +620,20 @@ export class TrialsService {
 
       const hoy = formatPlainDate(this.clock.today(gym?.timezone ?? 'America/Lima'));
 
-      const proximas = options.includePast !== true;
-      const rows = proximas
-        ? await tx
-            .select()
-            .from(schema.trialBookings)
-            .where(gte(schema.trialBookings.localDate, hoy))
-            .orderBy(schema.trialBookings.localDate, schema.trialBookings.startTime)
-            .limit(200)
-        : await tx
-            .select()
-            .from(schema.trialBookings)
-            .orderBy(desc(schema.trialBookings.localDate), schema.trialBookings.startTime)
-            .limit(200);
+      const rows =
+        options.onlyPast === true
+          ? await tx
+              .select()
+              .from(schema.trialBookings)
+              .where(lt(schema.trialBookings.localDate, hoy))
+              .orderBy(desc(schema.trialBookings.localDate), schema.trialBookings.startTime)
+              .limit(200)
+          : await tx
+              .select()
+              .from(schema.trialBookings)
+              .where(gte(schema.trialBookings.localDate, hoy))
+              .orderBy(schema.trialBookings.localDate, schema.trialBookings.startTime)
+              .limit(200);
 
       return rows.map(toTrialBooking);
     });

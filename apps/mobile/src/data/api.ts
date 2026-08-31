@@ -758,12 +758,13 @@ export const setOwnPin = (pin: string): Promise<unknown> =>
  * Quien viene a probar. La lista de posibles alumnos del local.
  *
  * Por defecto solo lo que falta: el mostrador la abre para saber a quien espera,
- * no para leer el historial.
+ * no para leer el historial. `soloPasadas` pide la otra mitad, y son mitades de
+ * verdad: ninguna reserva sale en las dos.
  */
-export const fetchTrials = async (incluirPasadas = false): Promise<readonly TrialBooking[]> =>
+export const fetchTrials = async (soloPasadas = false): Promise<readonly TrialBooking[]> =>
   (
     await request<readonly TrialBooking[]>(
-      incluirPasadas ? '/staff/trials?includePast=true' : '/staff/trials',
+      soloPasadas ? '/staff/trials?onlyPast=true' : '/staff/trials',
     )
   ).map(reviveTrial);
 

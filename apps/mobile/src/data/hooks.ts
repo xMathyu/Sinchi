@@ -635,9 +635,9 @@ export function useMisClasesGratis(): Carga<readonly TrialBookingDto[]> {
   );
 }
 
-/** Quién viene a probar. La lista del mostrador. */
-export function useClasesGratisDelGimnasio(incluirPasadas = false): Carga<readonly TrialBooking[]> {
-  const pedir = useCallback(() => fetchTrials(incluirPasadas), [incluirPasadas]);
+/** Quién viene a probar. La lista del mostrador: o lo que falta, o lo que pasó. */
+export function useClasesGratisDelGimnasio(soloPasadas = false): Carga<readonly TrialBooking[]> {
+  const pedir = useCallback(() => fetchTrials(soloPasadas), [soloPasadas]);
   return useCargaRemota<readonly TrialBooking[]>(
     pedir,
     [],

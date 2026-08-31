@@ -457,6 +457,42 @@ suite('lo que ve el gimnasio', () => {
       .expect(404);
   });
 
+  /**
+   * Las dos pestanas del mostrador no se pisan.
+   *
+   * `onlyPast` traia TODO, no lo pasado, asi que una reserva de manana salia en
+   * «por venir» Y en «historial» a la vez. El historial es donde el gimnasio
+   * cuenta cuantos vinieron de verdad, y contar sobre una lista que incluye a
+   * quien todavia no ha venido no cuenta nada.
+   */
+  it('el historial no trae lo que todavia no ha pasado', async () => {
+    const { body: reserva } = await reservar('nova-bjj', {
+      token: declareIdentity(`prospecto-${runId}-12`),
+      slot: nova.slots[0]!,
+    });
+    expect(reserva.booked).toBe(true);
+
+    const { body: porVenir } = await http
+      .get('/v1/staff/trials')
+      .set(auth(novaFrontDesk))
+      .expect(200);
+    const { body: historial } = await http
+      .get('/v1/staff/trials?onlyPast=true')
+      .set(auth(novaFrontDesk))
+      .expect(200);
+
+    const ids = (filas: { id: string }[]): string[] => filas.map((row) => row.id);
+
+    // Los slots que ofrece la app son de hoy en adelante, asi que toda reserva
+    // recien hecha pertenece a «por venir» y a ninguna otra parte.
+    expect(ids(porVenir)).toContain(reserva.booking.id);
+    expect(ids(historial)).not.toContain(reserva.booking.id);
+
+    // Y ninguna reserva sale en las dos listas, sea de quien sea.
+    const enAmbas = ids(porVenir).filter((id) => ids(historial).includes(id));
+    expect(enAmbas).toEqual([]);
+  });
+
   it('la lista exige sesion de staff', async () => {
     await http.get('/v1/staff/trials').expect(401);
   });

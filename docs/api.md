@@ -168,7 +168,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/payments` | Registra un pago en mostrador. |
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
-| `GET` | `/staff/trials` | Quién viene a probar. `?includePast=true` trae el historial. |
+| `GET` | `/staff/trials` | Quién viene a probar, de hoy en adelante. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
 | `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
