@@ -266,13 +266,18 @@ function TrialCard({
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
         <Row justify="flex-start" style={{ gap: 18, marginTop: 2 }}>
+          {/* La etiqueta no cambia al marcar. Cuando lo hacía —«· vino»— la fila
+              quedaba «· vino   No vino», que se lee como un error de tipeo y no
+              como un estado: quién vino ya lo dice la insignia de arriba, y cuál
+              está elegida la dice que esa esté apagada. Se dejan las dos porque
+              el mostrador se equivoca y tiene que poder corregir. */}
           <Accion
-            etiqueta={reserva.status === 'attended' ? '· vino' : 'Vino'}
+            etiqueta="Vino"
             activa={reserva.status !== 'attended' && !guardando}
             onPress={() => marcar('attended')}
           />
           <Accion
-            etiqueta={reserva.status === 'no_show' ? '· no vino' : 'No vino'}
+            etiqueta="No vino"
             activa={reserva.status !== 'no_show' && !guardando}
             onPress={() => marcar('no_show')}
           />

@@ -250,13 +250,16 @@ export class StaffController {
    *
    * Es la lista de posibles alumnos: gente que encontro el gimnasio en la app y
    * dijo a que hora vendria. Por defecto solo lo que falta —el mostrador la abre
-   * para saber a quien espera— y con `?includePast=true` sale el historial, que
-   * es donde se ve cuantos vinieron de verdad.
+   * para saber a quien espera— y con `?onlyPast=true` sale el historial, que es
+   * donde se ve cuantos vinieron de verdad.
+   *
+   * Las dos listas son disjuntas a proposito: ver la misma reserva de manana en
+   * «por venir» y en «historial» a la vez no es mas informacion, es una duda.
    */
   @Get('trials')
-  trialBookings(@CurrentSession() session: Session, @Query('includePast') includePast?: string) {
+  trialBookings(@CurrentSession() session: Session, @Query('onlyPast') onlyPast?: string) {
     return this.trials.forTenant(assertStaffSession(session).tenantId, {
-      includePast: includePast === 'true',
+      onlyPast: onlyPast === 'true',
     });
   }
 
