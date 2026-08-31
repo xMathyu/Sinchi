@@ -212,6 +212,7 @@ export function toTrialBooking(row: TrialBookingRow): TrialBooking {
     date: toDate(row.localDate),
     startTime: row.startTime,
     endTime: row.endTime,
+    priceCents: toCents(row.priceCents),
     status: row.status,
     createdAt: row.createdAt,
   };

@@ -267,6 +267,8 @@ export interface TrialBooking {
   readonly date: PlainDate;
   readonly startTime: LocalTime;
   readonly endTime: LocalTime;
+  /** Lo que cuesta esa clase, congelado al reservar. 0 = gratis. */
+  readonly priceCents: Cents;
   readonly status: TrialBookingStatus;
   readonly createdAt: Date;
 }

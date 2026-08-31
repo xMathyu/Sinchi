@@ -57,6 +57,13 @@
       "when": 1787549919404,
       "tag": "0007_datos_de_la_cuenta_nueva",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787549919405,
+      "tag": "0008_clase_de_prueba_con_precio",
+      "breakpoints": true
     }
   ]
 }

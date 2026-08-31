@@ -120,7 +120,7 @@ export default function WalletScreen() {
                       {clase.gymName}
                     </Text>
                     <Badge
-                      label="CLASE GRATIS"
+                      label={(clase.priceCents ?? 0) === 0 ? 'CLASE GRATIS' : 'CLASE DE PRUEBA'}
                       color={theme.semaphoreInk.ok}
                       background={theme.semaphore.ok}
                     />
@@ -138,7 +138,7 @@ export default function WalletScreen() {
       {/* Antes esto era un recuadro punteado con un «+» que decía «Unirme a otro
           gimnasio» y NO era pulsable: un `View` suelto, sin `onPress`. Prometía
           una acción que el producto no tenía. Ahora sí la tiene, y es esta: el
-          directorio de la red, con la primera clase gratis. El camino del
+          directorio de la red, con la primera clase de prueba. El camino del
           mostrador sigue existiendo y se dice debajo, porque sigue siendo el
           normal para quien ya eligió gimnasio. */}
       <Stack gap={8} style={{ marginTop: 22 }}>
@@ -155,7 +155,7 @@ export default function WalletScreen() {
                 </Text>
                 <Text variant="captionSmall" color={theme.colors.textSecondary}>
                   Mira los horarios y los precios de las escuelas de la red, y prueba una
-                  clase gratis en la que te interese.
+                  clase de prueba en la que te interese.
                 </Text>
               </Stack>
               <Text variant="title" color={theme.colors.textFaint}>

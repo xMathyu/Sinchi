@@ -59,6 +59,14 @@ export interface GimnasioSpec {
    * y el dueno lo cambia cuando quiera desde la app.
    */
   readonly trialClassEnabled?: boolean;
+  /**
+   * Lo que cuesta esa primera clase. 0 o ausente = gratis.
+   *
+   * No es lo mismo que `dropInSoles`: uno lo paga el alumno que agota su cupo y
+   * otro quien viene a conocer el local. Un gimnasio puede regalar la primera y
+   * cobrar las siguientes.
+   */
+  readonly trialSoles?: number;
   readonly planes: readonly PlanSpec[];
   readonly horarios: readonly ClaseSpec[];
 }
@@ -101,6 +109,7 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
           dropInPriceCents: dropIn === null ? null : SOLES(dropIn),
           enrollmentFeeCents: SOLES(spec.enrollmentSoles ?? 0),
           trialClassEnabled: spec.trialClassEnabled ?? true,
+          trialClassPriceCents: SOLES(spec.trialSoles ?? 0),
         })
         .returning({ id: schema.tenants.id });
       return tenant!.id;
@@ -139,7 +148,9 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
         (dropIn === null ? '' : `, clase suelta S/${dropIn}`),
     );
     if (spec.trialClassEnabled === false) {
-      console.log(`${etiqueta} SIN clase gratis por la app: su prueba es de pago`);
+      console.log(`${etiqueta} SIN clase de prueba por la app`);
+    } else if ((spec.trialSoles ?? 0) > 0) {
+      console.log(`${etiqueta} clase de prueba reservable, S/${spec.trialSoles} al llegar`);
     }
     if (spec.taxId === 'PENDIENTE') {
       console.log(`${etiqueta} AVISO: el RUC quedó como "PENDIENTE"`);
