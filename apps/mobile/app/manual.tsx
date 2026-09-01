@@ -6,21 +6,12 @@
  * cuelan favores (MD 4.6): el aviso en pantalla no es un trámite legal, es lo
  * que hace que el recepcionista sepa que se está firmando.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatPENShort } from '@sinchi/shared';
 import { screenPadding, semaphoreStyle, withAlpha } from '@sinchi/ui';
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Eyebrow,
-  Row,
-  Stack,
-  Text,
-} from '../src/design/primitives';
+import { Avatar, Badge, Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { useRoster, useStore, useToday } from '../src/data/hooks';
@@ -38,6 +29,15 @@ export default function ManualCheckInScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [marcando, setMarcando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * El servidor dijo que NO.
+   *
+   * Distinto de `error`: aquello es que la peticion fallo, esto es que salio
+   * bien y la respuesta fue un rechazo. Se guarda para poder ensenar el MOTIVO y
+   * ofrecer la excepcion, que es lo unico que le sirve a quien tiene al alumno
+   * delante.
+   */
+  const [rechazo, setRechazo] = useState<{ titulo: string; detalle: string } | null>(null);
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -50,6 +50,60 @@ export default function ManualCheckInScreen() {
   }, [roster, query]);
 
   const selected = matches.find((entry) => entry.view.membership.id === selectedId) ?? null;
+
+  /**
+   * Marca, y ATIENDE la respuesta.
+   *
+   * `marcarAsistencia` resuelve TAMBIEN cuando el servidor dice que no
+   * —`registrada: false`, sin fila y sin error— y esta pantalla cerraba en ese
+   * caso como si hubiera funcionado: el recepcionista volvia a la puerta, no
+   * veia el marcado y no tenia forma de saber por que. El motivo llegaba y se
+   * tiraba a la basura.
+   */
+  const marcar = useCallback(() => {
+    if (selected === null || marcando) return;
+
+    setMarcando(true);
+    setError(null);
+    setRechazo(null);
+
+    void marcarAsistencia({
+      membershipId: selected.view.membership.id,
+      method: 'manual',
+      /**
+       * SIEMPRE la excepcion, y a proposito.
+       *
+       * Elegir a un alumno del padron y tocar «marcar» ES la autorizacion: lo
+       * hace una persona que tiene al alumno delante y sabe algo que el
+       * servidor no —el profe alargo la clase, el alumno llego tarde y
+       * entreno igual, hubo clase fuera del horario publicado—. El rechazo mas
+       * comun aqui es «fuera de horario», que pasa todos los dias fuera de las
+       * horas de clase, y bloquearlo dejaba fuera justo el caso para el que
+       * existe el marcado manual.
+       *
+       * No se pierde nada de auditoria, que es lo que protege este camino
+       * (MD 4.6): el servidor guarda `overrodeDenial` y `denialReason`, asi que
+       * la excepcion queda escrita CON su motivo y a nombre de quien la hizo.
+       *
+       * El escaneo de QR sigue preguntando en la pantalla de resultado: alli no
+       * ha decidido nadie todavia, solo ha leido un codigo una maquina.
+       */
+      overrideDenial: true,
+    })
+      .then((salida) => {
+        if (!salida.registrada) {
+          setRechazo({ titulo: salida.titulo, detalle: salida.detalle });
+          return;
+        }
+        setSelectedId(null);
+        setQuery('');
+        router.back();
+      })
+      .catch((causa: unknown) => {
+        setError(causa instanceof Error ? causa.message : 'No se pudo marcar la asistencia.');
+      })
+      .finally(() => setMarcando(false));
+  }, [selected, marcando]);
 
   const cabecera = (
     <>
@@ -165,34 +219,27 @@ export default function ManualCheckInScreen() {
           // dos peticiones. La idempotencia las colapsa en el servidor, pero la
           // pantalla no lo reflejaba.
           disabled={selected === null || marcando}
-          onPress={() => {
-            if (selected === null || marcando) return;
-            const allowed = selected.view.delinquency.canTrain && !selected.view.quota.exhausted;
-            setMarcando(true);
-            setError(null);
-
-            void marcarAsistencia({
-              membershipId: selected.view.membership.id,
-              method: 'manual',
-              overrideDenial: !allowed,
-            })
-              .then(() => {
-                setSelectedId(null);
-                setQuery('');
-                router.back();
-              })
-              .catch((causa: unknown) => {
-                setError(
-                  causa instanceof Error ? causa.message : 'No se pudo marcar la asistencia.',
-                );
-              })
-              .finally(() => setMarcando(false));
-          }}
+          onPress={marcar}
         />
         {error !== null ? (
           <Text variant="micro" color={theme.semaphore.bad} align="center">
             {error}
           </Text>
+        ) : null}
+        {/* Red de seguridad, no un paso del flujo: con la excepción siempre
+            puesta el servidor ya no se niega. Si algún día vuelve a hacerlo, el
+            motivo se ve aquí en vez de cerrarse la pantalla en silencio. */}
+        {rechazo !== null ? (
+          <Stack gap={4}>
+            <Text variant="micro" weight="bold" color={theme.semaphore.alert} align="center">
+              {rechazo.titulo}
+            </Text>
+            {rechazo.detalle.length > 0 ? (
+              <Text variant="micro" color={theme.colors.textSecondary} align="center">
+                {rechazo.detalle}
+              </Text>
+            ) : null}
+          </Stack>
         ) : null}
         {selected !== null && !selected.view.delinquency.canTrain ? (
           <Text variant="micro" color={theme.semaphore.bad} align="center">
@@ -215,7 +262,11 @@ export default function ManualCheckInScreen() {
           <MemberRow
             entry={item}
             selected={item.view.membership.id === selectedId}
-            onPress={() => setSelectedId(item.view.membership.id)}
+            onPress={() => {
+              setSelectedId(item.view.membership.id);
+              // El motivo era del alumno anterior: dejarlo puesto se lee como suyo.
+              setRechazo(null);
+            }}
           />
         )}
         ListHeaderComponent={cabecera}
