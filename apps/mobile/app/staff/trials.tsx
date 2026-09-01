@@ -17,7 +17,16 @@ import { useState } from 'react';
 import { Alert, Linking, Pressable, Switch, View } from 'react-native';
 import { formatPENShort, type TrialBooking, type TrialBookingStatus } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Badge, Card, Eyebrow, Row, SegmentedControl, Stack, Text } from '../../src/design/primitives';
+import {
+  Badge,
+  Card,
+  Chip,
+  Eyebrow,
+  Row,
+  SegmentedControl,
+  Stack,
+  Text,
+} from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
@@ -31,9 +40,12 @@ type Vista = 'proximas' | 'pasadas';
 export default function TrialsScreen() {
   const theme = useTheme();
   const [vista, setVista] = useState<Vista>('proximas');
-  const { datos: reservas, cargando, error, recargar } = useClasesGratisDelGimnasio(
-    vista === 'pasadas',
-  );
+  const {
+    datos: reservas,
+    cargando,
+    error,
+    recargar,
+  } = useClasesGratisDelGimnasio(vista === 'pasadas');
 
   const vigentes = reservas.filter((reserva) => reserva.status !== 'canceled');
 
@@ -192,6 +204,8 @@ function TrialCard({
   const [guardando, setGuardando] = useState(false);
 
   const marcar = (status: TrialBookingStatus): void => {
+    // Ya está en ese estado, o hay una petición en vuelo: no se manda otra.
+    if (guardando || reserva.status === status) return;
     setGuardando(true);
     void setTrialStatus(reserva.id, status)
       .then(() => onCambio())
@@ -265,47 +279,34 @@ function TrialCard({
 
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
-        <Row justify="flex-start" style={{ gap: 18, marginTop: 2 }}>
-          {/* La etiqueta no cambia al marcar. Cuando lo hacía —«· vino»— la fila
-              quedaba «· vino   No vino», que se lee como un error de tipeo y no
-              como un estado: quién vino ya lo dice la insignia de arriba, y cuál
-              está elegida la dice que esa esté apagada. Se dejan las dos porque
-              el mostrador se equivoca y tiene que poder corregir. */}
-          <Accion
-            etiqueta="Vino"
-            activa={reserva.status !== 'attended' && !guardando}
+        <Row justify="flex-start" style={{ gap: 8, marginTop: 2 }}>
+          {/* Chips, y no dos textos con uno «apagado».
+              
+              El apagado era invisible: distinguía `textSecondary` (#9C9CA6) de
+              `textFaint` (#8C8C95), y esos dos dejaron de ser dos colores cuando
+              la rampa de grises se aplanó al suelo que pasa AA — `textFaint` y
+              `textTertiary` son hoy el MISMO hex. Asi que tocar «Vino» en una
+              reserva que ya estaba en «vino» no hacia nada y nada en la pantalla
+              explicaba por que: se leia como un boton roto.
+              
+              El chip elegido se pinta con su color del semaforo, que es el mismo
+              lenguaje que la insignia de arriba y el que ya usa el padron para
+              «Activos / Bajas». Las dos siguen tocables porque el mostrador se
+              equivoca y tiene que poder corregir. */}
+          <Chip
+            label="Vino"
+            selected={reserva.status === 'attended'}
+            selectedColor={theme.semaphore.ok}
             onPress={() => marcar('attended')}
           />
-          <Accion
-            etiqueta="No vino"
-            activa={reserva.status !== 'no_show' && !guardando}
+          <Chip
+            label="No vino"
+            selected={reserva.status === 'no_show'}
+            selectedColor={theme.semaphore.alert}
             onPress={() => marcar('no_show')}
           />
         </Row>
       </Stack>
     </Card>
-  );
-}
-
-function Accion({
-  etiqueta,
-  activa,
-  onPress,
-}: {
-  readonly etiqueta: string;
-  readonly activa: boolean;
-  readonly onPress: () => void;
-}) {
-  const theme = useTheme();
-  return (
-    <Pressable accessibilityRole="button" disabled={!activa} onPress={onPress} hitSlop={10}>
-      <Text
-        variant="caption"
-        weight="semibold"
-        color={activa ? theme.colors.textSecondary : theme.colors.textFaint}
-      >
-        {etiqueta}
-      </Text>
-    </Pressable>
   );
 }
