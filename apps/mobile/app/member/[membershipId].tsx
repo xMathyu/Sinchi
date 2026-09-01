@@ -152,9 +152,7 @@ function Ficha({
       <Row gap={10} style={{ marginTop: 12 }} align="stretch">
         <Dato
           label="Cupo semanal"
-          value={
-            quota.limit === null ? 'Sin límite' : `${quota.used} de ${quota.limit}`
-          }
+          value={quota.limit === null ? 'Sin límite' : `${quota.used} de ${quota.limit}`}
           hint={quota.limit === null ? 'plan ilimitado' : 'se reinicia el lunes'}
         />
         <Dato
@@ -197,9 +195,8 @@ function Ficha({
             <Stack gap={3} style={{ flex: 1 }}>
               <Eyebrow color={theme.semaphore.bad}>Debe</Eyebrow>
               <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                {receivable.periodsOwed}{' '}
-                {receivable.periodsOwed === 1 ? 'periodo' : 'periodos'} · desde el{' '}
-                {formatLongDate(receivable.fromDate)}
+                {receivable.periodsOwed} {receivable.periodsOwed === 1 ? 'periodo' : 'periodos'} ·
+                desde el {formatLongDate(receivable.fromDate)}
                 {receivable.capped ? ' (tope aplicado)' : ''}
               </Text>
             </Stack>
@@ -213,45 +210,55 @@ function Ficha({
       {cancelada ? (
         <Reactivar membershipId={view.membership.id} nombre={user.name} />
       ) : (
-      <Stack gap={10} style={{ marginTop: 18 }}>
-        <Button
-          label={receivable.due ? 'Cobrar' : 'Registrar pago'}
-          onPress={() =>
-            router.push({
-              pathname: '/charge/[membershipId]',
-              params: { membershipId: view.membership.id },
-            })
-          }
-        />
-        <Button
-          label={marcando ? 'Marcando…' : 'Marcar asistencia'}
-          variant="secondary"
-          disabled={marcando}
-          onPress={() => {
-            setMarcando(true);
-            setAviso(null);
-            void marcarAsistencia({
-              membershipId: view.membership.id,
-              method: 'manual',
-              // El mostrador marca a quien tiene delante aunque deba: queda
-              // auditado como excepción a nombre de quien está de turno.
-              overrideDenial: !delinquency.canTrain || quota.exhausted,
-            })
-              .then((salida) =>
-                setAviso(salida.repetida ? 'Ya estaba marcado hoy.' : salida.titulo),
-              )
-              .catch((causa: unknown) =>
-                setAviso(causa instanceof Error ? causa.message : 'No se pudo marcar.'),
-              )
-              .finally(() => setMarcando(false));
-          }}
-        />
-        {aviso === null ? null : (
-          <Text variant="micro" color={theme.colors.textSecondary} align="center">
-            {aviso}
-          </Text>
-        )}
-      </Stack>
+        <Stack gap={10} style={{ marginTop: 18 }}>
+          <Button
+            label={receivable.due ? 'Cobrar' : 'Registrar pago'}
+            onPress={() =>
+              router.push({
+                pathname: '/charge/[membershipId]',
+                params: { membershipId: view.membership.id },
+              })
+            }
+          />
+          <Button
+            label={marcando ? 'Marcando…' : 'Marcar asistencia'}
+            variant="secondary"
+            disabled={marcando}
+            onPress={() => {
+              setMarcando(true);
+              setAviso(null);
+              void marcarAsistencia({
+                membershipId: view.membership.id,
+                method: 'manual',
+                // El mostrador marca a quien tiene delante aunque deba, y aunque
+                // sea fuera de horario: el profe alarga la clase, el alumno llega
+                // tarde y entrena igual. Queda auditado como excepción a nombre de
+                // quien está de turno, con su motivo. Antes solo forzaba lo que la
+                // ficha ya veía —mora y cupo—, así que un marcado fuera de horario
+                // se perdía sin registrarse.
+                overrideDenial: true,
+              })
+                .then((salida) =>
+                  setAviso(
+                    !salida.registrada
+                      ? `No se registró: ${salida.titulo.toLowerCase()}.`
+                      : salida.repetida
+                        ? 'Ya estaba marcado hoy.'
+                        : 'Asistencia marcada.',
+                  ),
+                )
+                .catch((causa: unknown) =>
+                  setAviso(causa instanceof Error ? causa.message : 'No se pudo marcar.'),
+                )
+                .finally(() => setMarcando(false));
+            }}
+          />
+          {aviso === null ? null : (
+            <Text variant="micro" color={theme.colors.textSecondary} align="center">
+              {aviso}
+            </Text>
+          )}
+        </Stack>
       )}
 
       <View style={{ marginTop: 22 }}>
@@ -270,8 +277,7 @@ function Ficha({
       {parcial ? (
         <Card tone="sunken" radius={16} style={{ marginTop: 12 }}>
           <Text variant="captionSmall" color={theme.colors.textSecondary} align="center">
-            {error ?? 'Sin conexión'} · se muestra lo que hay en la caché del padrón, sin
-            historial.
+            {error ?? 'Sin conexión'} · se muestra lo que hay en la caché del padrón, sin historial.
           </Text>
         </Card>
       ) : pestana === 'attendance' ? (
@@ -280,11 +286,7 @@ function Ficha({
           filas={asistencias.map((a) => ({
             id: a.id,
             izquierda: formatCheckInMoment(a.checkedInAt),
-            derecha: a.overrodeDenial
-              ? 'excepción'
-              : a.method === 'manual'
-                ? 'manual'
-                : 'QR',
+            derecha: a.overrodeDenial ? 'excepción' : a.method === 'manual' ? 'manual' : 'QR',
             alerta: a.overrodeDenial,
           }))}
         />
@@ -294,9 +296,7 @@ function Ficha({
           filas={cargos.map((c) => ({
             id: c.id,
             izquierda: `${formatPEN(c.amountCents)} · ${railLabel(c.rail)}`,
-            derecha: formatShortDate(
-              c.periodStart ?? view.subscription.periodStart,
-            ),
+            derecha: formatShortDate(c.periodStart ?? view.subscription.periodStart),
             alerta: c.status !== 'succeeded',
           }))}
         />
@@ -453,8 +453,8 @@ function Reactivar({
             Reinscrito
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {nombre} vuelve a estar en el padrón con su historial completo. Cóbrale la
-            mensualidad para que el escáner valide su QR.
+            {nombre} vuelve a estar en el padrón con su historial completo. Cóbrale la mensualidad
+            para que el escáner valide su QR.
           </Text>
         </Stack>
       </Card>
