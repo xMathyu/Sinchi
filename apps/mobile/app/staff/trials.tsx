@@ -15,7 +15,12 @@
  */
 import { useState } from 'react';
 import { Alert, Linking, Pressable, Switch, View } from 'react-native';
-import { formatPENShort, type TrialBooking, type TrialBookingStatus } from '@sinchi/shared';
+import {
+  formatPENShort,
+  isAfter,
+  type TrialBooking,
+  type TrialBookingStatus,
+} from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import {
   Badge,
@@ -31,7 +36,12 @@ import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useClasesGratisDelGimnasio, useOfreceClaseGratis, useStore } from '../../src/data/hooks';
+import {
+  useClasesGratisDelGimnasio,
+  useOfreceClaseGratis,
+  useStore,
+  useToday,
+} from '../../src/data/hooks';
 import { setTrialClassEnabled, setTrialStatus } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
 
@@ -201,7 +211,25 @@ function TrialCard({
   readonly onCambio: () => void;
 }) {
   const theme = useTheme();
+  const hoy = useToday();
   const [guardando, setGuardando] = useState(false);
+
+  /**
+   * Marcar quien vino solo tiene sentido desde el DIA de la clase.
+   *
+   * Antes salia siempre, asi que la tarjeta ofrecia marcar «vino» en una clase
+   * que todavia no habia ocurrido —y al marcarla no se movia a ningun sitio,
+   * porque sigue siendo futura—. Se tocaba algo que no deberia estar ahi y el
+   * resultado era invisible.
+   *
+   * El corte es por DIA y no por hora de inicio, igual que el de las pestanas:
+   * quien llega diez minutos antes se marca al recibirlo, no cuando el reloj
+   * cruza el horario.
+   *
+   * Si una reserva futura ya viniera marcada, los chips se quedan: es la unica
+   * forma de deshacer un marcado hecho por error.
+   */
+  const yaToca = !isAfter(reserva.date, hoy) || reserva.status !== 'booked';
 
   const marcar = (status: TrialBookingStatus): void => {
     // Ya está en ese estado, o hay una petición en vuelo: no se manda otra.
@@ -279,8 +307,9 @@ function TrialCard({
 
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
-        <Row justify="flex-start" style={{ gap: 8, marginTop: 2 }}>
-          {/* Chips, y no dos textos con uno «apagado».
+        {yaToca ? (
+          <Row justify="flex-start" style={{ gap: 8, marginTop: 2 }}>
+            {/* Chips, y no dos textos con uno «apagado».
               
               El apagado era invisible: distinguía `textSecondary` (#9C9CA6) de
               `textFaint` (#8C8C95), y esos dos dejaron de ser dos colores cuando
@@ -293,19 +322,20 @@ function TrialCard({
               lenguaje que la insignia de arriba y el que ya usa el padron para
               «Activos / Bajas». Las dos siguen tocables porque el mostrador se
               equivoca y tiene que poder corregir. */}
-          <Chip
-            label="Vino"
-            selected={reserva.status === 'attended'}
-            selectedColor={theme.semaphore.ok}
-            onPress={() => marcar('attended')}
-          />
-          <Chip
-            label="No vino"
-            selected={reserva.status === 'no_show'}
-            selectedColor={theme.semaphore.alert}
-            onPress={() => marcar('no_show')}
-          />
-        </Row>
+            <Chip
+              label="Vino"
+              selected={reserva.status === 'attended'}
+              selectedColor={theme.semaphore.ok}
+              onPress={() => marcar('attended')}
+            />
+            <Chip
+              label="No vino"
+              selected={reserva.status === 'no_show'}
+              selectedColor={theme.semaphore.alert}
+              onPress={() => marcar('no_show')}
+            />
+          </Row>
+        ) : null}
       </Stack>
     </Card>
   );
