@@ -111,6 +111,13 @@ export default function RootLayout() {
           <Stack.Screen name="enroll" options={{ presentation: 'modal' }} />
           <Stack.Screen name="claims" options={{ presentation: 'modal' }} />
           <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
+          {/* A pantalla completa y sin animacion lateral: es la camara, no una
+              ficha que se consulta. Se queda abierta DEBAJO del resultado para
+              que el siguiente alumno no tenga que pasar por la puerta. */}
+          <Stack.Screen
+            name="scan"
+            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+          />
           <Stack.Screen name="shift" options={{ animation: 'fade' }} />
           <Stack.Screen
             name="result/[membershipId]"
@@ -215,7 +222,7 @@ function DataLoader() {
 const RUTAS_COMPARTIDAS = new Set(['settings', 'explore']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
-  staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual']),
+  staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual', 'scan']),
   student: new Set(['pay', 'plan-change']),
 };
 
