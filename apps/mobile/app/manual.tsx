@@ -33,9 +33,10 @@ export default function ManualCheckInScreen() {
    * El servidor dijo que NO.
    *
    * Distinto de `error`: aquello es que la peticion fallo, esto es que salio
-   * bien y la respuesta fue un rechazo. Se guarda para poder ensenar el MOTIVO y
-   * ofrecer la excepcion, que es lo unico que le sirve a quien tiene al alumno
-   * delante.
+   * bien y la respuesta fue un rechazo. Con la excepcion siempre puesta ya no
+   * deberia ocurrir; se guarda para que, si vuelve a ocurrir, se vea el MOTIVO
+   * en vez de cerrarse la pantalla en silencio — que es como se perdian los
+   * marcados fuera de horario.
    */
   const [rechazo, setRechazo] = useState<{ titulo: string; detalle: string } | null>(null);
 
