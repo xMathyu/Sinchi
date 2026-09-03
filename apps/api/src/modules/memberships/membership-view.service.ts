@@ -475,7 +475,9 @@ export class MembershipViewService {
         ),
       );
 
-    return new Set(rows.map((row) => row.membershipId));
+    // `membership_id` es nulable desde que el ledger admite el pago de un evento
+    // por alguien de fuera; aqui solo interesan los cargos con alumno detras.
+    return new Set(rows.flatMap((row) => (row.membershipId === null ? [] : [row.membershipId])));
   }
 
   private async loadPendingPlan(tx: Tx, planId: string | null): Promise<Plan | null> {

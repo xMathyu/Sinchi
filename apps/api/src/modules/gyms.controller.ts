@@ -10,16 +10,24 @@
  * misma razon que lo exige `/invites/:token/claim`: sin una cuenta detras, la
  * lista del mostrador se llena de reservas inventadas y deja de servir.
  */
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { Public } from '../auth/auth.guard';
 import { parseWith } from '../common/zod.pipe';
 import { FirebaseVerifier } from '../auth/firebase';
 import { TrialsService, type TrialAccount } from './trials/trials.service';
 import { OnboardingService } from './onboarding/onboarding.service';
+import { EventsService } from './events/events.service';
+import { EventRegistrationsService } from './events/registrations.service';
 
 /** El mismo ID token de Firebase que consume `/auth/google`. */
 const idTokenSchema = z.object({ idToken: z.string().min(100) });
+
+/** Nombre y celular solo hacen falta si la persona no tiene ficha en ningun padron. */
+const bookEventSchema = idTokenSchema.extend({
+  fullName: z.string().min(2).max(120).optional(),
+  phone: z.string().min(6).max(20).optional(),
+});
 
 /**
  * Alta de un gimnasio.
@@ -56,6 +64,8 @@ export class GymsController {
     private readonly trials: TrialsService,
     private readonly firebase: FirebaseVerifier,
     private readonly onboarding: OnboardingService,
+    private readonly events: EventsService,
+    private readonly registrations: EventRegistrationsService,
   ) {}
 
   /**
@@ -126,11 +136,65 @@ export class GymsController {
     );
   }
 
-  /** Horarios, precios y las clases concretas que se pueden probar. */
+  /**
+   * Horarios, precios, las clases que se pueden probar y lo que viene.
+   *
+   * Los eventos se componen aqui y no dentro de `trials.gym`: son de otro
+   * modulo, y meterlos ahi dentro ataria el directorio a la clase gratis para
+   * siempre. La ficha publica es un ensamblaje, y este es el sitio donde se ve.
+   */
   @Public()
   @Get(':slug')
-  gym(@Param('slug') slug: string) {
-    return this.trials.gym(slug);
+  async gym(@Param('slug') slug: string) {
+    const detalle = await this.trials.gym(slug);
+    return { ...detalle, events: await this.events.publicUpcoming(detalle.id) };
+  }
+
+  /**
+   * Coge plaza en un evento desde el directorio.
+   *
+   * Es lo que hace que un seminario con alguien conocido llene el local: lo
+   * reserva gente que TODAVIA no entrena ahi. Se identifica ante Firebase
+   * primero y se escribe despues, igual que la clase gratis.
+   *
+   * Un rechazo vuelve con 200 y `booked: false`. Que se agotaran las plazas no
+   * es un error de la peticion, y quien lo lee necesita saber si esperar al
+   * siguiente o si ya tenia la suya.
+   */
+  @Public()
+  @Post(':slug/events/:eventId/book')
+  async bookEvent(
+    @Param('slug') slug: string,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Body(parseWith(bookEventSchema)) body: z.infer<typeof bookEventSchema>,
+  ) {
+    const identity = await this.firebase.verify(body.idToken);
+
+    return this.registrations.book({
+      slug,
+      eventId,
+      account: {
+        kind: 'firebase',
+        uid: identity.uid,
+        email: identity.email,
+        displayName: identity.displayName,
+      },
+      fullName: body.fullName,
+      phone: body.phone,
+    });
+  }
+
+  /** Las plazas que ya tiene esta persona, para que no se le pierdan. */
+  @Public()
+  @Post('events/mine')
+  async myEvents(@Body(parseWith(idTokenSchema)) body: z.infer<typeof idTokenSchema>) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.registrations.mine({
+      kind: 'firebase',
+      uid: identity.uid,
+      email: identity.email,
+      displayName: identity.displayName,
+    });
   }
 
   /**

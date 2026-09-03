@@ -129,6 +129,9 @@ export default function RootLayout() {
           <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
           <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="events/edit/[eventId]" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -246,6 +249,9 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     // `pricing` se apagan solas para recepcion, que las lee pero no las toca.
     'plans',
     'pricing',
+    // Sin esto la ruta se redirige EN SILENCIO —sin error, sin pantalla— y la
+    // pantalla queda escrita para nadie. Ya se pagó una vez con `plans`.
+    'events',
   ]),
   student: new Set(['pay', 'plan-change']),
 };

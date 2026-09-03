@@ -38,6 +38,20 @@ import {
   archivarPlan,
   borrarPlan,
   guardarPrecios,
+  fetchEventos,
+  fetchEvento,
+  crearEvento,
+  editarEvento,
+  cambiarEstadoEvento,
+  borrarEvento,
+  fetchPlazas,
+  inscribirEnEvento,
+  cambiarEstadoPlaza,
+  cobrarPlaza,
+  type EventoConCupo,
+  type EventoDto,
+  type EventoEscrito,
+  type PlazaDto,
   type PlanConUso,
   type PlanEscrito,
   type PreciosDelLocal,
@@ -593,6 +607,78 @@ export async function eliminarPlan(planId: string): Promise<void> {
 export async function preciosDelLocal(): Promise<PreciosDelLocal> {
   exigeServidor('Ver lo que cobras');
   return await fetchPrecios();
+}
+
+// ---------------------------------------------------------------------------
+// Eventos con fecha
+// ---------------------------------------------------------------------------
+
+/**
+ * Todo lo de eventos exige servidor, igual que los precios.
+ *
+ * Aqui el motivo es todavia mas fuerte que en los planes: lo que se reparte es
+ * CUPO. Dos equipos del mostrador vendiendo plazas contra su propia caché
+ * venderian la misma dos veces, y el sábado se presentan dos personas para una
+ * silla. El cupo lo cuenta el servidor con la fila del evento bloqueada, y esa
+ * garantía no se puede replicar sin conexión.
+ */
+export async function eventosDelGimnasio(
+  opciones: { readonly past?: boolean; readonly drafts?: boolean } = {},
+): Promise<readonly EventoConCupo[]> {
+  exigeServidor('Ver los eventos');
+  return await fetchEventos(opciones);
+}
+
+export async function eventoDelGimnasio(eventId: string): Promise<EventoConCupo> {
+  exigeServidor('Ver un evento');
+  return await fetchEvento(eventId);
+}
+
+export async function guardarEvento(
+  eventId: string | null,
+  evento: EventoEscrito,
+): Promise<EventoDto> {
+  exigeServidor('Guardar un evento');
+  return eventId === null ? await crearEvento(evento) : await editarEvento(eventId, evento);
+}
+
+export async function publicarEvento(
+  eventId: string,
+  status: 'draft' | 'published' | 'canceled',
+): Promise<EventoDto> {
+  exigeServidor('Cambiar un evento');
+  return await cambiarEstadoEvento(eventId, status);
+}
+
+export async function eliminarEvento(eventId: string): Promise<void> {
+  exigeServidor('Borrar un evento');
+  await borrarEvento(eventId);
+}
+
+export async function plazasDelEvento(eventId: string): Promise<readonly PlazaDto[]> {
+  exigeServidor('Ver los inscritos');
+  return await fetchPlazas(eventId);
+}
+
+export async function inscribirAlumnoEnEvento(eventId: string, membershipId: string) {
+  exigeServidor('Inscribir en un evento');
+  return await inscribirEnEvento(eventId, membershipId);
+}
+
+export async function marcarPlaza(
+  registrationId: string,
+  status: 'booked' | 'attended' | 'no_show' | 'canceled',
+): Promise<PlazaDto> {
+  exigeServidor('Marcar una plaza');
+  return await cambiarEstadoPlaza(registrationId, status);
+}
+
+export async function cobrarPlazaDeEvento(
+  registrationId: string,
+  rail: 'cash' | 'yape' | 'bank_transfer',
+): Promise<PlazaDto> {
+  exigeServidor('Cobrar una plaza');
+  return await cobrarPlaza(registrationId, rail);
 }
 
 export async function guardarPreciosDelLocal(

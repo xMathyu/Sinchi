@@ -87,6 +87,8 @@ export const chargeTypeEnum = pgEnum('charge_type', [
   'enrollment',
   'drop_in',
   'saas',
+  /** Plaza en un evento con fecha: un seminario, un taller, la clase del invitado. */
+  'event',
 ]);
 export const chargeStatusEnum = pgEnum('charge_status', ['pending', 'succeeded', 'failed']);
 export const paymentRailEnum = pgEnum('payment_rail', [
@@ -96,6 +98,18 @@ export const paymentRailEnum = pgEnum('payment_rail', [
   'bank_transfer',
 ]);
 export const checkInMethodEnum = pgEnum('check_in_method', ['qr', 'manual']);
+export const gymEventStatusEnum = pgEnum('gym_event_status', ['draft', 'published', 'canceled']);
+/**
+ * Mismos valores que `trial_booking_status` y tipo propio a proposito: son dos
+ * ciclos que se parecen hoy y no tienen por que seguir pareciendose. Compartir
+ * el enum ata el dia que uno de los dos necesite un estado mas.
+ */
+export const eventRegistrationStatusEnum = pgEnum('event_registration_status', [
+  'booked',
+  'attended',
+  'no_show',
+  'canceled',
+]);
 export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
   'booked',
   'attended',
@@ -579,9 +593,21 @@ export const charges = pgTable(
     subscriptionId: uuid('subscription_id').references(() => subscriptions.id, {
       onDelete: 'set null',
     }),
-    membershipId: uuid('membership_id')
-      .notNull()
-      .references(() => memberships.id, { onDelete: 'cascade' }),
+    /**
+     * `null` SOLO en un cargo de tipo `event`.
+     *
+     * Un seminario lo paga tambien quien no entrena aqui, y esa persona no tiene
+     * membresia en este local ni debe tenerla: viene a una clase, no se inscribe
+     * en el padron. Su plata sigue siendo del gimnasio y sale en "cobrado este
+     * mes", asi que va al MISMO ledger — dos sitios donde vive el dinero es como
+     * se dejan de cuadrar las cuentas.
+     *
+     * `charges_membership_unless_event` mantiene la columna obligatoria para
+     * todos los demas tipos.
+     */
+    membershipId: uuid('membership_id').references(() => memberships.id, {
+      onDelete: 'cascade',
+    }),
     type: chargeTypeEnum('type').notNull(),
     amountCents: integer('amount_cents').notNull(),
     status: chargeStatusEnum('status').notNull(),
@@ -614,6 +640,120 @@ export const charges = pgTable(
     uniqueIndex('charges_client_id_key')
       .on(t.tenantId, t.clientId)
       .where(sql`client_id is not null`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Eventos con fecha
+// ---------------------------------------------------------------------------
+
+/**
+ * Una clase con FECHA que se vende aparte: un seminario, un taller, la clase del
+ * invitado que viene una sola vez.
+ *
+ * No es `class_schedules`, que es el horario semanal y se repite, ni `plans`,
+ * que es una suscripcion. Los dos precios no son un lujo: un seminario se llena
+ * con gente que TODAVIA no entrena aqui, y cobrarle lo mismo que al alumno de
+ * casa es regalar el unico dia del ano en que entra gente nueva por la puerta.
+ */
+export const gymEvents = pgTable(
+  'gym_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    /** El invitado, si lo hay. Es lo que vende la plaza. */
+    instructor: text('instructor'),
+    /** Fecha civil en la zona del gimnasio. */
+    localDate: date('local_date').notNull(),
+    /** `HH:MM` en hora local del tenant, igual que `class_schedules`. */
+    startTime: text('start_time').notNull(),
+    endTime: text('end_time').notNull(),
+    /** `null` = sin limite de plazas. */
+    capacity: smallint('capacity'),
+    memberPriceCents: integer('member_price_cents').notNull(),
+    guestPriceCents: integer('guest_price_cents').notNull(),
+    status: gymEventStatusEnum('status').notNull().default('draft'),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // "Lo que viene" del directorio y del mostrador barre por aqui.
+    index('gym_events_tenant_date_idx').on(t.tenantId, t.localDate),
+  ],
+);
+
+/**
+ * La plaza de una persona en un evento.
+ *
+ * Lleva su propio estado y NO escribe en `attendance` a proposito: el indice
+ * `attendance_once_per_day` deja una asistencia por alumno y dia, asi que quien
+ * entreno el sabado por la manana no podria marcar en el seminario de esa tarde.
+ *
+ * Copia el nombre y el celular como `trial_bookings`, y por lo mismo: quien
+ * reserva puede no tener ficha en ningun padron todavia.
+ */
+export const eventRegistrations = pgTable(
+  'event_registrations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => gymEvents.id, { onDelete: 'cascade' }),
+    /** `null` cuando quien viene no entrena en este local. */
+    membershipId: uuid('membership_id').references(() => memberships.id, {
+      onDelete: 'set null',
+    }),
+    /** Identidad Sinchi, cuando ya la tiene. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Cuenta de Firebase de quien todavia no tiene ficha en ningun padron. */
+    firebaseUid: text('firebase_uid'),
+    fullName: text('full_name').notNull(),
+    phone: text('phone').notNull(),
+    email: text('email'),
+    /** Congelado al inscribirse: se respeta lo que se le prometio a la persona. */
+    priceCents: integer('price_cents').notNull(),
+    status: eventRegistrationStatusEnum('status').notNull().default('booked'),
+    /**
+     * El cargo que pago la plaza. `null` = reservada sin pagar.
+     *
+     * `set null` y no `cascade`: borrar un cargo no puede borrar a alguien de la
+     * lista del seminario — se quedaria sin plaza sin que nadie lo decidiera.
+     */
+    chargeId: uuid('charge_id').references(() => charges.id, { onDelete: 'set null' }),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /**
+     * UNA plaza por persona y evento, contada por celular.
+     *
+     * Va en la base y no solo en el servicio: reservar dos veces desde dos
+     * pestanas a la vez es justo la carrera que un `select` previo no atrapa, y
+     * con cupo de por medio esa carrera vende una plaza que no existe.
+     */
+    uniqueIndex('event_registrations_one_per_phone')
+      .on(t.eventId, t.phone)
+      .where(sql`status <> 'canceled'`),
+    // Solo por celular no basta: la misma cuenta con otro numero se lleva una
+    // segunda plaza, y con cupo eso es una plaza que otro no puede comprar.
+    uniqueIndex('event_registrations_one_per_user')
+      .on(t.eventId, t.userId)
+      .where(sql`user_id is not null and status <> 'canceled'`),
+    uniqueIndex('event_registrations_one_per_account')
+      .on(t.eventId, t.firebaseUid)
+      .where(sql`firebase_uid is not null and status <> 'canceled'`),
+    index('event_registrations_event_idx').on(t.eventId),
+    index('event_registrations_tenant_idx').on(t.tenantId),
+    index('event_registrations_membership_idx')
+      .on(t.membershipId)
+      .where(sql`membership_id is not null`),
   ],
 );
 

@@ -32,6 +32,8 @@ export type PaymentMethodId = Id<'payment_method'>;
 export type ClassScheduleId = Id<'class_schedule'>;
 export type AttendanceId = Id<'attendance'>;
 export type TrialBookingId = Id<'trial_booking'>;
+export type GymEventId = Id<'gym_event'>;
+export type EventRegistrationId = Id<'event_registration'>;
 export type DeviceId = Id<'device'>;
 export type StaffId = Id<'staff'>;
 
@@ -225,7 +227,14 @@ export interface PaymentMethod {
 // Ledger de cargos
 // ---------------------------------------------------------------------------
 
-export type ChargeType = 'renewal' | 'proration' | 'enrollment' | 'drop_in' | 'saas';
+export type ChargeType =
+  | 'renewal'
+  | 'proration'
+  | 'enrollment'
+  | 'drop_in'
+  | 'saas'
+  /** Plaza en un evento con fecha: un seminario, un taller, una clase especial. */
+  | 'event';
 export type ChargeStatus = 'pending' | 'succeeded' | 'failed';
 
 /**
@@ -240,7 +249,19 @@ export interface Charge {
   readonly id: ChargeId;
   readonly tenantId: TenantId;
   readonly subscriptionId: SubscriptionId | null;
-  readonly membershipId: MembershipId;
+  /**
+   * `null` SOLO en un cargo de tipo `event`.
+   *
+   * Un seminario lo paga tambien quien no entrena aqui, y esa persona no tiene
+   * membresia en este local — ni debe tenerla: viene a una clase, no se inscribe
+   * en el padron. Su plata sigue siendo del gimnasio y tiene que salir en
+   * "cobrado este mes", asi que va al MISMO ledger y no a una tabla aparte: dos
+   * sitios donde vive el dinero es como se dejan de cuadrar las cuentas.
+   *
+   * La restriccion `charges_membership_unless_event` lo mantiene honesto: para
+   * cualquier otro tipo la columna sigue siendo obligatoria.
+   */
+  readonly membershipId: MembershipId | null;
   readonly type: ChargeType;
   readonly amountCents: Cents;
   readonly status: ChargeStatus;
@@ -254,6 +275,85 @@ export interface Charge {
   readonly recordedBy: StaffId | null;
   readonly createdAt: Date;
 }
+
+// ---------------------------------------------------------------------------
+// Eventos con fecha
+// ---------------------------------------------------------------------------
+
+/**
+ * `draft` existe y no sobra: el dueno escribe el seminario el martes con el
+ * precio a medias y lo publica el viernes, cuando el invitado confirmo.
+ * `canceled` no es lo mismo que despublicar — hay gente con plaza que hay que
+ * avisar, y esa diferencia se pierde con un booleano.
+ */
+export type GymEventStatus = 'draft' | 'published' | 'canceled';
+
+/**
+ * Una clase con FECHA que se vende aparte: un seminario, un taller, la clase
+ * del invitado que viene una sola vez.
+ *
+ * No es un `ClassSchedule`, que es el horario semanal y se repite; ni un `Plan`,
+ * que es una suscripcion. Es un evento suelto, con cupo y con dos precios —lo
+ * que paga el alumno del local y lo que paga quien viene de fuera—, porque de
+ * eso vive un seminario: se llena con gente que todavia no entrena aqui.
+ */
+export interface GymEvent {
+  readonly id: GymEventId;
+  readonly tenantId: TenantId;
+  readonly name: string;
+  readonly description: string | null;
+  /** El invitado, si lo hay. Es lo que vende la plaza. */
+  readonly instructor: string | null;
+  readonly date: PlainDate;
+  readonly startTime: LocalTime;
+  readonly endTime: LocalTime;
+  /** `null` = sin limite de plazas. */
+  readonly capacity: number | null;
+  readonly memberPriceCents: Cents;
+  /** Lo que paga quien no entrena aqui. Suele ser mas alto, y ese es el punto. */
+  readonly guestPriceCents: Cents;
+  readonly status: GymEventStatus;
+}
+
+export type EventRegistrationStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
+
+/**
+ * La plaza de una persona en un evento.
+ *
+ * Lleva su propio estado y NO crea una fila en `attendance`, a proposito: el
+ * indice `attendance_once_per_day` deja una asistencia por alumno y dia, asi que
+ * el que entreno el sabado por la manana no podria marcar en el seminario de esa
+ * tarde. Son dos cosas distintas contadas por separado.
+ */
+export interface EventRegistration {
+  readonly id: EventRegistrationId;
+  readonly tenantId: TenantId;
+  readonly eventId: GymEventId;
+  /** `null` cuando quien viene no entrena en este local. */
+  readonly membershipId: MembershipId | null;
+  /** Identidad Sinchi, cuando ya la tiene. */
+  readonly userId: UserId | null;
+  readonly fullName: string;
+  readonly phone: string;
+  readonly email: string | null;
+  /** Congelado al inscribirse: se respeta lo que se le prometio a la persona. */
+  readonly priceCents: Cents;
+  readonly status: EventRegistrationStatus;
+  /**
+   * El cargo que pago la plaza. `null` = reservada sin pagar.
+   *
+   * En la version 1 todo cargo manual nace `succeeded`, asi que tenerlo equivale
+   * a estar pagada. Cuando entre el cobro con tarjeta habra que mirar tambien su
+   * estado, y por eso se guarda la referencia y no un booleano.
+   */
+  readonly chargeId: ChargeId | null;
+}
+
+/** Lo que le toca pagar a esta persona: no es lo mismo venir de fuera. */
+export const eventPriceFor = (
+  event: Pick<GymEvent, 'memberPriceCents' | 'guestPriceCents'>,
+  isMember: boolean,
+): Cents => (isMember ? event.memberPriceCents : event.guestPriceCents);
 
 // ---------------------------------------------------------------------------
 // Horarios y asistencia

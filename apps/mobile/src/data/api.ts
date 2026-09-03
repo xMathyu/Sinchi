@@ -316,6 +316,8 @@ export interface GymDetailDto extends GymCardDto {
   readonly schedules: readonly ClassSchedule[];
   /** Las clases concretas que se pueden reservar, ya con fecha. */
   readonly slots: readonly TrialSlot[];
+  /** Seminarios y talleres publicados que todavía no han pasado. */
+  readonly events: readonly EventoConCupo[];
 }
 
 export interface TrialBookingDto extends TrialBooking {
@@ -346,8 +348,52 @@ const reviveBooking = (out: BookTrialDto): BookTrialDto =>
 export const fetchGyms = (): Promise<readonly GymCardDto[]> =>
   request('/gyms', { anonymous: true });
 
-export const fetchGym = (slug: string): Promise<GymDetailDto> =>
-  request(`/gyms/${encodeURIComponent(slug)}`, { anonymous: true });
+export const fetchGym = async (slug: string): Promise<GymDetailDto> => {
+  const ficha = await request<GymDetailDto>(`/gyms/${encodeURIComponent(slug)}`, {
+    anonymous: true,
+  });
+  // Misma revivida que en la lista del staff: `date` llega como cadena y el tipo
+  // promete `PlainDate`.
+  return {
+    ...ficha,
+    events: (ficha.events ?? []).map((fila) => ({ ...fila, event: reviveEvento(fila.event) })),
+  };
+};
+
+/** Coge plaza sin sesión de Sinchi, con la cuenta de Google verificada. */
+export const bookEventAsGuest = (input: {
+  readonly slug: string;
+  readonly eventId: string;
+  readonly idToken: string;
+  readonly fullName: string;
+  readonly phone: string;
+}): Promise<BookEventDto> =>
+  request(`/gyms/${encodeURIComponent(input.slug)}/events/${input.eventId}/book`, {
+    method: 'POST',
+    anonymous: true,
+    body: { idToken: input.idToken, fullName: input.fullName, phone: input.phone },
+  });
+
+/** Coge plaza con la sesión puesta: no hace falta preguntarle nada. */
+export const bookEvent = (input: {
+  readonly slug: string;
+  readonly eventId: string;
+}): Promise<BookEventDto> => request('/me/events', { method: 'POST', body: input });
+
+/**
+ * Resultado de coger plaza.
+ *
+ * Union discriminada porque el servidor responde 200 también al rechazar: que se
+ * agotaran las plazas no es un error de la petición, y la pantalla necesita el
+ * motivo para decir si esperar al siguiente o si ya tenía la suya.
+ */
+export type BookEventDto =
+  | { readonly booked: true; readonly registration: PlazaDto; readonly event: EventoDto }
+  | {
+      readonly booked: false;
+      readonly reason: { readonly code: string; readonly paid?: boolean; readonly capacity?: number };
+      readonly event: EventoDto;
+    };
 
 /**
  * Reserva sin ficha en ningun padron.
@@ -709,6 +755,162 @@ export interface PreciosDelLocal {
 }
 
 export const fetchPrecios = (): Promise<PreciosDelLocal> => request('/staff/pricing');
+
+// ---------------------------------------------------------------------------
+// Eventos con fecha: seminarios, talleres, la clase del invitado
+// ---------------------------------------------------------------------------
+
+export interface EventoDto {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly instructor: string | null;
+  readonly date: PlainDate;
+  readonly startTime: string;
+  readonly endTime: string;
+  readonly capacity: number | null;
+  /** Lo que paga el alumno del local. */
+  readonly memberPriceCents: number;
+  /** Lo que paga quien viene de fuera. Suele ser más alto, y ese es el punto. */
+  readonly guestPriceCents: number;
+  readonly status: 'draft' | 'published' | 'canceled';
+}
+
+/** Un evento con lo que hace falta para decidir sobre él. */
+export interface EventoConCupo {
+  readonly event: EventoDto;
+  /** Plazas vivas: reservadas, pagadas o no. */
+  readonly seatsTaken: number;
+  /** `null` cuando el evento no limita el cupo. */
+  readonly seatsLeft: number | null;
+  /** Cuántas están pagadas. Es la cifra que el dueño mira antes del día. */
+  readonly paidSeats: number;
+}
+
+export interface PlazaDto {
+  readonly registration: {
+    readonly id: string;
+    readonly eventId: string;
+    readonly membershipId: string | null;
+    readonly fullName: string;
+    readonly phone: string;
+    readonly email: string | null;
+    readonly priceCents: number;
+    readonly status: 'booked' | 'attended' | 'no_show' | 'canceled';
+    readonly chargeId: string | null;
+  };
+  readonly paid: boolean;
+  /** `true` cuando entrena aquí: explica por qué paga el precio que paga. */
+  readonly isMember: boolean;
+}
+
+/** Lo que se manda al crear o editar un evento. */
+export interface EventoEscrito {
+  readonly name: string;
+  readonly description: string | null;
+  readonly instructor: string | null;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+  readonly startTime: string;
+  readonly endTime: string;
+  readonly capacity: number | null;
+  readonly memberPriceCents: number;
+  readonly guestPriceCents: number;
+  readonly published: boolean;
+}
+
+/**
+ * Lo que viene, o el historial con `past`.
+ *
+ * Las dos listas son disjuntas: ver el mismo seminario en «lo que viene» y en
+ * «lo que pasó» no es más información, es una duda.
+ */
+export const fetchEventos = async (
+  opciones: { readonly past?: boolean; readonly drafts?: boolean } = {},
+): Promise<readonly EventoConCupo[]> => {
+  const query = [
+    opciones.past === true ? 'past=true' : '',
+    opciones.drafts === true ? 'drafts=true' : '',
+  ]
+    .filter((p) => p.length > 0)
+    .join('&');
+  const eventos = await request<readonly EventoConCupo[]>(
+    query.length === 0 ? '/staff/events' : `/staff/events?${query}`,
+  );
+  return eventos.map((fila) => ({ ...fila, event: reviveEvento(fila.event) }));
+};
+
+export const fetchEvento = async (eventId: string): Promise<EventoConCupo> => {
+  const fila = await request<EventoConCupo>(`/staff/events/${eventId}`);
+  return { ...fila, event: reviveEvento(fila.event) };
+};
+
+export const crearEvento = (evento: EventoEscrito): Promise<EventoDto> =>
+  request('/staff/events', { method: 'POST', body: evento });
+
+export const editarEvento = (eventId: string, evento: EventoEscrito): Promise<EventoDto> =>
+  request(`/staff/events/${eventId}`, { method: 'POST', body: evento });
+
+/** Publicar, volver a borrador o cancelar. Cancelar NO borra a los inscritos. */
+export const cambiarEstadoEvento = (
+  eventId: string,
+  status: 'draft' | 'published' | 'canceled',
+): Promise<EventoDto> =>
+  request(`/staff/events/${eventId}/status`, { method: 'POST', body: { status } });
+
+/** Solo el que nadie reservó. Con una plaza vendida, la api responde 409. */
+export const borrarEvento = (eventId: string): Promise<unknown> =>
+  request(`/staff/events/${eventId}`, { method: 'DELETE' });
+
+export const fetchPlazas = (eventId: string): Promise<readonly PlazaDto[]> =>
+  request(`/staff/events/${eventId}/registrations`);
+
+/** El mostrador mete a un alumno del padrón. Un rechazo vuelve con 200. */
+export const inscribirEnEvento = (
+  eventId: string,
+  membershipId: string,
+): Promise<
+  | { readonly booked: true; readonly registration: PlazaDto }
+  | { readonly booked: false; readonly reason: { readonly code: string } }
+> =>
+  request(`/staff/events/${eventId}/registrations`, {
+    method: 'POST',
+    body: { membershipId },
+  });
+
+export const cambiarEstadoPlaza = (
+  registrationId: string,
+  status: 'booked' | 'attended' | 'no_show' | 'canceled',
+): Promise<PlazaDto> =>
+  request(`/staff/events/registrations/${registrationId}/status`, {
+    method: 'POST',
+    body: { status },
+  });
+
+/** Idempotente: tocar dos veces no cobra dos veces. */
+export const cobrarPlaza = (
+  registrationId: string,
+  rail: 'cash' | 'yape' | 'bank_transfer',
+): Promise<PlazaDto> =>
+  request(`/staff/events/registrations/${registrationId}/pay`, {
+    method: 'POST',
+    body: { rail },
+  });
+
+/**
+ * `date` llega como `YYYY-MM-DD` y el tipo dice `PlainDate`.
+ *
+ * Misma mentira que la de `Charge.createdAt`, y explota igual de lejos de su
+ * origen: quien compara la fecha del evento con la de hoy recibe una cadena
+ * donde espera `{ year, month, day }`.
+ */
+function reviveEvento(raw: EventoDto): EventoDto {
+  const fecha = raw.date as unknown;
+  if (typeof fecha !== 'string') return raw;
+  const [year, month, day] = fecha.split('-').map(Number);
+  return { ...raw, date: { year: year!, month: month!, day: day! } as PlainDate };
+}
 
 export const guardarPrecios = (precios: PreciosDelLocal): Promise<PreciosDelLocal> =>
   request('/staff/pricing', { method: 'POST', body: precios });

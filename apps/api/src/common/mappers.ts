@@ -15,6 +15,8 @@ import {
   type Cents,
   type Charge,
   type ClassSchedule,
+  type EventRegistration,
+  type GymEvent,
   type IsoWeekday,
   type Membership,
   type Plan,
@@ -38,6 +40,8 @@ type ChargeRow = InferSelectModel<typeof schema.charges>;
 type ClassScheduleRow = InferSelectModel<typeof schema.classSchedules>;
 type AttendanceRow = InferSelectModel<typeof schema.attendance>;
 type TrialBookingRow = InferSelectModel<typeof schema.trialBookings>;
+type GymEventRow = InferSelectModel<typeof schema.gymEvents>;
+type EventRegistrationRow = InferSelectModel<typeof schema.eventRegistrations>;
 
 /** Columnas `date` de Postgres llegan como `YYYY-MM-DD`. */
 const toDate = (value: string): PlainDate => parsePlainDate(value);
@@ -143,7 +147,7 @@ export function toCharge(row: ChargeRow): Charge {
     id: asId(row.id),
     tenantId: asId(row.tenantId),
     subscriptionId: row.subscriptionId === null ? null : asId(row.subscriptionId),
-    membershipId: asId(row.membershipId),
+    membershipId: row.membershipId === null ? null : asId(row.membershipId),
     type: row.type,
     amountCents: toCents(row.amountCents),
     status: row.status,
@@ -199,6 +203,39 @@ export function toAttendance(row: AttendanceRow): Attendance {
  * tiene ficha en ningun padron, y ese es justo el caso que la funcion existe
  * para atender.
  */
+export function toGymEvent(row: GymEventRow): GymEvent {
+  return {
+    id: asId(row.id),
+    tenantId: asId(row.tenantId),
+    name: row.name,
+    description: row.description,
+    instructor: row.instructor,
+    date: toDate(row.localDate),
+    startTime: row.startTime,
+    endTime: row.endTime,
+    capacity: row.capacity,
+    memberPriceCents: toCents(row.memberPriceCents),
+    guestPriceCents: toCents(row.guestPriceCents),
+    status: row.status,
+  };
+}
+
+export function toEventRegistration(row: EventRegistrationRow): EventRegistration {
+  return {
+    id: asId(row.id),
+    tenantId: asId(row.tenantId),
+    eventId: asId(row.eventId),
+    membershipId: row.membershipId === null ? null : asId(row.membershipId),
+    userId: row.userId === null ? null : asId(row.userId),
+    fullName: row.fullName,
+    phone: row.phone,
+    email: row.email,
+    priceCents: toCents(row.priceCents),
+    status: row.status,
+    chargeId: row.chargeId === null ? null : asId(row.chargeId),
+  };
+}
+
 export function toTrialBooking(row: TrialBookingRow): TrialBooking {
   return {
     id: asId(row.id),

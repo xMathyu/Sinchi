@@ -234,6 +234,31 @@ export default function PadronScreen() {
 
           Por ROL y no por `resumen === null`: ese llega tarde y la fila
           aparecía y se esfumaba sola al cargar el resumen. */}
+      {/* Los eventos los ve TODO el staff, no solo el dueño: la lista del día
+          del seminario la opera quien recibe a la gente en la puerta. Escribir
+          el evento sí es del dueño, y eso se apaga dentro. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Eventos"
+        onPress={() => router.push('/events')}
+      >
+        <Card radius={theme.radii.lg} tone="sunken">
+          <Row>
+            <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="bodySmall" weight="semibold">
+                Eventos
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                Seminarios y talleres: quién viene y quién ya pagó.
+              </Text>
+            </Stack>
+            <Text variant="body" color={theme.colors.textTertiary}>
+              ›
+            </Text>
+          </Row>
+        </Card>
+      </Pressable>
+
       {esDueno && (
         <Pressable
           accessibilityRole="button"

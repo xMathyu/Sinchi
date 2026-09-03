@@ -54,6 +54,20 @@ export function formatLongDate(date: PlainDate): string {
   return `${date.day} de ${MONTH_LONG[date.month - 1] ?? ''}`;
 }
 
+/**
+ * `dom 20 set` — cuándo es un evento.
+ *
+ * Lleva el día de la semana porque un seminario se decide por ahí («¿trabajo
+ * ese sábado?»), y va corta porque comparte fila con el precio y el invitado.
+ * Vive aquí y no en la pantalla porque lo dicen tres superficies —la lista del
+ * dueño, el día del evento y el directorio— y en las tres tiene que leerse
+ * igual.
+ */
+export function formatEventDate(date: PlainDate): string {
+  const dia = weekdayName(isoWeekday(date)).slice(0, 3);
+  return `${dia} ${date.day} ${MONTH_SHORT[date.month - 1] ?? ''}`;
+}
+
 /** `Jueves 20` con la inicial en mayuscula, como en el historial del diseno. */
 export function formatWeekdayAndDay(date: PlainDate): string {
   const name = weekdayName(isoWeekday(date));

@@ -20,7 +20,8 @@ import { router } from 'expo-router';
 import { Button, Card, Divider, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { usePreciosDelLocal, useStore } from '../src/data/hooks';
+import { usePreciosDelLocal } from '../src/data/hooks';
+import { useRole } from '../src/data/session-hooks';
 import { guardarPreciosDelLocal } from '../src/data/actions';
 
 /** Soles escritos a mano → céntimos enteros. Vacío es `null`, que es "no se ofrece". */
@@ -37,7 +38,9 @@ const enSoles = (centimos: number | null): string =>
 
 export default function PreciosScreen() {
   const theme = useTheme();
-  const esDueno = useStore((s) => s.staff.role) === 'owner';
+  // De la sesión: el del store llega con el padrón, y estas pantallas se
+  // abren solas desde un enlace.
+  const esDueno = useRole() === 'owner';
   const { precios, recargar } = usePreciosDelLocal();
 
   const [matricula, setMatricula] = useState('');

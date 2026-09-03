@@ -260,6 +260,8 @@ function chargeTypeLabel(charge: Charge): string {
       return 'matrícula';
     case 'drop_in':
       return 'clase suelta';
+    case 'event':
+      return 'evento';
     case 'saas':
       return 'suscripción Sinchi';
   }

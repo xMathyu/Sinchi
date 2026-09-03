@@ -29,7 +29,9 @@ import {
   type CheckInPreviewDto,
   type GymCardDto,
   type GymDetailDto,
+  type EventoConCupo,
   type PlanConUso,
+  type PlazaDto,
   type PreciosDelLocal,
   type SaasSubscriptionDto,
   type SummaryDto,
@@ -45,6 +47,9 @@ import {
   resumenDelGimnasio,
   planesDelDueno,
   preciosDelLocal,
+  eventosDelGimnasio,
+  eventoDelGimnasio,
+  plazasDelEvento,
   suscripcionSinchi,
   vinculacionesPendientes,
   type Vinculacion,
@@ -572,6 +577,113 @@ export function usePlanesDelDueno(): {
     planes,
     error,
     cargando: planes === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+/**
+ * Los eventos del local.
+ *
+ * `drafts` solo lo pide el dueño: a recepción un evento sin publicar le ensucia
+ * la lista de a quién espera, y la api se lo filtra igual.
+ */
+export function useEventos(opciones: { readonly past?: boolean; readonly drafts?: boolean } = {}): {
+  readonly eventos: readonly EventoConCupo[] | null;
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const { past = false, drafts = false } = opciones;
+  const [eventos, setEventos] = useState<readonly EventoConCupo[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void eventosDelGimnasio({ past, drafts })
+      .then((valor) => {
+        if (!cancelado) setEventos(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudieron traer los eventos.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [past, drafts, intento]);
+
+  /**
+   * Y se vuelve a pedir al enfocar la pantalla.
+   *
+   * Sin esto la lista enseña lo de la primera vez: el dueño publica un evento
+   * desde el editor, recepción inscribe a alguien desde otro equipo, y quien
+   * vuelve a esta pantalla ve el mundo de hace media hora. El cupo de un
+   * seminario es justo el dato que no puede estar viejo.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      setIntento((n) => n + 1);
+    }, []),
+  );
+
+  return {
+    eventos,
+    error,
+    cargando: eventos === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+/** Un evento con su lista de inscritos: es la pantalla del día del seminario. */
+export function useEvento(eventId: string): {
+  readonly evento: EventoConCupo | null;
+  readonly plazas: readonly PlazaDto[];
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const [evento, setEvento] = useState<EventoConCupo | null>(null);
+  const [plazas, setPlazas] = useState<readonly PlazaDto[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    // Las dos a la vez: la cabecera sin la lista, o al revés, deja la pantalla
+    // media hecha durante un salto perceptible.
+    void Promise.all([eventoDelGimnasio(eventId), plazasDelEvento(eventId)])
+      .then(([uno, lista]) => {
+        if (cancelado) return;
+        setEvento(uno);
+        setPlazas(lista);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudo traer el evento.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [eventId, intento]);
+
+  // Es la pantalla que el mostrador tiene abierta mientras entra la gente: si
+  // alguien reservó desde el directorio hace un minuto, tiene que aparecer.
+  useFocusEffect(
+    useCallback(() => {
+      setIntento((n) => n + 1);
+    }, []),
+  );
+
+  return {
+    evento,
+    plazas,
+    error,
+    cargando: evento === null && error === null,
     recargar: () => setIntento((n) => n + 1),
   };
 }
