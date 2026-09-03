@@ -168,6 +168,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/payments` | Registra un pago en mostrador. |
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
+| `GET` | `/staff/subscription` | Solo el dueño: su suscripción a Sinchi, cuánto le queda de mes gratis y qué pasa al terminar. |
 | `GET` | `/staff/trials` | Quién viene a probar, de hoy en adelante. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
 | `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
@@ -240,9 +241,58 @@ Tres garantías, todas en la base y no en el código:
   en la puerta no le come una sesión del cupo.
 - `client_id` único por tenant en `charges` y `attendance` — reintentar la cola
   offline no duplica nada.
+- `saas_charges_reference_once` — el número de operación de la transferencia con
+  la que el gimnasio paga Sinchi. Hace falta **además** del índice por periodo:
+  registrar un pago adelanta la fecha de cobro, así que anotar dos veces el mismo
+  depósito no chocaría por periodo, le cobraría dos meses.
 
 Los endpoints aceptan `clientId` para eso. Un reintento devuelve el registro que
 ya existía con `alreadyRegistered: true` en vez de fallar.
+
+### El gimnasio que no paga queda en solo lectura, nunca sin puerta
+
+Todo gimnasio entra con **un mes gratis** desde su alta. Al vencer se cobra por
+adelantado con la tarifa de su escalón (S/ 149 / 299 / 499 según el padrón) y,
+pasados 7 días de gracia, la cuenta cae a solo lectura.
+
+Qué significa exactamente:
+
+| Sigue funcionando | Se bloquea |
+|---|---|
+| `POST /staff/checkin/qr` y `/checkin/manual` | `POST /staff/members` y `/members/:id/resubscribe` |
+| `POST /staff/sync` — repite lo que ya pasó en el mostrador | `POST /staff/payments` |
+| `POST /staff/pin` y `/staff/devices` — sin PIN ni equipo no hay puerta | `POST /staff/trials/settings` |
+| Los `DELETE`: revocar invitación, desvincular cuenta, revocar equipo — solo quitan acceso | `POST /staff/invites` y `/staff/claims/confirm` |
+| Todos los `GET`: padrón, deuda, historial, reportes | Sale del directorio: `GET /gyms` y `GET /gyms/:slug` |
+
+Vincular una cuenta de Google a una ficha (`claims/confirm`) sí se bloquea, y es
+el caso más discutible de la tabla: el alumno ya existe y ya paga. No queda
+tirado —en la puerta lo marcan a mano igual, que es lo que importa— y esperar
+unos días a tener la app no es que le nieguen la entrada.
+
+La regla que ordena esa tabla: **el corte de Sinchi al gimnasio nunca cae sobre
+el alumno**. Cerrar la puerta castigaría a quien sí le pagó a su gimnasio,
+delante de todos, y la reacción del dueño sería volver al cuaderno ese mismo día.
+Lo que se corta es crear futuro —alumnos nuevos, cobros nuevos, interesados
+nuevos— y eso hace imposible operar el día a día sin quitarle nada de lo que ya
+tiene. Los datos siguen siendo suyos y siguen visibles.
+
+Lo aplica `SaasGuard`, global y **cerrado por defecto**: cualquier ruta de
+escritura nueva nace cortada para el gimnasio impago, y abrirla exige
+`@AllowedWhenReadOnly()`. Al revés, cada ruta nueva regalaría el producto sin que
+nada fallara nunca.
+
+El estado se calcula (`evaluateSaas` en `packages/shared`);
+`saas_subscriptions.status` es un caché que refresca el mismo trabajo diario que
+la morosidad. Registrar el pago levanta el corte en el acto:
+
+```bash
+npm run saas:status -w @sinchi/api                       # todos los gimnasios
+npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
+```
+
+No hay pantalla para cobrar a propósito: con un puñado de gimnasios, quien cobra
+es una persona mirando el correo del banco una vez al mes.
 
 ### Aislamiento por tenant
 

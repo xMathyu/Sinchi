@@ -48,6 +48,7 @@ import { toClassSchedule, toPlan, toTrialBooking } from '../../common/mappers';
 import { Clock } from '../../common/clock';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { MailService } from '../mail/mail.service';
+import { SaasService } from '../saas/saas.service';
 
 /** Ficha del gimnasio en la lista. Lo justo para decidir si abrirlo. */
 export interface GymCard {
@@ -165,6 +166,7 @@ export class TrialsService {
     private readonly clock: Clock,
     private readonly mail: MailService,
     private readonly accountLink: AccountLinkService,
+    private readonly saas: SaasService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -188,6 +190,13 @@ export class TrialsService {
   async directory(): Promise<readonly GymCard[]> {
     const LIMITE = 60;
 
+    /**
+     * Un gimnasio que no le paga a Sinchi deja de recibir interesados POR
+     * Sinchi. Es la parte del corte que le cuesta algo al dueno sin costarle
+     * nada al alumno que ya entrena ahi.
+     */
+    const listed = await this.saas.listedTenantIds();
+
     return withoutTenantIsolation(this.db, async (tx) => {
       const gyms = await tx
         .select({
@@ -204,6 +213,7 @@ export class TrialsService {
 
       const cards: GymCard[] = [];
       for (const gym of gyms) {
+        if (!listed.has(gym.id)) continue;
         await adoptTenant(tx, gym.id);
         cards.push({ ...gym, ...(await this.aggregates(tx)) });
       }
@@ -244,6 +254,11 @@ export class TrialsService {
   async gym(slug: string): Promise<GymDetail> {
     const gym = await this.findGym(slug);
     if (gym === null || gym.status !== 'active') {
+      throw new NotFoundException('Ese gimnasio no está disponible.');
+    }
+    // Fuera del directorio también significa fuera de su propia ficha: si no,
+    // el enlace que alguien guardó seguiría dando de alta interesados.
+    if (!(await this.saas.stateFor(gym.id)).listed) {
       throw new NotFoundException('Ese gimnasio no está disponible.');
     }
 
@@ -353,6 +368,7 @@ export class TrialsService {
     if (gym === null) throw new NotFoundException('Ese gimnasio no existe.');
 
     const person = await this.resolvePerson(input);
+    const listed = (await this.saas.stateFor(gym.id)).listed;
 
     const outcome = await withTenant(this.db, gym.id, async (tx): Promise<BookOutcome> => {
       const scheduleRows = await tx
@@ -388,7 +404,9 @@ export class TrialsService {
               .limit(1);
 
       const verdict = validateTrialBooking({
-        gymActive: gym.status === 'active',
+        // El gimnasio que no le paga a Sinchi no recibe reservas nuevas. Las ya
+        // hechas se respetan, mismo criterio que apagar la clase gratis.
+        gymActive: gym.status === 'active' && listed,
         trialOffered: gym.trialClassEnabled,
         alreadyMember: membership.length > 0,
         existing:

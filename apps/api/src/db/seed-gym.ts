@@ -11,6 +11,7 @@
  * el panel, o una migracion, no un script de alta.
  */
 import { and, eq } from 'drizzle-orm';
+import { TZ_LIMA, formatPlainDate, freeUntilFrom, plainDateInZone } from '@sinchi/shared';
 import { createDatabase, createPool, schema, withTenant, withoutTenantIsolation } from './client';
 
 const SOLES = (amount: number): number => amount * 100;
@@ -112,6 +113,23 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
           trialClassPriceCents: SOLES(spec.trialSoles ?? 0),
         })
         .returning({ id: schema.tenants.id });
+
+      /**
+       * Su mes gratis, desde hoy.
+       *
+       * Explicito y no por la creacion perezosa del servicio: un gimnasio
+       * sembrado tiene que quedar con su fecha de vencimiento puesta aunque
+       * nadie abra la app, porque el job diario recorre esta tabla y lo que no
+       * esta aqui no vence nunca.
+       */
+      const alta = plainDateInZone(new Date(), TZ_LIMA);
+      await tx.insert(schema.saasSubscriptions).values({
+        tenantId: tenant!.id,
+        freeUntil: formatPlainDate(freeUntilFrom(alta)),
+        periodStart: formatPlainDate(alta),
+        nextBillingDate: formatPlainDate(freeUntilFrom(alta)),
+      });
+
       return tenant!.id;
     });
 

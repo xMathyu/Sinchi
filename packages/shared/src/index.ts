@@ -36,3 +36,6 @@ export * from './trial/validate.js';
 
 // Seguridad
 export * from './security/totp.js';
+
+// Suscripcion del gimnasio a Sinchi
+export * from './saas/subscription.js';

@@ -192,3 +192,94 @@ Lo que **no** hace, a propósito: no controla aforo. Una reserva de clase gratis
 no ocupa plaza, así que MD 8.3 sigue abierto igual que antes. Con los números de
 un dojo —una o dos pruebas por semana— cobrar el aforo aquí sería construir el
 sistema de reservas entero para el caso menos frecuente.
+
+---
+
+## 8. El mes gratis del gimnasio, y qué pasa cuando termina
+
+El esquema traía `saas_tier` y `charge_type = 'saas'` desde el primer commit,
+pero nada leía `tenants.status` y ningún gimnasio tenía fecha de vencimiento:
+**Sinchi era gratis para siempre sin quererlo**. Lo que faltaba no era la oferta
+—esa se puede anunciar mañana— sino la mitad que la convierte en un negocio.
+
+**Un mes gratis contado desde el alta.** La fecha sale de `advanceBillingDate`,
+la misma función que mueve el cobro del alumno, así que el alta del 31 de enero
+vence el 28 de febrero sin ningún caso especial. Es el dogfooding del MD 3: si el
+motor de cobro recurrente falla, nos falla a nosotros primero.
+
+**A los gimnasios que ya estaban, su mes empieza el día que esto se enciende**,
+no desde su `created_at`. Kaizen y Fa Meng Chuen llevaban meses dentro:
+arrancarlos ya vencidos por una fecha que nadie les comunicó es una conversación
+fea por un backfill.
+
+### Solo lectura, y la puerta nunca se cierra
+
+Es la decisión que ordena todo lo demás. Vencido el mes y pasados 7 días de
+gracia, el gimnasio impago pierde la capacidad de **crear futuro** —alumnos
+nuevos, cobros nuevos, interesados nuevos— y conserva todo lo que ya tiene: el
+check-in valida igual, el QR del alumno funciona igual, el padrón y el historial
+siguen ahí y siguen siendo suyos.
+
+Cortar la puerta era la opción con más palanca y es la que no se tomó. El
+castigo caería sobre el alumno que **sí** le pagó a su gimnasio, en la puerta y
+delante de todos, por una deuda que no es suya; y la reacción del dueño ante eso
+no es pagar, es volver al cuaderno esa misma tarde. Lo que sí duele sin dañar a
+nadie es no poder registrar el cobro del día: es la operación que el mostrador
+hace todas las tardes.
+
+Tres consecuencias que no son obvias y están en el código por escrito:
+
+- **`POST /staff/sync` sigue abierta.** No crea nada: repite marcados y pagos que
+  ya ocurrieron en el mostrador mientras no había wifi. Rechazarla borraría
+  dinero ya cobrado en efectivo.
+- **El PIN de turno y el alta de equipos siguen abiertos.** Sin PIN nadie abre
+  turno y sin equipo no hay puerta: cortarlos convertiría el modo solo lectura en
+  el cierre del local, que es justo lo que se prometió no hacer.
+- **Sale del directorio público.** Un local que no paga deja de recibir gente que
+  le llega *por* Sinchi. Es la parte del corte que le cuesta algo al dueño sin
+  costarle nada al alumno que ya entrena ahí. Las reservas ya hechas se respetan,
+  mismo criterio que apagar la clase gratis.
+
+El corte lo aplica un guard global **cerrado por defecto**: una ruta de escritura
+nueva nace cortada y abrirla exige `@AllowedWhenReadOnly()`. Al revés, cada ruta
+nueva regalaría el producto y el olvido no se notaría nunca, porque nada falla.
+
+### Tablas propias, no `charges`
+
+Dos razones que no se arreglan con un `ALTER`:
+
+1. `charges.membership_id` es `NOT NULL`. Un cobro a Sinchi no tiene alumno
+   detrás. Meterlo ahí exigiría inventar un tenant ficticio del que cada gimnasio
+   fuera «alumno» — el tipo de modelo que se paga tres meses después. Por eso el
+   `charge_type = 'saas'` que existía desde el principio nunca se pudo usar.
+2. `charges` está bajo RLS por tenant. Esta relación no es del gimnasio: es de
+   Sinchi **con** el gimnasio. Que el cliente lea su propia fila está bien; que el
+   aislamiento la trate como dato suyo, no.
+
+`saas_subscriptions` va fuera de `TENANT_SCOPED_TABLES`, igual que `tenants`: el
+mismo modelo de confianza que la tabla a la que apunta, y el job diario tiene que
+recorrerlas todas.
+
+### La idempotencia es el número de operación, no el periodo
+
+Registrar un pago **adelanta** la fecha de cobro. Así que anotar dos veces la
+misma transferencia —lo que pasa cuando dos personas atienden el mismo correo del
+banco— no chocaría contra el índice por periodo: apuntaría al mes siguiente y
+pasaría, cobrándole dos meses por un solo depósito. Lo para
+`saas_charges_reference_once`, que juega el mismo papel que `client_id` en la
+cola offline del mostrador.
+
+### Lo que no se construyó
+
+**Pantalla para cobrarle al gimnasio.** Con tres gimnasios, quien cobra es una
+persona mirando el correo del banco una vez al mes: `npm run saas:pay`. Una
+pantalla es trabajo que se tira el día que entre Culqi.
+
+**Cobro automático con tarjeta.** Misma decisión que con el alumno (§1): el
+gimnasio paga por transferencia o Yape y alguien lo registra. El corte por impago
+—que es lo que sostiene el negocio— funciona completo sin pasarela.
+
+**Aviso al dueño por correo o push antes de vencer.** Falta el mismo canal que
+falta para la morosidad del alumno. Lo que sí existe desde el primer día es la
+cuenta atrás visible en el modo staff: un mes gratis del que el dueño se entera
+el día que se corta es un cliente que se va enojado, no uno que paga.

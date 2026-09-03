@@ -8,6 +8,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentSession, OwnerOnly, StaffOnly } from '../auth/auth.guard';
+import { AllowedWhenReadOnly } from './saas/saas.guard';
 import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
 import { loadEnv } from '../config/env';
@@ -117,7 +118,14 @@ export class AccountsController {
     return this.invites.listPending(assertStaffSession(session).tenantId);
   }
 
-  /** Revoca una invitación: corta el enlace al instante. */
+  /**
+   * Revoca una invitación: corta el enlace al instante.
+   *
+   * Abierta con la cuenta impaga: revocar no crea futuro, lo quita. Cortarla
+   * dejaría vivo un enlace de alta que el gimnasio ya no quiere, que es peor
+   * para todos que dejarlo revocar.
+   */
+  @AllowedWhenReadOnly()
   @Delete('invites/:inviteId')
   async revokeInvite(
     @CurrentSession() session: Session,
@@ -172,6 +180,8 @@ export class AccountsController {
    * asocia la cuenta de Diego a la ficha de Julio, tiene que haber forma de
    * deshacerlo sin entrar a la base a mano.
    */
+  /** Misma razón que revocar la invitación: desvincular solo quita acceso. */
+  @AllowedWhenReadOnly()
   @OwnerOnly()
   @Delete('members/:membershipId/account')
   async unlink(
@@ -186,7 +196,14 @@ export class AccountsController {
   // PIN
   // -------------------------------------------------------------------------
 
-  /** Cada persona fija el suyo; el dueño puede fijar el de cualquiera. */
+  /**
+   * Cada persona fija el suyo; el dueño puede fijar el de cualquiera.
+   *
+   * Abierta aunque el gimnasio no haya pagado su suscripción a Sinchi: sin PIN
+   * nadie abre turno, y sin turno no hay puerta. Cortarla convertiría el modo
+   * solo lectura en el cierre del local, que es justo lo que no se quiso hacer.
+   */
+  @AllowedWhenReadOnly()
   @Post('pin')
   async setPin(
     @CurrentSession() session: Session,
@@ -222,6 +239,8 @@ export class AccountsController {
    * registra otro equipo y se revoca este, que es más seguro que poder
    * recuperarlo.
    */
+  /** Misma razón que el PIN: una tablet rota no puede dejar al gimnasio sin puerta. */
+  @AllowedWhenReadOnly()
   @OwnerOnly()
   @Post('devices')
   registerDevice(
@@ -232,6 +251,7 @@ export class AccountsController {
   }
 
   /** Revoca un equipo: una tablet que se pierde en el gimnasio. */
+  @AllowedWhenReadOnly()
   @OwnerOnly()
   @Delete('devices/:deviceId')
   async revokeDevice(
