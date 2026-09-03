@@ -156,6 +156,13 @@ cd apps/api && npm run db:migrate
 Las migraciones también viajan dentro de la imagen (`apps/api/drizzle`), así que
 se pueden aplicar desde el mismo artefacto desplegado si algún día hace falta.
 
+**El esquema se migra antes, y en la misma corrida.** `deploy-api.yml` llama a
+`migrate.yml` como primer job y solo construye la imagen si esa migración pasó.
+Antes eran dos cosas sueltas —el deploy automático, la migración a mano— y eso
+dejaba ventanas con el código por delante del esquema. A cambio, cada migración
+tiene que ser compatible hacia atrás: se aplica mientras la revisión anterior
+sigue sirviendo tráfico.
+
 ---
 
 ## Configuración y por qué

@@ -40,7 +40,26 @@ env:
   RUNTIME_SA: sinchi-api@sinchi-a95913.iam.gserviceaccount.com
 
 jobs:
+  # El esquema va PRIMERO, y el despliegue cuelga de que pase.
+  #
+  # Antes eran dos mitades sueltas: esto se disparaba a mano y el deploy solo, así
+  # que un merge que necesitaba una migración dejaba el código nuevo sirviendo
+  # contra el esquema viejo. Rompía en silencio —las lecturas siguen
+  # funcionando— hasta que algo intentaba escribir.
+  #
+  # El orden obliga a que cada migración sea COMPATIBLE HACIA ATRÁS: se aplica
+  # mientras la revisión anterior todavía sirve tráfico. Agregar está bien; para
+  # quitar algo van dos despliegues. Está explicado en `migrate.yml`.
+  migrar:
+    uses: ./.github/workflows/migrate.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      aplicar: true
+
   deploy:
+    needs: migrar
     runs-on: ubuntu-latest
 
     permissions:
