@@ -151,6 +151,24 @@ function denialMessage(reason: DenialReason, voice: AccessVoice): AccessMessage 
       };
     }
 
+    case 'drop_in_unpaid': {
+      const price = formatPENShort(reason.priceCents);
+      return {
+        level: 'alert',
+        title: 'Falta la clase de hoy',
+        reason: staff
+          ? `Paga por clase: ${price} cada vez que entrena.`
+          : `Tu plan es por clase: ${price} cada vez que entrenas.`,
+        // Lo que hay que decir en voz alta es que NO debe nada: en un plan asi,
+        // no haber pagado todavia es lo normal a las siete de la manana, no un
+        // descuido. Sin esta linea el mostrador le habla como a un moroso.
+        detail: staff
+          ? 'No debe nada: en este plan cada clase se cobra al entrar.'
+          : 'No debes nada: en tu plan cada clase se paga al entrar.',
+        action: staff ? `Cobrar ${price}` : `Pagar ${price} en el mostrador`,
+      };
+    }
+
     case 'outside_schedule':
       return {
         level: 'alert',

@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatPEN, weekdayName, type Cents } from '@sinchi/shared';
+import { formatPEN, isDropInPlan, weekdayName, type Cents } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import {
   Badge,
@@ -96,9 +96,29 @@ function Ficha({
   const [marcando, setMarcando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  const semaphore = semaphoreStyle(theme, view.level);
   const { quota, receivable, delinquency, plan, user } = view;
   const cancelada = view.subscription.status === 'canceled';
+  /** Cambia lo que significan tres cifras de esta pantalla; ver más abajo. */
+  const paganPorClase = isDropInPlan(plan);
+
+  /**
+   * El semáforo de ESTA pantalla, que no es el del padrón.
+   *
+   * `view.level` responde a «¿me debe?», y un alumno de clase suelta no debe
+   * nunca: sale verde. Aquí la pregunta es otra —«¿este pasa ahora?»— y con el
+   * verde puesto, el titular decía "Falta la clase de hoy" pintado de OK, que se
+   * lee como que todo está bien.
+   *
+   * No se arregla en `membershipStatus` a propósito: eso pintaría de ámbar a
+   * todos los alumnos de clase suelta del padrón casi todos los días, y ahí sí
+   * estarían al día. Es la misma persona con dos respuestas correctas a dos
+   * preguntas distintas.
+   */
+  const nivel =
+    paganPorClase && !view.dropInPaidToday && !cancelada && delinquency.canTrain
+      ? 'alert'
+      : view.level;
+  const semaphore = semaphoreStyle(theme, nivel);
 
   const asistencias = [...view.attendances].sort(
     (a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime(),
@@ -139,9 +159,15 @@ function Ficha({
           <Text variant="heading" weight="semibold" color={semaphore.color}>
             {cancelada
               ? 'Dado de baja'
-              : delinquency.canTrain
-                ? 'Puede entrenar'
-                : 'No puede entrenar'}
+              : /* En un plan de clase suelta, "al día" y "puede pasar" NO son lo
+                   mismo: no debe nada —nunca debe— pero la puerta le va a pedir
+                   la clase de hoy. Decirle al mostrador "Puede entrenar" en
+                   verde es mandarlo a una puerta que lo va a parar. */
+                paganPorClase && !view.dropInPaidToday
+                ? 'Falta la clase de hoy'
+                : delinquency.canTrain
+                  ? 'Puede entrenar'
+                  : 'No puede entrenar'}
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             {motivo(view)}
@@ -149,16 +175,45 @@ function Ficha({
         </Stack>
       </Card>
 
+      {/* Las dos cifras cambian de significado con el tipo de plan, y no
+          cambiarlas mentía dos veces en la misma fila: a un alumno de clase
+          suelta le decía "plan ilimitado" —no lo es, es que no tiene cupo— y le
+          ponía una fecha de renovación que no existe. Esa fecha es la columna
+          `next_billing_date`, que la suscripción lleva porque es NOT NULL y que
+          no significa nada mientras el plan sea por clase: el dueño la leía como
+          dinero que le va a entrar ese día. */}
       <Row gap={10} style={{ marginTop: 12 }} align="stretch">
         <Dato
-          label="Cupo semanal"
-          value={quota.limit === null ? 'Sin límite' : `${quota.used} de ${quota.limit}`}
-          hint={quota.limit === null ? 'plan ilimitado' : 'se reinicia el lunes'}
+          label={paganPorClase ? 'Vino esta semana' : 'Cupo semanal'}
+          value={
+            paganPorClase
+              ? `${quota.used} ${quota.used === 1 ? 'vez' : 'veces'}`
+              : quota.limit === null
+                ? 'Sin límite'
+                : `${quota.used} de ${quota.limit}`
+          }
+          hint={
+            paganPorClase
+              ? 'paga cada clase'
+              : quota.limit === null
+                ? 'plan ilimitado'
+                : 'se reinicia el lunes'
+          }
         />
         <Dato
-          label="Renueva"
-          value={formatShortDate(view.subscription.nextBillingDate)}
-          hint={`gracia de ${view.tenant.graceDays} días`}
+          label={paganPorClase ? 'La clase de hoy' : 'Renueva'}
+          value={
+            paganPorClase
+              ? view.dropInPaidToday
+                ? 'Pagada'
+                : 'Sin pagar'
+              : formatShortDate(view.subscription.nextBillingDate)
+          }
+          hint={
+            paganPorClase
+              ? formatPEN(plan.priceCents, { withDecimals: false })
+              : `gracia de ${view.tenant.graceDays} días`
+          }
         />
       </Row>
 
@@ -316,6 +371,11 @@ function motivo(view: MembershipView): string {
   }
   if (receivable.due) {
     return `En gracia: le ${delinquency.graceDaysLeft === 1 ? 'queda 1 día' : `quedan ${delinquency.graceDaysLeft} días`} antes de que el escáner deje de validar.`;
+  }
+  if (isDropInPlan(view.plan)) {
+    return view.dropInPaidToday
+      ? 'Pagó su clase de hoy. Puede pasar.'
+      : 'No debe nada: en este plan cada clase se cobra al entrar. Cóbrasela y la puerta lo deja pasar.';
   }
   if (quota.exhausted) return 'Al día, pero agotó el cupo de esta semana.';
   if (quota.isLastSession) return 'Al día. Le queda la última sesión de la semana.';

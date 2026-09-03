@@ -237,10 +237,9 @@ export class StaffController {
     );
   }
 
-  @Get('plans')
-  plans(@CurrentSession() session: Session) {
-    return this.members.plans(assertStaffSession(session).tenantId);
-  }
+  // `GET /staff/plans` se mudo a `OfferingController`, junto a las escrituras
+  // del dueno: la lista de lo que se puede vender y las cuatro rutas que la
+  // cambian tienen que leerse de una sentada.
 
   @Get('schedules')
   schedules(@CurrentSession() session: Session) {

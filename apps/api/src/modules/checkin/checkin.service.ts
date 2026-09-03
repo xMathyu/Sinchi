@@ -114,6 +114,9 @@ export class CheckInService {
       graceDays: view.tenant.graceDays,
       quotaOverflowPolicy: view.tenant.quotaOverflowPolicy,
       dropInPriceCents: view.tenant.dropInPriceCents,
+      // Solo lo mira un plan `drop_in`. Sin esto la puerta se abriria sola para
+      // quien paga por clase, porque su deuda es cero por definicion.
+      dropInPaidToday: view.dropInPaidToday,
       debtCents: view.receivable.amountCents,
       daysPastDue: view.delinquency.daysPastDue,
       // El cupo ya viene contado en SQL por la vista: recontarlo sobre una

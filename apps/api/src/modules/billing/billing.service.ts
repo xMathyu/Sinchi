@@ -15,6 +15,7 @@ import {
   applyPayment,
   cents,
   decidePlanChange,
+  isDropInPlan,
   type Charge,
   type ChargeType,
   type PaymentRail,
@@ -175,8 +176,19 @@ export class BillingService {
       return cents(input.amountCents);
     }
 
-    if (input.type === 'drop_in' && view.tenant.dropInPriceCents !== null) {
-      return view.tenant.dropInPriceCents;
+    if (input.type === 'drop_in') {
+      /**
+       * Dos precios distintos con el mismo nombre, y el del PLAN manda.
+       *
+       * `plans.price_cents` de un plan `drop_in` es lo que cuesta una clase para
+       * quien no tiene mensualidad; `tenants.drop_in_price_cents` es lo que paga
+       * el alumno CON PLAN que agota su cupo semanal. Al alumno de clase suelta
+       * hay que cobrarle el suyo: es el precio que la puerta acaba de decir en
+       * voz alta (`drop_in_unpaid` lleva `plan.priceCents`), y cobrarle otro
+       * delante del mostrador es una discusion.
+       */
+      if (isDropInPlan(view.plan)) return view.plan.priceCents;
+      if (view.tenant.dropInPriceCents !== null) return view.tenant.dropInPriceCents;
     }
 
     throw new BadRequestException(
@@ -250,13 +262,36 @@ export class BillingService {
         throw new BadRequestException('Ese plan no existe en este gimnasio.');
       }
 
+      const target = toPlan(targetRow);
+
+      /**
+       * Entrar o salir de la clase suelta NO es un cambio de plan.
+       *
+       * `decidePlanChange` decide comparando precios, y los de un plan `drop_in`
+       * estan en otra unidad: S/ 25 la clase contra S/ 150 el mes se leen como
+       * un "downgrade" de S/ 125, se guardan como pendiente y el alumno amanece
+       * un dia pagando por clase sin haberlo pedido. Al reves es peor: se le
+       * cobraria un prorrateo contra un periodo que nunca pago.
+       *
+       * Es un cambio de modelo de cobro, no de tarifa: se hace en el mostrador
+       * dando de baja y volviendo a inscribir, que es un camino que ya existe y
+       * en el que alguien mira lo que esta pasando.
+       */
+      if (isDropInPlan(target) !== isDropInPlan(view.plan)) {
+        throw new BadRequestException(
+          isDropInPlan(target)
+            ? 'Pasar a pagar por clase no es un cambio de plan: pídelo en el mostrador.'
+            : 'Pasar de clase suelta a una mensualidad se hace en el mostrador.',
+        );
+      }
+
       const today = this.clock.today(view.tenant.timezone);
       let decision: PlanChangeDecision;
       try {
         decision = decidePlanChange({
           subscription: view.subscription,
           currentPlan: view.plan,
-          targetPlan: toPlan(targetRow),
+          targetPlan: target,
           today,
         });
       } catch (error) {

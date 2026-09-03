@@ -57,10 +57,16 @@ export const saasStatusEnum = pgEnum('saas_status', [
 export const billingModeEnum = pgEnum('billing_mode', ['anniversary', 'fixed_day']);
 export const quotaOverflowPolicyEnum = pgEnum('quota_overflow_policy', ['block', 'offer_drop_in']);
 export const staffRoleEnum = pgEnum('staff_role', ['owner', 'front_desk']);
+/**
+ * `drop_in` no es un cuarto sabor del mismo helado: es el plan que NO crea
+ * ciclo de cobro. No genera deuda, no tiene cupo semanal y su `price_cents` es
+ * el de UNA clase, no el del mes. Ver `0012_planes_del_dueno.sql`.
+ */
 export const planTypeEnum = pgEnum('plan_type', [
   'unlimited',
   'sessions_per_week',
   'fixed_days',
+  'drop_in',
 ]);
 export const subscriptionStatusEnum = pgEnum('subscription_status', [
   'active',
@@ -460,11 +466,27 @@ export const plans = pgTable(
      * lunes-viernes es `sessions_per_week` con los dias recortados (MD 4.3).
      */
     allowedDays: smallint('allowed_days').array(),
+    /** Del periodo; de UNA clase cuando el tipo es `drop_in`. */
     priceCents: integer('price_cents').notNull(),
+    /**
+     * Archivar en vez de borrar.
+     *
+     * `subscriptions.plan_id` es ON DELETE restrict: un plan que alguien esta
+     * pagando no se puede borrar sin romperle el historial. Subir los precios es
+     * escribir uno nuevo y apagar el viejo, que sigue explicando lo que cobraba
+     * la suscripcion que lo apunta.
+     */
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('plans_tenant_idx').on(t.tenantId)],
+  (t) => [
+    index('plans_tenant_idx').on(t.tenantId),
+    // Dos planes activos con el mismo nombre son la misma tarifa leida dos
+    // veces, y el mostrador elige una al azar en el alta.
+    uniqueIndex('plans_active_name_per_tenant')
+      .on(t.tenantId, sql`lower(${t.name})`)
+      .where(sql`active`),
+  ],
 );
 
 export const subscriptions = pgTable(

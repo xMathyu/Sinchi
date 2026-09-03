@@ -131,7 +131,24 @@ export type AppRole = 'student' | 'front_desk' | 'owner';
 // Planes
 // ---------------------------------------------------------------------------
 
-export type PlanType = 'unlimited' | 'sessions_per_week' | 'fixed_days';
+/**
+ * Formas en que un gimnasio cobra el acceso.
+ *
+ * Las tres primeras son SUSCRIPCION: se paga por adelantado un periodo y el plan
+ * dice cuanto se puede entrenar dentro de el. `drop_in` no lo es, y por eso no
+ * es un cuarto sabor del mismo helado:
+ *
+ *  - no genera deuda. `computeReceivable` corta antes de mirar el calendario, y
+ *    de ahi cae solo que no se le pueda suspender por mora: quien paga por
+ *    clase no debe nada nunca, porque no prometio nada;
+ *  - no tiene cupo semanal. Lo que limita cuanto entrena es su bolsillo;
+ *  - la puerta le pide el pago DEL DIA (`validateCheckIn`).
+ *
+ * `priceCents` cambia de unidad con el tipo: es lo que cuesta un PERIODO en los
+ * tres primeros y lo que cuesta UNA CLASE en este. Es la unica diferencia que el
+ * dueno tiene que entender al escribir el precio.
+ */
+export type PlanType = 'unlimited' | 'sessions_per_week' | 'fixed_days' | 'drop_in';
 
 export interface Plan {
   readonly id: PlanId;
@@ -147,9 +164,22 @@ export interface Plan {
    * lunes-viernes es `sessions_per_week` con `allowedDays` recortado (MD 4.3).
    */
   readonly allowedDays: readonly IsoWeekday[] | null;
+  /** Del periodo; de UNA clase cuando el tipo es `drop_in`. */
   readonly priceCents: Cents;
   readonly active: boolean;
 }
+
+/**
+ * Si el plan cobra por clase en vez de por periodo.
+ *
+ * La pregunta aparece en tres sitios que no pueden discrepar —la deuda, el cupo
+ * y la puerta— asi que la respuesta vive en una linea. Comparar con la cadena a
+ * mano en cada uno es como se olvida el tercero.
+ */
+export const isDropInPlan = (plan: Pick<Plan, 'type'>): boolean => plan.type === 'drop_in';
+
+/** Los que si crean ciclo de cobro y por tanto pueden caer en mora. */
+export const isSubscriptionPlan = (plan: Pick<Plan, 'type'>): boolean => !isDropInPlan(plan);
 
 // ---------------------------------------------------------------------------
 // Suscripciones

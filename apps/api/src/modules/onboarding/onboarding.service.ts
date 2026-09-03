@@ -48,6 +48,60 @@ import { AuthService, type IssuedSession } from '../../auth/auth.service';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { SaasService } from '../saas/saas.service';
 
+/**
+ * Con que tarifas nace un gimnasio.
+ *
+ * Sin esto el alta dejaba el local INUTILIZABLE: `plans` quedaba vacia y el alta
+ * de un alumno exige `plan_id`, asi que el dueno que se registraba un martes no
+ * podia inscribir a nadie hasta que alguien de aqui le sembrara una tarifa a
+ * mano. Nadie descubria el producto; descubria una pantalla que no dejaba pasar.
+ *
+ * Son una PROPUESTA, no una decision nuestra: se crean editables y el dueno las
+ * cambia, las archiva o las borra desde su pantalla de planes. Empezar con tres
+ * precios que hay que corregir es infinitamente mejor que empezar con cero, que
+ * es lo que hay que inventar.
+ *
+ * Los importes son los corrientes de un dojo de barrio en Lima (2026). La clase
+ * suelta va incluida a proposito: es la unica forma de cobrarle al que aparece
+ * un sabado sin querer amarrarse a un mes, y hasta ahora no se podia ni
+ * escribir.
+ */
+const PLANES_DE_ARRANQUE = [
+  {
+    name: '2 veces por semana',
+    type: 'sessions_per_week' as const,
+    sessionsPerWeek: 2,
+    allowedDays: null,
+    priceCents: 12_000,
+    active: true,
+  },
+  {
+    name: '3 veces por semana',
+    type: 'sessions_per_week' as const,
+    sessionsPerWeek: 3,
+    allowedDays: null,
+    priceCents: 15_000,
+    active: true,
+  },
+  {
+    name: 'Ilimitado',
+    type: 'unlimited' as const,
+    sessionsPerWeek: null,
+    allowedDays: null,
+    priceCents: 18_000,
+    active: true,
+  },
+  {
+    name: 'Clase suelta',
+    type: 'drop_in' as const,
+    sessionsPerWeek: null,
+    allowedDays: null,
+    // De UNA clase, no de un mes.
+    priceCents: 2_500,
+    active: true,
+  },
+];
+
 export interface SignUpGymInput {
   readonly firebaseUid: string;
   readonly email: string | null;
@@ -165,6 +219,10 @@ export class OnboardingService {
         periodStart: formatPlainDate(alta),
         nextBillingDate: formatPlainDate(freeUntil),
       });
+
+      await tx.insert(schema.plans).values(
+        PLANES_DE_ARRANQUE.map((plan) => ({ ...plan, tenantId })),
+      );
 
       return { tenantId, slug };
     });

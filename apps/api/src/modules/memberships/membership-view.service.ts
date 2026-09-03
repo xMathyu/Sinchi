@@ -19,9 +19,11 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   computeReceivable,
   evaluateDelinquency,
+  isDropInPlan,
   isoWeekOf,
   membershipStatus,
   quotaFromCount,
+  startOfDayInZone,
   type AccessLevel,
   type Attendance,
   type Charge,
@@ -58,6 +60,14 @@ export interface MembershipView {
   readonly subscription: Subscription;
   readonly pendingPlan: Plan | null;
   readonly quota: QuotaState;
+  /**
+   * Si ya pago la clase de HOY. Siempre `false` fuera de un plan `drop_in`.
+   *
+   * La puerta lo necesita y no se puede deducir del resto de la vista: la deuda
+   * de un plan de clase suelta es cero por definicion, asi que sin este dato el
+   * semaforo diria verde para alguien que no ha pagado nada.
+   */
+  readonly dropInPaidToday: boolean;
   readonly receivable: Receivable;
   readonly delinquency: DelinquencyState;
   readonly level: AccessLevel;
@@ -152,17 +162,20 @@ export class MembershipViewService {
       )) as [{ used: number }];
 
     const pendingPlan = await this.loadPendingPlan(tx, row.subscription.pendingPlanId);
+    const plan = toPlan(row.plan);
 
     return this.assemble({
       membership: toMembership(row.membership),
       user: toUser(row.user),
       tenant,
-      plan: toPlan(row.plan),
+      plan,
       subscription: toSubscription(row.subscription),
       pendingPlan,
       used,
       week,
       today: day,
+      dropInPaidToday: await this.paidDropInToday(tx, plan, [membershipId], day, tenant.timezone)
+        .then((paid) => paid.has(membershipId)),
     });
   }
 
@@ -340,12 +353,24 @@ export class MembershipViewService {
         .filter((id): id is string => id !== null);
       const pendingPlans = await this.loadPlans(tx, pendingIds);
 
-      return rows.map((row) =>
+      const plans = rows.map((row) => toPlan(row.plan));
+
+      // Una sola consulta para todo el gimnasio, y ninguna cuando no hay ningun
+      // plan de clase suelta — que es el caso de casi todos.
+      const paidToday = await this.paidDropInToday(
+        tx,
+        plans,
+        rows.map((row) => row.membership.id),
+        day,
+        tenant.timezone,
+      );
+
+      return rows.map((row, i) =>
         this.assemble({
           membership: toMembership(row.membership),
           user: toUser(row.user),
           tenant: toTenant(row.tenant),
-          plan: toPlan(row.plan),
+          plan: plans[i]!,
           subscription: toSubscription(row.subscription),
           pendingPlan:
             row.subscription.pendingPlanId === null
@@ -354,6 +379,7 @@ export class MembershipViewService {
           used: usedBy.get(row.membership.id) ?? 0,
           week,
           today: day,
+          dropInPaidToday: paidToday.has(row.membership.id),
         }),
       );
     });
@@ -373,6 +399,7 @@ export class MembershipViewService {
     used: number;
     week: string;
     today: PlainDate;
+    dropInPaidToday: boolean;
   }): MembershipView {
     const receivable = computeReceivable({
       subscription: input.subscription,
@@ -401,11 +428,54 @@ export class MembershipViewService {
       subscription: { ...input.subscription, status: delinquency.status },
       pendingPlan: input.pendingPlan,
       quota,
+      dropInPaidToday: input.dropInPaidToday,
       receivable,
       delinquency,
       level,
       badge,
     };
+  }
+
+  /**
+   * Quienes ya pagaron su clase de hoy.
+   *
+   * Se deriva del ledger —un cargo `drop_in` exitoso de hoy— y no de un contador
+   * de clases compradas. El indice `attendance_once_per_day` ya garantiza una
+   * asistencia por dia, asi que "pago hoy" y "puede entrar hoy" son la misma
+   * cosa contada una sola vez, sin saldo que reconciliar.
+   *
+   * El corte del dia va en la zona del GIMNASIO: a las 20:00 de Lima ya es
+   * manana en UTC, y con el corte en UTC la clase pagada por la noche dejaba de
+   * valer a mitad de la ultima hora punta del dia.
+   *
+   * Devuelve vacio en cuanto no hay ningun plan de clase suelta entre los que se
+   * preguntan, que es el caso de casi todos los gimnasios: asi el padron de 150
+   * alumnos no paga una consulta mas por una funcionalidad que no usa.
+   */
+  private async paidDropInToday(
+    tx: Tx,
+    plans: Plan | readonly Plan[],
+    membershipIds: readonly string[],
+    today: PlainDate,
+    timezone: Tenant['timezone'],
+  ): Promise<ReadonlySet<string>> {
+    const list = Array.isArray(plans) ? (plans as readonly Plan[]) : [plans as Plan];
+    if (membershipIds.length === 0 || !list.some(isDropInPlan)) return new Set();
+
+    const from = startOfDayInZone(today, timezone);
+    const rows = await tx
+      .select({ membershipId: schema.charges.membershipId })
+      .from(schema.charges)
+      .where(
+        and(
+          inArray(schema.charges.membershipId, [...new Set(membershipIds)]),
+          eq(schema.charges.type, 'drop_in'),
+          eq(schema.charges.status, 'succeeded'),
+          sql`${schema.charges.createdAt} >= ${from}`,
+        ),
+      );
+
+    return new Set(rows.map((row) => row.membershipId));
   }
 
   private async loadPendingPlan(tx: Tx, planId: string | null): Promise<Plan | null> {
