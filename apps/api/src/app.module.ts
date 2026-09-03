@@ -35,6 +35,7 @@ import { StudentController } from './modules/student.controller';
 import { GymsController } from './modules/gyms.controller';
 import { TrialsService } from './modules/trials/trials.service';
 import { SaasService } from './modules/saas/saas.service';
+import { OnboardingService } from './modules/onboarding/onboarding.service';
 import { SaasGuard } from './modules/saas/saas.guard';
 
 @Module({
@@ -62,6 +63,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     MailService,
     TrialsService,
     SaasService,
+    OnboardingService,
     RefreshDelinquencyJob,
     RefreshSaasJob,
   ],

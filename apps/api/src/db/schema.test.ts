@@ -68,6 +68,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111';
 const OTHER_TENANT = '22222222-2222-2222-2222-222222222222';
 const USER = '33333333-3333-3333-3333-333333333333';
 let membershipId = '';
+let promoId = '';
 let subscriptionId = '';
 let planId = '';
 
@@ -516,6 +517,114 @@ describe('suscripcion del gimnasio a Sinchi', () => {
         ),
       /saas_charges_period_ordered/,
     );
+  });
+});
+
+describe('codigos de promocion', () => {
+  it('el codigo se guarda canonico', async () => {
+    // Minusculas o con guiones no entran: si entraran, el indice unico dejaria
+    // convivir "SINCHI2026" y "sinchi-2026" como dos codigos distintos.
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_promo_codes (code, free_months, max_redemptions)
+           values ('sinchi-2026', 1, 10)`,
+        ),
+      /saas_promo_codes_code_canonical/,
+    );
+
+    const ok = await db.query<{ id: string }>(
+      `insert into saas_promo_codes (code, free_months, max_redemptions)
+       values ('SINCHI2026', 1, 10) returning id`,
+    );
+    expect(ok.rows).toHaveLength(1);
+    promoId = ok.rows[0]!.id;
+  });
+
+  it('el mismo codigo no existe dos veces', async () => {
+    await expectRejection(
+      () =>
+        db.query(`insert into saas_promo_codes (code, free_months) values ('SINCHI2026', 1)`),
+      /saas_promo_codes_code_key/,
+    );
+  });
+
+  /**
+   * EL tope. No es una comprobacion redundante del codigo: es la unica que
+   * sobrevive a dos gimnasios canjeando el ultimo uso en el mismo segundo, donde
+   * los dos leen "9 de 10" y los dos escriben 10.
+   */
+  it('el contador no puede pasarse del tope', async () => {
+    await db.query(`update saas_promo_codes set redeemed_count = 10 where id = $1`, [promoId]);
+
+    await expectRejection(
+      () => db.query(`update saas_promo_codes set redeemed_count = 11 where id = $1`, [promoId]),
+      /saas_promo_codes_within_cap/,
+    );
+
+    await db.query(`update saas_promo_codes set redeemed_count = 0 where id = $1`, [promoId]);
+  });
+
+  it('sin tope, el contador sube sin limite', async () => {
+    const abierto = await db.query<{ id: string }>(
+      `insert into saas_promo_codes (code, free_months) values ('ABIERTO', 1) returning id`,
+    );
+    const id = abierto.rows[0]!.id;
+    const subido = await db.query(
+      `update saas_promo_codes set redeemed_count = 99999 where id = $1 returning id`,
+      [id],
+    );
+    expect(subido.rows).toHaveLength(1);
+  });
+
+  it('los meses de regalo tienen tope', async () => {
+    await expectRejection(
+      () => db.query(`insert into saas_promo_codes (code, free_months) values ('MUCHOS', 13)`),
+      /saas_promo_codes_months_sane/,
+    );
+  });
+
+  /** La otra mitad del tope: sin esto, un solo gimnasio gasta los diez usos. */
+  it('un gimnasio no canjea el mismo codigo dos veces', async () => {
+    await db.query(
+      `insert into saas_redemptions (promo_code_id, tenant_id, free_months, free_until_after)
+       values ($1, $2, 1, '2026-11-02')`,
+      [promoId, TENANT],
+    );
+
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_redemptions (promo_code_id, tenant_id, free_months, free_until_after)
+           values ($1, $2, 1, '2026-12-02')`,
+          [promoId, TENANT],
+        ),
+      /saas_redemptions_once_per_tenant/,
+    );
+  });
+
+  it('otro gimnasio si puede canjearlo', async () => {
+    const otro = await db.query(
+      `insert into saas_redemptions (promo_code_id, tenant_id, free_months, free_until_after)
+       values ($1, $2, 1, '2026-11-02') returning id`,
+      [promoId, OTHER_TENANT],
+    );
+    expect(otro.rows).toHaveLength(1);
+  });
+});
+
+describe('plan gratis', () => {
+  it('los enums aceptan el escalon y el estado nuevos', async () => {
+    // Se agregaron con ALTER TYPE ADD VALUE sobre los enums existentes, no
+    // recreandolos: recrear obliga a soltar y rehacer cada columna que los usa.
+    const filas = await db.query<{ tier: string; status: string }>(
+      `insert into saas_subscriptions (tenant_id, tier, status, free_until, period_start, next_billing_date)
+       values ($1, 'free', 'free', '2026-10-02', '2026-09-02', '2026-10-02')
+       on conflict (tenant_id) do update set tier = 'free', status = 'free'
+       returning tier, status`,
+      [OTHER_TENANT],
+    );
+    expect(filas.rows[0]).toEqual({ tier: 'free', status: 'free' });
   });
 });
 

@@ -80,7 +80,14 @@ mismo identificador es el bug que aparece leyendo un reporte tres meses después
 |---|---|
 | suscripción del gimnasio a Sinchi | `SaasSubscription` / `saas_subscriptions` |
 | mes gratis del gimnasio | `freeUntil` (fecha en que termina) |
-| escalón de precio | `SaasTier` (`up_to_60`, `up_to_150`, `unlimited`) |
+| escalón de precio | `SaasTier` (`free`, `up_to_60`, `up_to_150`, `unlimited`) |
+| plan gratis (hasta 10 alumnos) | `free` / `isFreeTier` |
+| alta de un gimnasio | `signUpGym` / `OnboardingService` |
+| RUC | `taxId`, validado con `checkRuc` |
+| código de promoción | `PromoCode` / `saas_promo_codes` |
+| canje | `saas_redemptions` / `redeemPromo` |
+| tope de usos | `maxRedemptions` / `redeemedCount` |
+| meses de regalo | `freeMonths` |
 | estado de la cuenta | `SaasStatus` |
 | dentro del mes gratis | `trialing` |
 | vencido pero todavía escribe | `in_grace` |

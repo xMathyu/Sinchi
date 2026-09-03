@@ -14,9 +14,15 @@ import { addDays, plainDate } from '../time/plain-date.js';
 const ALTA = plainDate(2026, 9, 2);
 const FIN_DEL_MES_GRATIS = plainDate(2026, 10, 2);
 
-/** Un gimnasio recien dado de alta: dentro de su mes gratis y sin pagar nada. */
+/**
+ * Un gimnasio recien dado de alta: dentro de su mes gratis y sin pagar nada.
+ *
+ * Con escalon de pago, que es donde todas estas reglas aplican. El plan gratis
+ * las esquiva enteras y tiene su propio bloque.
+ */
 function enMesGratis(overrides: Partial<SaasInput> = {}): SaasInput {
   return {
+    tier: 'up_to_60',
     freeUntil: FIN_DEL_MES_GRATIS,
     nextBillingDate: FIN_DEL_MES_GRATIS,
     today: ALTA,
@@ -43,15 +49,18 @@ describe('freeUntilFrom', () => {
 });
 
 describe('tierForMembers', () => {
-  it('parte en 60 y en 150', () => {
-    expect(tierForMembers(0)).toBe('up_to_60');
+  it('parte en 10, en 60 y en 150', () => {
+    expect(tierForMembers(0)).toBe('free');
+    expect(tierForMembers(10)).toBe('free');
+    expect(tierForMembers(11)).toBe('up_to_60');
     expect(tierForMembers(60)).toBe('up_to_60');
     expect(tierForMembers(61)).toBe('up_to_150');
     expect(tierForMembers(150)).toBe('up_to_150');
     expect(tierForMembers(151)).toBe('unlimited');
   });
 
-  it('cobra los precios del MD 3', () => {
+  it('cobra los precios del MD 3, y nada por el plan gratis', () => {
+    expect(saasPrice('free')).toBe(0);
     expect(saasPrice('up_to_60')).toBe(14_900);
     expect(saasPrice('up_to_150')).toBe(29_900);
     expect(saasPrice('unlimited')).toBe(49_900);
@@ -139,6 +148,43 @@ describe('evaluateSaas cuando el mes gratis vencio', () => {
     // propia gracia subiendola en su configuracion.
     expect(evaluateSaas(vencido(6, { graceDays: 5 })).status).toBe('read_only');
     expect(evaluateSaas(vencido(6)).status).toBe('in_grace');
+  });
+});
+
+describe('el plan gratis', () => {
+  /**
+   * La regla que sostiene el escalon: un local de diez alumnos no debe nada, y
+   * por tanto no hay corte que aplicarle por mucho que su fecha haya pasado.
+   */
+  it('no se corta nunca, aunque su mes gratis venciera hace medio ano', () => {
+    const estado = evaluateSaas(
+      enMesGratis({ tier: 'free', today: plainDate(2027, 4, 2) }),
+    );
+
+    expect(estado.status).toBe('free');
+    expect(estado.canWrite).toBe(true);
+    expect(estado.listed).toBe(true);
+    expect(estado.daysPastDue).toBe(0);
+  });
+
+  it('el mismo gimnasio en escalon de pago si se corta', () => {
+    // Es la comparacion que demuestra que lo que cambia es el escalon y no otra
+    // cosa: mismas fechas, mismo dia, distinto precio.
+    expect(evaluateSaas(enMesGratis({ tier: 'up_to_60', today: plainDate(2027, 4, 2) })).status).toBe(
+      'read_only',
+    );
+  });
+
+  it('cancelar pesa mas que el plan gratis', () => {
+    expect(evaluateSaas(enMesGratis({ tier: 'free', canceled: true })).status).toBe('canceled');
+  });
+
+  it('lo dice sin hablar de meses gratis ni de deuda', () => {
+    const aviso = saasNotice(evaluateSaas(enMesGratis({ tier: 'free' })), saasPrice('free'));
+
+    expect(aviso.tone).toBe('info');
+    expect(aviso.title).toBe('Plan gratis');
+    expect(aviso.detail).toContain('Hasta 10 alumnos');
   });
 });
 

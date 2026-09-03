@@ -423,7 +423,13 @@ export class AuthService {
     return this.issueForUser(userId);
   }
 
-  private async issueForUser(userId: string): Promise<IssuedSession> {
+  /**
+   * Sesion para una identidad ya resuelta.
+   *
+   * Publica porque el alta de un gimnasio tambien la necesita: quien acaba de
+   * crear su local tiene que entrar como dueno sin volver a autenticarse.
+   */
+  async issueForUser(userId: string): Promise<IssuedSession> {
     const [staffRow] = await withUser(this.db, userId, (tx) =>
       tx
         .select({

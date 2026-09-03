@@ -26,6 +26,8 @@ import {
   fetchPlansFor,
   fetchSaasSubscription,
   fetchSummary,
+  redeemPromoCode,
+  signUpGym,
   fetchStaffMember,
   fetchRoster,
   fetchStaffPlans,
@@ -35,10 +37,13 @@ import {
   scanQr,
   setOwnPin,
   type CheckInOutcomeDto,
+  type RedeemPromoDto,
   type SaasSubscriptionDto,
+  type SignUpGymDto,
+  type SignUpGymInput,
   type SummaryDto,
 } from './api';
-import { getSessionState } from './session';
+import { currentFirebaseToken, getSessionState, saveSession } from './session';
 import {
   cancelSubscription as cancelSubscriptionLocal,
   changePlan as changePlanLocal,
@@ -428,6 +433,34 @@ export async function suscripcionSinchi(): Promise<SaasSubscriptionDto | null> {
   const estado = getSessionState();
   if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
   return await fetchSaasSubscription();
+}
+
+/** Canjea un código de promoción. El rechazo viene en el resultado, no como error. */
+export const canjearCodigo = (code: string): Promise<RedeemPromoDto> => redeemPromoCode(code);
+
+/**
+ * Da de alta un gimnasio y deja la sesión de dueño puesta.
+ *
+ * Guardar la sesión aquí y no en la pantalla es lo que hace que el alta termine
+ * DENTRO del modo staff: el layout raíz enruta en cuanto ve la sesión.
+ */
+export async function registrarGimnasio(
+  input: Omit<SignUpGymInput, 'idToken'>,
+): Promise<SignUpGymDto> {
+  const idToken = currentFirebaseToken();
+  if (idToken === null) {
+    throw new ApiError(401, 'Entra con Google antes de registrar tu gimnasio.');
+  }
+
+  const alta = await signUpGym({ ...input, idToken });
+  await saveSession({
+    accessToken: alta.session.accessToken,
+    expiresInSeconds: alta.session.expiresInSeconds,
+    role: alta.session.role,
+    userId: alta.session.userId,
+    tenantId: alta.session.tenantId,
+  });
+  return alta;
 }
 
 /**

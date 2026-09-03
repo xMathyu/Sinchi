@@ -69,7 +69,16 @@ export interface Membership {
 // Tenant
 // ---------------------------------------------------------------------------
 
-export type SaasTier = 'up_to_60' | 'up_to_150' | 'unlimited';
+/**
+ * Escalon de precio del gimnasio.
+ *
+ * `free` no es una promocion ni un periodo de prueba: es el precio de un local
+ * de hasta 10 alumnos, para siempre. Un dojo que empieza con seis alumnos no
+ * tiene con que pagar S/149 y tampoco tiene con que llevar un cuaderno bien;
+ * cobrarle desde el primer dia lo deja fuera, y lo que queremos es que crezca
+ * dentro. Cuando pasa de 10, empieza a costar.
+ */
+export type SaasTier = 'free' | 'up_to_60' | 'up_to_150' | 'unlimited';
 
 /**
  * Politica de fecha de cobro.

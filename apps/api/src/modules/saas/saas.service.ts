@@ -20,13 +20,18 @@
  * fila, y ninguno la tenia.
  */
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, lt, sql } from 'drizzle-orm';
 import {
   advanceBillingDate,
   cents,
   evaluateSaas,
+  extendedFreeUntil,
   formatPlainDate,
   freeUntilFrom,
+  isAfter,
+  isFreeTier,
+  normalizePromoCode,
+  isWellFormedPromoCode,
   parsePlainDate,
   plainDateInZone,
   saasNotice,
@@ -38,6 +43,7 @@ import {
   type PlainDate,
   type SaasNotice,
   type SaasState,
+  type PromoDenial,
   type SaasStatus,
   type SaasTier,
 } from '@sinchi/shared';
@@ -54,6 +60,9 @@ import {
 
 /** Un mes de suscripcion. La misma politica que el aniversario del alumno. */
 const MENSUAL = { mode: 'anniversary' } as const;
+
+/** Aborta la transaccion del canje cuando el codigo se agoto entre medias. */
+class PromoExhausted extends Error {}
 
 type SaasSubscriptionRow = typeof schema.saasSubscriptions.$inferSelect;
 
@@ -74,6 +83,8 @@ interface LoadedSaas {
   readonly plan: SaasPlan;
   readonly slug: string;
   readonly state: SaasState;
+  /** Hoy en la zona del local, que es donde su dia empieza. */
+  readonly today: PlainDate;
 }
 
 export interface SaasSummary {
@@ -103,6 +114,15 @@ export interface RecordSaasPaymentResult {
   readonly alreadyRecorded: boolean;
 }
 
+export type RedeemPromoResult =
+  | {
+      readonly redeemed: true;
+      readonly code: string;
+      readonly freeMonths: number;
+      readonly freeUntil: PlainDate;
+    }
+  | { readonly redeemed: false; readonly reason: PromoDenial };
+
 export interface SaasRefreshReport {
   readonly reviewed: number;
   readonly started: number;
@@ -110,6 +130,8 @@ export interface SaasRefreshReport {
   readonly enteredGrace: number;
   readonly readOnly: number;
   readonly reactivated: number;
+  /** Gimnasios que pasaron de 10 alumnos y empiezan a costar. */
+  readonly leftFreeTier: number;
 }
 
 @Injectable()
@@ -133,10 +155,17 @@ export class SaasService {
     return (await this.load(tenantId)).state;
   }
 
-  /** Lo que ve el dueno: estado, escalon derivado del padron y precio. */
+  /**
+   * Lo que ve el dueno.
+   *
+   * El escalon sale de la fila —el que el trabajo diario dejo puesto— y NO de un
+   * recuento en vivo. Con un recuento aqui, la franja podia decir «cuenta en solo
+   * lectura» mientras el guard, que lee la fila, seguia dejando escribir: el dia
+   * que un gimnasio cruza los 10 alumnos los dos tienen que contar lo mismo.
+   */
   async summaryFor(tenantId: string): Promise<SaasSummary> {
     const { plan, state } = await this.load(tenantId);
-    const tier = await this.tierFor(tenantId);
+    const tier = plan.tier;
     const price = saasPrice(tier);
 
     return {
@@ -201,6 +230,109 @@ export class SaasService {
   }
 
   /**
+   * Canjea un codigo de promocion: mueve el mes gratis hacia adelante.
+   *
+   * Devuelve el rechazo con `redeemed: false` en vez de lanzar, igual que el
+   * check-in devuelve 200 con su motivo: escribir mal un codigo no es un error
+   * de la peticion, es un resultado que la persona necesita entender para saber
+   * si insistir sirve de algo.
+   *
+   * Todo va en UNA transaccion, y en este orden:
+   *
+   *  1. se inserta el canje, que choca si este gimnasio ya uso el codigo;
+   *  2. se incrementa el contador con el tope en el `WHERE`, que choca si el
+   *     codigo se agoto entre medias;
+   *  3. se mueve la fecha.
+   *
+   * Al reves —mirar el contador y despues escribir— dos gimnasios canjeando el
+   * ultimo uso a la vez leen los dos "quedan 9 de 10" y los dos entran.
+   */
+  async redeemPromo(tenantId: string, rawCode: string): Promise<RedeemPromoResult> {
+    if (!isWellFormedPromoCode(rawCode)) return { redeemed: false, reason: 'malformed' };
+    const code = normalizePromoCode(rawCode);
+
+    const { plan, today } = await this.load(tenantId);
+
+    return withoutTenantIsolation(this.db, async (tx) => {
+      const [promo] = await tx
+        .select()
+        .from(schema.saasPromoCodes)
+        .where(eq(schema.saasPromoCodes.code, code))
+        .limit(1);
+
+      if (promo === undefined) return { redeemed: false as const, reason: 'not_found' as const };
+      if (!promo.active) return { redeemed: false as const, reason: 'inactive' as const };
+      if (promo.expiresOn !== null && isAfter(today, parsePlainDate(promo.expiresOn))) {
+        return { redeemed: false as const, reason: 'expired' as const };
+      }
+
+      /**
+       * `free_until` y `next_billing_date` pueden ir por separado: el gimnasio
+       * que ya pago un mes tiene la segunda por delante de la primera. Se
+       * extiende desde la ULTIMA, para no regalarle un periodo que ya compro.
+       */
+      const cubierto = isAfter(plan.nextBillingDate, plan.freeUntil)
+        ? plan.nextBillingDate
+        : plan.freeUntil;
+      const freeUntil = extendedFreeUntil(cubierto, today, promo.freeMonths);
+
+      const canje = await tx
+        .insert(schema.saasRedemptions)
+        .values({
+          promoCodeId: promo.id,
+          tenantId,
+          freeMonths: promo.freeMonths,
+          freeUntilAfter: formatPlainDate(freeUntil),
+        })
+        .onConflictDoNothing()
+        .returning({ id: schema.saasRedemptions.id });
+
+      if (canje.length === 0) {
+        return { redeemed: false as const, reason: 'already_used' as const };
+      }
+
+      const consumido = await tx
+        .update(schema.saasPromoCodes)
+        .set({ redeemedCount: sql`${schema.saasPromoCodes.redeemedCount} + 1` })
+        .where(
+          and(
+            eq(schema.saasPromoCodes.id, promo.id),
+            eq(schema.saasPromoCodes.active, true),
+            // El tope, en el WHERE. `null` es sin tope.
+            promo.maxRedemptions === null
+              ? sql`true`
+              : lt(schema.saasPromoCodes.redeemedCount, promo.maxRedemptions),
+          ),
+        )
+        .returning({ id: schema.saasPromoCodes.id });
+
+      if (consumido.length === 0) {
+        // Se agoto entre el SELECT y el UPDATE. Deshacer el canje ya insertado.
+        throw new PromoExhausted();
+      }
+
+      // La fila puede no existir todavia: el gimnasio que nunca fue tocado por
+      // el trabajo diario no la tiene, y canjear es motivo de sobra para crearla.
+      await this.start(tx, tenantId);
+      await tx
+        .update(schema.saasSubscriptions)
+        .set({
+          freeUntil: formatPlainDate(freeUntil),
+          nextBillingDate: formatPlainDate(freeUntil),
+          status: 'trialing',
+        })
+        .where(eq(schema.saasSubscriptions.tenantId, tenantId));
+
+      return { redeemed: true as const, code, freeMonths: promo.freeMonths, freeUntil };
+    }).catch((error: unknown) => {
+      if (error instanceof PromoExhausted) {
+        return { redeemed: false as const, reason: 'exhausted' as const };
+      }
+      throw error;
+    });
+  }
+
+  /**
    * Refresco diario del cache de estado.
    *
    * Como el de morosidad del alumno: la columna no manda —`evaluateSaas` lo
@@ -214,19 +346,83 @@ export class SaasService {
    */
   async refreshAll(): Promise<SaasRefreshReport> {
     const started = await this.startMissing();
-    const report = { reviewed: 0, started, changed: 0, enteredGrace: 0, readOnly: 0, reactivated: 0 };
+    const report = {
+      reviewed: 0,
+      started,
+      changed: 0,
+      enteredGrace: 0,
+      readOnly: 0,
+      reactivated: 0,
+      leftFreeTier: 0,
+    };
 
-    for (const { plan, state, slug } of await this.loadAll()) {
+    for (const { plan, slug, today } of await this.loadAll()) {
       report.reviewed += 1;
-      if (!plan.persisted || state.status === plan.status) continue;
+      if (!plan.persisted) continue;
+
+      const tier = await this.tierFor(plan.tenantId);
+      let freeUntil = plan.freeUntil;
+      let nextBillingDate = plan.nextBillingDate;
+
+      /**
+       * Salir del plan gratis no puede cortar a nadie de golpe.
+       *
+       * Un gimnasio que llevaba un ano gratis tiene `next_billing_date` de hace
+       * meses: en cuanto pasa de 10 alumnos, el motor lo veria como un moroso de
+       * 300 dias y lo dejaria en solo lectura el mismo dia que crecio — la peor
+       * manera posible de cobrarle a alguien por primera vez. Cruzar el limite
+       * le da el mismo mes por delante que tuvo al darse de alta.
+       *
+       * Se acepta a sabiendas que alguien podria bajar de 10 y volver a subir
+       * para repetirlo. Con estos numeros eso es dar de baja alumnos de verdad
+       * en el padron para ahorrar S/149, y se ve en la lista.
+       */
+      if (isFreeTier(plan.tier) && !isFreeTier(tier) && !isAfter(nextBillingDate, today)) {
+        /**
+         * La ULTIMA de las dos, no siempre «hoy + 1 mes»: un gimnasio del plan
+         * gratis pudo canjear un codigo de tres meses mientras era pequeno, y
+         * machacar su `free_until` le tiraria ese codigo a la basura justo el
+         * dia que empieza a importarle.
+         */
+        const conMes = freeUntilFrom(today);
+        freeUntil = isAfter(freeUntil, conMes) ? freeUntil : conMes;
+        nextBillingDate = freeUntil;
+        report.leftFreeTier += 1;
+        this.logger.log(
+          `[${slug}] pasa a ${tier}: mes por delante hasta ${formatPlainDate(freeUntil)}`,
+        );
+      }
+
+      const state = evaluateSaas({
+        tier,
+        freeUntil,
+        nextBillingDate,
+        today,
+        graceDays: plan.graceDays,
+        periodPaid: false,
+        canceled: plan.canceled,
+      });
+
+      const sinCambios =
+        tier === plan.tier &&
+        state.status === plan.status &&
+        formatPlainDate(freeUntil) === formatPlainDate(plan.freeUntil) &&
+        formatPlainDate(nextBillingDate) === formatPlainDate(plan.nextBillingDate);
+      if (sinCambios) continue;
 
       await withoutTenantIsolation(this.db, (tx) =>
         tx
           .update(schema.saasSubscriptions)
-          .set({ status: state.status })
+          .set({
+            tier,
+            status: state.status,
+            freeUntil: formatPlainDate(freeUntil),
+            nextBillingDate: formatPlainDate(nextBillingDate),
+          })
           .where(eq(schema.saasSubscriptions.tenantId, plan.tenantId)),
       );
 
+      if (state.status === plan.status) continue;
       report.changed += 1;
       if (state.status === 'in_grace') report.enteredGrace += 1;
       else if (state.status === 'read_only') report.readOnly += 1;
@@ -326,7 +522,9 @@ export class SaasService {
     return {
       plan,
       slug: row.slug,
+      today,
       state: evaluateSaas({
+        tier: plan.tier,
         freeUntil: plan.freeUntil,
         nextBillingDate: plan.nextBillingDate,
         today,

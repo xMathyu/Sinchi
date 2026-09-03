@@ -18,7 +18,13 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
-import { TZ_LIMA, addDays, formatPlainDate, plainDateInZone } from '@sinchi/shared';
+import {
+  SAAS_FREE_TIER_LIMIT,
+  TZ_LIMA,
+  addDays,
+  formatPlainDate,
+  plainDateInZone,
+} from '@sinchi/shared';
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL;
 const suite = DATABASE_URL === undefined ? describe.skip : describe;
@@ -113,14 +119,32 @@ beforeAll(async () => {
 
   const plans = await http.get('/v1/staff/plans').set(auth(token.owner)).expect(200);
   planId = plans.body[0].id as string;
-}, 90_000);
+
+  /**
+   * El gimnasio tiene que PAGAR para que haya corte que probar.
+   *
+   * Hasta 10 alumnos el escalón es gratis y la cuenta no se puede cortar —no
+   * debe nada—, así que un local de cuatro alumnos como el sembrado dejaría
+   * estas pruebas verdes sin ejercitar nada. Se le llena el padrón por encima
+   * del límite, que es la condición real del cliente que paga.
+   *
+   * Con MARGEN y no justo en 11: parado en el límite exacto, cualquier alumno
+   * que se cuente distinto —una baja, un alta de otra prueba— devolvía el
+   * gimnasio al plan gratis y las pruebas del corte fallaban una vez de cada
+   * tantas. Un test que falla a veces es peor que uno que falla siempre.
+   */
+  const MARGEN = SAAS_FREE_TIER_LIMIT + 4;
+  while ((await http.get('/v1/staff/roster').set(auth(token.owner))).body.length < MARGEN) {
+    await http.post('/v1/staff/members').set(auth(token.owner)).send(otroAlumno()).expect(201);
+  }
+}, 120_000);
 
 afterAll(async () => {
   await app?.close();
 });
 
 suite('el mes gratis del gimnasio', () => {
-  it('un gimnasio recién dado de alta está en su mes gratis', async () => {
+  it('un gimnasio que ya pasó del plan gratis está en su mes gratis', async () => {
     const body = await suscripcion();
 
     expect(body.state.status).toBe('trialing');
@@ -148,7 +172,11 @@ suite('el mes gratis del gimnasio', () => {
     const reporte = await app.get(SaasService).refreshAll();
 
     expect(reporte.started).toBeGreaterThanOrEqual(1);
-    expect((await suscripcion()).state.status).toBe('trialing');
+    // Sigue en su mes gratis: pasó de 10 alumnos, así que su escalón es de pago
+    // y el mes gratis del alta le corre igual.
+    const despues = await suscripcion();
+    expect(despues.state.status).toBe('trialing');
+    expect(despues.tier).toBe('up_to_60');
   });
 });
 
@@ -168,6 +196,10 @@ suite('cuando el mes gratis vence y no se paga', () => {
     await vencerHace(8);
 
     const body = await suscripcion();
+    // Se afirma el escalón antes que el estado: si el gimnasio hubiera caído al
+    // plan gratis, todo lo que sigue pasaría por el motivo equivocado y el
+    // fallo aparecería tres pruebas más abajo, disfrazado de otra cosa.
+    expect(body.tier).not.toBe('free');
     expect(body.state.status).toBe('read_only');
     expect(body.state.canWrite).toBe(false);
   });
@@ -276,5 +308,44 @@ suite('cuando el gimnasio paga', () => {
 
     const siguiente = await saas.recordPayment({ tenantId, rail: 'yape', reference: 'OP-2' });
     expect(siguiente.alreadyRecorded).toBe(false);
+  });
+});
+
+/**
+ * Va AL FINAL: deja al gimnasio con un mes gratis por delante, así que cualquier
+ * prueba del corte que corriera después pasaría en vacío.
+ */
+suite('crecer y salir del plan gratis', () => {
+  /**
+   * El caso que decide si el plan gratis es una puerta o una trampa.
+   *
+   * Un gimnasio que lleva meses gratis tiene su fecha de cobro muy atrás. Si al
+   * pasar de 10 alumnos el motor lo mirara tal cual, lo vería como un moroso de
+   * meses y lo cortaría EL MISMO DÍA que creció — la peor forma posible de
+   * cobrarle a alguien por primera vez.
+   */
+  it('cruzar los 10 alumnos da un mes por delante, no un corte', async () => {
+    const { schema, withoutTenantIsolation } = await import('./db/client');
+    const { DATABASE } = await import('./db/db.module');
+    const { SaasService } = await import('./modules/saas/saas.service');
+
+    // Como si llevara medio año en el plan gratis: escalón gratis y fecha
+    // vencida hace mucho. El padrón ya está por encima de 10 desde `beforeAll`.
+    await vencerHace(180);
+    await withoutTenantIsolation(app.get(DATABASE), (tx) =>
+      tx
+        .update(schema.saasSubscriptions)
+        .set({ tier: 'free', status: 'free' })
+        .where(eq(schema.saasSubscriptions.tenantId, tenantId)),
+    );
+
+    const reporte = await app.get(SaasService).refreshAll();
+    expect(reporte.leftFreeTier).toBeGreaterThanOrEqual(1);
+
+    const { body } = await http.get('/v1/staff/subscription').set(auth(token.owner)).expect(200);
+    expect(body.tier).toBe('up_to_60');
+    // Lo que importa: NO quedó cortado, y tiene un mes por delante.
+    expect(body.state.canWrite).toBe(true);
+    expect(body.state.freeDaysLeft).toBeGreaterThanOrEqual(27);
   });
 });

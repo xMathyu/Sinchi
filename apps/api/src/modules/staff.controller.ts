@@ -71,6 +71,9 @@ const enrollSchema = z.object({
 
 const resubscribeSchema = z.object({ planId: z.string().uuid() });
 
+/** El codigo se normaliza en el dominio; aqui solo se acota el tamano. */
+const promoSchema = z.object({ code: z.string().min(1).max(40) });
+
 /**
  * Que paso con quien reservo una clase gratis.
  *
@@ -487,6 +490,27 @@ export class StaffController {
   @Get('subscription')
   subscription(@CurrentSession() session: Session) {
     return this.saas.summaryFor(assertStaffSession(session).tenantId);
+  }
+
+  /**
+   * Canjea un código de promoción: suma meses al mes gratis.
+   *
+   * Abierta con la cuenta en solo lectura, y es la excepción que más sentido
+   * tiene de todas: canjear es justo por donde un gimnasio cortado vuelve. Que
+   * el corte bloquee la forma de levantarlo sería una trampa.
+   *
+   * Un código mal escrito vuelve con 200 y `redeemed: false` más el motivo, como
+   * el rechazo de un check-in: no es un error de la petición, es un resultado
+   * que la persona necesita entender para saber si insistir sirve de algo.
+   */
+  @AllowedWhenReadOnly()
+  @OwnerOnly()
+  @Post('promo')
+  redeemPromo(
+    @CurrentSession() session: Session,
+    @Body(parseWith(promoSchema)) body: z.infer<typeof promoSchema>,
+  ) {
+    return this.saas.redeemPromo(assertStaffSession(session).tenantId, body.code);
   }
 }
 
