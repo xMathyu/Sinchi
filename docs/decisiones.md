@@ -283,3 +283,103 @@ gimnasio paga por transferencia o Yape y alguien lo registra. El corte por impag
 falta para la morosidad del alumno. Lo que sí existe desde el primer día es la
 cuenta atrás visible en el modo staff: un mes gratis del que el dueño se entera
 el día que se corta es un cliente que se va enojado, no uno que paga.
+
+---
+
+## 9. El plan gratis, el alta desde la app y los códigos
+
+### Hasta 10 alumnos no se paga nada
+
+No es una promoción ni una prueba: es el precio de un local pequeño, para
+siempre. Un dojo que empieza con seis alumnos no tiene con qué pagar S/ 149 —y
+tampoco tiene con qué llevar un cuaderno bien—, así que cobrarle desde el primer
+día lo deja fuera cuando lo que queremos es que crezca **dentro**.
+
+La consecuencia ordena todo el motor: **un gimnasio del plan gratis no se puede
+cortar**. No debe nada, así que no hay fecha que se le pase, y `evaluateSaas` lo
+resuelve antes que cualquier otra regla. Por eso el escalón es un campo
+obligatorio de su entrada y no un opcional con valor por defecto: si faltara, un
+local de seis alumnos acabaría en solo lectura por una deuda de cero soles.
+
+**Cruzar los 10 no corta a nadie de golpe.** Un gimnasio con un año gratis a la
+espalda tiene su fecha de cobro un año atrás; mirarla tal cual lo dejaría cortado
+el mismo día que creció, que es la peor forma posible de cobrarle a alguien por
+primera vez. El trabajo diario le da un mes por delante — el mismo que tuvo al
+darse de alta — y respeta cualquier código que hubiera canjeado siendo pequeño.
+
+Se acepta a sabiendas que alguien podría bajar de 10 y volver a subir para
+repetirlo. Con estos números eso es dar de baja alumnos de verdad en su propio
+padrón para ahorrar S/ 149, y se ve en la lista.
+
+**El escalón se deriva del padrón**, no de lo que el dueño declaró al
+registrarse: esa columna se fija una vez y nadie la vuelve a tocar, así que un
+dojo que creció de 40 a 200 alumnos seguiría pagando el escalón más barato para
+siempre. Se cachea en `saas_subscriptions.tier` y lo refresca el trabajo diario:
+así el guard no cuenta alumnos en cada escritura, y —más importante— la franja
+que ve el dueño y el corte que aplica el guard cuentan siempre lo mismo.
+
+### El alta de un gimnasio vive en la app, no en un script
+
+Hasta aquí un gimnasio solo podía nacer de `db:seed:kaizen`. Eso servía para los
+tres primeros clientes y no sirve para una oferta: quien escucha «el primer mes
+es gratis» en un dojo el martes tiene que poder empezar el martes.
+
+Es la única ruta pública que crea un tenant, así que la fricción no es
+burocracia: es lo único que separa un padrón real de una tabla de pruebas.
+
+- **Cuenta de Google verificada**, igual que para reservar una clase gratis.
+- **RUC con dígito verificador**, comprobado de verdad y no solo por longitud: un
+  tipeo cambia un dígito y la longitud sigue siendo once. La columna es `NOT
+  NULL` y lo que entre ahí sale después en las boletas del gimnasio.
+- **Un gimnasio por persona.** Multi-sede es el escalón de S/ 499 y una
+  conversación, no un botón.
+
+Esa última comprobación se escribió mal la primera vez: preguntaba por `staff` en
+SQL crudo creyendo que eso esquivaba las políticas. No las esquiva —RLS aplica al
+rol, no al estilo de la consulta— así que devolvía cero filas y **no se disparaba
+nunca**. La misma persona podía crear gimnasios sin límite y nada fallaba. Lo
+encontró la prueba de punta a punta, no el typecheck.
+
+El código de promoción va **al final y fuera de la transacción**: si está mal
+escrito, el gimnasio queda creado igual y la app dice por qué no se aplicó.
+Perder un alta por un tipeo en un campo opcional sería cambiar un cliente por una
+promoción.
+
+### Los códigos mueven la fecha, no el precio
+
+Un código no descuenta el importe: adelanta `free_until`. Así el motor de cobro
+sigue sin saber que las promociones existen, y lo único que cambia es una fecha.
+Un descuento sobre el importe habría obligado a tocar el prorrateo, que es
+justamente lo que no conviene tocar por una campaña.
+
+**El tope de usos no se comprueba en el código.** Vive en un `CHECK` y en un
+`UPDATE ... WHERE redeemed_count < max_redemptions`: dos gimnasios canjeando el
+último uso en el mismo segundo leen los dos «9 de 10» y los dos entrarían con un
+`if`. La otra mitad es el índice único por `(código, gimnasio)`, sin el cual un
+solo gimnasio podría gastar los diez usos.
+
+El canje **cuenta desde lo último que el gimnasio ya tiene cubierto**, no desde
+`free_until` a secas: quien ya pagó un mes no puede recibir de regalo un periodo
+que ya compró. Y si esa fecha ya pasó, cuenta desde hoy — si no, un gimnasio
+cortado canjearía un código y seguiría cortado, que es justo lo que el código
+venía a arreglar. Por eso `POST /staff/promo` sigue abierta en solo lectura: que
+el corte bloqueara la forma de levantarlo sería una trampa.
+
+### Lo que falta para que el alta sirva de verdad
+
+**Un gimnasio recién creado no tiene planes ni horarios**, y sin planes no puede
+inscribir a un solo alumno: `POST /staff/members` exige `planId` y no hay ninguna
+ruta que cree planes — hasta ahora los ponía el script de siembra. El alta deja
+al dueño dentro, con su mes gratis corriendo y su padrón vacío, pero el local no
+es operable hasta que alguien le cree los planes. Es lo siguiente.
+
+### Y lo que no se puede hacer con Apple Pay
+
+Cobrar la suscripción **dentro de la app** cae en la regla 3.1.1 de la App Store
+y exige In-App Purchase, no Apple Pay — que es para bienes y servicios que se
+consumen fuera. El IAP se lleva 15–30%, que es volver a tener un porcentaje justo
+después de haber decidido en el MD 2 no tenerlo, y encima uno que no se negocia.
+
+El camino es el que ya sigue Sinchi: **el cobro ocurre fuera de la app**. El dueño
+paga por transferencia hoy, y mañana en una página de Culqi donde Apple Pay y
+Google Pay sí funcionan como billeteras de tarjeta. La app solo refleja el estado.

@@ -146,6 +146,7 @@ que es exactamente la persona que la clase gratis quiere convertir en alumno.
 | `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y qué cuesta su clase de prueba (0 = gratis). Anónima. |
 | `GET` | `/gyms/:slug` | Horarios, precios y las clases concretas —con fecha— que se pueden reservar. Anónima. |
 | `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
+| `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada, RUC con dígito verificador y un gimnasio por persona. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
 | `POST` | `/gyms/trials/:id/cancel` | Cancela la suya. Libera el cupo del gimnasio. |
 
@@ -169,6 +170,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
 | `GET` | `/staff/subscription` | Solo el dueño: su suscripción a Sinchi, cuánto le queda de mes gratis y qué pasa al terminar. |
+| `POST` | `/staff/promo` | Solo el dueño: canjea un código y suma meses gratis. Abierta en solo lectura — es por donde un gimnasio cortado vuelve. |
 | `GET` | `/staff/trials` | Quién viene a probar, de hoy en adelante. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
 | `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
@@ -249,6 +251,29 @@ Tres garantías, todas en la base y no en el código:
 Los endpoints aceptan `clientId` para eso. Un reintento devuelve el registro que
 ya existía con `alreadyRegistered: true` en vez de fallar.
 
+### Hasta 10 alumnos no se paga nada
+
+El primer escalón es **gratis y permanente**: un dojo de seis alumnos no tiene
+con qué pagar S/ 149, y cobrarle desde el primer día lo deja fuera cuando lo que
+queremos es que crezca dentro.
+
+La consecuencia ordena el código: **un gimnasio del plan gratis no se puede
+cortar**. No debe nada, así que no hay fecha que se le pase. `evaluateSaas` lo
+resuelve antes que cualquier otra regla, y por eso el escalón es un campo
+obligatorio de su entrada: si faltara, un local pequeño acabaría en solo lectura
+por una deuda de cero soles.
+
+Al pasar de 10 empieza a costar, y **el cambio no corta a nadie de golpe**: el
+trabajo diario le da un mes por delante, el mismo que tuvo al darse de alta. Sin
+eso, un gimnasio con un año gratis a la espalda tendría su fecha de cobro un año
+atrás y quedaría cortado el mismo día que creció.
+
+El escalón se **deriva del padrón**, no de lo que el dueño declaró al
+registrarse: esa columna se fija una vez y nadie la vuelve a tocar. Se cachea en
+`saas_subscriptions.tier` y lo refresca el trabajo diario, para que el guard no
+tenga que contar alumnos en cada escritura — y para que la franja del dueño y el
+corte cuenten siempre lo mismo.
+
 ### El gimnasio que no paga queda en solo lectura, nunca sin puerta
 
 Todo gimnasio entra con **un mes gratis** desde su alta. Al vencer se cobra por
@@ -290,6 +315,27 @@ la morosidad. Registrar el pago levanta el corte en el acto:
 npm run saas:status -w @sinchi/api                       # todos los gimnasios
 npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
 ```
+
+### Códigos de promoción
+
+Un código no descuenta el precio: mueve `free_until` hacia adelante. Así el motor
+de cobro sigue sin saber que las promociones existen y lo único que cambia es una
+fecha.
+
+```bash
+npm run saas:promo -w @sinchi/api -- new VERANO2026 1 20 "campaña de enero"
+npm run saas:promo -w @sinchi/api -- list
+npm run saas:promo -w @sinchi/api -- off VERANO2026
+```
+
+El tope de usos **no** se comprueba en el código: vive en un `CHECK` y en un
+`UPDATE ... WHERE redeemed_count < max_redemptions`. Dos gimnasios canjeando el
+último uso en el mismo segundo leen los dos «9 de 10» y los dos entrarían con un
+`if`. Y `saas_redemptions` tiene índice único por `(código, gimnasio)`: sin él, un
+solo gimnasio podría gastar los diez usos.
+
+Un código mal escrito vuelve con **200 y `redeemed: false`** más el motivo, como
+el rechazo de un check-in.
 
 No hay pantalla para cobrar a propósito: con un puñado de gimnasios, quien cobra
 es una persona mirando el correo del banco una vez al mes.

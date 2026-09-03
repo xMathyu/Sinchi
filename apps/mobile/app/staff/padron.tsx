@@ -23,6 +23,9 @@ import { Screen } from '../../src/design/screen';
 import { Button, Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
 import {
+  canjearCodigo,
+} from '../../src/data/actions';
+import {
   useBajas,
   useClaims,
   useOwnerSummary,
@@ -32,7 +35,7 @@ import {
   useSuscripcionSinchi,
 } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
-import type { SaasNotice } from '@sinchi/shared';
+import { describePromo, promoDenialMessage, type SaasNotice } from '@sinchi/shared';
 
 export default function PadronScreen() {
   const theme = useTheme();
@@ -42,7 +45,7 @@ export default function PadronScreen() {
   const esDueno = useStore((s) => s.staff.role) === 'owner';
   const { claims } = useClaims();
   const resumen = useOwnerSummary();
-  const suscripcion = useSuscripcionSinchi();
+  const { suscripcion, recargar: recargarSuscripcion } = useSuscripcionSinchi();
   /**
    * `null` cuando quien mira es recepción: la suscripción es del dueño. Ahí no
    * se apaga nada — el alta le devuelve el motivo de la api en pantalla, que es
@@ -182,11 +185,14 @@ export default function PadronScreen() {
           Va arriba del todo y desde el primer día: un mes gratis del que el
           dueño se entera el día que se corta es un cliente que se va enojado, no
           uno que paga. Solo aparece mientras dice algo —el mes gratis corriendo,
-          el vencimiento encima o el corte— y desaparece cuando la cuenta está al
-          día, que es la mayoría de los meses. */}
+          el vencimiento encima, el corte, o el plan gratis, que es lo que
+          explica por qué no le están cobrando— y desaparece cuando la cuenta
+          está al día pagando, que no necesita decir nada. */}
       {suscripcion !== null &&
-      (suscripcion.state.status === 'trialing' || suscripcion.notice.tone !== 'info') ? (
-        <AvisoSuscripcion notice={suscripcion.notice} />
+      (suscripcion.state.status === 'trialing' ||
+        suscripcion.state.status === 'free' ||
+        suscripcion.notice.tone !== 'info') ? (
+        <AvisoSuscripcion notice={suscripcion.notice} onCanjeado={recargarSuscripcion} />
       ) : null}
 
       {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
@@ -391,14 +397,46 @@ function Metrica({
  * pantalla escribiera el suyo, el dueño leería una cosa en el padrón y otra
  * distinta al chocar contra el corte.
  */
-function AvisoSuscripcion({ notice }: { readonly notice: SaasNotice }) {
+function AvisoSuscripcion({
+  notice,
+  onCanjeado,
+}: {
+  readonly notice: SaasNotice;
+  readonly onCanjeado: () => void;
+}) {
   const theme = useTheme();
+  const [abierto, setAbierto] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [canjeando, setCanjeando] = useState(false);
+  const [resultado, setResultado] = useState<string | null>(null);
+
   const color =
     notice.tone === 'blocked'
       ? theme.semaphore.bad
       : notice.tone === 'warn'
         ? theme.semaphore.warn
         : theme.colors.ink;
+
+  const canjear = async (): Promise<void> => {
+    setCanjeando(true);
+    setResultado(null);
+    try {
+      const canje = await canjearCodigo(codigo);
+      if (canje.redeemed) {
+        setResultado(describePromo({ freeMonths: canje.freeMonths, freeUntil: canje.freeUntil }));
+        setCodigo('');
+        onCanjeado();
+      } else {
+        // El motivo sale de `shared`: la app, el panel y la api dicen lo mismo
+        // del mismo hecho, y la persona necesita saber si insistir sirve.
+        setResultado(promoDenialMessage(canje.reason));
+      }
+    } catch (causa: unknown) {
+      setResultado(causa instanceof Error ? causa.message : 'No se pudo canjear.');
+    } finally {
+      setCanjeando(false);
+    }
+  };
 
   return (
     <Card borderColor={withAlpha(color, 0.35)} style={{ paddingVertical: 12 }}>
@@ -409,6 +447,62 @@ function AvisoSuscripcion({ notice }: { readonly notice: SaasNotice }) {
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
           {notice.detail}
         </Text>
+
+        {/* El canje vive AQUI, pegado a la cuenta atrás, y no en ajustes: es el
+            único momento en que el dueño piensa en cuánto le queda. */}
+        {abierto ? (
+          <Row gap={8} style={{ marginTop: 8 }}>
+            <TextInput
+              value={codigo}
+              onChangeText={setCodigo}
+              placeholder="Tu código"
+              placeholderTextColor={theme.colors.textPlaceholder}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Código de promoción"
+              style={{
+                flex: 1,
+                color: theme.colors.ink,
+                fontSize: 15,
+                paddingVertical: 6,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.hairline,
+              }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Canjear código"
+              disabled={canjeando || codigo.trim().length === 0}
+              hitSlop={10}
+              onPress={() => void canjear()}
+            >
+              <Text
+                variant="captionSmall"
+                weight="semibold"
+                color={codigo.trim().length === 0 ? theme.colors.textFaint : theme.semaphore.ok}
+              >
+                {canjeando ? 'Canjeando…' : 'Canjear'}
+              </Text>
+            </Pressable>
+          </Row>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={() => setAbierto(true)}
+            style={{ marginTop: 6 }}
+          >
+            <Text variant="captionSmall" weight="semibold" color={theme.colors.textSecondary}>
+              Tengo un código
+            </Text>
+          </Pressable>
+        )}
+
+        {resultado === null ? null : (
+          <Text variant="micro" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
+            {resultado}
+          </Text>
+        )}
       </Stack>
     </Card>
   );

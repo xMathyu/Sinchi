@@ -37,7 +37,14 @@ import type { SaasTier } from '../domain/types.js';
  * gimnasio impago no se le cierra nada de lo que ya tiene, se le impide crear
  * mas. Llamarlos igual invita a copiar el comportamiento equivocado.
  */
-export type SaasStatus = 'trialing' | 'active' | 'in_grace' | 'read_only' | 'canceled';
+export type SaasStatus =
+  /** Hasta 10 alumnos: no paga, y por tanto no se le puede cortar. */
+  | 'free'
+  | 'trialing'
+  | 'active'
+  | 'in_grace'
+  | 'read_only'
+  | 'canceled';
 
 /** Meses de regalo al dar de alta un gimnasio. */
 export const SAAS_FREE_MONTHS = 1;
@@ -52,18 +59,26 @@ export const SAAS_FREE_MONTHS = 1;
  */
 export const SAAS_GRACE_DAYS = 7;
 
+/** Hasta cuantos alumnos activos el gimnasio no paga nada. */
+export const SAAS_FREE_TIER_LIMIT = 10;
+
 /** Tarifa mensual por escalon (MD 3). Precio fijo, nunca porcentaje. */
 export const SAAS_TIER_PRICES: Readonly<Record<SaasTier, Cents>> = {
+  free: cents(0),
   up_to_60: cents(14_900),
   up_to_150: cents(29_900),
   unlimited: cents(49_900),
 };
 
 export const SAAS_TIER_LABELS: Readonly<Record<SaasTier, string>> = {
-  up_to_60: 'Hasta 60 alumnos',
+  free: `Hasta ${SAAS_FREE_TIER_LIMIT} alumnos`,
+  up_to_60: `De ${SAAS_FREE_TIER_LIMIT + 1} a 60 alumnos`,
   up_to_150: 'De 61 a 150 alumnos',
   unlimited: 'Más de 150 alumnos',
 };
+
+/** El escalon en el que el gimnasio no paga nada. */
+export const isFreeTier = (tier: SaasTier): boolean => SAAS_TIER_PRICES[tier] === 0;
 
 export function saasPrice(tier: SaasTier): Cents {
   return SAAS_TIER_PRICES[tier];
@@ -77,6 +92,7 @@ export function saasPrice(tier: SaasTier): Cents {
  * 40 a 200 alumnos seguiria pagando el escalon mas barato para siempre.
  */
 export function tierForMembers(activeMembers: number): SaasTier {
+  if (activeMembers <= SAAS_FREE_TIER_LIMIT) return 'free';
   if (activeMembers <= 60) return 'up_to_60';
   if (activeMembers <= 150) return 'up_to_150';
   return 'unlimited';
@@ -97,6 +113,14 @@ export function freeUntilFrom(startDate: PlainDate): PlainDate {
 }
 
 export interface SaasInput {
+  /**
+   * Escalon vigente, derivado del padron.
+   *
+   * Obligatorio y no opcional con valor por defecto: si faltara, un gimnasio del
+   * plan gratis pasaria por el motor de cobro y acabaria cortado por no pagar
+   * algo que no cuesta nada.
+   */
+  readonly tier: SaasTier;
   /** Primer dia en que el gimnasio ya tiene que haber pagado. */
   readonly freeUntil: PlainDate;
   /** Inicio del periodo no pagado. Durante el mes gratis coincide con `freeUntil`. */
@@ -132,6 +156,26 @@ export interface SaasState {
 export function evaluateSaas(input: SaasInput): SaasState {
   const graceDays = input.graceDays ?? SAAS_GRACE_DAYS;
   const readOnlyOn = addDays(input.nextBillingDate, graceDays);
+
+  /**
+   * El plan gratis se resuelve ANTES que nada.
+   *
+   * Un local de diez alumnos no debe nada, asi que no hay fecha que se le pueda
+   * pasar ni corte que aplicarle. Si esto fuera al final, un gimnasio pequeno
+   * cuyo mes gratis vencio hace medio ano saldria en solo lectura por una deuda
+   * de cero soles — que es la forma mas rapida de perder al cliente que mas
+   * tarda en crecer.
+   */
+  if (isFreeTier(input.tier) && input.canceled !== true) {
+    return {
+      status: 'free',
+      freeDaysLeft: 0,
+      daysPastDue: 0,
+      readOnlyOn,
+      canWrite: true,
+      listed: true,
+    };
+  }
 
   if (input.canceled === true) {
     return {
@@ -217,6 +261,12 @@ export function saasNotice(state: SaasState, price: Cents): SaasNotice {
   const soles = Math.round(price / 100);
 
   switch (state.status) {
+    case 'free':
+      return {
+        tone: 'info',
+        title: 'Plan gratis',
+        detail: `Hasta ${SAAS_FREE_TIER_LIMIT} alumnos, sin costo. Al pasar de ahí, S/ 149 al mes.`,
+      };
     case 'trialing':
       return {
         tone: state.freeDaysLeft <= 7 ? 'warn' : 'info',

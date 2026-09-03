@@ -16,9 +16,27 @@ import { Public } from '../auth/auth.guard';
 import { parseWith } from '../common/zod.pipe';
 import { FirebaseVerifier } from '../auth/firebase';
 import { TrialsService, type TrialAccount } from './trials/trials.service';
+import { OnboardingService } from './onboarding/onboarding.service';
 
 /** El mismo ID token de Firebase que consume `/auth/google`. */
 const idTokenSchema = z.object({ idToken: z.string().min(100) });
+
+/**
+ * Alta de un gimnasio.
+ *
+ * El RUC y el documento se validan de verdad en el servicio —digito verificador
+ * incluido—; aqui solo se acotan tamanos. El escalon lo DECLARA el dueno para
+ * saber cuanto le va a costar; el cobro lo deriva del padron igual.
+ */
+const signUpSchema = idTokenSchema.extend({
+  gymName: z.string().min(3).max(120),
+  taxId: z.string().min(8).max(20),
+  saasTier: z.enum(['free', 'up_to_60', 'up_to_150', 'unlimited']),
+  ownerName: z.string().min(2).max(120).optional(),
+  documentId: z.string().min(6).max(20),
+  phone: z.string().min(6).max(20).optional(),
+  promoCode: z.string().max(40).optional(),
+});
 
 const bookSchema = idTokenSchema.extend({
   /**
@@ -37,6 +55,7 @@ export class GymsController {
   constructor(
     private readonly trials: TrialsService,
     private readonly firebase: FirebaseVerifier,
+    private readonly onboarding: OnboardingService,
   ) {}
 
   /**
@@ -49,6 +68,34 @@ export class GymsController {
   @Get()
   directory() {
     return this.trials.directory();
+  }
+
+  /**
+   * Da de alta un gimnasio y devuelve la sesión de dueño.
+   *
+   * Es la única ruta pública que crea un tenant. Va aquí y no bajo `/staff`
+   * porque quien la llama todavía no es staff de ningún sitio: es justo lo que
+   * esta petición produce.
+   *
+   * Se declara antes que `:slug` para que ningún gimnasio con slug "signup"
+   * pueda taparla.
+   */
+  @Public()
+  @Post('signup')
+  async signUp(@Body(parseWith(signUpSchema)) body: z.infer<typeof signUpSchema>) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.onboarding.signUpGym({
+      firebaseUid: identity.uid,
+      email: identity.email,
+      displayName: identity.displayName,
+      gymName: body.gymName,
+      taxId: body.taxId,
+      saasTier: body.saasTier,
+      ownerName: body.ownerName,
+      documentId: body.documentId,
+      phone: body.phone,
+      promoCode: body.promoCode,
+    });
   }
 
   /**

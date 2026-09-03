@@ -486,8 +486,12 @@ export function useClaims(): {
  * mes gratis avanza en días, no en cobros. Colgarla del padrón la volvería a
  * pedir en cada alta y cada pago para ver el mismo número.
  */
-export function useSuscripcionSinchi(): SaasSubscriptionDto | null {
+export function useSuscripcionSinchi(): {
+  readonly suscripcion: SaasSubscriptionDto | null;
+  readonly recargar: () => void;
+} {
   const [suscripcion, setSuscripcion] = useState<SaasSubscriptionDto | null>(null);
+  const [intento, setIntento] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
@@ -499,9 +503,11 @@ export function useSuscripcionSinchi(): SaasSubscriptionDto | null {
     return () => {
       cancelado = true;
     };
-  }, []);
+  }, [intento]);
 
-  return suscripcion;
+  // Canjear un código mueve la fecha: sin volver a pedirla, la franja seguiría
+  // diciendo los días de antes justo cuando el dueño acaba de ganar un mes.
+  return { suscripcion, recargar: () => setIntento((n) => n + 1) };
 }
 
 /** Resumen del local para el dueño. `null` cuando no es el dueño o aún no llegó. */

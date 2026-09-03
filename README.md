@@ -11,12 +11,13 @@ gimnasios a los que asiste.
 
 | Parte | Estado |
 |---|---|
-| `packages/shared` — dominio y reglas puras | **Completo y con tests** (196 tests) |
+| `packages/shared` — dominio y reglas puras | **Completo y con tests** (217 tests) |
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio y clase gratis) |
-| `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (217 tests, 132 de punta a punta) |
+| `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (239 tests, 146 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
-| Cobro SaaS al gimnasio | **Mes gratis, corte a solo lectura y cobro manual.** Culqi pendiente |
+| Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
+| Alta de gimnasio | **Desde la app.** Falta crear planes: sin ellos el local no puede inscribir |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
 | Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
 | CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo |
@@ -35,13 +36,21 @@ El corte de acceso al moroso —que es el valor del producto— sí funciona
 completo: gracia configurable, suspensión automática y check-in que deja de
 validar. Ver [`docs/decisiones.md`](docs/decisiones.md) para el detalle.
 
-### El gimnasio entra con un mes gratis
+### Hasta 10 alumnos, gratis. Después, un mes de regalo
 
-Todo local que se da de alta tiene **un mes de Sinchi gratis** contado desde ese
-día. Al vencer se cobra por adelantado según su padrón —S/ 149 hasta 60 alumnos,
-S/ 299 hasta 150, S/ 499 por encima— y, pasados 7 días de gracia, la cuenta cae a
-**solo lectura**: no se dan de alta alumnos, no se registran pagos y el local sale
-del directorio público.
+El primer escalón es **gratis y permanente**: un dojo de seis alumnos no tiene con
+qué pagar S/ 149, y cobrarle desde el primer día lo deja fuera cuando lo que
+queremos es que crezca dentro. Un gimnasio del plan gratis **no se puede cortar**:
+no debe nada.
+
+Al pasar de 10 empieza a costar —S/ 149 hasta 60 alumnos, S/ 299 hasta 150, S/ 499
+por encima— y el cambio no corta a nadie de golpe: se le da un mes por delante, el
+mismo que tiene todo local al darse de alta. Vencido eso y pasados 7 días de
+gracia, la cuenta cae a **solo lectura**: no se dan de alta alumnos, no se
+registran pagos y el local sale del directorio público.
+
+El escalón se **deriva del padrón**, no de lo que el dueño declaró: esa columna se
+fija una vez y nadie la vuelve a tocar.
 
 **La puerta nunca se cierra.** El check-in, el QR del alumno y la cola offline
 siguen funcionando, y el padrón entero sigue visible. El corte de Sinchi al
@@ -55,7 +64,19 @@ pagan en mostrador:
 ```bash
 npm run saas:status -w @sinchi/api                       # cómo va cada gimnasio
 npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
+npm run saas:promo -w @sinchi/api -- new VERANO2026 1 20  # 1 mes, 20 usos
 ```
+
+### El gimnasio se da de alta solo
+
+Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —con dígito
+verificador comprobado—, escalón, sus datos y, si lo tiene, un código de
+promoción. Al terminar entra como dueño, con su mes gratis corriendo.
+
+Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
+verificada y **un gimnasio por persona**. Falta lo siguiente para que sirva de
+verdad: un gimnasio recién creado **no tiene planes**, y sin planes no puede
+inscribir a nadie.
 
 ---
 
@@ -65,7 +86,7 @@ npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
 nvm use            # Node 24.8.0 (.nvmrc)
 npm ci
 npm run build      # compila shared y ui: la app los consume compilados
-npm test           # 289 tests (421 con TEST_DATABASE_URL apuntando a una base)
+npm test           # 318 tests (464 con TEST_DATABASE_URL apuntando a una base)
 
 cd apps/mobile
 npm start          # Expo: pulsa i (iOS), a (Android)
@@ -139,7 +160,7 @@ la app no puede es ser la autoridad final.
   credenciales de pasarela del gimnasio.
 
 Las migraciones se prueban contra Postgres de verdad (PGlite, en WASM, sin
-Docker) y hay 132 pruebas de punta a punta que recorren la api por HTTP contra un
+Docker) y hay 146 pruebas de punta a punta que recorren la api por HTTP contra un
 Postgres con RLS activo. Entre las dos encontraron cuatro bugs que habrían
 llegado a producción: dos `CHECK` que pasaban con `NULL`, una ruta de import que
 fallaba solo en tiempo de ejecución, y RLS bloqueando el propio login del staff.
@@ -157,7 +178,8 @@ money/      céntimos enteros con tipo marcado, aritmética de prorrateo
 domain/     entidades. `User` vive FUERA del tenant: la identidad es global
 billing/    ciclo, prorrateo, cambio de plan, deuda derivada, dunning
 checkin/    cupo semanal, validación con motivo estructurado, textos
-saas/       el mes gratis del gimnasio y su corte a solo lectura
+saas/       plan gratis, mes de regalo, corte a solo lectura y códigos
+identity/   RUC peruano con dígito verificador
 security/   TOTP con HMAC inyectado, payload del QR
 ```
 

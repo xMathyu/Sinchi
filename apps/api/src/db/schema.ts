@@ -37,7 +37,8 @@ import {
 
 export const membershipStatusEnum = pgEnum('membership_status', ['active', 'inactive']);
 export const tenantStatusEnum = pgEnum('tenant_status', ['active', 'suspended']);
-export const saasTierEnum = pgEnum('saas_tier', ['up_to_60', 'up_to_150', 'unlimited']);
+/** `free` = hasta 10 alumnos, sin costo. No es prueba: es el precio de un local pequeno. */
+export const saasTierEnum = pgEnum('saas_tier', ['free', 'up_to_60', 'up_to_150', 'unlimited']);
 /**
  * Estado de la suscripcion del GIMNASIO a Sinchi.
  *
@@ -46,6 +47,7 @@ export const saasTierEnum = pgEnum('saas_tier', ['up_to_60', 'up_to_150', 'unlim
  * igual invita a copiar el comportamiento equivocado.
  */
 export const saasStatusEnum = pgEnum('saas_status', [
+  'free',
   'trialing',
   'active',
   'in_grace',
@@ -256,6 +258,60 @@ export const tenantGateway = pgTable('tenant_gateway', {
   culqiSecretKeyEncrypted: text('culqi_secret_key_encrypted'),
   active: boolean('active').notNull().default(false),
 });
+
+/**
+ * Codigos de promocion: meses de Sinchi de regalo.
+ *
+ * Un codigo mueve `free_until` hacia adelante; no descuenta el precio. Asi el
+ * motor de cobro sigue sin saber que existen las promociones.
+ *
+ * Fuera de `TENANT_SCOPED_TABLES`: los crea y los lista Sinchi, no el gimnasio.
+ */
+export const saasPromoCodes = pgTable(
+  'saas_promo_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Normalizado: mayusculas, sin separadores (`normalizePromoCode`). */
+    code: text('code').notNull(),
+    freeMonths: smallint('free_months').notNull().default(1),
+    /** `null` = sin tope. */
+    maxRedemptions: integer('max_redemptions'),
+    redeemedCount: integer('redeemed_count').notNull().default(0),
+    expiresOn: date('expires_on'),
+    active: boolean('active').notNull().default(true),
+    /** A quien se le dio y por que. Dentro de seis meses nadie se acuerda. */
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('saas_promo_codes_code_key').on(t.code)],
+);
+
+/**
+ * Quien canjeo que.
+ *
+ * El indice unico es la mitad del tope que el `CHECK` de `redeemed_count` no
+ * cubre: sin el, un solo gimnasio podria gastar los diez usos de un codigo.
+ */
+export const saasRedemptions = pgTable(
+  'saas_redemptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    promoCodeId: uuid('promo_code_id')
+      .notNull()
+      .references(() => saasPromoCodes.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    freeMonths: smallint('free_months').notNull(),
+    /** Hasta cuando quedo gratis despues de canjear. Rastro, no derivable. */
+    freeUntilAfter: date('free_until_after').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('saas_redemptions_once_per_tenant').on(t.promoCodeId, t.tenantId),
+    index('saas_redemptions_tenant_idx').on(t.tenantId),
+  ],
+);
 
 /**
  * La suscripcion del gimnasio a Sinchi: el mes gratis y lo que viene despues.

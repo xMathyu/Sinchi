@@ -23,6 +23,7 @@ import type {
   Membership,
   PlainDate,
   Plan,
+  PromoDenial,
   QuotaState,
   Receivable,
   SaasNotice,
@@ -759,6 +760,50 @@ export interface SaasSubscriptionDto {
 
 export const fetchSaasSubscription = (): Promise<SaasSubscriptionDto> =>
   request('/staff/subscription');
+
+/**
+ * Canje de un código de promoción.
+ *
+ * Un código mal escrito vuelve con 200 y `redeemed: false`, como el rechazo de
+ * un check-in: no es un fallo de la petición, es un resultado que la persona
+ * necesita entender.
+ */
+export type RedeemPromoDto =
+  | { readonly redeemed: true; readonly code: string; readonly freeMonths: number; readonly freeUntil: PlainDate }
+  | { readonly redeemed: false; readonly reason: PromoDenial };
+
+export const redeemPromoCode = (code: string): Promise<RedeemPromoDto> =>
+  request('/staff/promo', { method: 'POST', body: { code } });
+
+/**
+ * Alta de un gimnasio. Anónima salvo por el token de Firebase, igual que la
+ * reserva de una clase de prueba: quien la llama todavía no es staff de nada.
+ */
+export interface SignUpGymInput {
+  readonly idToken: string;
+  readonly gymName: string;
+  readonly taxId: string;
+  readonly saasTier: SaasTier;
+  readonly ownerName?: string;
+  readonly documentId: string;
+  readonly phone?: string;
+  readonly promoCode?: string;
+}
+
+export interface SignUpGymDto {
+  readonly tenantId: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly freeUntil: string;
+  readonly promo:
+    | { readonly applied: true; readonly freeMonths: number }
+    | { readonly applied: false; readonly reason: PromoDenial }
+    | null;
+  readonly session: IssuedSessionDto;
+}
+
+export const signUpGym = (input: SignUpGymInput): Promise<SignUpGymDto> =>
+  request('/gyms/signup', { method: 'POST', body: input, anonymous: true });
 
 export const fetchClaims = (): Promise<
   readonly {

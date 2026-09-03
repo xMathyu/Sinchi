@@ -218,8 +218,14 @@ function DataLoader() {
  * gimnasios se puede mirar SIN sesion, con la cuenta a medio vincular y con
  * sesion de alumno. Es la unica pantalla del producto que atiende a alguien que
  * todavia no es de ningun gimnasio.
+ *
+ * `gym-signup` va con ella y por lo mismo: quien registra su gimnasio llega
+ * desde el directorio, y su cuenta puede estar en cualquiera de esos tres
+ * estados. Una ruta que no este en estas listas se redirige EN SILENCIO —sin
+ * error y sin pantalla— asi que anadir una y olvidarse de esto es escribirla
+ * para nadie.
  */
-const RUTAS_COMPARTIDAS = new Set(['settings', 'explore']);
+const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual', 'scan']),
@@ -282,6 +288,14 @@ function SessionRouter() {
     // El directorio se mira sin cuenta: quien busca dojo todavia no tiene una, y
     // exigirsela para ver una lista es perderlo en la primera pantalla.
     const enDirectorio = primero === 'explore';
+    /**
+     * El alta de un gimnasio sale del directorio, y quien la abre casi siempre
+     * es una cuenta RECIEN creada sin ficha en ningun padron — que es el estado
+     * `unlinked`, cuya rama devuelve al directorio todo lo que no sea el codigo
+     * de vinculacion. Sin esta excepcion el boton rebotaba a `/explore` sin
+     * mostrar nada, y el fallo era mudo: ni error, ni ruta desconocida, nada.
+     */
+    const enAltaDeGimnasio = primero === 'gym-signup';
 
     if (state.status === 'signed_out') {
       if (!enLogin && !enTurno && !enDev && !enInvitacion && !enDirectorio) {
@@ -306,7 +320,7 @@ function SessionRouter() {
        * ficha llegue a su app — el auto-vinculo por correo solo existe para el
        * dueno (`tryLinkOwnerByEmail`).
        */
-      if (primero !== 'link' && !enDirectorio) router.replace('/explore');
+      if (primero !== 'link' && !enDirectorio && !enAltaDeGimnasio) router.replace('/explore');
       return;
     }
 

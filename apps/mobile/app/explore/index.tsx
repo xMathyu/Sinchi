@@ -161,7 +161,52 @@ export default function ExploreScreen() {
           ))}
         </Stack>
       )}
+
+      <InvitacionAlDueno />
     </Screen>
+  );
+}
+
+/**
+ * La otra mitad del directorio: quien lo mira no siempre busca dónde entrenar.
+ *
+ * Es la única puerta de entrada al alta de un gimnasio, y va al final del
+ * directorio a propósito. Arriba competiría con la lista —que es lo que casi
+ * todo el mundo viene a ver— y en Ajustes no la encontraría nadie: quien está
+ * evaluando Sinchi para su dojo llega mirando qué otros gimnasios ya lo usan,
+ * y termina justo aquí.
+ */
+function InvitacionAlDueno() {
+  const theme = useTheme();
+  const router = useRouter();
+
+  return (
+    <Card
+      borderColor={withAlpha(theme.semaphore.ok, 0.3)}
+      style={{ marginTop: 26, marginBottom: 8, paddingVertical: 16 }}
+    >
+      <Stack gap={10}>
+        <Stack gap={3}>
+          <Text variant="bodySmall" weight="semibold">
+            ¿Tienes un gimnasio?
+          </Text>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            Regístralo en Sinchi: el primer mes es gratis, y hasta 10 alumnos no
+            pagas nunca.
+          </Text>
+        </Stack>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Registrar mi gimnasio"
+          hitSlop={10}
+          onPress={() => router.push('/gym-signup')}
+        >
+          <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+            Registrar mi gimnasio
+          </Text>
+        </Pressable>
+      </Stack>
+    </Card>
   );
 }
 
