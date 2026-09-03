@@ -39,6 +39,7 @@ export default function PadronScreen() {
   const router = useRouter();
   const roster = useRoster();
   const cargando = useStore((s) => s.hidratando);
+  const esDueno = useStore((s) => s.staff.role) === 'owner';
   const { claims } = useClaims();
   const resumen = useOwnerSummary();
   const suscripcion = useSuscripcionSinchi();
@@ -91,75 +92,91 @@ export default function PadronScreen() {
 
   const cabecera = (
     <Stack gap={18} style={{ paddingTop: 20, paddingBottom: 18 }}>
-      <Row align="flex-start">
-        <Stack gap={4} style={{ flex: 1 }}>
+      {/* Los chips van en la línea del rótulo, no en la del título.
+          Entre los dos ocupan el 63% del ancho, así que compartir fila con
+          «5 alumnos» no cabe de ninguna manera: primero se partía en dos líneas
+          y la deuda en tres, y forzando una sola línea quedaba «5 alumn…».
+          Arriba sobra sitio —«PADRÓN» usa el 14% de una línea entera— y así el
+          título y la deuda recuperan el ancho completo. */}
+      <Stack gap={4}>
+        <Row gap={10}>
           <Eyebrow>Padrón</Eyebrow>
-          <Text variant="title">
-            {roster.length} {roster.length === 1 ? 'alumno' : 'alumnos'}
-          </Text>
-          {deudaTotal > 0 && (
-            <Text variant="bodySmall" color={theme.semaphore.warn}>
-              {conDeuda} con deuda · {formatPEN(deudaTotal as Cents, { withDecimals: false })} por
-              cobrar
-            </Text>
-          )}
-        </Stack>
-        <Row gap={8} justify="flex-end">
-          {/* Solo aparece cuando hay alguien esperando. Un chip permanente para
-              algo que ocurre tres veces por semana es ruido en la pantalla que
-              recepción mira todo el día. */}
-          {claims.length > 0 && (
+          <Row gap={8} justify="flex-end" style={{ flexShrink: 0 }}>
+            {/* Solo aparece cuando hay alguien esperando. Un chip permanente
+                para algo que ocurre tres veces por semana es ruido en la
+                pantalla que recepción mira todo el día. */}
+            {claims.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={12}
+                onPress={() => router.push('/claims')}
+              >
+                <Card
+                  radius={theme.radii.pill}
+                  borderColor={withAlpha(theme.semaphore.warn, 0.35)}
+                  style={{ paddingVertical: 7, paddingHorizontal: 12 }}
+                >
+                  <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
+                    {claims.length} por vincular
+                  </Text>
+                </Card>
+              </Pressable>
+            )}
+            {/* Inscribir sí es permanente: es la acción que sostiene todo lo
+                demás —sin padrón no hay a quién vincular, ni a quién escanear,
+                ni a quién cobrar— y hasta ahora no existía en ninguna pantalla.
+
+                Se apaga con la cuenta en solo lectura, y no desaparece: un botón
+                que se esfuma deja al dueño preguntándose qué pasó, mientras que
+                uno gris justo encima de «Cuenta en solo lectura» se lee como
+                causa y efecto. Verde e invitando llevaría a un alta que la api
+                va a rechazar, que es la peor de las tres. */}
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Inscribir un alumno"
+              accessibilityState={{ disabled: !puedeInscribir }}
+              disabled={!puedeInscribir}
               hitSlop={12}
-              onPress={() => router.push('/claims')}
+              onPress={() => router.push('/enroll')}
             >
               <Card
                 radius={theme.radii.pill}
-                borderColor={withAlpha(theme.semaphore.warn, 0.35)}
-                style={{ paddingVertical: 7, paddingHorizontal: 13 }}
+                borderColor={withAlpha(
+                  puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary,
+                  0.4,
+                )}
+                style={{ paddingVertical: 7, paddingHorizontal: 12 }}
               >
-                <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
-                  {claims.length} por vincular
+                <Text
+                  variant="captionSmall"
+                  weight="semibold"
+                  color={puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary}
+                >
+                  + Alumno
                 </Text>
               </Card>
             </Pressable>
-          )}
-          {/* Inscribir sí es permanente: es la acción que sostiene todo lo demás
-              —sin padrón no hay a quién vincular, ni a quién escanear, ni a quién
-              cobrar— y hasta ahora no existía en ninguna pantalla. */}
-          {/* Se apaga con la cuenta en solo lectura, y no desaparece: un botón
-              que se esfuma deja al dueño preguntándose qué pasó, mientras que
-              uno gris justo encima de «Cuenta en solo lectura» se lee como
-              causa y efecto. Verde e invitando llevaría a un alta que la api va
-              a rechazar, que es la peor de las tres. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Inscribir un alumno"
-            accessibilityState={{ disabled: !puedeInscribir }}
-            disabled={!puedeInscribir}
-            hitSlop={12}
-            onPress={() => router.push('/enroll')}
-          >
-            <Card
-              radius={theme.radii.pill}
-              borderColor={withAlpha(
-                puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary,
-                0.4,
-              )}
-              style={{ paddingVertical: 7, paddingHorizontal: 14 }}
-            >
-              <Text
-                variant="captionSmall"
-                weight="semibold"
-                color={puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary}
-              >
-                + Alumno
-              </Text>
-            </Card>
-          </Pressable>
+          </Row>
         </Row>
-      </Row>
+
+        <Text variant="title" numberOfLines={1}>
+          {roster.length} {roster.length === 1 ? 'alumno' : 'alumnos'}
+        </Text>
+
+        {/* A lo ancho, y solo para recepción: al dueño se lo dicen con más
+            detalle las cifras de «Este mes», que van veinte píxeles más abajo.
+            Decir el mismo número dos veces en la misma pantalla no informa, y
+            era lo que obligaba a apretar esta línea contra los chips.
+
+            Se decide por el ROL y no por `resumen === null`: ese llega tarde, y
+            con él la línea aparecía y se esfumaba sola al cargar el resumen. */}
+        {deudaTotal > 0 && !esDueno && (
+          <Text variant="captionSmall" color={theme.semaphore.warn} numberOfLines={1}>
+            {conDeuda} con deuda · {formatPEN(deudaTotal as Cents, { withDecimals: false })} por
+            cobrar
+          </Text>
+        )}
+      </Stack>
 
       {/* La cuenta atrás del mes gratis del gimnasio.
           Va arriba del todo y desde el primer día: un mes gratis del que el
