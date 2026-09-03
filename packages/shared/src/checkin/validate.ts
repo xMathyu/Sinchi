@@ -9,14 +9,15 @@
  * servidor reconcilia despues y es la autoridad final (MD 4.6).
  */
 import type { Cents } from '../money/cents.js';
-import type {
-  Attendance,
-  ClassSchedule,
-  ClassScheduleId,
-  Plan,
-  QuotaOverflowPolicy,
-  Subscription,
-  SubscriptionStatus,
+import {
+  isDropInPlan,
+  type Attendance,
+  type ClassSchedule,
+  type ClassScheduleId,
+  type Plan,
+  type QuotaOverflowPolicy,
+  type Subscription,
+  type SubscriptionStatus,
 } from '../domain/types.js';
 import {
   isoWeekday,
@@ -50,6 +51,7 @@ export type DenialCode =
   | 'delinquent'
   | 'day_not_allowed'
   | 'quota_exhausted'
+  | 'drop_in_unpaid'
   | 'outside_schedule';
 
 export type DenialReason =
@@ -75,6 +77,20 @@ export type DenialReason =
       /** MD 8.2 sigue abierto: el motor informa, el gimnasio decide. */
       readonly offerDropIn: boolean;
       readonly dropInPriceCents: Cents | null;
+    }
+  | {
+      /**
+       * Plan de clase suelta sin la clase de hoy pagada.
+       *
+       * `alert` y no `blocked` a proposito: no debe nada ni esta suspendido —un
+       * plan asi no genera deuda— y lo que le falta se resuelve en el mostrador
+       * en diez segundos. Pintarlo rojo de moroso seria mentirle al alumno
+       * delante de la cola.
+       */
+      readonly code: 'drop_in_unpaid';
+      readonly level: 'alert';
+      /** Lo que cuesta UNA clase en este plan. Es lo que el mostrador va a cobrar. */
+      readonly priceCents: Cents;
     }
   | {
       readonly code: 'outside_schedule';
@@ -126,6 +142,19 @@ export interface CheckInContext {
   readonly graceDays: number;
   readonly quotaOverflowPolicy: QuotaOverflowPolicy;
   readonly dropInPriceCents?: Cents | null;
+  /**
+   * Si ya pago la clase de HOY. Solo lo mira un plan `drop_in`.
+   *
+   * Se deriva del ledger —un cargo `drop_in` exitoso con fecha de hoy en la zona
+   * del gimnasio— y no de un contador de clases compradas: el indice
+   * `attendance_once_per_day` ya garantiza una asistencia por dia, asi que "pago
+   * hoy" y "puede entrar hoy" son la misma cosa contada una sola vez.
+   *
+   * Ausente equivale a NO pagada. Un plan de clase suelta que se colara por un
+   * llamador que no lo pasa dejaria entrar gratis a todo el mundo, y ese fallo
+   * no se nota nunca: la puerta simplemente se abre.
+   */
+  readonly dropInPaidToday?: boolean;
   readonly debtCents?: Cents | null;
   /** Dias transcurridos desde `nextBillingDate`; 0 si esta al dia. */
   readonly daysPastDue?: number;
@@ -173,6 +202,9 @@ function nextClassOfDay(
  * El orden importa y es el del MD 4.3: suscripcion al dia -> dia permitido ->
  * cupo semanal -> hay clase. Reordenarlo cambia el motivo que ve el staff: a
  * un moroso hay que decirle que debe plata, no que hoy no es su dia.
+ *
+ * La clase suelta se intercala entre el dia y el cupo, que es el mismo sitio que
+ * ocupa el dinero en los demas planes.
  */
 export function validateCheckIn(ctx: CheckInContext): CheckInResult {
   const { subscription, plan, today, time } = ctx;
@@ -220,7 +252,22 @@ export function validateCheckIn(ctx: CheckInContext): CheckInResult {
     };
   }
 
-  // 3. Cupo semanal.
+  // 3. Clase suelta: la de hoy tiene que estar pagada.
+  //
+  //    Va antes del cupo y no despues porque para este plan el cupo no existe
+  //    (`weeklyLimit` devuelve null): si estuviera despues, seguiria funcionando,
+  //    pero el orden dejaria de leerse como la lista de razones por las que
+  //    alguien no pasa.
+  if (isDropInPlan(plan) && ctx.dropInPaidToday !== true) {
+    return {
+      allowed: false,
+      level: 'alert',
+      reason: { code: 'drop_in_unpaid', level: 'alert', priceCents: plan.priceCents },
+      quota,
+    };
+  }
+
+  // 4. Cupo semanal.
   if (quota.exhausted && quota.limit !== null) {
     return {
       allowed: false,
@@ -237,7 +284,7 @@ export function validateCheckIn(ctx: CheckInContext): CheckInResult {
     };
   }
 
-  // 4. Hay clase en este horario. Sin horarios cargados no se bloquea a nadie:
+  // 5. Hay clase en este horario. Sin horarios cargados no se bloquea a nadie:
   //    un gimnasio de horario libre no tiene por que configurarlos.
   let classScheduleId: ClassScheduleId | null = null;
   if (ctx.schedules.length > 0) {

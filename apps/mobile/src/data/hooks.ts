@@ -29,6 +29,8 @@ import {
   type CheckInPreviewDto,
   type GymCardDto,
   type GymDetailDto,
+  type PlanConUso,
+  type PreciosDelLocal,
   type SaasSubscriptionDto,
   type SummaryDto,
   type TrialBookingDto,
@@ -41,6 +43,8 @@ import {
   planesPara,
   refrescarDatos,
   resumenDelGimnasio,
+  planesDelDueno,
+  preciosDelLocal,
   suscripcionSinchi,
   vinculacionesPendientes,
   type Vinculacion,
@@ -530,6 +534,74 @@ export function useOwnerSummary(): SummaryDto | null {
   }, [roster]);
 
   return resumen;
+}
+
+/**
+ * Los planes del dueño, con lo que hace falta para decidir sobre ellos.
+ *
+ * `recargar` no es opcional aquí: esta pantalla es la única desde la que se
+ * escriben, así que después de guardar hay que volver a pedirlos o la lista
+ * enseña lo de antes justo donde el dueño acaba de cambiar algo.
+ */
+export function usePlanesDelDueno(): {
+  readonly planes: readonly PlanConUso[] | null;
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const [planes, setPlanes] = useState<readonly PlanConUso[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void planesDelDueno()
+      .then((valor) => {
+        if (!cancelado) setPlanes(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) setError(e instanceof Error ? e.message : 'No se pudieron traer tus planes.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  return {
+    planes,
+    error,
+    cargando: planes === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+/** Lo que el local cobra aparte de los planes. */
+export function usePreciosDelLocal(): {
+  readonly precios: PreciosDelLocal | null;
+  readonly error: string | null;
+  readonly recargar: () => void;
+} {
+  const [precios, setPrecios] = useState<PreciosDelLocal | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void preciosDelLocal()
+      .then((valor) => {
+        if (!cancelado) setPrecios(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) setError(e instanceof Error ? e.message : 'No se pudo traer lo que cobras.');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  return { precios, error, recargar: () => setIntento((n) => n + 1) };
 }
 
 /**

@@ -18,7 +18,13 @@
  * quien paga, no como se mide la deuda.
  */
 import { ZERO, multiplyByFraction, type Cents } from '../money/cents.js';
-import type { BillingDatePolicy, Charge, Plan, Subscription } from '../domain/types.js';
+import {
+  isDropInPlan,
+  type BillingDatePolicy,
+  type Charge,
+  type Plan,
+  type Subscription,
+} from '../domain/types.js';
 import { daysBetween, type PlainDate } from '../time/plain-date.js';
 import { advanceBillingDate, isDue } from './cycle.js';
 
@@ -66,7 +72,20 @@ export function computeReceivable(input: ReceivableInput): Receivable {
   const from = subscription.nextBillingDate;
   const price = plan.priceCents;
 
-  if (subscription.status === 'canceled' || !isDue(from, today)) {
+  /**
+   * La clase suelta no debe nunca, y esto es lo unico que hay que escribir para
+   * que asi sea en todas partes.
+   *
+   * `evaluateDelinquency` no recibe el plan: recibe `periodPaid: !receivable.due`
+   * de sus tres llamadores —la vista de la api, el store de la app y el cron de
+   * morosidad—. Cortando aqui, los tres concluyen `active` sin tocarlos, y no
+   * queda ninguno donde se pueda olvidar la excepcion.
+   *
+   * La suscripcion de un plan `drop_in` igual lleva `next_billing_date`: la
+   * columna es NOT NULL y la fecha existe por si el alumno pasa manana a un plan
+   * mensual. Lo que no hace es significar nada mientras el plan sea este.
+   */
+  if (isDropInPlan(plan) || subscription.status === 'canceled' || !isDue(from, today)) {
     return {
       due: false,
       periodsOwed: 0,

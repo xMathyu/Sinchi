@@ -106,6 +106,26 @@ export function makeFixedDaysPlan(
   };
 }
 
+/**
+ * Clase suelta: se paga cada vez que se entrena.
+ *
+ * `priceCents` es lo que cuesta UNA clase, no un mes. Los S/ 25 son el precio
+ * corriente de una clase suelta en un dojo de Lima.
+ */
+export function makeDropInPlan(overrides: Partial<Plan> = {}): Plan {
+  return {
+    id: asId('plan-drop-in'),
+    tenantId: asId('tenant-1'),
+    name: 'Clase suelta',
+    type: 'drop_in',
+    sessionsPerWeek: null,
+    allowedDays: null,
+    priceCents: fromSoles(25),
+    active: true,
+    ...overrides,
+  };
+}
+
 export function makeSubscription(overrides: Partial<Subscription> = {}): Subscription {
   return {
     id: asId('subscription-1'),

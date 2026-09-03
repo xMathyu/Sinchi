@@ -37,6 +37,12 @@ export function weeklyLimit(plan: Plan): number | null {
       // El limite lo da la cantidad de dias fijos asignados: un plan de lunes
       // y miercoles no puede rendir tres sesiones.
       return plan.allowedDays?.length ?? null;
+    case 'drop_in':
+      // La clase suelta no tiene cupo semanal: lo que la limita es el pago de
+      // cada dia, y de eso se ocupa `validateCheckIn`. Un limite aqui se
+      // "agotaria" el segundo dia de la semana aunque el alumno hubiera pagado
+      // las dos clases.
+      return null;
   }
 }
 

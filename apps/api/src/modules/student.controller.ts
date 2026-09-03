@@ -8,7 +8,7 @@
  */
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
-import { accessMessage } from '@sinchi/shared';
+import { accessMessage, isDropInPlan } from '@sinchi/shared';
 import { CurrentSession } from '../auth/auth.guard';
 import type { Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
@@ -125,13 +125,23 @@ export class StudentController {
     return this.checkin.schedules(tenantId);
   }
 
+  /**
+   * A que planes puede cambiarse el alumno solo.
+   *
+   * Sin los de clase suelta: su precio esta en otra unidad —lo que cuesta UNA
+   * clase, no el mes— y ofrecerlos aqui los pinta al lado de una mensualidad
+   * como si fueran S/ 125 mas baratos. Entrar o salir de pagar por clase es un
+   * cambio de modelo de cobro y se hace en el mostrador; la api tambien lo
+   * rechaza, porque una lista no es un guardia.
+   */
   @Get('memberships/:membershipId/plans')
   async availablePlans(
     @CurrentSession() session: Session,
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ) {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
-    return this.members.plans(tenantId);
+    const planes = await this.members.plans(tenantId);
+    return planes.filter((plan) => !isDropInPlan(plan));
   }
 
   /**

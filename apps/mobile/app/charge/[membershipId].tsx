@@ -18,6 +18,7 @@ import {
   advanceBillingDate,
   cents,
   formatPEN,
+  isDropInPlan,
   type ChargeType,
   type PaymentRail,
 } from '@sinchi/shared';
@@ -61,8 +62,22 @@ export default function ChargeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [periods, setPeriods] = useState(Math.max(1, entry.receivable.periodsOwed));
+  /**
+   * Prellenado de la clase suelta: el precio DEL PLAN si el alumno paga por
+   * clase, y el del local si tiene mensualidad.
+   *
+   * Son dos precios distintos con el mismo nombre. Con el del local puesto para
+   * todos, la puerta le decía al mostrador "Cobrar S/ 25" —el del plan— y esta
+   * pantalla se abría con S/ 30 escrito. Cambiar la cifra delante del alumno es
+   * una discusión, y la api además cobra el del plan: quedaba un recibo que no
+   * coincide con lo que se tecleó.
+   */
   const [customSoles, setCustomSoles] = useState(
-    String((entry.tenant.dropInPriceCents ?? 0) / 100),
+    String(
+      (isDropInPlan(entry.plan)
+        ? entry.plan.priceCents
+        : (entry.tenant.dropInPriceCents ?? 0)) / 100,
+    ),
   );
 
   const semaphore = semaphoreStyle(theme, entry.level);

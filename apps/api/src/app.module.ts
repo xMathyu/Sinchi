@@ -36,6 +36,9 @@ import { GymsController } from './modules/gyms.controller';
 import { TrialsService } from './modules/trials/trials.service';
 import { SaasService } from './modules/saas/saas.service';
 import { OnboardingService } from './modules/onboarding/onboarding.service';
+import { OfferingController } from './modules/offering/offering.controller';
+import { PlansService } from './modules/offering/plans.service';
+import { GymSettingsService } from './modules/offering/settings.service';
 import { SaasGuard } from './modules/saas/saas.guard';
 
 @Module({
@@ -45,6 +48,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     HealthController,
     StudentController,
     StaffController,
+    OfferingController,
     GymsController,
     AccountsController,
     InvitesController,
@@ -64,6 +68,8 @@ import { SaasGuard } from './modules/saas/saas.guard';
     TrialsService,
     SaasService,
     OnboardingService,
+    PlansService,
+    GymSettingsService,
     RefreshDelinquencyJob,
     RefreshSaasJob,
   ],

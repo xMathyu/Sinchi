@@ -124,6 +124,11 @@ export default function RootLayout() {
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
           />
           <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          {/* La oferta del gimnasio. Van como modal y no como pestaña porque no
+              se consultan a diario: se entra a cambiar un precio y se sale. */}
+          <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -228,7 +233,20 @@ function DataLoader() {
 const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
-  staff: new Set(['charge', 'result', 'member', 'enroll', 'claims', 'manual', 'scan']),
+  staff: new Set([
+    'charge',
+    'result',
+    'member',
+    'enroll',
+    'claims',
+    'manual',
+    'scan',
+    // La oferta del local. Del staff y no compartidas: el alumno no tiene nada
+    // que hacer en la pantalla donde se escriben los precios. Dentro, `plans` y
+    // `pricing` se apagan solas para recepcion, que las lee pero no las toca.
+    'plans',
+    'pricing',
+  ]),
   student: new Set(['pay', 'plan-change']),
 };
 

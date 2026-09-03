@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PERIODS_OWED, applyPayment, computeReceivable } from './receivable.js';
+import { evaluateDelinquency } from './dunning.js';
 import { fromSoles } from '../money/cents.js';
 import { plainDate } from '../time/plain-date.js';
 import { asId } from '../domain/types.js';
-import { makeSubscription, makeWeeklyPlan } from '../testing/fixtures.js';
+import { makeDropInPlan, makeSubscription, makeWeeklyPlan } from '../testing/fixtures.js';
 
 const ANIVERSARIO = { mode: 'anniversary' } as const;
 const plan = makeWeeklyPlan(2); // S/ 120
@@ -157,5 +158,55 @@ describe('deuda y pago se cierran entre si', () => {
     });
     expect(despues.due).toBe(false);
     expect(despues.amountCents).toBe(0);
+  });
+});
+
+describe('clase suelta', () => {
+  const dropIn = makeDropInPlan();
+
+  it('no debe nada aunque la fecha de cobro este vencida hace meses', () => {
+    const r = computeReceivable({
+      subscription: suscripcion,
+      plan: dropIn,
+      policy: ANIVERSARIO,
+      today: plainDate(2027, 3, 1),
+    });
+    expect(r.due).toBe(false);
+    expect(r.amountCents).toBe(0);
+    expect(r.periodsOwed).toBe(0);
+    expect(r.daysPastDue).toBe(0);
+  });
+
+  /**
+   * Es la consecuencia que importa y por eso se prueba aqui y no solo en
+   * `dunning`: los tres llamadores de `evaluateDelinquency` le pasan
+   * `periodPaid: !receivable.due`, asi que cortar la deuda es lo unico que hace
+   * falta para que a un alumno de clase suelta no se le pueda suspender.
+   */
+  it('de ahi sale que nunca caiga en mora', () => {
+    const r = computeReceivable({
+      subscription: suscripcion,
+      plan: dropIn,
+      policy: ANIVERSARIO,
+      today: plainDate(2027, 3, 1),
+    });
+    const estado = evaluateDelinquency({
+      nextBillingDate: suscripcion.nextBillingDate,
+      today: plainDate(2027, 3, 1),
+      graceDays: 5,
+      periodPaid: !r.due,
+    });
+    expect(estado.status).toBe('active');
+    expect(estado.canTrain).toBe(true);
+  });
+
+  it('el mismo alumno con un plan mensual si debe: la excepcion es del plan, no de la fecha', () => {
+    const r = computeReceivable({
+      subscription: suscripcion,
+      plan,
+      policy: ANIVERSARIO,
+      today: plainDate(2026, 8, 12),
+    });
+    expect(r.due).toBe(true);
   });
 });

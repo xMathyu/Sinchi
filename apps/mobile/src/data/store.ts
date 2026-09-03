@@ -20,6 +20,8 @@ import {
   decidePlanChange,
   evaluateDelinquency,
   formatPENShort,
+  isDropInPlan,
+  isSameDay,
   isoWeekOf,
   membershipStatus,
   parseQrPayload,
@@ -46,6 +48,7 @@ import {
   type CheckInResult,
   validateCheckIn,
   localTimeInZone,
+  plainDateInZone,
   TZ_LIMA,
   ZERO,
   type Cents,
@@ -353,6 +356,14 @@ export interface MembershipView {
   readonly subscription: Subscription;
   readonly pendingPlan: Plan | null;
   readonly quota: QuotaState;
+  /**
+   * Si ya pago la clase de HOY. Solo significa algo en un plan de clase suelta.
+   *
+   * Sin conexion se deriva del ledger en cache igual que en el servidor: un
+   * cargo `drop_in` exitoso de hoy. Es lo unico que frena a un alumno que paga
+   * por clase, porque su deuda es cero por definicion.
+   */
+  readonly dropInPaidToday: boolean;
   readonly receivable: Receivable;
   readonly delinquency: DelinquencyState;
   /** Semaforo de la membresia, no del check-in de hoy. */
@@ -409,6 +420,10 @@ export function viewMembership(membershipId: string, hoy: PlainDate = today()): 
   const attendances = state.attendances.filter((a) => a.membershipId === membership.id);
   const quota = computeQuota(plan, attendances, hoy);
   const { level, badge } = membershipStatus({ delinquency, receivable, quota });
+  const charges = state.charges
+    .filter((c) => c.membershipId === membership.id)
+    .slice()
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return {
     membership,
@@ -418,16 +433,40 @@ export function viewMembership(membershipId: string, hoy: PlainDate = today()): 
     subscription,
     pendingPlan: subscriptionRaw.pendingPlanId === null ? null : findPlan(subscriptionRaw.pendingPlanId),
     quota,
+    dropInPaidToday: pagoClaseDeHoy(charges, plan, hoy),
     receivable,
     delinquency,
     level,
     badge,
     attendances,
-    charges: state.charges
-      .filter((c) => c.membershipId === membership.id)
-      .slice()
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    charges,
   };
+}
+
+/**
+ * Si el alumno pago su clase de hoy.
+ *
+ * Es la misma regla del servidor —un cargo `drop_in` exitoso con fecha de hoy—
+ * calculada aqui para cuando no hay red. Solo se pregunta en un plan de clase
+ * suelta; en los demas, cero cargos de este tipo tambien devuelve `false` y no
+ * significa nada.
+ *
+ * El corte del dia va en la zona del GIMNASIO: a las 20:00 de Lima ya es manana
+ * en UTC, y con el corte en UTC la clase pagada por la noche dejaba de valer a
+ * mitad de la ultima hora punta del dia.
+ */
+function pagoClaseDeHoy(
+  charges: readonly Charge[],
+  plan: Plan,
+  hoy: PlainDate,
+): boolean {
+  if (!isDropInPlan(plan)) return false;
+  return charges.some(
+    (c) =>
+      c.type === 'drop_in' &&
+      c.status === 'succeeded' &&
+      isSameDay(plainDateInZone(c.createdAt, TZ_LIMA), hoy),
+  );
 }
 
 /** Billetera del alumno: sus membresias en todos los gimnasios de la red. */
@@ -489,6 +528,9 @@ export function previewCheckIn(
     graceDays: view.tenant.graceDays,
     quotaOverflowPolicy: view.tenant.quotaOverflowPolicy,
     dropInPriceCents: view.tenant.dropInPriceCents,
+    // Sin esto la puerta se abriria sola para quien paga por clase: su deuda es
+    // cero por definicion, asi que no hay nada mas que lo frene.
+    dropInPaidToday: view.dropInPaidToday,
     debtCents: view.receivable.amountCents,
     daysPastDue: view.delinquency.daysPastDue,
   });

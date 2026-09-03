@@ -451,6 +451,8 @@ export interface MembershipViewDto {
   readonly subscription: Subscription;
   readonly pendingPlan: Plan | null;
   readonly quota: QuotaState;
+  /** Si ya pagó la clase de HOY. Solo significa algo en un plan de clase suelta. */
+  readonly dropInPaidToday: boolean;
   readonly receivable: Receivable;
   readonly delinquency: DelinquencyState;
   readonly level: AccessLevel;
@@ -645,6 +647,71 @@ export const fetchSchedules = (): Promise<readonly ClassSchedule[]> =>
 
 /** Planes del local. Los del staff, no los del alumno: `/me/...` es su billetera. */
 export const fetchStaffPlans = (): Promise<readonly Plan[]> => request('/staff/plans');
+
+// ---------------------------------------------------------------------------
+// La oferta del gimnasio (solo el dueño escribe)
+// ---------------------------------------------------------------------------
+
+/**
+ * Un plan con lo que hace falta saber ANTES de tocarlo.
+ *
+ * `activeMembers` no es adorno: es la diferencia entre «esto se puede borrar» y
+ * «esto lo están pagando catorce personas».
+ */
+export interface PlanConUso {
+  readonly plan: Plan;
+  readonly activeMembers: number;
+  /** `false` cuando alguien lo tiene: entonces solo se puede archivar. */
+  readonly deletable: boolean;
+}
+
+/** Lo que se manda al crear o editar. `id` no va: la ruta ya lo dice. */
+export interface PlanEscrito {
+  readonly name: string;
+  readonly type: Plan['type'];
+  readonly sessionsPerWeek: number | null;
+  readonly allowedDays: readonly number[] | null;
+  readonly priceCents: number;
+  readonly active: boolean;
+}
+
+/** La lista del dueño: también los archivados, y con cuánta gente tiene cada uno. */
+export const fetchPlanesDelDueno = (): Promise<readonly PlanConUso[]> =>
+  request('/staff/plans/all');
+
+export const crearPlan = (plan: PlanEscrito): Promise<Plan> =>
+  request('/staff/plans', { method: 'POST', body: plan });
+
+export const editarPlan = (planId: string, plan: PlanEscrito): Promise<Plan> =>
+  request(`/staff/plans/${planId}`, { method: 'POST', body: plan });
+
+/** Archiva o revive. Quien ya lo tiene lo conserva; deja de ofrecerse. */
+export const archivarPlan = (planId: string, active: boolean): Promise<Plan> =>
+  request(`/staff/plans/${planId}/active`, { method: 'POST', body: { active } });
+
+/** Solo el que nunca se usó. Con un alumno detrás, la api responde 409. */
+export const borrarPlan = (planId: string): Promise<unknown> =>
+  request(`/staff/plans/${planId}`, { method: 'DELETE' });
+
+/**
+ * Lo que el local cobra aparte de los planes.
+ *
+ * Ojo con no confundir las dos clases sueltas: `dropInPriceCents` es lo que paga
+ * el alumno CON PLAN que agota su cupo semanal. La de quien nunca tuvo cupo es
+ * un plan de tipo `drop_in`, con su precio en `plans`.
+ */
+export interface PreciosDelLocal {
+  readonly enrollmentFeeCents: number;
+  readonly dropInPriceCents: number | null;
+  readonly quotaOverflowPolicy: 'block' | 'offer_drop_in';
+  readonly trialClassEnabled: boolean;
+  readonly trialClassPriceCents: number;
+}
+
+export const fetchPrecios = (): Promise<PreciosDelLocal> => request('/staff/pricing');
+
+export const guardarPrecios = (precios: PreciosDelLocal): Promise<PreciosDelLocal> =>
+  request('/staff/pricing', { method: 'POST', body: precios });
 
 /**
  * Vuelve a suscribir a alguien que canceló, sin volver a registrarlo.

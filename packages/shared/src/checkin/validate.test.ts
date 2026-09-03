@@ -6,6 +6,7 @@ import { fromSoles } from '../money/cents.js';
 import { plainDate } from '../time/plain-date.js';
 import {
   makeAttendances,
+  makeDropInPlan,
   makeFixedDaysPlan,
   makeSchedule,
   makeSubscription,
@@ -347,5 +348,72 @@ describe('las dos voces del mismo veredicto', () => {
 
     expect(accessMessage(permitido).title).toBe('Puede pasar');
     expect(accessMessage(permitido, 'student').title).toBe('Puedes entrar');
+  });
+});
+
+describe('clase suelta', () => {
+  const plan = makeDropInPlan();
+
+  it('no pasa sin haber pagado la clase de hoy', () => {
+    const r = validateCheckIn(contexto({ plan }));
+    expect(r.allowed).toBe(false);
+    if (r.allowed) return;
+    expect(r.reason.code).toBe('drop_in_unpaid');
+    // `alert`, no `blocked`: no debe nada, le falta pagar lo de hoy.
+    expect(r.level).toBe('alert');
+  });
+
+  it('pasa con la clase de hoy pagada', () => {
+    const r = validateCheckIn(contexto({ plan, dropInPaidToday: true }));
+    expect(r.allowed).toBe(true);
+    expect(r.level).toBe('ok');
+  });
+
+  it('el motivo lleva el precio de UNA clase, que es lo que va a cobrar el mostrador', () => {
+    const r = validateCheckIn(contexto({ plan: makeDropInPlan({ priceCents: fromSoles(30) }) }));
+    if (r.allowed) throw new Error('debia rechazar');
+    if (r.reason.code !== 'drop_in_unpaid') throw new Error('motivo equivocado');
+    expect(r.reason.priceCents).toBe(fromSoles(30));
+    expect(accessMessage(r).action).toContain('30');
+  });
+
+  it('sin el dato se asume NO pagada: la puerta no se abre por omision', () => {
+    const ctx = contexto({ plan });
+    expect(ctx.dropInPaidToday).toBeUndefined();
+    expect(validateCheckIn(ctx).allowed).toBe(false);
+  });
+
+  it('no tiene cupo semanal: cuatro clases pagadas en la semana entran las cuatro', () => {
+    expect(weeklyLimit(plan)).toBeNull();
+    const r = validateCheckIn(
+      contexto({
+        plan,
+        dropInPaidToday: true,
+        attendances: makeAttendances(JUEVES, 3),
+      }),
+    );
+    expect(r.allowed).toBe(true);
+    expect(r.quota?.exhausted).toBe(false);
+  });
+
+  it('el dia no permitido gana al pago: primero se le dice que hoy no abre para el', () => {
+    const soloFinde = makeDropInPlan({ allowedDays: [6, 7] });
+    const r = validateCheckIn(contexto({ plan: soloFinde, dropInPaidToday: false }));
+    if (r.allowed) throw new Error('debia rechazar');
+    expect(r.reason.code).toBe('day_not_allowed');
+  });
+
+  it('la mora no le aplica, pero una suspension escrita a mano sigue mandando', () => {
+    // El estado nunca deberia llegar a `suspended` con este plan —`computeReceivable`
+    // corta antes—, y si llegara, la puerta obedece al estado. Es la garantia de
+    // que ningun camino raro deja entrar a alguien suspendido.
+    const r = validateCheckIn(
+      contexto({
+        plan,
+        dropInPaidToday: true,
+        subscription: makeSubscription({ status: 'suspended' }),
+      }),
+    );
+    expect(r.allowed).toBe(false);
   });
 });

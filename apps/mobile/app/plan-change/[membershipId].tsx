@@ -11,7 +11,13 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { decidePlanChange, formatPENShort, weekdayInitial, type Plan } from '@sinchi/shared';
+import {
+  decidePlanChange,
+  formatPENShort,
+  planShape,
+  weekdayInitial,
+  type Plan,
+} from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
@@ -241,12 +247,9 @@ function describePlan(plan: Plan): string {
       ? 'cualquier día'
       : plan.allowedDays.map(weekdayInitial).join(' · ');
 
-  switch (plan.type) {
-    case 'unlimited':
-      return `Sin límite de sesiones · ${days}`;
-    case 'sessions_per_week':
-      return `${plan.sessionsPerWeek} sesiones por semana · ${days}`;
-    case 'fixed_days':
-      return `Días fijos · ${days}`;
-  }
+  // El texto sale del dominio: la lista del dueño, el alta y esta pantalla
+  // dicen lo mismo del mismo plan. La api no manda planes de clase suelta a
+  // esta lista —entrar o salir de pagar por clase no es un cambio de plan— pero
+  // el tipo existe y `planShape` lo cubre.
+  return `${planShape(plan)} · ${days}`;
 }

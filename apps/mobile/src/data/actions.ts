@@ -31,6 +31,16 @@ import {
   fetchStaffMember,
   fetchRoster,
   fetchStaffPlans,
+  fetchPlanesDelDueno,
+  fetchPrecios,
+  crearPlan,
+  editarPlan,
+  archivarPlan,
+  borrarPlan,
+  guardarPrecios,
+  type PlanConUso,
+  type PlanEscrito,
+  type PreciosDelLocal,
   markManual,
   recordPayment,
   resubscribe,
@@ -536,6 +546,60 @@ export async function reactivarSuscripcion(
 export async function planesDelGimnasio(): Promise<readonly Plan[]> {
   if (conServidor() === null) return getState().plans.filter((plan) => plan.active);
   return (await fetchStaffPlans()).filter((plan) => plan.active);
+}
+
+// ---------------------------------------------------------------------------
+// La oferta del gimnasio
+// ---------------------------------------------------------------------------
+
+/**
+ * Todo lo que el dueño puede tocar exige servidor, y no por comodidad.
+ *
+ * Cambiar un precio en la caché de un teléfono sin conexión y sincronizarlo
+ * después es la peor versión de esto: dos dispositivos escribirían dos tarifas
+ * distintas para el mismo plan y ganaría el último en subir. El padrón sí se
+ * puede leer sin red porque nadie lo escribe desde dos sitios a la vez; una
+ * tarifa, sí.
+ */
+function exigeServidor(que: string): void {
+  if (conServidor() === null) {
+    throw new Error(`${que} necesita conexión: es una decisión del local, no de este equipo.`);
+  }
+}
+
+export async function planesDelDueno(): Promise<readonly PlanConUso[]> {
+  exigeServidor('Ver tus planes');
+  return await fetchPlanesDelDueno();
+}
+
+export async function guardarPlan(
+  planId: string | null,
+  plan: PlanEscrito,
+): Promise<Plan> {
+  exigeServidor('Guardar un plan');
+  return planId === null ? await crearPlan(plan) : await editarPlan(planId, plan);
+}
+
+export async function archivarOReactivarPlan(planId: string, activo: boolean): Promise<Plan> {
+  exigeServidor('Archivar un plan');
+  return await archivarPlan(planId, activo);
+}
+
+export async function eliminarPlan(planId: string): Promise<void> {
+  exigeServidor('Borrar un plan');
+  await borrarPlan(planId);
+}
+
+export async function preciosDelLocal(): Promise<PreciosDelLocal> {
+  exigeServidor('Ver lo que cobras');
+  return await fetchPrecios();
+}
+
+export async function guardarPreciosDelLocal(
+  precios: PreciosDelLocal,
+): Promise<PreciosDelLocal> {
+  exigeServidor('Guardar lo que cobras');
+  return await guardarPrecios(precios);
 }
 
 /**

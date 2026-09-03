@@ -228,6 +228,36 @@ export default function PadronScreen() {
         </Stack>
       )}
 
+      {/* La entrada a la oferta del local. Va aquí y no en Ajustes porque es
+          plata, no configuración: el dueño llega al padrón preguntándose cuánto
+          entró, y "cuánto cobro" es la misma pregunta un paso antes.
+
+          Por ROL y no por `resumen === null`: ese llega tarde y la fila
+          aparecía y se esfumaba sola al cargar el resumen. */}
+      {esDueno && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Planes y precios"
+          onPress={() => router.push('/plans')}
+        >
+          <Card radius={theme.radii.lg} tone="sunken">
+            <Row>
+              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodySmall" weight="semibold">
+                  Planes y precios
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Lo que cobras por entrenar aquí.
+                </Text>
+              </Stack>
+              <Text variant="body" color={theme.colors.textTertiary}>
+                ›
+              </Text>
+            </Row>
+          </Card>
+        </Pressable>
+      )}
+
       <Row gap={8} justify="flex-start">
         <Chip label="Activos" selected={!viendoBajas} onPress={() => setViendoBajas(false)} />
         <Chip label="Bajas" selected={viendoBajas} onPress={() => setViendoBajas(true)} />
