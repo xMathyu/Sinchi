@@ -43,6 +43,12 @@ Cloud Scheduler la despierta con una petición HTTP:
 Cloud Scheduler (06:00 Lima) ──POST /v1/jobs/refresh-delinquency──> Cloud Run
 ```
 
+Esa **única** ruta hace los dos refrescos diarios: la morosidad de los alumnos y
+la suscripción de los gimnasios a Sinchi. Separarlas era más limpio y habría
+exigido una entrada nueva en Cloud Scheduler; un paso manual que, si se olvida,
+deja el mes gratis de los gimnasios sin vencer nunca — el fallo exacto que ese
+trabajo existe para evitar, y además silencioso.
+
 Eso implica tres cosas en el código:
 
 - `SCHEDULER_MODE=external` apaga el cron interno. El decorador `@Cron` se

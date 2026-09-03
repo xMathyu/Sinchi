@@ -26,28 +26,40 @@ import { Public } from '../auth/auth.guard';
 import { loadEnv } from '../config/env';
 import { safeEquals } from '../common/secret-box';
 import { RefreshDelinquencyJob, type RefreshReport } from './refresh-delinquency.job';
+import { RefreshSaasJob } from './refresh-saas.job';
+import type { SaasRefreshReport } from '../modules/saas/saas.service';
 
 export const JOBS_TOKEN_HEADER = 'x-jobs-token';
 
 @Public()
 @Controller('jobs')
 export class JobsController {
-  constructor(private readonly refreshDelinquency: RefreshDelinquencyJob) {}
+  constructor(
+    private readonly refreshDelinquency: RefreshDelinquencyJob,
+    private readonly refreshSaas: RefreshSaasJob,
+  ) {}
 
   /**
-   * Refresca el caché de morosidad de todos los gimnasios.
+   * Refresca el caché de morosidad de todos los gimnasios, y de paso el de sus
+   * suscripciones a Sinchi.
    *
-   * Idempotente: recalcula desde `evaluateDelinquency` y escribe solo lo que
-   * cambió. Dispararlo dos veces el mismo día no hace daño, así que Cloud
+   * Los dos en la MISMA ruta a propósito. Separarlos era más limpio y habría
+   * exigido una entrada nueva en Cloud Scheduler: un paso manual que, si se
+   * olvida, deja el mes gratis sin vencer nunca — que es justo el fallo que esta
+   * función existe para evitar, y además silencioso.
+   *
+   * Idempotente: los dos recalculan desde las funciones puras y escriben solo lo
+   * que cambió. Dispararlo dos veces el mismo día no hace daño, así que Cloud
    * Scheduler puede reintentar sin cuidado.
    */
   @Post('refresh-delinquency')
   async runRefreshDelinquency(
     @Headers(JOBS_TOKEN_HEADER) token: string | undefined,
-  ): Promise<RefreshReport & { readonly ranAt: string }> {
+  ): Promise<RefreshReport & { readonly saas: SaasRefreshReport; readonly ranAt: string }> {
     this.assertAuthorized(token);
     const report = await this.refreshDelinquency.run();
-    return { ...report, ranAt: new Date().toISOString() };
+    const saas = await this.refreshSaas.run();
+    return { ...report, saas, ranAt: new Date().toISOString() };
   }
 
   private assertAuthorized(token: string | undefined): void {

@@ -388,6 +388,137 @@ describe('suscripciones', () => {
   });
 });
 
+describe('suscripcion del gimnasio a Sinchi', () => {
+  it('un gimnasio no puede tener dos suscripciones a Sinchi', async () => {
+    await db.query(
+      `insert into saas_subscriptions (tenant_id, free_until, period_start, next_billing_date)
+       values ($1, '2026-10-02', '2026-09-02', '2026-10-02')`,
+      [TENANT],
+    );
+
+    // La PK es el tenant a proposito: con un `id` propio, un gimnasio podria
+    // acabar con dos meses gratis corriendo a la vez.
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_subscriptions (tenant_id, free_until, period_start, next_billing_date)
+           values ($1, '2027-01-01', '2026-12-01', '2027-01-01')`,
+          [TENANT],
+        ),
+      /saas_subscriptions_pkey/,
+    );
+  });
+
+  it('la gracia de Sinchi no puede ser cualquier numero', async () => {
+    await expectRejection(
+      () => db.query(`update saas_subscriptions set grace_days = 400 where tenant_id = $1`, [TENANT]),
+      /saas_subscriptions_grace_days_sane/,
+    );
+  });
+
+  /**
+   * La misma garantia que `charges_renewal_once_per_period` le da al alumno.
+   * Es lo que evita regalarle un mes al gimnasio cuando dos personas atienden el
+   * mismo correo del banco y las dos registran la transferencia.
+   */
+  it('un solo cobro exitoso por periodo', async () => {
+    await db.query(
+      `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+       values ($1, 14900, 'up_to_60', 'bank_transfer', 'succeeded', '2026-10-02', '2026-11-02')`,
+      [TENANT],
+    );
+
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+           values ($1, 14900, 'up_to_60', 'yape', 'succeeded', '2026-10-02', '2026-11-02')`,
+          [TENANT],
+        ),
+      /saas_charges_once_per_period/,
+    );
+  });
+
+  it('un intento fallido no ocupa el periodo', async () => {
+    // El indice es parcial sobre `succeeded`: un cobro que fallo no puede
+    // impedir que despues entre el bueno.
+    const ok = await db.query(
+      `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+       values ($1, 14900, 'up_to_60', 'bank_transfer', 'failed', '2026-11-02', '2026-12-02')
+       returning id`,
+      [TENANT],
+    );
+    expect(ok.rows).toHaveLength(1);
+
+    const bueno = await db.query(
+      `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+       values ($1, 14900, 'up_to_60', 'yape', 'succeeded', '2026-11-02', '2026-12-02')
+       returning id`,
+      [TENANT],
+    );
+    expect(bueno.rows).toHaveLength(1);
+  });
+
+  /**
+   * El numero de operacion es la llave de idempotencia del pago manual. Hace
+   * falta ADEMAS del indice por periodo: registrar un pago adelanta la fecha de
+   * cobro, asi que registrar dos veces la misma transferencia no chocaria por
+   * periodo — le cobraria al gimnasio dos meses por un solo deposito.
+   */
+  it('el mismo numero de operacion no entra dos veces', async () => {
+    await db.query(
+      `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end, reference)
+       values ($1, 14900, 'up_to_60', 'bank_transfer', 'succeeded', '2026-12-02', '2027-01-02', 'OP-9911')`,
+      [TENANT],
+    );
+
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end, reference)
+           values ($1, 14900, 'up_to_60', 'yape', 'succeeded', '2027-01-02', '2027-02-02', 'OP-9911')`,
+          [TENANT],
+        ),
+      /saas_charges_reference_once/,
+    );
+  });
+
+  it('sin numero de operacion no hay choque: el indice es parcial', async () => {
+    // Un pago en efectivo no siempre trae comprobante. Que dos filas sin
+    // referencia choquen entre si bloquearia el caso normal.
+    for (const periodo of ['2027-03-02', '2027-04-02']) {
+      const fila = await db.query(
+        `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+         values ($1, 14900, 'up_to_60', 'cash', 'succeeded', $2, '2027-12-02') returning id`,
+        [TENANT, periodo],
+      );
+      expect(fila.rows).toHaveLength(1);
+    }
+  });
+
+  it('rechaza montos negativos y periodos al reves', async () => {
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+           values ($1, -1, 'up_to_60', 'yape', 'succeeded', '2027-01-02', '2027-02-02')`,
+          [TENANT],
+        ),
+      /saas_charges_amount_non_negative/,
+    );
+
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
+           values ($1, 14900, 'up_to_60', 'yape', 'succeeded', '2027-02-02', '2027-01-02')`,
+          [TENANT],
+        ),
+      /saas_charges_period_ordered/,
+    );
+  });
+});
+
 describe('horarios', () => {
   it('valida el formato de hora y el orden', async () => {
     await expectRejection(

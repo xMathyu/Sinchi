@@ -19,6 +19,8 @@ import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
 import { MembersService } from './members/members.service';
 import { TrialsService } from './trials/trials.service';
+import { SaasService } from './saas/saas.service';
+import { AllowedWhenReadOnly } from './saas/saas.guard';
 
 const qrScanSchema = z.object({
   /** Contenido crudo del QR: `SINCHI1:u:<userId>:<code>`. */
@@ -130,6 +132,7 @@ export class StaffController {
     private readonly billing: BillingService,
     private readonly members: MembersService,
     private readonly trials: TrialsService,
+    private readonly saas: SaasService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -315,6 +318,7 @@ export class StaffController {
   // -------------------------------------------------------------------------
 
   /** Modo A del MD 4.6: el staff escanea el QR del alumno. */
+  @AllowedWhenReadOnly()
   @Post('checkin/qr')
   async scanQr(
     @CurrentSession() session: Session,
@@ -342,6 +346,7 @@ export class StaffController {
    * Queda registrado con `method = manual` y con quién lo hizo, porque es el
    * hueco por donde se cuelan favores (MD 4.6).
    */
+  @AllowedWhenReadOnly()
   @Post('checkin/manual')
   manualCheckIn(
     @CurrentSession() session: Session,
@@ -403,6 +408,12 @@ export class StaffController {
    * local del dispositivo dejó pasar a alguien que aquí sale rechazado, la
    * respuesta lo dice y queda registrado como excepción, no se borra.
    */
+  /**
+   * Sigue abierta con la cuenta impaga, y es la excepcion que mas importa: esto
+   * no crea nada, REPITE lo que ya paso en el mostrador mientras no habia wifi.
+   * Rechazarlo borraria pagos en efectivo ya cobrados.
+   */
+  @AllowedWhenReadOnly()
   @Post('sync')
   async sync(
     @CurrentSession() session: Session,
@@ -461,6 +472,21 @@ export class StaffController {
   @Get('summary')
   summary(@CurrentSession() session: Session) {
     return this.billing.summary(assertStaffSession(session).tenantId);
+  }
+
+  /**
+   * La suscripción del gimnasio a Sinchi: cuánto le queda de mes gratis y qué
+   * pasa cuando termine.
+   *
+   * Del dueño y no de recepción: es su relación comercial, no la operación del
+   * mostrador. La cuenta atrás tiene que verse desde el primer día — un mes
+   * gratis del que el dueño se entera el día que se corta es un cliente que se
+   * va enojado, no uno que paga.
+   */
+  @OwnerOnly()
+  @Get('subscription')
+  subscription(@CurrentSession() session: Session) {
+    return this.saas.summaryFor(assertStaffSession(session).tenantId);
   }
 }
 

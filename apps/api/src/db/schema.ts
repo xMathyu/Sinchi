@@ -38,6 +38,20 @@ import {
 export const membershipStatusEnum = pgEnum('membership_status', ['active', 'inactive']);
 export const tenantStatusEnum = pgEnum('tenant_status', ['active', 'suspended']);
 export const saasTierEnum = pgEnum('saas_tier', ['up_to_60', 'up_to_150', 'unlimited']);
+/**
+ * Estado de la suscripcion del GIMNASIO a Sinchi.
+ *
+ * `read_only` y no `suspended` a proposito: al alumno suspendido no lo dejan
+ * entrenar, al gimnasio impago no se le cierra nada de lo que ya tiene. Llamarlos
+ * igual invita a copiar el comportamiento equivocado.
+ */
+export const saasStatusEnum = pgEnum('saas_status', [
+  'trialing',
+  'active',
+  'in_grace',
+  'read_only',
+  'canceled',
+]);
 export const billingModeEnum = pgEnum('billing_mode', ['anniversary', 'fixed_day']);
 export const quotaOverflowPolicyEnum = pgEnum('quota_overflow_policy', ['block', 'offer_drop_in']);
 export const staffRoleEnum = pgEnum('staff_role', ['owner', 'front_desk']);
@@ -242,6 +256,80 @@ export const tenantGateway = pgTable('tenant_gateway', {
   culqiSecretKeyEncrypted: text('culqi_secret_key_encrypted'),
   active: boolean('active').notNull().default(false),
 });
+
+/**
+ * La suscripcion del gimnasio a Sinchi: el mes gratis y lo que viene despues.
+ *
+ * Ojo: `trial` en este esquema es la clase gratis del ALUMNO. El mes gratis del
+ * GIMNASIO se llama `free_until` y no reusa esa palabra (`docs/glosario.md`).
+ *
+ * Fuera de `TENANT_SCOPED_TABLES` a proposito, igual que `tenants`: no es dato
+ * del gimnasio sino de Sinchi CON el gimnasio, y el job diario tiene que
+ * recorrerlas todas — que es justo lo que RLS por tenant impediria.
+ */
+export const saasSubscriptions = pgTable(
+  'saas_subscriptions',
+  {
+    /** La PK es el tenant: un gimnasio no puede tener dos suscripciones. */
+    tenantId: uuid('tenant_id')
+      .primaryKey()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    tier: saasTierEnum('tier').notNull().default('up_to_60'),
+    /** CACHE. La verdad la calcula `evaluateSaas`; esto sirve para listar en SQL. */
+    status: saasStatusEnum('status').notNull().default('trialing'),
+    /** Primer dia en que el gimnasio ya tiene que haber pagado. */
+    freeUntil: date('free_until').notNull(),
+    periodStart: date('period_start').notNull(),
+    nextBillingDate: date('next_billing_date').notNull(),
+    /** Propia, NO `tenants.grace_days`: esa es la que el gimnasio da a sus alumnos. */
+    graceDays: smallint('grace_days').notNull().default(7),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('saas_subscriptions_status_idx').on(t.status, t.nextBillingDate)],
+);
+
+/**
+ * Lo que el gimnasio le paga a Sinchi. Append-only, como `charges`.
+ *
+ * Tabla propia y no `charges` porque ahi `membership_id` es NOT NULL: un cobro a
+ * Sinchi no tiene alumno detras, y el enum `charge_type = 'saas'` que existe
+ * desde el primer commit nunca se pudo usar por eso.
+ */
+export const saasCharges = pgTable(
+  'saas_charges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    amountCents: integer('amount_cents').notNull(),
+    tier: saasTierEnum('tier').notNull(),
+    rail: paymentRailEnum('rail').notNull(),
+    status: chargeStatusEnum('status').notNull(),
+    periodStart: date('period_start').notNull(),
+    periodEnd: date('period_end').notNull(),
+    /** Numero de operacion de la transferencia. Lo que se busca cuando el dueno llama. */
+    reference: text('reference'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('saas_charges_tenant_idx').on(t.tenantId),
+    /** Un solo cobro exitoso por periodo, como en el ledger del alumno. */
+    uniqueIndex('saas_charges_once_per_period')
+      .on(t.tenantId, t.periodStart)
+      .where(sql`status = 'succeeded'`),
+    /**
+     * El numero de operacion es la llave de idempotencia del pago manual, como
+     * `client_id` en la cola offline. Hace falta ademas del anterior: registrar
+     * un pago adelanta la fecha de cobro, asi que registrar dos veces la misma
+     * transferencia no chocaria por periodo, le regalaria un mes de mas.
+     */
+    uniqueIndex('saas_charges_reference_once')
+      .on(t.tenantId, t.reference)
+      .where(sql`reference is not null`),
+  ],
+);
 
 export const memberships = pgTable(
   'memberships',

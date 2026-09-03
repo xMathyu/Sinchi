@@ -70,6 +70,31 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | ya la usó en este gimnasio | `already_booked` |
 | ya entrena aquí | `already_member` |
 
+## Conceptos de la suscripción del gimnasio a Sinchi
+
+Ojo con `trial`: ya es la clase gratis del **alumno**. El mes gratis del
+**gimnasio** es otra cosa y no reusa esa palabra. Dos conceptos distintos con el
+mismo identificador es el bug que aparece leyendo un reporte tres meses después.
+
+| Negocio | Código |
+|---|---|
+| suscripción del gimnasio a Sinchi | `SaasSubscription` / `saas_subscriptions` |
+| mes gratis del gimnasio | `freeUntil` (fecha en que termina) |
+| escalón de precio | `SaasTier` (`up_to_60`, `up_to_150`, `unlimited`) |
+| estado de la cuenta | `SaasStatus` |
+| dentro del mes gratis | `trialing` |
+| vencido pero todavía escribe | `in_grace` |
+| cortado: solo lectura | `read_only` |
+| lo que el gimnasio le paga a Sinchi | `saas_charges` |
+| número de operación de la transferencia | `reference` |
+| puede dar de alta y cobrar | `canWrite` |
+| sale en el directorio público | `listed` |
+
+`read_only` y no `suspended` a propósito, aunque el motor del alumno use esa
+palabra: al alumno suspendido no lo dejan entrenar; al gimnasio impago no se le
+cierra nada de lo que ya tiene, se le impide crear más. Llamarlos igual invita a
+copiar el comportamiento equivocado.
+
 ## Nota sobre el MD
 
 El esquema del documento de especificación (sección 5) nombra las columnas en

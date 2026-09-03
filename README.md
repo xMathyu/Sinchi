@@ -11,11 +11,12 @@ gimnasios a los que asiste.
 
 | Parte | Estado |
 |---|---|
-| `packages/shared` — dominio y reglas puras | **Completo y con tests** (147 tests) |
+| `packages/shared` — dominio y reglas puras | **Completo y con tests** (196 tests) |
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio y clase gratis) |
-| `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (81 tests, 37 de punta a punta) |
+| `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (217 tests, 132 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
+| Cobro SaaS al gimnasio | **Mes gratis, corte a solo lectura y cobro manual.** Culqi pendiente |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
 | Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
 | CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo |
@@ -34,6 +35,28 @@ El corte de acceso al moroso —que es el valor del producto— sí funciona
 completo: gracia configurable, suspensión automática y check-in que deja de
 validar. Ver [`docs/decisiones.md`](docs/decisiones.md) para el detalle.
 
+### El gimnasio entra con un mes gratis
+
+Todo local que se da de alta tiene **un mes de Sinchi gratis** contado desde ese
+día. Al vencer se cobra por adelantado según su padrón —S/ 149 hasta 60 alumnos,
+S/ 299 hasta 150, S/ 499 por encima— y, pasados 7 días de gracia, la cuenta cae a
+**solo lectura**: no se dan de alta alumnos, no se registran pagos y el local sale
+del directorio público.
+
+**La puerta nunca se cierra.** El check-in, el QR del alumno y la cola offline
+siguen funcionando, y el padrón entero sigue visible. El corte de Sinchi al
+gimnasio no puede caer sobre el alumno que sí le pagó a su gimnasio: castigarlo
+en la puerta, delante de todos, por una deuda que no es suya, hace que el dueño
+vuelva al cuaderno esa misma tarde. Lo que se corta es crear futuro.
+
+El gimnasio paga por transferencia y se registra a mano, igual que sus alumnos
+pagan en mostrador:
+
+```bash
+npm run saas:status -w @sinchi/api                       # cómo va cada gimnasio
+npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
+```
+
 ---
 
 ## Arrancar
@@ -42,7 +65,7 @@ validar. Ver [`docs/decisiones.md`](docs/decisiones.md) para el detalle.
 nvm use            # Node 24.8.0 (.nvmrc)
 npm ci
 npm run build      # compila shared y ui: la app los consume compilados
-npm test           # 224 tests (282 con TEST_DATABASE_URL apuntando a una base)
+npm test           # 289 tests (421 con TEST_DATABASE_URL apuntando a una base)
 
 cd apps/mobile
 npm start          # Expo: pulsa i (iOS), a (Android)
@@ -108,14 +131,15 @@ la app no puede es ser la autoridad final.
   api se conecte con un rol **sin `BYPASSRLS`** — el que Neon crea por defecto lo
   tiene, y con él el aislamiento sería decorativo (`scripts/setup-app-role.sql`).
 - **Idempotencia en la base, no en el código.** Un cargo de renovación por
-  periodo, un marcado por alumno y día, y `client_id` único para la cola offline.
+  periodo, un marcado por alumno y día, `client_id` único para la cola offline y
+  el número de operación de la transferencia con la que el gimnasio paga Sinchi.
 - **Verificación de la firma del QR**, que es justo lo que el dispositivo de la
   puerta no puede hacer sin conexión.
 - **Secretos cifrados en reposo** con AES-256-GCM: el TOTP del alumno y las
   credenciales de pasarela del gimnasio.
 
 Las migraciones se prueban contra Postgres de verdad (PGlite, en WASM, sin
-Docker) y hay 37 pruebas de punta a punta que recorren la api por HTTP contra un
+Docker) y hay 132 pruebas de punta a punta que recorren la api por HTTP contra un
 Postgres con RLS activo. Entre las dos encontraron cuatro bugs que habrían
 llegado a producción: dos `CHECK` que pasaban con `NULL`, una ruta de import que
 fallaba solo en tiempo de ejecución, y RLS bloqueando el propio login del staff.
@@ -133,6 +157,7 @@ money/      céntimos enteros con tipo marcado, aritmética de prorrateo
 domain/     entidades. `User` vive FUERA del tenant: la identidad es global
 billing/    ciclo, prorrateo, cambio de plan, deuda derivada, dunning
 checkin/    cupo semanal, validación con motivo estructurado, textos
+saas/       el mes gratis del gimnasio y su corte a solo lectura
 security/   TOTP con HMAC inyectado, payload del QR
 ```
 

@@ -24,6 +24,7 @@ import {
   confirmClaim,
   fetchClaims,
   fetchPlansFor,
+  fetchSaasSubscription,
   fetchSummary,
   fetchStaffMember,
   fetchRoster,
@@ -34,6 +35,7 @@ import {
   scanQr,
   setOwnPin,
   type CheckInOutcomeDto,
+  type SaasSubscriptionDto,
   type SummaryDto,
 } from './api';
 import { getSessionState } from './session';
@@ -414,6 +416,18 @@ export async function resumenDelGimnasio(): Promise<SummaryDto | null> {
   const estado = getSessionState();
   if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
   return await fetchSummary();
+}
+
+/**
+ * La suscripción del gimnasio a Sinchi: el mes gratis y lo que viene después.
+ *
+ * `null` cuando quien mira no es el dueño, por la misma razón que el resumen: no
+ * es un error, es que no le toca.
+ */
+export async function suscripcionSinchi(): Promise<SaasSubscriptionDto | null> {
+  const estado = getSessionState();
+  if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
+  return await fetchSaasSubscription();
 }
 
 /**

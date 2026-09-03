@@ -29,6 +29,7 @@ import {
   type CheckInPreviewDto,
   type GymCardDto,
   type GymDetailDto,
+  type SaasSubscriptionDto,
   type SummaryDto,
   type TrialBookingDto,
 } from './api';
@@ -40,6 +41,7 @@ import {
   planesPara,
   refrescarDatos,
   resumenDelGimnasio,
+  suscripcionSinchi,
   vinculacionesPendientes,
   type Vinculacion,
 } from './actions';
@@ -475,6 +477,31 @@ export function useClaims(): {
   }, [intento]);
 
   return { claims, cargando, error, recargar: () => setIntento((n) => n + 1) };
+}
+
+/**
+ * La suscripción del gimnasio a Sinchi, para el dueño.
+ *
+ * Se pide UNA vez al montar y no cuando cambia el padrón: la cuenta atrás del
+ * mes gratis avanza en días, no en cobros. Colgarla del padrón la volvería a
+ * pedir en cada alta y cada pago para ver el mismo número.
+ */
+export function useSuscripcionSinchi(): SaasSubscriptionDto | null {
+  const [suscripcion, setSuscripcion] = useState<SaasSubscriptionDto | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    void suscripcionSinchi()
+      .then((valor) => {
+        if (!cancelado) setSuscripcion(valor);
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  return suscripcion;
 }
 
 /** Resumen del local para el dueño. `null` cuando no es el dueño o aún no llegó. */

@@ -21,9 +21,13 @@ import type {
   ClassSchedule,
   DelinquencyState,
   Membership,
+  PlainDate,
   Plan,
   QuotaState,
   Receivable,
+  SaasNotice,
+  SaasState,
+  SaasTier,
   Subscription,
   Tenant,
   TrialBooking,
@@ -737,6 +741,24 @@ export interface SummaryDto {
 }
 
 export const fetchSummary = (): Promise<SummaryDto> => request('/staff/summary');
+
+/**
+ * La suscripción del gimnasio a Sinchi.
+ *
+ * Del dueño: a recepción le responde 403, igual que `/staff/summary`. Es la
+ * relación comercial del local, no la operación del mostrador.
+ */
+export interface SaasSubscriptionDto {
+  readonly state: SaasState;
+  readonly tier: SaasTier;
+  readonly priceCents: number;
+  readonly freeUntil: PlainDate;
+  readonly nextBillingDate: PlainDate;
+  readonly notice: SaasNotice;
+}
+
+export const fetchSaasSubscription = (): Promise<SaasSubscriptionDto> =>
+  request('/staff/subscription');
 
 export const fetchClaims = (): Promise<
   readonly {

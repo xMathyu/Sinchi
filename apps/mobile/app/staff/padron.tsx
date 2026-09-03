@@ -29,8 +29,10 @@ import {
   useRefresco,
   useRoster,
   useStore,
+  useSuscripcionSinchi,
 } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
+import type { SaasNotice } from '@sinchi/shared';
 
 export default function PadronScreen() {
   const theme = useTheme();
@@ -39,6 +41,13 @@ export default function PadronScreen() {
   const cargando = useStore((s) => s.hidratando);
   const { claims } = useClaims();
   const resumen = useOwnerSummary();
+  const suscripcion = useSuscripcionSinchi();
+  /**
+   * `null` cuando quien mira es recepción: la suscripción es del dueño. Ahí no
+   * se apaga nada — el alta le devuelve el motivo de la api en pantalla, que es
+   * el mismo texto y llega en el momento de actuar.
+   */
+  const puedeInscribir = suscripcion === null || suscripcion.state.canWrite;
   const { refrescando, refrescar } = useRefresco();
   const [query, setQuery] = useState('');
   // Las bajas no entran en el padron normal —el mostrador mira «quien entrena
@@ -119,24 +128,49 @@ export default function PadronScreen() {
           {/* Inscribir sí es permanente: es la acción que sostiene todo lo demás
               —sin padrón no hay a quién vincular, ni a quién escanear, ni a quién
               cobrar— y hasta ahora no existía en ninguna pantalla. */}
+          {/* Se apaga con la cuenta en solo lectura, y no desaparece: un botón
+              que se esfuma deja al dueño preguntándose qué pasó, mientras que
+              uno gris justo encima de «Cuenta en solo lectura» se lee como
+              causa y efecto. Verde e invitando llevaría a un alta que la api va
+              a rechazar, que es la peor de las tres. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Inscribir un alumno"
+            accessibilityState={{ disabled: !puedeInscribir }}
+            disabled={!puedeInscribir}
             hitSlop={12}
             onPress={() => router.push('/enroll')}
           >
             <Card
               radius={theme.radii.pill}
-              borderColor={withAlpha(theme.semaphore.ok, 0.4)}
+              borderColor={withAlpha(
+                puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary,
+                0.4,
+              )}
               style={{ paddingVertical: 7, paddingHorizontal: 14 }}
             >
-              <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+              <Text
+                variant="captionSmall"
+                weight="semibold"
+                color={puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary}
+              >
                 + Alumno
               </Text>
             </Card>
           </Pressable>
         </Row>
       </Row>
+
+      {/* La cuenta atrás del mes gratis del gimnasio.
+          Va arriba del todo y desde el primer día: un mes gratis del que el
+          dueño se entera el día que se corta es un cliente que se va enojado, no
+          uno que paga. Solo aparece mientras dice algo —el mes gratis corriendo,
+          el vencimiento encima o el corte— y desaparece cuando la cuenta está al
+          día, que es la mayoría de los meses. */}
+      {suscripcion !== null &&
+      (suscripcion.state.status === 'trialing' || suscripcion.notice.tone !== 'info') ? (
+        <AvisoSuscripcion notice={suscripcion.notice} />
+      ) : null}
 
       {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
           es la misma pregunta mirada de lejos: cuánto entró, cuánto falta y
@@ -326,6 +360,37 @@ function Metrica({
         </Text>
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
           {etiqueta}
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+/**
+ * El aviso de la suscripción del gimnasio a Sinchi.
+ *
+ * El texto sale de `shared` y no de aquí: la app, el panel web y el motivo con
+ * el que la api rechaza un alta tienen que decir lo mismo del mismo hecho. Si la
+ * pantalla escribiera el suyo, el dueño leería una cosa en el padrón y otra
+ * distinta al chocar contra el corte.
+ */
+function AvisoSuscripcion({ notice }: { readonly notice: SaasNotice }) {
+  const theme = useTheme();
+  const color =
+    notice.tone === 'blocked'
+      ? theme.semaphore.bad
+      : notice.tone === 'warn'
+        ? theme.semaphore.warn
+        : theme.colors.ink;
+
+  return (
+    <Card borderColor={withAlpha(color, 0.35)} style={{ paddingVertical: 12 }}>
+      <Stack gap={3}>
+        <Text variant="bodySmall" weight="semibold" color={color}>
+          {notice.title}
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          {notice.detail}
         </Text>
       </Stack>
     </Card>
