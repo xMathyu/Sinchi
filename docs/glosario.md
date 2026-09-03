@@ -22,6 +22,27 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | asistencia | `Attendance` |
 | staff / recepción / dueño | `Staff`, `front_desk`, `owner` |
 | clase gratis reservada | `TrialBooking` |
+| evento con fecha (seminario, taller) | `GymEvent` |
+| plaza en un evento | `EventRegistration` |
+
+## Tipos de plan
+
+Los tres primeros son SUSCRIPCION: se paga un periodo por adelantado. El cuarto
+no lo es, y por eso no genera deuda, no tiene cupo semanal y su precio es el de
+UNA clase.
+
+| Negocio | Código |
+|---|---|
+| ilimitado | `PlanType = 'unlimited'` |
+| N veces por semana | `PlanType = 'sessions_per_week'` |
+| días fijos | `PlanType = 'fixed_days'` |
+| se paga por clase | `PlanType = 'drop_in'` |
+
+Ojo con `drop_in`: nombra DOS cosas que no son la misma. Como `PlanType` es el
+plan de quien no tiene mensualidad y paga cada vez que entrena, con su precio en
+`plans.price_cents`. Como `ChargeType` es el cobro de una clase suelta, que
+también paga el alumno CON plan que agota su cupo semanal — y ese precio vive en
+`tenants.drop_in_price_cents`.
 
 ## Conceptos de cobro
 
@@ -40,6 +61,9 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | mensualidad | `ChargeType = 'renewal'` |
 | matrícula | `ChargeType = 'enrollment'` |
 | clase suelta | `ChargeType = 'drop_in'` |
+| plaza de un evento | `ChargeType = 'event'` |
+| precio del alumno de casa | `memberPriceCents` |
+| precio del que viene de fuera | `guestPriceCents` |
 | medio de pago (efectivo, Yape…) | `PaymentRail` (`cash`, `yape`, `bank_transfer`, `card`) |
 
 ## Conceptos de check-in
