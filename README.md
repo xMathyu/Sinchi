@@ -20,7 +20,7 @@ gimnasios a los que asiste.
 | Alta de gimnasio | **Desde la app.** Falta crear planes: sin ellos el local no puede inscribir |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
 | Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
-| CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo |
+| CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo. **La base se migra sola antes de desplegar** |
 
 La app todavía corre contra un store en memoria (`apps/mobile/src/data`) que pasa
 por las mismas funciones puras que la api. Conectarla a la api real es cambiar ese

@@ -366,6 +366,28 @@ contexto de gimnasio, una transacción por gimnasio.
 
 ## Migraciones
 
+**En producción se aplican solas, antes de desplegar.** Cada push a `main` que
+toca la api encadena `migrate.yml` → `deploy-api.yml`, y el despliegue no empieza
+si la migración falla. No hay que lanzar nada a mano.
+
+Eso impone una regla que **no es negociable**: cada migración tiene que ser
+**compatible hacia atrás** con el código que ya está desplegado, porque se aplica
+mientras la revisión anterior todavía sirve tráfico. Agregar está bien —tabla,
+columna, valor de enum—; quitar no. Para borrar algo van dos despliegues: primero
+el código que deja de usarlo, después la migración que lo borra.
+
+Antes se disparaba a mano, y la idea era buena: ningún `ALTER TABLE` sin alguien
+mirando. El problema es que el *despliegue* sí era automático, así que las dos
+mitades iban por su cuenta y se abría una ventana con el código nuevo sirviendo
+contra el esquema viejo. Pasó el 2026-09-03 con el plan gratis. Un esquema por
+detrás del código rompe en silencio: las lecturas siguen funcionando y solo falla
+lo que escribe.
+
+`workflow_dispatch` sigue existiendo, para aplicar sin desplegar o para mirar el
+SQL pendiente sin aplicarlo.
+
+En local:
+
 ```bash
 npm run db:generate          # tras tocar src/db/schema.ts
 npm run db:migrate           # aplica y verifica que RLS siga activo

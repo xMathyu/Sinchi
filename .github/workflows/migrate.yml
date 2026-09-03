@@ -1,18 +1,45 @@
 name: Migrar la base
 
-# Las migraciones NO van en el despliegue, y es a propósito.
+# Las migraciones corren ANTES del despliegue, encadenadas, y el deploy no
+# empieza si esto falla.
 #
-# Encadenarlas al deploy suena cómodo hasta la primera migración mala: se aplica
-# sola, sin nadie mirando, sobre el ledger de pagos de gimnasios reales. Y un
-# `ALTER TABLE` no se deshace con un `git revert`.
+# Antes se disparaban a mano para que ninguna tocara la base sin alguien
+# mirando. La idea era buena y el resultado no: el despliegue de la api SÍ es
+# automático en cada push a `main`, así que las dos mitades iban por su cuenta y
+# se abría una ventana con el código nuevo sirviendo contra el esquema viejo.
+# Pasó el 2026-09-03 — se desplegó el plan gratis mientras faltaban
+# `saas_promo_codes` y el valor `free` del enum, y el trabajo de las 06:00 iba a
+# reventar al escribirlo. Un esquema por detrás del código rompe en silencio; una
+# migración de más rompe a la vista.
 #
-# Así que se dispara a mano, con el SHA que se quiere aplicar a la vista, y con
-# un paso previo que enseña el SQL pendiente antes de tocar nada.
+# LO QUE ESTO EXIGE A CAMBIO, y no es negociable: cada migración tiene que ser
+# COMPATIBLE HACIA ATRÁS con el código que ya está desplegado. Se aplica mientras
+# la revisión anterior sigue sirviendo tráfico, así que agregar está bien —tabla,
+# columna, valor de enum— y quitar no: un `DROP COLUMN` deja a la revisión vieja
+# consultando algo que ya no existe durante el minuto y medio que tarda el
+# deploy. Para quitar algo van dos despliegues: primero el código que deja de
+# usarlo, después la migración que lo borra.
+#
+# Sigue habiendo dos redes antes de tocar la base real: el ensayo completo contra
+# un Postgres desechable, y el SQL pendiente impreso en el log de la corrida que
+# lo aplicó. Lo que se perdió es la mano humana; lo que se ganó es que nunca haya
+# código por delante del esquema.
+#
+# A mano sigue funcionando (`workflow_dispatch`), y ahí sí pide confirmación:
+# sirve para aplicar sin desplegar, o para mirar el SQL pendiente sin aplicar.
 #
 # Tampoco hay secretos en GitHub: la cadena del rol dueño vive en Secret Manager
 # y la lee `sinchi-deployer`, que llegó ahí por federación de identidad.
 
 on:
+  # La llama `deploy-api.yml` antes de construir la imagen.
+  workflow_call:
+    inputs:
+      aplicar:
+        description: 'Aplicar de verdad. El despliegue la llama siempre con true.'
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       confirmar:
@@ -110,7 +137,9 @@ jobs:
           fi
 
       - name: Aplicar en producción
-        if: ${{ github.event.inputs.confirmar == 'aplicar' }}
+        # `inputs` sirve para los dos disparadores: el booleano llega del
+        # despliegue, la palabra de quien lo lanza a mano.
+        if: ${{ inputs.aplicar || inputs.confirmar == 'aplicar' }}
         working-directory: apps/api
         run: |
           MIGRATION_DATABASE_URL=$(gcloud secrets versions access latest \
@@ -122,7 +151,7 @@ jobs:
           npm run db:migrate
 
       - name: Sin confirmar, no se aplicó nada
-        if: ${{ github.event.inputs.confirmar != 'aplicar' }}
+        if: ${{ !inputs.aplicar && inputs.confirmar != 'aplicar' }}
         run: |
           echo "Solo se revisó. Quedan ${{ steps.pendientes.outputs.pendientes }} migración(es) pendiente(s)."
           echo "Para aplicarlas, vuelve a lanzar el workflow escribiendo: aplicar"
