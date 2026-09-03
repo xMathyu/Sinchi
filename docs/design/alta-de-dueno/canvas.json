@@ -1,0 +1,26 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 390, "h": 844, "title": "Entrar" },
+    { "file": "Registro.dc.html", "x": 510, "y": 0, "w": 390, "h": 844, "title": "Crear cuenta" },
+    { "file": "GimnasioOferta.dc.html", "x": 1020, "y": 0, "w": 390, "h": 844, "title": "Registra tu gimnasio" },
+    { "file": "GimnasioPlan.dc.html", "x": 1530, "y": 0, "w": 390, "h": 844, "title": "Paso 1 de 2 · Tu plan", "is_interactive": true },
+    { "file": "GimnasioDatos.dc.html", "x": 2040, "y": 0, "w": 390, "h": 844, "title": "Paso 2 de 2 · Últimos datos" }
+  ],
+  "annotations": [
+    {
+      "id": "tesis",
+      "x": 0,
+      "y": -250,
+      "w": 900,
+      "text": "El problema de fondo: la pantalla de entrar solo le hablaba al alumno («tus membresías en una sola app») y no había ninguna puerta hacia el alta de gimnasio.\nAhora hay una tarjeta de dueño visible sin bajar, y el alta empieza vendiendo antes de pedir un solo dato."
+    },
+    {
+      "id": "pasos",
+      "x": 1020,
+      "y": -250,
+      "w": 900,
+      "text": "El alta ya no es un scroll largo: venta → plan → datos, y cada pantalla entra completa sin scroll.\n\nEl comentario de gym-signup.tsx defendía un solo formulario porque «lo que hace que abandone un alta es no saber cuánto falta». Por eso son DOS pasos y no tres, con la barra de progreso y el «Paso N de 2» siempre a la vista: se ve cuánto queda desde el primer campo.\n\nEl código de promoción se movió al paso del plan, que es donde el dueño está pensando en cuánto va a pagar.\n\nPrecios de SAAS_TIER_PRICES; el mes gratis solo se promete donde de verdad ocurre (el escalón gratis nunca entra en «trialing»); los 7 días de SAAS_GRACE_DAYS."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

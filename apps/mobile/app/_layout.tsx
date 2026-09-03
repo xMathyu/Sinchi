@@ -220,10 +220,10 @@ function DataLoader() {
  * todavia no es de ningun gimnasio.
  *
  * `gym-signup` va con ella y por lo mismo: quien registra su gimnasio llega
- * desde el directorio, y su cuenta puede estar en cualquiera de esos tres
- * estados. Una ruta que no este en estas listas se redirige EN SILENCIO —sin
- * error y sin pantalla— asi que anadir una y olvidarse de esto es escribirla
- * para nadie.
+ * desde el directorio o desde la tarjeta de dueno del login, y su cuenta puede
+ * estar en cualquiera de esos tres estados —incluida ninguna. Una ruta que no
+ * este en estas listas se redirige EN SILENCIO —sin error y sin pantalla— asi
+ * que anadir una y olvidarse de esto es escribirla para nadie.
  */
 const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup']);
 
@@ -298,7 +298,17 @@ function SessionRouter() {
     const enAltaDeGimnasio = primero === 'gym-signup';
 
     if (state.status === 'signed_out') {
-      if (!enLogin && !enTurno && !enDev && !enInvitacion && !enDirectorio) {
+      /**
+       * El alta de un gimnasio tambien se abre SIN sesion, y no por comodidad.
+       *
+       * Su primera vista es la oferta —lo que Sinchi le hace a un gimnasio y
+       * cuanto cuesta— y esa pantalla existe justamente para quien todavia no
+       * tiene cuenta. Exigirsela antes de ensenarle nada es pedirle el correo a
+       * quien acaba de entrar a mirar el escaparate. La cuenta se crea DENTRO
+       * del flujo, en el paso siguiente, que es donde de verdad hace falta:
+       * `registrarGimnasio` firma el alta con la credencial de Firebase.
+       */
+      if (!enLogin && !enTurno && !enDev && !enInvitacion && !enDirectorio && !enAltaDeGimnasio) {
         router.replace('/login');
       }
       return;

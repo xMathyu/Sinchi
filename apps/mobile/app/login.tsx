@@ -13,14 +13,33 @@
  *
  * El acceso del staff va abajo y discreto a propósito: en un dojo de 60 alumnos
  * hay 60 personas que entran con Google y una que abre turno.
+ *
+ * La tarjeta de dueño, en cambio, NO es discreta. Esta pantalla es lo primero
+ * que ve alguien que viene a evaluar Sinchi para su gimnasio, y hasta ahora solo
+ * le hablaba al alumno («tus membresías en una sola app»): el alta de un
+ * gimnasio vivía escondida al final del directorio, así que quien venía a
+ * comprar no encontraba dónde. La oferta —gratis hasta diez alumnos— se dice
+ * aquí, no dos pantallas más adentro.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
+import ChevronLeft from 'lucide-react-native/icons/chevron-left';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../src/design/screen';
-import { Button, Card, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
+import {
+  Button,
+  Card,
+  Eyebrow,
+  Field,
+  Logo,
+  Row,
+  Stack,
+  Text,
+  Wordmark,
+} from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
 import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
@@ -37,8 +56,9 @@ export default function LoginScreen() {
   // pantalla ya no vuelve a preguntarlos.
   const [nombre, setNombre] = useState('');
   const [celular, setCelular] = useState('+51');
-  // "Entrar" o "crear cuenta": el mismo formulario, porque los campos son los
-  // mismos y separarlos en dos pantallas solo añade un paso.
+  // "Entrar" o "crear cuenta": son dos vistas y no dos rutas. Los campos y los
+  // handlers son los mismos, y separarlas en rutas obligaría a subir todo este
+  // estado a un contexto para que sobreviviera al salto.
   const [creating, setCreating] = useState(false);
 
   // `useIdTokenAuthRequest` en vez del flujo de código: devuelve directamente el
@@ -119,217 +139,320 @@ export default function LoginScreen() {
   const canSubmit =
     email.trim().length > 3 && password.length >= 6 && (!creating || datosCompletos) && !working;
 
-  return (
-    <Screen scroll>
-      <Stack gap={26} style={{ flex: 1, justifyContent: 'center', paddingVertical: 40 }}>
-        <Stack gap={14} style={{ alignItems: 'center' }}>
-          <Logo size={56} />
-          <Text variant="hero" align="center">
-            SINCHI
-          </Text>
-          <Text variant="body" color={theme.colors.textSecondary} align="center">
-            Tus membresías de todos tus gimnasios, en una sola app.
-          </Text>
-        </Stack>
+  const avisoDeError =
+    error === null ? null : (
+      <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
+        <Text variant="bodySmall">{error}</Text>
+      </Card>
+    );
 
-        {error !== null && (
-          <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
-            <Text variant="bodySmall">{error}</Text>
-          </Card>
-        )}
+  const faltaFirebase = (
+    <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
+      <Eyebrow>Falta configurar</Eyebrow>
+      <Text variant="bodySmall" style={{ marginTop: 6 }}>
+        Este build no trae configuración de Firebase (ver `.env.example`).
+      </Text>
+    </Card>
+  );
+
+  const separador = (
+    <Row align="center" gap={10}>
+      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+      <Text variant="captionSmall" color={theme.colors.textFaint}>
+        o
+      </Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+    </Row>
+  );
+
+  const botonDeGoogle = (
+    <Button
+      label="Entrar con Google"
+      variant="secondary"
+      disabled={request === null || working}
+      onPress={() => {
+        setError(null);
+        setWorking(true);
+        void promptAsync();
+      }}
+    />
+  );
+
+  if (creating) {
+    return (
+      <Screen scroll style={{ flexGrow: 1 }}>
+        <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Volver a entrar"
+            onPress={() => {
+              setError(null);
+              setCreating(false);
+            }}
+            disabled={working}
+            style={{ height: 44, marginLeft: -8, paddingHorizontal: 8, justifyContent: 'center' }}
+          >
+            <Row gap={6} justify="flex-start">
+              <ChevronLeft size={16} color={theme.colors.textSecondary} />
+              <Text variant="bodySmall" color={theme.colors.textSecondary}>
+                Entrar
+              </Text>
+            </Row>
+          </Pressable>
+
+          <Text variant="title" weight="bold" style={{ marginTop: 22 }}>
+            Crea tu cuenta
+          </Text>
+          <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
+            Con la misma cuenta entras a cualquier gimnasio de la red y reservas tu
+            primera clase gratis.
+          </Text>
+
+          {avisoDeError === null ? null : <View style={{ marginTop: 20 }}>{avisoDeError}</View>}
+
+          {emailReady ? (
+            <>
+              <Stack gap={14} style={{ marginTop: 24 }}>
+                <Field
+                  label="Tu nombre"
+                  value={nombre}
+                  onChangeText={setNombre}
+                  placeholder="Nombre y apellido"
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  editable={!working}
+                />
+                <Field
+                  label="Correo"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="tucorreo@ejemplo.com"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  editable={!working}
+                />
+                <Field
+                  label="Contraseña"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Al menos 6 caracteres"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  editable={!working}
+                />
+                <Field
+                  label="Tu celular"
+                  value={celular}
+                  onChangeText={setCelular}
+                  placeholder="+51987654321"
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  editable={!working}
+                  hint="Es con lo que el gimnasio te reconoce cuando llegas a probar."
+                  returnKeyType="go"
+                  onSubmitEditing={() => {
+                    if (canSubmit) submitEmail();
+                  }}
+                />
+              </Stack>
+
+              <View style={{ marginTop: 20 }}>
+                <Button
+                  label={working ? 'Creando…' : 'Crear cuenta'}
+                  disabled={!canSubmit}
+                  onPress={submitEmail}
+                />
+              </View>
+            </>
+          ) : (
+            <View style={{ marginTop: 24 }}>{faltaFirebase}</View>
+          )}
+
+          {googleReady && (
+            <Stack gap={14} style={{ marginTop: 18 }}>
+              {separador}
+              {botonDeGoogle}
+            </Stack>
+          )}
+
+          {working && <ActivityIndicator color={theme.colors.ink} style={{ marginTop: 16 }} />}
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setError(null);
+              setCreating(false);
+            }}
+            disabled={working}
+            style={{ marginTop: 'auto', minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text variant="caption" color={theme.colors.textSecondary} align="center">
+              ¿Ya tienes cuenta? Entra
+            </Text>
+          </Pressable>
+        </Stack>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen scroll style={{ flexGrow: 1 }}>
+      <Stack gap={0} style={{ flex: 1, paddingTop: 20, paddingBottom: 8 }}>
+        <Row gap={10} justify="flex-start">
+          <Logo size={34} />
+          <Wordmark size={34} />
+        </Row>
+
+        <Text variant="body" color={theme.colors.textStrong} style={{ marginTop: 12 }}>
+          Tu gimnasio y tus alumnos, en la misma app.
+        </Text>
+
+        <Row gap={8} justify="flex-start" style={{ marginTop: 14 }}>
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Cobro automático
+          </Text>
+          <Punto />
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Puerta con QR
+          </Text>
+          <Punto />
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Padrón al día
+          </Text>
+        </Row>
+
+        {avisoDeError === null ? null : <View style={{ marginTop: 20 }}>{avisoDeError}</View>}
 
         {emailReady ? (
-          <Stack gap={14}>
-            <Stack gap={4}>
-              <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                Correo
-              </Text>
-              <TextInput
+          <>
+            <Stack gap={14} style={{ marginTop: 26 }}>
+              <Field
+                label="Correo"
                 value={email}
                 onChangeText={setEmail}
+                placeholder="tucorreo@ejemplo.com"
                 autoCapitalize="none"
-                autoCorrect={false}
                 autoComplete="email"
                 keyboardType="email-address"
                 editable={!working}
-                placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={theme.colors.textPlaceholder}
-                style={{
-                  color: theme.colors.ink,
-                  fontSize: 16,
-                  paddingVertical: 10,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.hairline,
-                }}
               />
-            </Stack>
-
-            <Stack gap={4}>
-              <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                Contraseña
-              </Text>
-              <TextInput
+              <Field
+                label="Contraseña"
                 value={password}
                 onChangeText={setPassword}
+                placeholder="••••••••"
                 secureTextEntry
                 autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete={creating ? 'new-password' : 'current-password'}
+                autoComplete="current-password"
                 editable={!working}
-                placeholder={creating ? 'Al menos 6 caracteres' : '••••••••'}
-                placeholderTextColor={theme.colors.textPlaceholder}
+                returnKeyType="go"
                 onSubmitEditing={() => {
                   if (canSubmit) submitEmail();
                 }}
-                returnKeyType="go"
-                style={{
-                  color: theme.colors.ink,
-                  fontSize: 16,
-                  paddingVertical: 10,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.hairline,
-                }}
               />
             </Stack>
 
-            {/* Al crear la cuenta, y solo entonces. Preguntarlos aquí es lo que
-                permite que reservar una clase gratis no vuelva a pedirlos: la
-                queja legítima era «si ya me registré, ¿por qué me lo preguntas
-                otra vez?». */}
-            {creating ? (
-              <>
-                <Stack gap={4}>
-                  <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                    Tu nombre
-                  </Text>
-                  <TextInput
-                    value={nombre}
-                    onChangeText={setNombre}
-                    autoCapitalize="words"
-                    autoComplete="name"
-                    editable={!working}
-                    placeholder="Nombre y apellido"
-                    placeholderTextColor={theme.colors.textPlaceholder}
-                    style={{
-                      color: theme.colors.ink,
-                      fontSize: 16,
-                      paddingVertical: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.hairline,
-                    }}
-                  />
-                </Stack>
-
-                <Stack gap={4}>
-                  <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                    Tu celular
-                  </Text>
-                  <TextInput
-                    value={celular}
-                    onChangeText={setCelular}
-                    keyboardType="phone-pad"
-                    autoComplete="tel"
-                    editable={!working}
-                    placeholder="+51987654321"
-                    placeholderTextColor={theme.colors.textPlaceholder}
-                    style={{
-                      color: theme.colors.ink,
-                      fontSize: 16,
-                      paddingVertical: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.hairline,
-                    }}
-                  />
-                  <Text variant="micro" color={theme.colors.textFaint}>
-                    Es con lo que el gimnasio te reconoce cuando llegas a probar.
-                  </Text>
-                </Stack>
-              </>
-            ) : null}
-
-            <Button
-              label={
-                working ? (creating ? 'Creando…' : 'Entrando…') : creating ? 'Crear cuenta' : 'Entrar'
-              }
-              disabled={!canSubmit}
-              onPress={submitEmail}
-            />
+            <View style={{ marginTop: 18 }}>
+              <Button
+                label={working ? 'Entrando…' : 'Entrar'}
+                disabled={!canSubmit}
+                onPress={submitEmail}
+              />
+            </View>
 
             <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 setError(null);
-                setCreating((previous) => !previous);
+                setCreating(true);
               }}
-              hitSlop={12}
               disabled={working}
+              style={{ minHeight: 44, justifyContent: 'center' }}
             >
               <Text variant="caption" color={theme.colors.textSecondary} align="center">
-                {creating ? '¿Ya tienes cuenta? Entra' : '¿Primera vez? Crea tu cuenta'}
+                ¿Primera vez? Crea tu cuenta
               </Text>
             </Pressable>
-          </Stack>
+          </>
         ) : (
-          <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
-            <Eyebrow>Falta configurar</Eyebrow>
-            <Text variant="bodySmall" style={{ marginTop: 6 }}>
-              Este build no trae configuración de Firebase (ver `.env.example`).
-            </Text>
-          </Card>
+          <View style={{ marginTop: 26 }}>{faltaFirebase}</View>
         )}
 
         {googleReady && (
-          <Stack gap={12}>
-            <Row align="center" gap={10}>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
-              <Text variant="captionSmall" color={theme.colors.textFaint}>
-                o
-              </Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
-            </Row>
-            <Button
-              label="Entrar con Google"
-              variant="secondary"
-              disabled={request === null || working}
-              onPress={() => {
-                setError(null);
-                setWorking(true);
-                void promptAsync();
-              }}
-            />
+          <Stack gap={14} style={{ marginTop: 6 }}>
+            {separador}
+            {botonDeGoogle}
           </Stack>
         )}
 
-        {working && <ActivityIndicator color={theme.colors.ink} />}
+        {working && <ActivityIndicator color={theme.colors.ink} style={{ marginTop: 16 }} />}
 
-        <Stack gap={12} style={{ alignItems: 'center', marginTop: 6 }}>
-          {/* Antes esto prometía el código de 6 dígitos, que era lo primero que
-              veía quien entraba. Ya no: quien no entrena en ningún sitio aterriza
-              en el directorio, y el código está a un toque para cuando el
-              mostrador lo pida. */}
-          <Text variant="captionSmall" color={theme.colors.textFaint} align="center">
-            ¿Primera vez? Al entrar verás los gimnasios de la red y podrás reservar
-            tu primera clase.
+        {/* La puerta del dueño. Va abajo pero sin bajar la pantalla, y con la
+            oferta escrita: es lo que convierte esta pantalla en algo que le
+            habla también a quien viene a comprar. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Registra tu gimnasio"
+          onPress={() => router.push('/gym-signup')}
+          style={{ marginTop: 'auto', paddingTop: 22 }}
+        >
+          <Card borderColor={withAlpha(theme.semaphore.ok, 0.28)} style={{ paddingVertical: 15 }}>
+            <Row gap={14}>
+              <Stack gap={5} style={{ flex: 1 }}>
+                <Eyebrow color={theme.semaphore.ok}>Para dueños de gimnasio</Eyebrow>
+                <Text variant="heading" weight="semibold">
+                  Registra tu gimnasio
+                </Text>
+                <Text variant="caption" color={theme.colors.textSecondary}>
+                  Gratis hasta 10 alumnos, y el primer mes de pago va por nuestra cuenta.
+                </Text>
+              </Stack>
+              <ChevronRight size={18} color={theme.colors.textTertiary} />
+            </Row>
+          </Card>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/shift')}
+          style={{ minHeight: 44, justifyContent: 'center', marginTop: 4 }}
+        >
+          <Text variant="caption" color={theme.colors.textSecondary} align="center">
+            Soy staff — abrir turno
           </Text>
+        </Pressable>
 
-          <View style={{ height: 1, alignSelf: 'stretch', backgroundColor: theme.colors.hairline }} />
-
-          <Pressable onPress={() => router.push('/shift')} hitSlop={14}>
-            <Text variant="caption" color={theme.colors.textSecondary}>
-              Soy staff — abrir turno
+        {/* Solo en desarrollo. En un build de produccion `__DEV__` es false y
+            este bloque no se renderiza. */}
+        {__DEV__ && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/dev')}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text variant="captionSmall" color={theme.semaphore.warn} align="center">
+              Probar sin Google (desarrollo)
             </Text>
           </Pressable>
-
-          {/* Solo en desarrollo. En un build de produccion `__DEV__` es false y
-              este bloque no se renderiza. */}
-          {__DEV__ && (
-            <Pressable onPress={() => router.push('/dev')} hitSlop={14}>
-              <Text variant="captionSmall" color={theme.semaphore.warn}>
-                Probar sin Google (desarrollo)
-              </Text>
-            </Pressable>
-          )}
-        </Stack>
+        )}
       </Stack>
     </Screen>
+  );
+}
+
+/** Separador entre las tres promesas de la cabecera. */
+function Punto() {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        width: 3,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: theme.colors.textDisabled,
+      }}
+    />
   );
 }

@@ -10,8 +10,10 @@ import {
   Pressable,
   StyleSheet,
   Text as RNText,
+  TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
@@ -454,6 +456,119 @@ export function SegmentedControl<T extends string>({
         );
       })}
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Marca
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Campos
+// ---------------------------------------------------------------------------
+
+export interface FieldProps {
+  readonly label: string;
+  readonly value: string;
+  readonly onChangeText: (texto: string) => void;
+  readonly placeholder: string;
+  /** Explicacion bajo el campo. La sustituye `error` cuando lo hay. */
+  readonly hint?: string | undefined;
+  readonly error?: string | undefined;
+  /**
+   * Borde punteado sobre el fondo de pantalla, para lo opcional.
+   *
+   * Es la misma senal que ya usa la tarjeta de "unirme a otro gimnasio": lo
+   * punteado se lee como "esto puedes dejarlo vacio" sin gastar una linea de
+   * texto en decirlo.
+   */
+  readonly optional?: boolean;
+  readonly editable?: boolean;
+  readonly secureTextEntry?: boolean;
+  readonly keyboardType?: TextInputProps['keyboardType'];
+  readonly autoCapitalize?: TextInputProps['autoCapitalize'];
+  readonly autoComplete?: TextInputProps['autoComplete'];
+  readonly returnKeyType?: TextInputProps['returnKeyType'];
+  readonly onSubmitEditing?: () => void;
+}
+
+/**
+ * Campo de formulario con caja.
+ *
+ * Antes cada pantalla dibujaba su `TextInput` con una linea abajo. La caja no es
+ * un capricho: el alta de un gimnasio se llena de pie y con una mano, y una
+ * linea de un pixel no dice donde hay que tocar. Con caja, el area tactil es la
+ * que se ve —50px— y el campo vacio se distingue del texto suelto que tiene al
+ * lado.
+ *
+ * `fontSize: 16` es obligatorio y no un token: por debajo, iOS hace zoom al
+ * enfocar el campo y la pantalla salta.
+ */
+export function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  hint,
+  error,
+  optional = false,
+  editable = true,
+  secureTextEntry,
+  keyboardType,
+  autoCapitalize = 'sentences',
+  autoComplete,
+  returnKeyType,
+  onSubmitEditing,
+}: FieldProps) {
+  const theme = useTheme();
+  const conError = error !== undefined && error.length > 0;
+
+  return (
+    <Stack gap={6}>
+      <Text variant="captionSmall" color={theme.colors.textSecondary}>
+        {label}
+      </Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textPlaceholder}
+        editable={editable}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoComplete={autoComplete}
+        autoCorrect={false}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        accessibilityLabel={label}
+        style={{
+          height: 50,
+          borderRadius: theme.radii.md,
+          backgroundColor: optional ? theme.colors.screen : theme.colors.surfaceSunken,
+          borderWidth: 1,
+          borderStyle: optional ? 'dashed' : 'solid',
+          borderColor: conError
+            ? withAlpha(theme.semaphore.bad, 0.6)
+            : optional
+              ? theme.colors.borderDashed
+              : theme.colors.border,
+          paddingHorizontal: 14,
+          fontSize: 16,
+          color: theme.colors.ink,
+          opacity: editable ? 1 : 0.5,
+        }}
+      />
+      {conError ? (
+        <Text variant="micro" color={theme.semaphore.bad}>
+          {error}
+        </Text>
+      ) : hint === undefined ? null : (
+        <Text variant="micro" color={theme.colors.textFaint}>
+          {hint}
+        </Text>
+      )}
+    </Stack>
   );
 }
 
