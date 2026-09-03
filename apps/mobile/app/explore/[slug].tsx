@@ -20,6 +20,7 @@ import {
   addDays,
   allWeekdays,
   cents,
+  eventBookingDenialMessage,
   formatPEN,
   formatPENShort,
   formatPlainDate,
@@ -38,9 +39,14 @@ import { EstadoSinConexion } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import { useGym, useMisClasesGratis, useToday, useWallet } from '../../src/data/hooks';
-import { cuentaParaReservar, necesitaDatos, reservarClaseGratis } from '../../src/data/trials';
-import type { BookTrialDto } from '../../src/data/api';
-import { formatLongDate, formatWeekdayAndDay } from '../../src/lib/format';
+import {
+  cuentaParaReservar,
+  necesitaDatos,
+  reservarClaseGratis,
+  reservarPlazaEnEvento,
+} from '../../src/data/trials';
+import type { BookEventDto, BookTrialDto, EventoConCupo } from '../../src/data/api';
+import { formatEventDate, formatLongDate, formatWeekdayAndDay } from '../../src/lib/format';
 
 export default function GymScreen() {
   const theme = useTheme();
@@ -356,6 +362,24 @@ export default function GymScreen() {
         ) : null}
       </Stack>
 
+      {/* --- Lo que viene --------------------------------------------------- */}
+      {gym.events.length > 0 && (
+        <Stack gap={10} style={{ marginTop: 28 }}>
+          <Eyebrow>Lo que viene</Eyebrow>
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Seminarios y talleres. No hace falta ser alumno del local para venir.
+          </Text>
+          {gym.events.map((fila) => (
+            <TarjetaDeEvento
+              key={fila.event.id}
+              fila={fila}
+              slug={gym.slug}
+              esAlumno={esAlumno}
+            />
+          ))}
+        </Stack>
+      )}
+
       {/* --- Precios -------------------------------------------------------- */}
       <Stack gap={10} style={{ marginTop: 28 }}>
         <Eyebrow>Precios</Eyebrow>
@@ -400,7 +424,117 @@ export default function GymScreen() {
         )}
       </Stack>
 
+      <View style={{ height: 16 }} />
     </Screen>
+  );
+}
+
+/**
+ * Un evento en la ficha del gimnasio.
+ *
+ * El precio que se enseña es EL QUE LE TOCA a quien mira: el de alumno si
+ * entrena aquí, el de fuera si no. Enseñar los dos convierte una decisión de
+ * cinco segundos en una tabla que hay que interpretar, y enseñar solo el de
+ * alumno sería un precio que no va a pagar.
+ */
+function TarjetaDeEvento({
+  fila,
+  slug,
+  esAlumno,
+}: {
+  readonly fila: EventoConCupo;
+  readonly slug: string;
+  readonly esAlumno: boolean;
+}) {
+  const theme = useTheme();
+  const [reservando, setReservando] = useState(false);
+  const [resultado, setResultado] = useState<BookEventDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const { event, seatsLeft } = fila;
+  const precio = esAlumno ? event.memberPriceCents : event.guestPriceCents;
+  const lleno = seatsLeft !== null && seatsLeft === 0;
+  const yaTiene = resultado?.booked === true;
+
+  return (
+    <Card radius={theme.radii.xl}>
+      <Stack gap={12}>
+        <Row align="flex-start">
+          <Stack gap={3} style={{ flex: 1, paddingRight: 12 }}>
+            <Text variant="heading" weight="semibold">
+              {event.name}
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {formatEventDate(event.date)} · {event.startTime}–{event.endTime}
+              {event.instructor === null ? '' : ` · con ${event.instructor}`}
+            </Text>
+            {event.description !== null && (
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                {event.description}
+              </Text>
+            )}
+          </Stack>
+          <Stack gap={1} style={{ alignItems: 'flex-end' }}>
+            <Text variant="heading" weight="bold">
+              {formatPEN(cents(precio), { withDecimals: false })}
+            </Text>
+            {esAlumno && event.guestPriceCents > event.memberPriceCents && (
+              <Text variant="micro" color={theme.semaphore.ok}>
+                precio de alumno
+              </Text>
+            )}
+          </Stack>
+        </Row>
+
+        {/* Las plazas que quedan solo se dicen cuando aprietan: «quedan 28 de
+            30» no mueve a nadie, «quedan 3» sí. */}
+        {seatsLeft !== null && seatsLeft > 0 && seatsLeft <= 5 && (
+          <Text variant="micro" color={theme.semaphore.warn}>
+            Quedan {seatsLeft} {seatsLeft === 1 ? 'plaza' : 'plazas'}
+          </Text>
+        )}
+
+        {yaTiene ? (
+          <Text variant="captionSmall" color={theme.semaphore.ok}>
+            Tienes tu plaza. Se paga en el local.
+          </Text>
+        ) : lleno ? (
+          <Text variant="captionSmall" color={theme.colors.textTertiary}>
+            Se agotaron las plazas.
+          </Text>
+        ) : (
+          <Button
+            label={reservando ? 'Reservando…' : `Reservar mi plaza · ${formatPENShort(cents(precio))}`}
+            disabled={reservando}
+            onPress={() => {
+              setReservando(true);
+              setError(null);
+              void reservarPlazaEnEvento({ slug, eventId: event.id })
+                .then((salida) => {
+                  setResultado(salida);
+                  if (!salida.booked) {
+                    setError(eventBookingDenialMessage(salida.reason as never));
+                  }
+                })
+                .catch((e: unknown) =>
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : 'No se pudo reservar. Inténtalo otra vez.',
+                  ),
+                )
+                .finally(() => setReservando(false));
+            }}
+          />
+        )}
+
+        {error !== null && (
+          <Text variant="captionSmall" color={theme.semaphore.warn}>
+            {error}
+          </Text>
+        )}
+      </Stack>
+    </Card>
   );
 }
 

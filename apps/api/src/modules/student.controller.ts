@@ -18,6 +18,7 @@ import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
 import { MembersService } from './members/members.service';
 import { TrialsService } from './trials/trials.service';
+import { EventRegistrationsService } from './events/registrations.service';
 
 const planChangeSchema = z.object({ planId: z.string().uuid() });
 const trialSchema = z.object({
@@ -25,6 +26,10 @@ const trialSchema = z.object({
   slug: z.string().min(2).max(80),
   classScheduleId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+});
+const eventBookingSchema = z.object({
+  slug: z.string().min(2).max(80),
+  eventId: z.string().uuid(),
 });
 const linkDeviceSchema = z.object({
   /** `true` cuando el alumno perdió el celular: invalida los códigos viejos. */
@@ -40,6 +45,7 @@ export class StudentController {
     private readonly billing: BillingService,
     private readonly members: MembersService,
     private readonly trials: TrialsService,
+    private readonly registrations: EventRegistrationsService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -194,6 +200,42 @@ export class StudentController {
       account: { kind: 'user', userId: session.sub },
       classScheduleId: body.classScheduleId,
       date: body.date,
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Eventos
+  // -------------------------------------------------------------------------
+
+  /**
+   * Las plazas que tiene en eventos, en toda la red.
+   *
+   * Existe por lo mismo que `GET /me/trials`: un alumno de un gimnasio es
+   * tambien un posible asistente al seminario de otro, y la billetera y el
+   * directorio son el mismo producto visto de los dos lados.
+   */
+  @Get('events')
+  myEvents(@CurrentSession() session: Session) {
+    return this.registrations.mine({ kind: 'user', userId: session.sub });
+  }
+
+  /**
+   * Coge plaza con la sesion puesta.
+   *
+   * No pide nombre ni celular: ya los sabemos, y volver a preguntarlos dejaria
+   * dos versiones de la misma persona en la lista del seminario. Si entrena en
+   * ese local le toca el precio de alumno, y eso lo decide el servicio mirando
+   * su membresia, no el camino por el que llego.
+   */
+  @Post('events')
+  bookEvent(
+    @CurrentSession() session: Session,
+    @Body(parseWith(eventBookingSchema)) body: z.infer<typeof eventBookingSchema>,
+  ) {
+    return this.registrations.book({
+      slug: body.slug,
+      eventId: body.eventId,
+      account: { kind: 'user', userId: session.sub },
     });
   }
 

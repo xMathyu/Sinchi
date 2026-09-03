@@ -31,6 +31,10 @@ export * from './checkin/quota.js';
 export * from './checkin/validate.js';
 export * from './checkin/messages.js';
 
+// Eventos con fecha: seminarios, talleres, la clase del invitado
+export * from './events/draft.js';
+export * from './events/validate.js';
+
 // Clase gratis
 export * from './trial/slots.js';
 export * from './trial/validate.js';

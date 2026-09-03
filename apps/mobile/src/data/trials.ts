@@ -18,12 +18,15 @@
  */
 import { formatPlainDate, type TrialSlot } from '@sinchi/shared';
 import {
+  bookEvent,
+  bookEventAsGuest,
   bookTrial,
   bookTrialAsGuest,
   cancelGuestTrial,
   cancelTrial,
   fetchGuestTrials,
   fetchMyTrials,
+  type BookEventDto,
   type BookTrialDto,
   type TrialBookingDto,
 } from './api';
@@ -124,6 +127,45 @@ export async function reservarClaseGratis(input: {
     phone,
     classScheduleId: input.slot.scheduleId,
     date,
+  });
+}
+
+/**
+ * Coge plaza en un evento, venga con sesion o solo con su cuenta de Google.
+ *
+ * Vive aqui, junto a la clase gratis, porque es exactamente el mismo problema:
+ * alguien que mira el directorio y puede no ser de ningun gimnasio todavia. Los
+ * dos caminos —sesion y cuenta— se resuelven igual, y lo unico que cambia es que
+ * al invitado a veces hay que preguntarle su nombre.
+ */
+export async function reservarPlazaEnEvento(input: {
+  readonly slug: string;
+  readonly eventId: string;
+  /** Solo se usan como invitado. Con sesión se ignoran: ya los sabemos. */
+  readonly fullName?: string;
+  readonly phone?: string;
+}): Promise<BookEventDto> {
+  const cuenta = cuentaParaReservar();
+
+  if (cuenta.kind === 'session') {
+    return bookEvent({ slug: input.slug, eventId: input.eventId });
+  }
+  if (cuenta.kind === 'none') throw new SinCuenta();
+
+  const guardado = currentAccountDetails();
+  const fullName = dato(input.fullName) ?? dato(guardado?.fullName) ?? '';
+  const phone = dato(input.phone) ?? dato(guardado?.phone) ?? '';
+
+  // Se recuerdan en el dispositivo, igual que en la clase gratis: la siguiente
+  // reserva, aqui o en otro gimnasio, ya no pregunta nada.
+  await saveAccountDetails({ fullName: dato(fullName), phone: dato(phone) });
+
+  return bookEventAsGuest({
+    slug: input.slug,
+    eventId: input.eventId,
+    idToken: cuenta.idToken,
+    fullName,
+    phone,
   });
 }
 

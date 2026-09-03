@@ -39,6 +39,10 @@ import { OnboardingService } from './modules/onboarding/onboarding.service';
 import { OfferingController } from './modules/offering/offering.controller';
 import { PlansService } from './modules/offering/plans.service';
 import { GymSettingsService } from './modules/offering/settings.service';
+import { EventsController } from './modules/events/events.controller';
+import { EventsService } from './modules/events/events.service';
+import { EventRegistrationsService } from './modules/events/registrations.service';
+import { VisitorService } from './modules/identity/visitor.service';
 import { SaasGuard } from './modules/saas/saas.guard';
 
 @Module({
@@ -49,6 +53,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     StudentController,
     StaffController,
     OfferingController,
+    EventsController,
     GymsController,
     AccountsController,
     InvitesController,
@@ -70,6 +75,9 @@ import { SaasGuard } from './modules/saas/saas.guard';
     OnboardingService,
     PlansService,
     GymSettingsService,
+    EventsService,
+    EventRegistrationsService,
+    VisitorService,
     RefreshDelinquencyJob,
     RefreshSaasJob,
   ],

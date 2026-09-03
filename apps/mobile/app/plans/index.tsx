@@ -27,12 +27,15 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { usePlanesDelDueno, useStore } from '../../src/data/hooks';
+import { usePlanesDelDueno } from '../../src/data/hooks';
+import { useRole } from '../../src/data/session-hooks';
 import type { PlanConUso } from '../../src/data/api';
 
 export default function PlanesScreen() {
   const theme = useTheme();
-  const esDueno = useStore((s) => s.staff.role) === 'owner';
+  // De la sesión: el del store llega con el padrón, y estas pantallas se
+  // abren solas desde un enlace.
+  const esDueno = useRole() === 'owner';
   const { planes, error, cargando } = usePlanesDelDueno();
 
   const activos = planes?.filter((p) => p.plan.active) ?? [];
