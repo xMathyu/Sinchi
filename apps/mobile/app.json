@@ -12,14 +12,14 @@
     "backgroundColor": "#08080A",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "pe.sinchi.app",
+      "bundleIdentifier": "fit.sinchi.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "pe.sinchi.app",
+      "package": "fit.sinchi.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#08080A"

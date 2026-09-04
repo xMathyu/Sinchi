@@ -123,7 +123,7 @@ function intentAndroid(ruta: string, respaldo: string): string {
   const partes = [
     'Intent',
     'scheme=sinchi',
-    'package=pe.sinchi.app',
+    'package=fit.sinchi.app',
     `S.browser_fallback_url=${encodeURIComponent(respaldo)}`,
   ];
   return `intent://${ruta}#${partes.join(';')};end`;

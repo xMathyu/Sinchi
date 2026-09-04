@@ -269,7 +269,7 @@ export default function Landing() {
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             <a href="#" style={{ fontSize: 11 }} className="tertiary">Términos</a>
             <a href="#" style={{ fontSize: 11 }} className="tertiary">Privacidad</a>
-            <a href="mailto:soporte@sinchi.pe" style={{ fontSize: 11 }} className="tertiary">soporte@sinchi.pe</a>
+            <a href="mailto:soporte@sinchi.fit" style={{ fontSize: 11 }} className="tertiary">soporte@sinchi.fit</a>
           </div>
         </div>
       </footer>

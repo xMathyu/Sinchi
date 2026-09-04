@@ -72,7 +72,7 @@ describe('cómo se reproduce', () => {
 
   it('un archivo de video se reproduce nativo', () => {
     for (const ext of ['mp4', 'm4v', 'mov', 'webm', 'm3u8']) {
-      const video = parseVideoLink(`https://videos.sinchi.pe/kaizen/uchimata.${ext}`);
+      const video = parseVideoLink(`https://videos.sinchi.fit/kaizen/uchimata.${ext}`);
       expect(video?.provider, ext).toBe('file');
       expect(video?.playback, ext).toBe('file');
     }
