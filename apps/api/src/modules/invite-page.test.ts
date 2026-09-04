@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { detectarSistema, paginaInvitacion, type Tiendas } from './invite-page';
 
 const IOS = 'https://apps.apple.com/pe/app/sinchi/id123456789';
-const ANDROID = 'https://play.google.com/store/apps/details?id=pe.sinchi.app';
+const ANDROID = 'https://play.google.com/store/apps/details?id=fit.sinchi.app';
 
 const base = {
   gimnasio: 'Club Kaizen',
@@ -58,7 +58,7 @@ describe('paginaInvitacion', () => {
     const html = pagina('android');
     // Es el mecanismo del sistema: si la app está, la abre; si no, Chrome va
     // solo a la tienda. Sin `browser_fallback_url` no haría lo segundo.
-    expect(html).toContain('intent://invite/abc123#Intent;scheme=sinchi;package=pe.sinchi.app');
+    expect(html).toContain('intent://invite/abc123#Intent;scheme=sinchi;package=fit.sinchi.app');
     expect(html).toContain(`S.browser_fallback_url=${encodeURIComponent(ANDROID)}`);
     expect(html).not.toContain(IOS);
   });

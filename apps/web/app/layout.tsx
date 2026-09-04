@@ -23,7 +23,7 @@ const archivo = Archivo({
  * resuelven: la vista previa aparece sin imagen. El dominio se puede fijar por
  * entorno para poder previsualizar desde una URL de pruebas.
  */
-const SITE = process.env['NEXT_PUBLIC_SITE_URL'] ?? 'https://sinchi.pe';
+const SITE = process.env['NEXT_PUBLIC_SITE_URL'] ?? 'https://sinchi.fit';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),

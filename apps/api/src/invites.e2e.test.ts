@@ -24,7 +24,7 @@ import { FirebaseVerifier, type VerifiedIdentity } from './auth/firebase';
  * prueba diga a la vista de que depende.
  */
 process.env.IOS_STORE_URL ??= 'https://apps.apple.com/pe/app/sinchi/id123456789';
-process.env.ANDROID_STORE_URL ??= 'https://play.google.com/store/apps/details?id=pe.sinchi.app';
+process.env.ANDROID_STORE_URL ??= 'https://play.google.com/store/apps/details?id=fit.sinchi.app';
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL;
 const suite = DATABASE_URL === undefined ? describe.skip : describe;
