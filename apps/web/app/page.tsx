@@ -267,8 +267,8 @@ export default function Landing() {
             <span style={{ fontSize: 11 }} className="tertiary">Sinchi · Lima, Perú</span>
           </div>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <a href="#" style={{ fontSize: 11 }} className="tertiary">Términos</a>
-            <a href="#" style={{ fontSize: 11 }} className="tertiary">Privacidad</a>
+            <a href="/privacidad" style={{ fontSize: 11 }} className="tertiary">Privacidad</a>
+            <a href="/eliminar-cuenta" style={{ fontSize: 11 }} className="tertiary">Eliminar mi cuenta</a>
             <a href="mailto:soporte@sinchi.fit" style={{ fontSize: 11 }} className="tertiary">soporte@sinchi.fit</a>
           </div>
         </div>
