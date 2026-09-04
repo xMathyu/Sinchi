@@ -19,6 +19,7 @@ import { TrialsService, type TrialAccount } from './trials/trials.service';
 import { OnboardingService } from './onboarding/onboarding.service';
 import { EventsService } from './events/events.service';
 import { EventRegistrationsService } from './events/registrations.service';
+import { RoutinesService } from './routines/routines.service';
 
 /** El mismo ID token de Firebase que consume `/auth/google`. */
 const idTokenSchema = z.object({ idToken: z.string().min(100) });
@@ -66,6 +67,7 @@ export class GymsController {
     private readonly onboarding: OnboardingService,
     private readonly events: EventsService,
     private readonly registrations: EventRegistrationsService,
+    private readonly routines: RoutinesService,
   ) {}
 
   /**
@@ -147,7 +149,48 @@ export class GymsController {
   @Get(':slug')
   async gym(@Param('slug') slug: string) {
     const detalle = await this.trials.gym(slug);
-    return { ...detalle, events: await this.events.publicUpcoming(detalle.id) };
+    const [events, biblioteca] = await Promise.all([
+      this.events.publicUpcoming(detalle.id),
+      // Con ojos de la calle: solo lo publicado y publico. `membersOnly` es el
+      // numero que vende la mensualidad —"12 rutinas mas para alumnos"— sin
+      // regalar los titulos de lo que hay detras.
+      this.routines.library(detalle.id, 'visitor'),
+    ]);
+    return {
+      ...detalle,
+      events,
+      routines: biblioteca.routines,
+      membersOnlyRoutines: biblioteca.membersOnly,
+    };
+  }
+
+  /**
+   * Una rutina publica, abierta desde la calle.
+   *
+   * Es la unica ruta del producto que entrega contenido a quien no tiene cuenta
+   * de nada, y a proposito: el video de un uchimata bien explicado es lo que
+   * hace que alguien elija este dojo. Lo que NO entrega es lo de alumnos —el
+   * servicio devuelve el anzuelo sin videos ni instrucciones— porque filtrarlo
+   * en la pantalla seria decorativo: el JSON viaja igual.
+   */
+  @Public()
+  @Get(':slug/routines/:routineId')
+  async routine(
+    @Param('slug') slug: string,
+    @Param('routineId', ParseUUIDPipe) routineId: string,
+  ) {
+    /**
+     * Se resuelve con `trials.gym` —que trae la ficha entera— y no con una
+     * consulta suelta por el slug, a sabiendas de que cuesta un par de consultas
+     * de mas.
+     *
+     * Ahi vive la regla de cuando un gimnasio esta disponible desde fuera:
+     * activo Y dentro del directorio. Copiarla aqui seria tener dos sitios que
+     * deciden lo mismo, y el dia que un local salga del directorio uno de los
+     * dos se quedaria sirviendo su contenido.
+     */
+    const gym = await this.trials.gym(slug);
+    return this.routines.view(gym.id, routineId, 'visitor');
   }
 
   /**

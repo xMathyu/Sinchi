@@ -21,6 +21,8 @@ import {
   type Membership,
   type Plan,
   type PlainDate,
+  type Routine,
+  type RoutineItem,
   type Staff,
   type Subscription,
   type Tenant,
@@ -41,6 +43,8 @@ type ClassScheduleRow = InferSelectModel<typeof schema.classSchedules>;
 type AttendanceRow = InferSelectModel<typeof schema.attendance>;
 type TrialBookingRow = InferSelectModel<typeof schema.trialBookings>;
 type GymEventRow = InferSelectModel<typeof schema.gymEvents>;
+type RoutineRow = InferSelectModel<typeof schema.routines>;
+type RoutineItemRow = InferSelectModel<typeof schema.routineItems>;
 type EventRegistrationRow = InferSelectModel<typeof schema.eventRegistrations>;
 
 /** Columnas `date` de Postgres llegan como `YYYY-MM-DD`. */
@@ -252,5 +256,41 @@ export function toTrialBooking(row: TrialBookingRow): TrialBooking {
     priceCents: toCents(row.priceCents),
     status: row.status,
     createdAt: row.createdAt,
+  };
+}
+
+/**
+ * Rutina y paso.
+ *
+ * `videoUrl` sale tal cual esta guardado —se normaliza al ESCRIBIR, no al leer—
+ * y por tanto vale `null` cuando el video es un archivo subido: la URL firmada
+ * con la que se reproduce la pone el servicio al servir, porque caduca y no hay
+ * nada que guardar.
+ */
+export function toRoutine(row: RoutineRow): Routine {
+  return {
+    id: asId(row.id),
+    tenantId: asId(row.tenantId),
+    title: row.title,
+    summary: row.summary,
+    videoUrl: row.videoUrl,
+    videoAssetId: row.videoAssetId === null ? null : asId(row.videoAssetId),
+    level: row.level,
+    visibility: row.visibility,
+    status: row.status,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function toRoutineItem(row: RoutineItemRow): RoutineItem {
+  return {
+    id: asId(row.id),
+    routineId: asId(row.routineId),
+    position: row.position,
+    title: row.title,
+    instructions: row.instructions,
+    videoUrl: row.videoUrl,
+    videoAssetId: row.videoAssetId === null ? null : asId(row.videoAssetId),
+    prescription: row.prescription,
   };
 }

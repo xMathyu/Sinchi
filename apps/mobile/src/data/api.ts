@@ -318,6 +318,10 @@ export interface GymDetailDto extends GymCardDto {
   readonly slots: readonly TrialSlot[];
   /** Seminarios y talleres publicados que todavía no han pasado. */
   readonly events: readonly EventoConCupo[];
+  /** Las rutinas PÚBLICAS: el escaparate. */
+  readonly routines: readonly RutinaEnLista[];
+  /** Cuántas hay solo para alumnos. El número vende; los títulos no se dan. */
+  readonly membersOnlyRoutines: number;
 }
 
 export interface TrialBookingDto extends TrialBooking {
@@ -357,6 +361,11 @@ export const fetchGym = async (slug: string): Promise<GymDetailDto> => {
   return {
     ...ficha,
     events: (ficha.events ?? []).map((fila) => ({ ...fila, event: reviveEvento(fila.event) })),
+    // `?? []` porque la app se actualiza sola y la api no: contra un despliegue
+    // viejo estos campos no vienen, y una lista que no existe rompe la ficha
+    // entera del gimnasio.
+    routines: ficha.routines ?? [],
+    membersOnlyRoutines: ficha.membersOnlyRoutines ?? 0,
   };
 };
 
@@ -911,6 +920,239 @@ function reviveEvento(raw: EventoDto): EventoDto {
   const [year, month, day] = fecha.split('-').map(Number);
   return { ...raw, date: { year: year!, month: month!, day: day! } as PlainDate };
 }
+
+
+// ---------------------------------------------------------------------------
+// Rutinas: lo que el gimnasio ensena en video
+// ---------------------------------------------------------------------------
+
+export interface RutinaDto {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly title: string;
+  readonly summary: string | null;
+  /**
+   * La direccion con la que se REPRODUCE.
+   *
+   * Para un enlace es el enlace; para un video subido es una URL firmada que
+   * caduca, y que la api solo entrega a quien tiene acceso.
+   */
+  readonly videoUrl: string | null;
+  /** El archivo subido del que sale, si viene de uno. */
+  readonly videoAssetId: string | null;
+  readonly level: 'beginner' | 'intermediate' | 'advanced' | null;
+  readonly visibility: 'public' | 'members';
+  readonly status: 'draft' | 'published';
+  readonly updatedAt: string;
+}
+
+export interface PasoDto {
+  readonly id: string;
+  readonly routineId: string;
+  readonly position: number;
+  readonly title: string;
+  readonly instructions: string | null;
+  readonly videoUrl: string | null;
+  readonly videoAssetId: string | null;
+  /** "4 series de 12", "5 minutos de uchikomi". */
+  readonly prescription: string | null;
+}
+
+/** Una rutina en la lista. Sin los pasos: la ficha del gimnasio se abre con datos. */
+export interface RutinaEnLista {
+  readonly routine: RutinaDto;
+  readonly itemCount: number;
+  /**
+   * El video que representa a la rutina, elegido por la api: el suyo o el del
+   * primer paso que tenga uno. La miniatura sale de aqui con `parseVideoLink`,
+   * sin subir ninguna imagen.
+   */
+  readonly coverVideoUrl: string | null;
+  /**
+   * Tiene video, venga de enlace o de archivo subido.
+   *
+   * Existe porque `coverVideoUrl` es `null` para los subidos: en una lista no se
+   * reproduce nada, asi que la api no firma una URL por fila. Con esto la
+   * tarjeta pinta igual su marcador de video.
+   */
+  readonly hasVideo: boolean;
+}
+
+export interface BibliotecaDto {
+  readonly routines: readonly RutinaEnLista[];
+  /**
+   * Cuantas se pierde quien no es alumno.
+   *
+   * Es el gancho de la ficha publica —«12 rutinas mas para alumnos»— y vale 0
+   * para quien ya las tiene.
+   */
+  readonly membersOnly: number;
+}
+
+/**
+ * Lo que devuelve pedir UNA rutina.
+ *
+ * Union discriminada, y las dos ramas vienen con 200: que sea contenido de
+ * alumnos no es un error de la peticion. Cuando esta cerrada, el cuerpo NO trae
+ * los videos ni las instrucciones —eso lo garantiza la api, no la pantalla— y
+ * si el titulo y de que va, que es lo que hace querer entrar.
+ */
+export type RutinaDetalleDto =
+  | { readonly unlocked: true; readonly card: RutinaEnLista; readonly items: readonly PasoDto[] }
+  | {
+      readonly unlocked: false;
+      readonly reason: { readonly code: 'not_published' | 'members_only' };
+      readonly teaser: {
+        readonly id: string;
+        readonly title: string;
+        readonly summary: string | null;
+        readonly level: 'beginner' | 'intermediate' | 'advanced' | null;
+        readonly itemCount: number;
+      };
+    };
+
+/** Lo que se manda al crear o editar. */
+export interface PasoEscrito {
+  readonly title: string;
+  readonly instructions: string | null;
+  readonly videoUrl: string | null;
+  readonly videoAssetId: string | null;
+  readonly prescription: string | null;
+}
+
+export interface RutinaEscrita {
+  readonly title: string;
+  readonly summary: string | null;
+  readonly videoUrl: string | null;
+  readonly videoAssetId: string | null;
+  readonly level: 'beginner' | 'intermediate' | 'advanced' | null;
+  readonly visibility: 'public' | 'members';
+  readonly published: boolean;
+  readonly items: readonly PasoEscrito[];
+}
+
+// -- Del gimnasio (mostrador y dueno) ---------------------------------------
+
+export const fetchRutinas = (): Promise<BibliotecaDto> => request('/staff/routines');
+
+export const fetchRutina = (routineId: string): Promise<RutinaDetalleDto> =>
+  request(`/staff/routines/${routineId}`);
+
+export const crearRutina = (rutina: RutinaEscrita): Promise<RutinaDetalleDto> =>
+  request('/staff/routines', { method: 'POST', body: rutina });
+
+export const editarRutina = (
+  routineId: string,
+  rutina: RutinaEscrita,
+): Promise<RutinaDetalleDto> =>
+  request(`/staff/routines/${routineId}`, { method: 'POST', body: rutina });
+
+export const cambiarEstadoRutina = (
+  routineId: string,
+  status: 'draft' | 'published',
+): Promise<RutinaDto> =>
+  request(`/staff/routines/${routineId}/status`, { method: 'POST', body: { status } });
+
+/** De escaparate a contenido de alumnos, y al reves, sin abrir el editor. */
+export const cambiarPublicoRutina = (
+  routineId: string,
+  visibility: 'public' | 'members',
+): Promise<RutinaDto> =>
+  request(`/staff/routines/${routineId}/visibility`, { method: 'POST', body: { visibility } });
+
+/** Solo si esta sin publicar: la api responde 409 si no. */
+export const borrarRutina = (routineId: string): Promise<unknown> =>
+  request(`/staff/routines/${routineId}`, { method: 'DELETE' });
+
+/** Lo que hace falta para subir UN archivo, firmado por la api. */
+export interface PermisoDeSubida {
+  readonly assetId: string;
+  readonly uploadUrl: string;
+  /** Van tal cual: estan firmadas, no son una sugerencia. */
+  readonly headers: Record<string, string>;
+  readonly expiresInSeconds: number;
+}
+
+export const pedirSubidaDeVideo = (input: {
+  readonly contentType: string;
+  readonly sizeBytes?: number;
+  readonly originalName?: string;
+}): Promise<PermisoDeSubida> =>
+  request('/staff/routines/videos', { method: 'POST', body: input });
+
+export const confirmarSubidaDeVideo = (
+  assetId: string,
+): Promise<{ readonly assetId: string; readonly sizeBytes: number | null }> =>
+  request(`/staff/routines/videos/${assetId}/ready`, { method: 'POST' });
+
+/**
+ * Sube el archivo DIRECTO al almacenamiento, sin pasar por la api.
+ *
+ * Va con `XMLHttpRequest` y no con `fetch`, que es lo que usa el resto del
+ * cliente: `fetch` no informa del progreso, y una barra que no se mueve durante
+ * cuatro minutos con un video de 200 MB es indistinguible de una app colgada.
+ * La persona cancela y vuelve a empezar, que es la peor version de esto.
+ *
+ * Tampoco lleva la sesion de Sinchi: la autorizacion ya viaja DENTRO de la URL
+ * firmada, y mandar el token a un tercero seria regalarlo.
+ */
+export function subirArchivoDeVideo(input: {
+  readonly permiso: PermisoDeSubida;
+  readonly fileUri: string;
+  readonly onProgreso?: (fraccion: number) => void;
+}): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', input.permiso.uploadUrl);
+    for (const [nombre, valor] of Object.entries(input.permiso.headers)) {
+      xhr.setRequestHeader(nombre, valor);
+    }
+    xhr.upload.onprogress = (evento) => {
+      if (evento.lengthComputable && input.onProgreso !== undefined) {
+        input.onProgreso(evento.loaded / evento.total);
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`El almacenamiento rechazó el video (${xhr.status}).`));
+    };
+    xhr.onerror = () => reject(new Error('Se cortó la subida. Revisa la conexión.'));
+    xhr.onabort = () => reject(new Error('Subida cancelada.'));
+
+    /**
+     * En React Native se manda el `file://` envuelto: el puente nativo lee el
+     * archivo del disco y lo sube en trozos. Leerlo a memoria antes seria
+     * cargar 300 MB en el proceso de la app para volver a escribirlos.
+     */
+    xhr.send({ uri: input.fileUri, type: input.permiso.headers['Content-Type'] } as unknown as Blob);
+  });
+}
+
+// -- Del alumno --------------------------------------------------------------
+
+/**
+ * La biblioteca de SU gimnasio, por membresia.
+ *
+ * Por membresia y no suelta porque la biblioteca es del LOCAL: un alumno con
+ * tres gimnasios tiene tres.
+ */
+export const fetchRutinasDeMiGimnasio = (membershipId: string): Promise<BibliotecaDto> =>
+  request(`/me/memberships/${membershipId}/routines`);
+
+export const fetchRutinaDeMiGimnasio = (
+  membershipId: string,
+  routineId: string,
+): Promise<RutinaDetalleDto> =>
+  request(`/me/memberships/${membershipId}/routines/${routineId}`);
+
+// -- De la calle -------------------------------------------------------------
+
+/** Anonima: es la unica ruta que entrega contenido a quien no tiene cuenta. */
+export const fetchRutinaPublica = (
+  slug: string,
+  routineId: string,
+): Promise<RutinaDetalleDto> =>
+  request(`/gyms/${encodeURIComponent(slug)}/routines/${routineId}`, { anonymous: true });
 
 export const guardarPrecios = (precios: PreciosDelLocal): Promise<PreciosDelLocal> =>
   request('/staff/pricing', { method: 'POST', body: precios });

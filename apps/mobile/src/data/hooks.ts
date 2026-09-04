@@ -29,8 +29,10 @@ import {
   type CheckInPreviewDto,
   type GymCardDto,
   type GymDetailDto,
+  type BibliotecaDto,
   type EventoConCupo,
   type PlanConUso,
+  type RutinaDetalleDto,
   type PlazaDto,
   type PreciosDelLocal,
   type SaasSubscriptionDto,
@@ -50,6 +52,11 @@ import {
   eventosDelGimnasio,
   eventoDelGimnasio,
   plazasDelEvento,
+  bibliotecaDelGimnasio,
+  bibliotecaDeMiGimnasio,
+  rutinaDelGimnasio,
+  rutinaDeMiGimnasio,
+  rutinaPublica,
   suscripcionSinchi,
   vinculacionesPendientes,
   type Vinculacion,
@@ -684,6 +691,132 @@ export function useEvento(eventId: string): {
     plazas,
     error,
     cargando: evento === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+
+/**
+ * La biblioteca de rutinas.
+ *
+ * Un solo hook para los tres publicos —el mostrador, el alumno y quien la abre
+ * desde el directorio— porque es la MISMA lista mirada por tres ojos, y quien
+ * decide que sale de ella es la api. Tener tres hooks es como uno se queda sin
+ * el filtro el dia que la regla cambie.
+ *
+ * `membershipId` elige la fuente: con el, la del gimnasio donde entrena el
+ * alumno; sin el, la del local en el que trabaja quien tiene la sesion.
+ */
+export function useBiblioteca(membershipId?: string): {
+  readonly biblioteca: BibliotecaDto | null;
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const [biblioteca, setBiblioteca] = useState<BibliotecaDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    const pedir =
+      membershipId === undefined
+        ? bibliotecaDelGimnasio()
+        : bibliotecaDeMiGimnasio(membershipId);
+
+    void pedir
+      .then((valor) => {
+        if (!cancelado) setBiblioteca(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudieron traer las rutinas.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [membershipId, intento]);
+
+  /**
+   * Y se vuelve a pedir al enfocar.
+   *
+   * El dueno publica una rutina desde el editor y vuelve a la lista: sin esto se
+   * encuentra el mundo de antes de haberla escrito, y da por hecho que no se
+   * guardo.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      setIntento((n) => n + 1);
+    }, []),
+  );
+
+  return {
+    biblioteca,
+    error,
+    cargando: biblioteca === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
+/**
+ * Una rutina, desde donde sea que se la esté mirando.
+ *
+ * `slug` gana sobre `membershipId`: quien abre la ficha de OTRO gimnasio desde
+ * el directorio la mira como visitante aunque tenga membresías en la app, y
+ * mezclar las dos fuentes le enseñaría el contenido de alumnos del local
+ * equivocado.
+ *
+ * El resultado puede venir cerrado (`unlocked: false`), y eso NO es un error: es
+ * la pantalla que le vende la mensualidad a quien está mirando algo que quiere.
+ */
+export function useRutina(
+  routineId: string,
+  origen: { readonly membershipId?: string; readonly slug?: string } = {},
+): {
+  readonly rutina: RutinaDetalleDto | null;
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const { membershipId, slug } = origen;
+  const [rutina, setRutina] = useState<RutinaDetalleDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    // Sin id no hay nada que pedir: es la pantalla de crear una rutina nueva,
+    // que usa este mismo hook para no mantener dos formularios.
+    if (routineId.length === 0) return;
+
+    let cancelado = false;
+    setError(null);
+    const pedir =
+      slug !== undefined
+        ? rutinaPublica(slug, routineId)
+        : membershipId !== undefined
+          ? rutinaDeMiGimnasio(membershipId, routineId)
+          : rutinaDelGimnasio(routineId);
+
+    void pedir
+      .then((valor) => {
+        if (!cancelado) setRutina(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudo traer la rutina.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [routineId, membershipId, slug, intento]);
+
+  return {
+    rutina,
+    error,
+    cargando: routineId.length > 0 && rutina === null && error === null,
     recargar: () => setIntento((n) => n + 1),
   };
 }

@@ -383,3 +383,133 @@ después de haber decidido en el MD 2 no tenerlo, y encima uno que no se negocia
 El camino es el que ya sigue Sinchi: **el cobro ocurre fuera de la app**. El dueño
 paga por transferencia hoy, y mañana en una página de Culqi donde Apple Pay y
 Google Pay sí funcionan como billeteras de tarjeta. La app solo refleja el estado.
+
+---
+
+## 10. La biblioteca: lo que el gimnasio enseña sin abrir la puerta
+
+Hasta aquí, todo lo que un gimnasio vendía en Sinchi exigía que la persona
+ESTUVIERA ahí: la mensualidad, la clase suelta, el seminario. Las rutinas son lo
+primero que vale sin cruzar el umbral — el «día de pecho» con sus videos, el
+uchimata explicado paso a paso, el calentamiento de hombro.
+
+### La visibilidad va por rutina, no por gimnasio
+
+Es la decisión que se pidió y es la correcta: **la misma escuela necesita las
+dos**. Una rutina pública es un anuncio —la abre cualquiera desde el directorio,
+sin cuenta, y es lo que hace que alguien elija ESTE dojo entre cinco— y una de
+alumnos es media razón para seguir pagando la mensualidad. Un gimnasio que solo
+pudiera publicar hacia fuera regala su trabajo; uno que solo pudiera guardarlo no
+lo usa nunca para traer gente.
+
+Por eso el interruptor está en la lista, a un toque, y no enterrado en el editor:
+el dueño publica el uchimata para atraer, ve que funciona y decide guardarse la
+serie entera. Cambiar de opinión es el caso normal, no la excepción.
+
+El valor por defecto es `members`. De los dos errores posibles, publicar sin
+querer hacia todo internet es el que no se deshace.
+
+### El muro está en la api, no en la pantalla
+
+Filtrar en la app sería decorativo: el JSON viaja igual y basta un proxy para
+leerlo. Así que la api **nunca entrega la dirección de un video ni las
+instrucciones a quien no tiene acceso**. Lo que sí entrega es un anzuelo —título,
+de qué va, cuántos pasos— con `unlocked: false` y 200, no 403: es la única
+pantalla del producto donde alguien de fuera está mirando algo que quiere, y ahí
+el motivo del rechazo ES el argumento de venta. En la ficha del gimnasio pasa lo
+mismo un nivel más arriba: se enseñan las públicas y se CUENTAN las de alumnos
+—«hay 2 rutinas más solo para sus alumnos»— sin dar los títulos.
+
+Un borrador es distinto: fuera del local responde 404. No hay nada que vender de
+algo que el gimnasio todavía no escribió.
+
+### La deuda no cierra la biblioteca; la baja sí
+
+Al moroso ya se le cierra la puerta, y esa es la palanca que cobra. Quitarle
+además el video no recupera un sol —servirlo no le cuesta nada al gimnasio— y le
+quita justo lo único que lo mantiene atado a la escuela mientras junta la plata.
+Un alumno suspendido por mora sigue viendo todo.
+
+Lo que sí la cierra es darse de baja: quien se fue dejó de ser alumno. Y «ser
+alumno» se mide por la SUSCRIPCIÓN, no por `memberships.status` — esa columna
+existe y engaña, porque nada en el producto la pone en `inactive`. Mirarla habría
+dejado la biblioteca abierta para siempre a quien se dio de baja, y el fallo
+habría sido mudo.
+
+### Se sube el archivo, y también se acepta un enlace
+
+Las dos formas conviven porque los dos gimnasios existen. El dojo con canal de
+YouTube ya tiene su material subido, y obligarlo a repetirlo sería trabajo por
+nada; el profesor que graba en el tatami con el celular no tiene canal ni ganas
+de abrirlo, y sin subida no tenía forma de publicar nada. Lo que se ofrece
+primero es subir, porque es lo que más gente puede hacer.
+
+Nunca los dos a la vez, y lo fuerza un `CHECK` en la base: con los dos puestos
+hay dos videos para el mismo sitio y quien lee decide cuál gana, que es como el
+alumno y el dueño acaban mirando cosas distintas.
+
+**El archivo no pasa por la api.** Se firma una URL y el teléfono sube directo al
+bucket. Meter 300 MB por un proceso de Cloud Run con 512 MiB y 30s de timeout es
+la forma conocida de tumbar la api con una sola subida, y encima se pagaría el
+tráfico dos veces. El tope de tamaño va firmado en las cabeceras, así que lo
+aplica el almacenamiento y no una comprobación del cliente — que no es ninguna. Y
+«ya subí» no se cree: se le pregunta al almacenamiento cuánto pesa el objeto.
+
+**Subir es lo que hace exclusivo el contenido de alumnos.** Un video «solo para
+alumnos» en YouTube oculto lo ve cualquiera que tenga la dirección: eso no es un
+muro, es una puerta sin cartel. Un objeto privado del bucket solo se sirve con una
+URL firmada que caduca en dos horas, y la api solo la firma después de pasar
+`checkRoutineAccess`. Con un enlace, la exclusividad era una promesa; con archivo
+propio, es una propiedad del sistema.
+
+Lo que hay que seguir diciendo en voz alta: quien pega un enlace de YouTube sigue
+teniendo la limitación de siempre, y por eso el editor lo dice donde se decide
+—«un enlace de YouTube lo ve cualquiera que lo tenga; un video subido solo lo ve
+quien tú decidas»— en vez de esconderlo en la documentación.
+
+**Y lo que cuesta es servirlo, no guardarlo.** Guardar un GB son centavos al mes;
+que cien alumnos miren tres veces un video de 100 MB son 30 GB de salida a
+$0,12/GB. Las dos palancas —el tope por video, hoy 300 MB, y cuántos videos
+publica un gimnasio— están juntas y en el dominio, para que el día que apriete no
+haya que ir a buscarlas. Sin `VIDEO_BUCKET` la subida queda apagada y la
+biblioteca funciona entera con enlaces: un despliegue sin bucket degrada, no
+rompe.
+
+### El video se ve dentro de la app
+
+Un enlace que echa a la persona a YouTube rompe justo lo que hace útil una rutina:
+mirar diez segundos, leer la explicación del paso y volver a mirar. Así que el
+reproductor aparece EN SU SITIO, con la instrucción debajo.
+
+Hay dos reproductores porque hay dos clases de video, y cuál toca lo decide el
+dominio (`VideoLink.playback`), no la pantalla:
+
+- **el archivo** —lo subido, y cualquier `.mp4`— va con el reproductor nativo:
+  pantalla completa de verdad y control de velocidad, que para una técnica de
+  judo a 0.5x vale más que cualquier otra cosa;
+- **YouTube y Vimeo** no sirven el archivo, así que se embebe su reproductor en
+  un `WebView`. Cargarlo a pelo no funciona: YouTube lo trata como una petición
+  sin origen y contesta «Error 153» en vez del video. Hay que servirlo dentro de
+  una página con `baseUrl`.
+
+Sobre el embebido hay que ser honesto: depende de permisos que no controlamos —el
+dueño del video puede prohibirlo— y **el simulador de iOS no lo reproduce nunca**.
+Por eso el reproductor lleva encima nuestro propio botón para abrirlo fuera, y no
+se intenta detectar el fallo para caer solo: la tarjeta de error se pinta dentro
+del iframe, en otro origen, y no se puede leer. Ofrecer la salida siempre es más
+honesto que fingir que sabemos si falló.
+
+Los enlaces se guardan **canónicos**: dos dueños pegan el mismo video, uno desde
+el móvil y otro desde el navegador con la lista de reproducción y el segundo por
+el que iba detrás, y sin normalizar son dos cadenas distintas para el mismo video
+y el `?t=42` arranca la técnica por la mitad. Una dirección de un sitio conocido
+de la que no se saca un id —un canal, una lista, un tipeo— se rechaza en vez de
+guardarse como enlace genérico: aceptarla escondería el error hasta el día en que
+un alumno toca la técnica y YouTube le contesta que el video no existe.
+
+### Las series van en texto libre
+
+«4 series de 12» y «5 minutos de uchikomi con el compañero» son la misma casilla
+para quien la escribe. Modelarla con campos `sets` y `reps` sirve al gimnasio de
+pesas y deja al judoca rellenando repeticiones que no significan nada en su
+deporte. Sinchi no cuenta series; las dice.

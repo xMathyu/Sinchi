@@ -13,7 +13,7 @@ gimnasios a los que asiste.
 |---|---|
 | `packages/shared` — dominio y reglas puras | **Completo y con tests** (217 tests) |
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
-| `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio y clase gratis) |
+| `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio, clase gratis y biblioteca de rutinas) |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (239 tests, 146 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
 | Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
@@ -66,6 +66,39 @@ npm run saas:status -w @sinchi/api                       # cómo va cada gimnasi
 npm run saas:pay -w @sinchi/api -- kaizen transferencia 00123456
 npm run saas:promo -w @sinchi/api -- new VERANO2026 1 20  # 1 mes, 20 usos
 ```
+
+### Rutinas y técnicas en video, y quién ve cada una
+
+Lo primero que un gimnasio ofrece **sin que la persona cruce la puerta**: el «día
+de pecho» con sus ejercicios, el uchimata explicado paso a paso, el calentamiento
+de hombro. Cada rutina lleva su video, sus pasos y —lo que importa— **su
+público**:
+
+- **pública**: la abre cualquiera desde la ficha del directorio, sin cuenta. Es
+  un anuncio, y es lo que hace que alguien elija ese dojo entre cinco;
+- **de alumnos**: solo la ve quien entrena ahí. Es media razón para seguir
+  pagando la mensualidad.
+
+La decisión va **por rutina y no por gimnasio**, porque la misma escuela necesita
+las dos, y se cambia con un toque desde la lista. El muro lo aplica la api, no la
+pantalla: quien no tiene acceso recibe el título y de qué va —con el número de
+rutinas exclusivas que se está perdiendo— y **ni un enlace de video ni una
+instrucción**.
+
+**El video se sube desde la app y se ve dentro de la app.** El profesor graba en
+el tatami y publica sin abrir cuenta en ningún sitio; el archivo no pasa por la
+api —se firma una URL y el teléfono sube directo al bucket— y se reproduce en su
+sitio, con la instrucción del paso debajo. Quien ya tiene canal de YouTube sigue
+pudiendo pegar el enlace.
+
+Subir es además lo que hace exclusivo el contenido de alumnos: un video oculto de
+YouTube lo ve cualquiera que tenga la dirección, y un objeto del bucket solo se
+sirve con una URL firmada que caduca. Sin `VIDEO_BUCKET` configurado, subir queda
+apagado y la biblioteca funciona entera con enlaces.
+
+La deuda no cierra la biblioteca: al moroso ya se le cierra la puerta, y quitarle
+el video no cobra nada. La baja sí. Ver
+[`docs/decisiones.md`](docs/decisiones.md) §10.
 
 ### El gimnasio se da de alta solo
 
@@ -178,6 +211,7 @@ money/      céntimos enteros con tipo marcado, aritmética de prorrateo
 domain/     entidades. `User` vive FUERA del tenant: la identidad es global
 billing/    ciclo, prorrateo, cambio de plan, deuda derivada, dunning
 checkin/    cupo semanal, validación con motivo estructurado, textos
+routines/   quién ve una rutina, borrador válido, enlaces y subida de video
 saas/       plan gratis, mes de regalo, corte a solo lectura y códigos
 identity/   RUC peruano con dígito verificador
 security/   TOTP con HMAC inyectado, payload del QR

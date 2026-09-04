@@ -19,6 +19,7 @@ import { BillingService } from './billing/billing.service';
 import { MembersService } from './members/members.service';
 import { TrialsService } from './trials/trials.service';
 import { EventRegistrationsService } from './events/registrations.service';
+import { RoutinesService } from './routines/routines.service';
 
 const planChangeSchema = z.object({ planId: z.string().uuid() });
 const trialSchema = z.object({
@@ -46,6 +47,7 @@ export class StudentController {
     private readonly members: MembersService,
     private readonly trials: TrialsService,
     private readonly registrations: EventRegistrationsService,
+    private readonly routines: RoutinesService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -164,6 +166,42 @@ export class StudentController {
   ) {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
     return this.billing.changePlan(tenantId, membershipId, body.planId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Rutinas
+  // -------------------------------------------------------------------------
+
+  /**
+   * La biblioteca de SU gimnasio: lo publico y lo de alumnos.
+   *
+   * Va por membresia, como el horario y por lo mismo: la biblioteca es del
+   * LOCAL, un alumno con tres gimnasios tiene tres, y `resolveOwnMembership`
+   * comprueba ademas que la membresia sea suya. Aceptar un `tenantId` del
+   * cliente seria dejar que cualquiera leyera el contenido de alumnos de un
+   * gimnasio en el que no esta escribiendo otro uuid.
+   *
+   * Quien mira lo decide el padron, no la deuda: ver `viewerForMembership`.
+   */
+  @Get('memberships/:membershipId/routines')
+  async library(
+    @CurrentSession() session: Session,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ) {
+    const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
+    const viewer = await this.routines.viewerForMembership(tenantId, membershipId);
+    return this.routines.library(tenantId, viewer);
+  }
+
+  @Get('memberships/:membershipId/routines/:routineId')
+  async routine(
+    @CurrentSession() session: Session,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+    @Param('routineId', ParseUUIDPipe) routineId: string,
+  ) {
+    const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
+    const viewer = await this.routines.viewerForMembership(tenantId, membershipId);
+    return this.routines.view(tenantId, routineId, viewer);
   }
 
   // -------------------------------------------------------------------------

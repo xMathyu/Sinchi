@@ -799,6 +799,170 @@ describe('clase gratis', () => {
   });
 });
 
+describe('rutinas', () => {
+  async function nuevaRutina(): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into routines (tenant_id, title) values ($1, 'Día de pecho') returning id`,
+      [TENANT],
+    );
+    return rows[0]!.id;
+  }
+
+  /**
+   * De los dos errores posibles, publicar sin querer hacia todo internet es el
+   * que no se deshace: el enlace ya salió.
+   */
+  it('nace de alumnos y sin publicar', async () => {
+    const id = await nuevaRutina();
+    const { rows } = await db.query<{ visibility: string; status: string }>(
+      `select visibility, status from routines where id = $1`,
+      [id],
+    );
+    expect(rows[0]).toEqual({ visibility: 'members', status: 'draft' });
+  });
+
+  it('un título en blanco no es un título', async () => {
+    await expectRejection(
+      () => db.query(`insert into routines (tenant_id, title) values ($1, '   ')`, [TENANT]),
+      /routines_title_not_blank/,
+    );
+  });
+
+  /**
+   * El CHECK va con `IS NULL OR` a propósito: una comparación con NULL da NULL,
+   * y NULL en un CHECK PASA. En esta misma base ya se colaron dos así.
+   */
+  it('el video puede faltar, pero no puede ser una cadena vacía', async () => {
+    await db.query(
+      `insert into routines (tenant_id, title, video_url) values ($1, 'Sin video', null)`,
+      [TENANT],
+    );
+    await expectRejection(
+      () =>
+        db.query(`insert into routines (tenant_id, title, video_url) values ($1, 'Vacío', '  ')`, [
+          TENANT,
+        ]),
+      /routines_video_url_not_blank/,
+    );
+  });
+
+  /**
+   * El orden es un dato, no una sugerencia: un calentamiento después del trabajo
+   * fuerte es otra rutina. Sin el índice, dos pasos empatados salen en el orden
+   * que quiera Postgres y la lista cambia sola entre dos aperturas.
+   */
+  it('dos pasos no pueden ocupar la misma posición', async () => {
+    const rutina = await nuevaRutina();
+    await db.query(
+      `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Press banca')`,
+      [TENANT, rutina],
+    );
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Fondos')`,
+          [TENANT, rutina],
+        ),
+      /routine_items_position_per_routine/,
+    );
+  });
+
+  it('la misma posición en otra rutina sí: el índice es por rutina', async () => {
+    const otra = await nuevaRutina();
+    await db.query(
+      `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Uchimata')`,
+      [TENANT, otra],
+    );
+    const { rows } = await db.query<{ total: number }>(
+      `select count(*)::int as total from routine_items where routine_id = $1`,
+      [otra],
+    );
+    expect(rows[0]!.total).toBe(1);
+  });
+
+  /**
+   * O enlace, o archivo, o nada: nunca los dos. Con los dos puestos hay dos
+   * videos para un mismo paso y quien lee decide cuál gana; el día que la app y
+   * el panel decidan distinto, el alumno y el dueño miran cosas distintas.
+   */
+  it('una rutina no puede tener enlace y archivo a la vez', async () => {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into routine_videos (tenant_id, object_path, content_type, status)
+       values ($1, 'kaizen/' || gen_random_uuid() || '.mp4', 'video/mp4', 'pending') returning id`,
+      [TENANT],
+    );
+    const asset = rows[0]!.id;
+
+    // Cada uno por su lado, sí.
+    await db.query(
+      `insert into routines (tenant_id, title, video_asset_id) values ($1, 'Subido', $2)`,
+      [TENANT, asset],
+    );
+    await db.query(
+      `insert into routines (tenant_id, title, video_url) values ($1, 'Enlazado', 'https://youtu.be/x')`,
+      [TENANT],
+    );
+
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into routines (tenant_id, title, video_url, video_asset_id)
+           values ($1, 'Los dos', 'https://youtu.be/x', $2)`,
+          [TENANT, asset],
+        ),
+      /routines_one_video_source/,
+    );
+  });
+
+  it('un video listo lleva fecha de listo, y uno pendiente no', async () => {
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into routine_videos (tenant_id, object_path, content_type, status)
+           values ($1, 'kaizen/sin-fecha.mp4', 'video/mp4', 'ready')`,
+          [TENANT],
+        ),
+      /routine_videos_ready_has_date/,
+    );
+  });
+
+  /**
+   * Dos filas apuntando al mismo objeto es una de las dos sirviendo el video de
+   * la otra, y borrar una deja a la otra apuntando a un objeto que ya no está.
+   */
+  it('dos videos no pueden apuntar al mismo objeto', async () => {
+    await db.query(
+      `insert into routine_videos (tenant_id, object_path, content_type)
+       values ($1, 'kaizen/mismo.mp4', 'video/mp4')`,
+      [TENANT],
+    );
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into routine_videos (tenant_id, object_path, content_type)
+           values ($1, 'kaizen/mismo.mp4', 'video/mp4')`,
+          [TENANT],
+        ),
+      /routine_videos_object_path_key/,
+    );
+  });
+
+  it('borrar la rutina se lleva sus pasos', async () => {
+    const rutina = await nuevaRutina();
+    await db.query(
+      `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Uchimata')`,
+      [TENANT, rutina],
+    );
+    await db.query(`delete from routines where id = $1`, [rutina]);
+    const { rows } = await db.query<{ total: number }>(
+      `select count(*)::int as total from routine_items where routine_id = $1`,
+      [rutina],
+    );
+    expect(rows[0]!.total).toBe(0);
+  });
+
+});
+
 describe('aislamiento por tenant', () => {
   it('las políticas quedan creadas y forzadas', async () => {
     const { rows } = await db.query<{
@@ -830,6 +994,11 @@ describe('aislamiento por tenant', () => {
       'checkin_devices',
       'tenant_gateway',
       'trial_bookings',
+      'gym_events',
+      'event_registrations',
+      'routines',
+      'routine_items',
+      'routine_videos',
     ]) {
       const entry = byTable.get(table);
       expect(entry, `${table} debería tener RLS`).toBeDefined();

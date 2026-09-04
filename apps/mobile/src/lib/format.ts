@@ -100,3 +100,32 @@ export function splitGymName(name: string): { readonly brand: string; readonly a
   if (parts.length < 2) return { brand: name, area: '' };
   return { brand: parts.slice(0, -1).join(' '), area: parts[parts.length - 1] ?? '' };
 }
+
+/**
+ * El nivel de una rutina, dicho en una palabra.
+ *
+ * `null` es «para cualquiera», y ahi se devuelve `null` en vez de esa frase: en
+ * una linea que ya lleva los pasos y el estado, «Para cualquiera» ocupa sitio
+ * para no decir nada. La ausencia de nivel ya significa eso.
+ */
+export function nivelCorto(
+  level: 'beginner' | 'intermediate' | 'advanced' | null,
+): string | null {
+  switch (level) {
+    case 'beginner':
+      return 'Básico';
+    case 'intermediate':
+      return 'Intermedio';
+    case 'advanced':
+      return 'Avanzado';
+    case null:
+      return null;
+  }
+}
+
+/** `3 set` a partir de un instante ISO. Para «actualizada el …». */
+export function formatIsoDay(iso: string): string {
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return formatShortDate(plainDateInZone(fecha, TZ_LIMA));
+}

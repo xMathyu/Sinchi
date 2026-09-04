@@ -2,7 +2,7 @@
   "name": "@sinchi/api",
   "version": "0.0.0",
   "private": true,
-  "description": "NestJS \u2014 dominio, cobro y check-in sobre Postgres (Neon)",
+  "description": "NestJS — dominio, cobro y check-in sobre Postgres (Neon)",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
@@ -20,6 +20,7 @@
     "db:seed:fa-meng-chuen": "tsx src/db/seed-fa-meng-chuen.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.22.0",
     "@nestjs/common": "^11.2.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.2.1",

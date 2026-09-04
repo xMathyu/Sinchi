@@ -158,6 +158,25 @@ const schema = z.object({
   JOBS_TOKEN: z.string().min(24).optional(),
 
   /**
+   * Bucket donde viven los videos que sube el gimnasio.
+   *
+   * OPCIONAL, y ese es el punto: sin el, subir queda apagado y la biblioteca
+   * sigue funcionando entera con enlaces de YouTube. Es lo que permite
+   * desplegar esto sin haber creado el bucket todavia, y lo que hace que un
+   * despliegue mal configurado degrade en vez de romper.
+   */
+  VIDEO_BUCKET: vacioEsAusente(z.string().min(3).optional()),
+
+  /**
+   * Cuenta de servicio con la que se FIRMAN las URLs de los videos.
+   *
+   * Sin ella se firma igual, pero por la api de IAM: una llamada de red por cada
+   * URL. Con la clave, la firma es local y cuesta microsegundos — y una ficha de
+   * rutina firma un puñado de URLs de golpe.
+   */
+  VIDEO_SIGNING_KEY_JSON: vacioEsAusente(z.string().optional()),
+
+  /**
    * Conexiones por instancia. Cloud Run escala horizontalmente, asi que el
    * total contra Neon es este numero por el numero de instancias vivas.
    */

@@ -34,6 +34,9 @@ export type AttendanceId = Id<'attendance'>;
 export type TrialBookingId = Id<'trial_booking'>;
 export type GymEventId = Id<'gym_event'>;
 export type EventRegistrationId = Id<'event_registration'>;
+export type RoutineId = Id<'routine'>;
+export type RoutineItemId = Id<'routine_item'>;
+export type RoutineVideoId = Id<'routine_video'>;
 export type DeviceId = Id<'device'>;
 export type StaffId = Id<'staff'>;
 
@@ -354,6 +357,97 @@ export const eventPriceFor = (
   event: Pick<GymEvent, 'memberPriceCents' | 'guestPriceCents'>,
   isMember: boolean,
 ): Cents => (isMember ? event.memberPriceCents : event.guestPriceCents);
+
+// ---------------------------------------------------------------------------
+// Rutinas: lo que el gimnasio ensena
+// ---------------------------------------------------------------------------
+
+/**
+ * Quien ve una rutina.
+ *
+ * Va en la RUTINA y no en el gimnasio, y esa es la decision entera: la misma
+ * escuela usa unas para atraer —el video que hace que alguien la elija— y otras
+ * para retener, que son la razon de seguir pagando la mensualidad. La regla de
+ * quien pasa vive en `checkRoutineAccess`.
+ */
+export type RoutineVisibility = 'public' | 'members';
+
+/**
+ * `draft` o `published`, y no hay tercero.
+ *
+ * A diferencia de `GymEventStatus` aqui no existe `canceled`: un seminario se
+ * CAE —habia gente con plaza y hay que avisarle— y una rutina simplemente deja
+ * de ofrecerse. Despublicar es todo lo que hace falta.
+ */
+export type RoutineStatus = 'draft' | 'published';
+
+/** Para quien es. `null` = para cualquiera. */
+export type RoutineLevel = 'beginner' | 'intermediate' | 'advanced';
+
+/**
+ * Una rutina o una tecnica que el gimnasio publica: "Dia de pecho", "Uchimata".
+ *
+ * Las dos caben en la misma fila a proposito. Un dia de entrenamiento son varios
+ * `RoutineItem` con sus series; una tecnica de judo es esta fila con su video y
+ * su explicacion, y ni un paso. Separarlas en dos entidades habria dado dos
+ * pantallas, dos editores y la misma pregunta —"donde subo el video"— con dos
+ * respuestas.
+ */
+export interface Routine {
+  readonly id: RoutineId;
+  readonly tenantId: TenantId;
+  readonly title: string;
+  /** De que va, en dos lineas. Es lo que se lee en la lista. */
+  readonly summary: string | null;
+  /**
+   * La direccion con la que se REPRODUCE el video.
+   *
+   * Para un enlace es el enlace. Para un archivo subido es una URL firmada que
+   * caduca, y por eso no se guarda en ninguna parte: se calcula al servir, y
+   * solo para quien pasa `checkRoutineAccess`. Eso es lo que hace que el
+   * contenido de alumnos sea exclusivo de verdad y no solo "no listado".
+   */
+  readonly videoUrl: string | null;
+  /** El archivo subido del que sale, si viene de uno. */
+  readonly videoAssetId: RoutineVideoId | null;
+  readonly level: RoutineLevel | null;
+  readonly visibility: RoutineVisibility;
+  readonly status: RoutineStatus;
+  /**
+   * Cuando se toco por ultima vez.
+   *
+   * Se ensena, y por eso se guarda: una biblioteca sin fechas no se distingue de
+   * una abandonada, y "actualizada la semana pasada" es media razon para volver.
+   */
+  readonly updatedAt: Date;
+}
+
+/**
+ * Un paso: el ejercicio del dia de pecho, la entrada del uchimata.
+ *
+ * Todo es opcional menos el nombre. El gimnasio que solo pega enlaces publica
+ * igual que el que escribe la tecnica entera, y ninguno de los dos tiene que
+ * rellenar campos que no usa.
+ */
+export interface RoutineItem {
+  readonly id: RoutineItemId;
+  readonly routineId: RoutineId;
+  /** Orden dentro de la rutina. Un calentamiento despues del trabajo fuerte no es la misma rutina. */
+  readonly position: number;
+  readonly title: string;
+  readonly instructions: string | null;
+  /** Reproducible: el enlace, o una URL firmada. Ver `Routine.videoUrl`. */
+  readonly videoUrl: string | null;
+  readonly videoAssetId: RoutineVideoId | null;
+  /** "4 series de 12", "5 minutos de uchikomi". Texto libre: ver `RoutineItemDraft`. */
+  readonly prescription: string | null;
+}
+
+/** La rutina con sus pasos: es lo que se abre al tocarla. */
+export interface RoutineDetail {
+  readonly routine: Routine;
+  readonly items: readonly RoutineItem[];
+}
 
 // ---------------------------------------------------------------------------
 // Horarios y asistencia

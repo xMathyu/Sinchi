@@ -27,6 +27,8 @@ import {
   fetchTrials,
   fetchMembership,
   fetchRoster,
+  fetchRutinas,
+  fetchRutinasDeMiGimnasio,
   fetchStaffMember,
   fetchCheckInPreview,
   fetchPlansFor,
@@ -410,6 +412,69 @@ suite('directorio y clase gratis', () => {
       expect(reserva.fullName).toBeTruthy();
       expect(reserva.phone).toBeTruthy();
       expect(['booked', 'attended', 'no_show', 'canceled']).toContain(reserva.status);
+    }
+  });
+});
+
+
+suite('rutinas', () => {
+  /**
+   * La forma de la biblioteca, no su contenido.
+   *
+   * Un gimnasio recién sembrado no tiene ninguna rutina, y eso está bien: lo que
+   * este test protege es que la ruta exista y que los nombres de los campos no
+   * se hayan separado entre el cliente y el servidor. Si `membersOnly` pasara a
+   * llamarse de otro modo, el gancho de la ficha pública dejaría de contar nada
+   * y nadie se enteraría.
+   */
+  it('el mostrador lee la biblioteca del local', async () => {
+    active = 'staff';
+    const biblioteca = await fetchRutinas();
+
+    expect(Array.isArray(biblioteca.routines)).toBe(true);
+    expect(Number.isInteger(biblioteca.membersOnly)).toBe(true);
+
+    for (const fila of biblioteca.routines) {
+      expect(typeof fila.routine.title).toBe('string');
+      expect(['public', 'members']).toContain(fila.routine.visibility);
+      expect(['draft', 'published']).toContain(fila.routine.status);
+      expect(Number.isInteger(fila.itemCount)).toBe(true);
+    }
+  });
+
+  it('el alumno lee la de su gimnasio, por membresía', async () => {
+    active = 'student';
+    const wallet = await fetchWallet();
+    const entrada = wallet[0];
+    if (entrada === undefined) return;
+
+    const biblioteca = await fetchRutinasDeMiGimnasio(entrada.membership.id);
+    expect(Array.isArray(biblioteca.routines)).toBe(true);
+    // Para quien ya es alumno el gancho no dice nada: ya las tiene todas.
+    expect(biblioteca.membersOnly).toBe(0);
+  });
+
+  /**
+   * El escaparate y el gancho, en la ficha pública.
+   *
+   * `membersOnlyRoutines` es un número y NUNCA una lista: enseñar los títulos de
+   * lo que hay detrás del muro regalaría la mitad del valor, y que este test lo
+   * afirme deja escrito que el día que alguien lo cambie a un array está
+   * cambiando una decisión de producto, no un tipo.
+   */
+  it('la ficha del gimnasio trae las públicas y CUENTA las de alumnos', async () => {
+    active = 'none';
+    const gimnasios = await fetchGyms();
+    const gym = await fetchGym(gimnasios[0]!.slug);
+
+    expect(Array.isArray(gym.routines)).toBe(true);
+    expect(typeof gym.membersOnlyRoutines).toBe('number');
+
+    for (const fila of gym.routines) {
+      // Desde la calle solo se ve lo publicado y público. Cualquier otra cosa
+      // aquí es una fuga.
+      expect(fila.routine.visibility).toBe('public');
+      expect(fila.routine.status).toBe('published');
     }
   });
 });

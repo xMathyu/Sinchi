@@ -35,6 +35,12 @@ export * from './checkin/messages.js';
 export * from './events/draft.js';
 export * from './events/validate.js';
 
+// Rutinas y tecnicas: lo que el gimnasio ensena en video
+export * from './routines/video.js';
+export * from './routines/draft.js';
+export * from './routines/access.js';
+export * from './routines/upload.js';
+
 // Clase gratis
 export * from './trial/slots.js';
 export * from './trial/validate.js';

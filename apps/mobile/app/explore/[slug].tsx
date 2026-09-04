@@ -33,7 +33,9 @@ import {
   type TrialSlot,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
+import Lock from 'lucide-react-native/icons/lock';
 import { Badge, Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
@@ -45,8 +47,13 @@ import {
   reservarClaseGratis,
   reservarPlazaEnEvento,
 } from '../../src/data/trials';
-import type { BookEventDto, BookTrialDto, EventoConCupo } from '../../src/data/api';
-import { formatEventDate, formatLongDate, formatWeekdayAndDay } from '../../src/lib/format';
+import type { BookEventDto, BookTrialDto, EventoConCupo, RutinaEnLista } from '../../src/data/api';
+import {
+  formatEventDate,
+  formatLongDate,
+  formatWeekdayAndDay,
+  nivelCorto,
+} from '../../src/lib/format';
 
 export default function GymScreen() {
   const theme = useTheme();
@@ -380,6 +387,39 @@ export default function GymScreen() {
         </Stack>
       )}
 
+      {/* --- Lo que enseñan -------------------------------------------------
+          Va antes que los precios y después de lo que viene: es lo único de
+          esta pantalla que se puede consumir HOY, sin decidir nada ni pagar
+          nada. Un uchimata bien explicado convence más que una lista de
+          tarifas. */}
+      {(gym.routines.length > 0 || gym.membersOnlyRoutines > 0) && (
+        <Stack gap={10} style={{ marginTop: 28 }}>
+          <Eyebrow>Lo que enseñan</Eyebrow>
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Rutinas y técnicas en video, abiertas para cualquiera.
+          </Text>
+
+          {gym.routines.map((fila) => (
+            <TarjetaDeRutina key={fila.routine.id} fila={fila} slug={gym.slug} />
+          ))}
+
+          {/* El número, sin los títulos. Enseñar qué hay detrás regalaría la
+              mitad del valor; decir cuánto hay es lo que vende la mensualidad. */}
+          {gym.membersOnlyRoutines > 0 ? (
+            <Card tone="sunken" radius={theme.radii.lg}>
+              <Row gap={10} justify="flex-start">
+                <Lock size={15} color={theme.colors.textSecondary} />
+                <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ flex: 1 }}>
+                  {gym.membersOnlyRoutines === 1
+                    ? 'Hay 1 rutina más solo para sus alumnos.'
+                    : `Hay ${gym.membersOnlyRoutines} rutinas más solo para sus alumnos.`}
+                </Text>
+              </Row>
+            </Card>
+          ) : null}
+        </Stack>
+      )}
+
       {/* --- Precios -------------------------------------------------------- */}
       <Stack gap={10} style={{ marginTop: 28 }}>
         <Eyebrow>Precios</Eyebrow>
@@ -426,6 +466,71 @@ export default function GymScreen() {
 
       <View style={{ height: 16 }} />
     </Screen>
+  );
+}
+
+/**
+ * Una rutina pública en la ficha del gimnasio.
+ *
+ * Con miniatura y no como una fila de texto: es la única cosa de esta pantalla
+ * que se puede mirar ahora mismo, y una lista de títulos no invita a tocar
+ * nada. La miniatura no cuesta ninguna subida — sale del propio enlace.
+ */
+function TarjetaDeRutina({
+  fila,
+  slug,
+}: {
+  readonly fila: RutinaEnLista;
+  readonly slug: string;
+}) {
+  const theme = useTheme();
+  const { routine, itemCount, coverVideoUrl, hasVideo } = fila;
+  const meta = [
+    nivelCorto(routine.level),
+    itemCount === 0 ? null : `${itemCount} ${itemCount === 1 ? 'paso' : 'pasos'}`,
+  ]
+    .filter((parte) => parte !== null)
+    .join(' · ');
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Abrir ${routine.title}`}
+      onPress={() =>
+        router.push({
+          pathname: '/routines/[routineId]',
+          params: { routineId: routine.id, slug },
+        })
+      }
+    >
+      <Card radius={theme.radii.xl}>
+        <Stack gap={12}>
+          {coverVideoUrl !== null ? (
+            <PortadaDeVideo url={coverVideoUrl} alto={150} />
+          ) : hasVideo ? (
+            <MarcadorDeVideo alto={150} />
+          ) : null}
+          <Stack gap={3}>
+            <Text variant="heading" weight="semibold" numberOfLines={2}>
+              {routine.title}
+            </Text>
+            {routine.summary === null ? null : (
+              <Text variant="captionSmall" color={theme.colors.textSecondary} numberOfLines={2}>
+                {routine.summary}
+              </Text>
+            )}
+            {/* Sin nivel y sin pasos no se dice nada: la miniatura ya cuenta que
+                es un video, y una línea de relleno debajo del título hace que la
+                tarjeta parezca tener menos, no más. */}
+            {meta === '' ? null : (
+              <Text variant="micro" color={theme.colors.textFaint}>
+                {meta}
+              </Text>
+            )}
+          </Stack>
+        </Stack>
+      </Card>
+    </Pressable>
   );
 }
 
