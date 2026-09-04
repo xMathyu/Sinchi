@@ -54,7 +54,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Sinchi entra a tus videos solo para subir los que publiques en tus rutinas. No mira nada más.",
-          "cameraPermission": false,
+          "cameraPermission": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta.",
           "microphonePermission": false
         }
       ]
