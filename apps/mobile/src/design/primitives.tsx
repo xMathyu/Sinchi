@@ -483,6 +483,14 @@ export interface FieldProps {
    * texto en decirlo.
    */
   readonly optional?: boolean;
+  /**
+   * Caja alta, para lo que se escribe en parrafos.
+   *
+   * Existe por las instrucciones de una rutina: "como se hace un uchimata" no
+   * cabe en una linea de 50px, y en una caja de una linea el dueno escribe tres
+   * palabras porque el campo le dice que ahi no cabe mas.
+   */
+  readonly multiline?: boolean;
   readonly editable?: boolean;
   readonly secureTextEntry?: boolean;
   readonly keyboardType?: TextInputProps['keyboardType'];
@@ -512,6 +520,7 @@ export function Field({
   hint,
   error,
   optional = false,
+  multiline = false,
   editable = true,
   secureTextEntry,
   keyboardType,
@@ -534,6 +543,7 @@ export function Field({
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
         editable={editable}
+        multiline={multiline}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
@@ -543,7 +553,12 @@ export function Field({
         onSubmitEditing={onSubmitEditing}
         accessibilityLabel={label}
         style={{
-          height: 50,
+          // Alta y crecida desde arriba cuando es de parrafos: con `height`
+          // fija, el texto se centra verticalmente y la segunda linea empuja a
+          // la primera fuera de la vista.
+          ...(multiline
+            ? { minHeight: 112, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' as const }
+            : { height: 50 }),
           borderRadius: theme.radii.md,
           backgroundColor: optional ? theme.colors.screen : theme.colors.surfaceSunken,
           borderWidth: 1,

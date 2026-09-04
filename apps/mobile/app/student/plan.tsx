@@ -166,6 +166,38 @@ export default function PlanScreen() {
           </Text>
         </View>
 
+        {/* La biblioteca del gimnasio.
+            Va aquí y no en la billetera porque es del LOCAL: un alumno con tres
+            gimnasios tiene tres bibliotecas distintas, y esta pantalla es la de
+            uno concreto. Es, además, lo único de esta lista que se puede usar un
+            martes por la noche sin ir al local. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Rutinas de ${entry.tenant.name}`}
+          onPress={() =>
+            router.push({
+              pathname: '/routines',
+              params: { membershipId: entry.membership.id },
+            })
+          }
+        >
+          <Card radius={theme.radii.lg} tone="sunken">
+            <Row>
+              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodySmall" weight="semibold">
+                  Rutinas y técnicas
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Los videos que publica tu gimnasio, para entrenar o repasar en casa.
+                </Text>
+              </Stack>
+              <Text variant="body" color={theme.colors.textTertiary}>
+                ›
+              </Text>
+            </Row>
+          </Card>
+        </Pressable>
+
         <Button
           label="Cambiar de plan"
           onPress={() => router.push(`/plan-change/${entry.membership.id}`)}

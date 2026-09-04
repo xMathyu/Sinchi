@@ -16,6 +16,7 @@
  *     el metodo (MD 4.5).
  */
 import { sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
   date,
@@ -109,6 +110,27 @@ export const eventRegistrationStatusEnum = pgEnum('event_registration_status', [
   'attended',
   'no_show',
   'canceled',
+]);
+/**
+ * Quien ve una rutina. La decision va por RUTINA y no por gimnasio: la misma
+ * escuela publica unas para atraer y guarda otras para retener.
+ */
+export const routineVisibilityEnum = pgEnum('routine_visibility', ['public', 'members']);
+/**
+ * Sin `canceled`, a diferencia de `gym_event_status`: un seminario se CAE y hay
+ * gente con plaza a la que avisar; una rutina deja de ofrecerse y ya.
+ */
+export const routineStatusEnum = pgEnum('routine_status', ['draft', 'published']);
+/**
+ * La fila del video nace ANTES que el archivo —hace falta para firmar la
+ * subida— y por eso `pending` existe: sin el no se distingue un video
+ * subiendose de uno cuya subida se cayo a la mitad.
+ */
+export const routineVideoStatusEnum = pgEnum('routine_video_status', ['pending', 'ready']);
+export const routineLevelEnum = pgEnum('routine_level', [
+  'beginner',
+  'intermediate',
+  'advanced',
 ]);
 export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
   'booked',
@@ -757,6 +779,142 @@ export const eventRegistrations = pgTable(
   ],
 );
 
+
+// ---------------------------------------------------------------------------
+// Rutinas: lo que el gimnasio ensena
+// ---------------------------------------------------------------------------
+
+
+/**
+ * Un archivo de video del gimnasio.
+ *
+ * EL ARCHIVO NO PASA POR LA API: se firma una URL y el telefono sube directo al
+ * bucket. Meter 200 MB por un proceso de Cloud Run con 512 MiB y 30s de timeout
+ * es la forma conocida de tumbar la api con una sola subida.
+ *
+ * `objectPath` se DERIVA del id y nunca del nombre que traia el archivo:
+ * "../../otro-gimnasio/kata.mp4" es un nombre de archivo perfectamente valido.
+ */
+export const routineVideos = pgTable(
+  'routine_videos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    objectPath: text('object_path').notNull(),
+    contentType: text('content_type').notNull(),
+    /**
+     * Lo dice el almacenamiento al confirmar, no el cliente: el telefono puede
+     * declarar 10 MB y subir 900.
+     */
+    sizeBytes: integer('size_bytes'),
+    /** Solo para que el dueno reconozca cual es. No se usa para nada mas. */
+    originalName: text('original_name'),
+    status: routineVideoStatusEnum('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    readyAt: timestamp('ready_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('routine_videos_object_path_key').on(t.objectPath),
+    index('routine_videos_tenant_idx').on(t.tenantId),
+  ],
+);
+
+/**
+ * Una rutina o una tecnica publicada: "Dia de pecho", "Uchimata".
+ *
+ * Es lo primero del producto que vale sin que la persona cruce la puerta, y por
+ * eso la columna que decide todo es `visibility`. Publica = anuncio: la ve
+ * cualquiera desde la ficha del directorio, sin cuenta, y es lo que hace que
+ * alguien elija ESTE dojo. De alumnos = media razon para seguir pagando la
+ * mensualidad. El mismo gimnasio necesita las dos, y por eso la decision va por
+ * rutina y no por local.
+ *
+ * `members` por defecto: de los dos errores posibles, publicar sin querer hacia
+ * todo internet es el que no se deshace.
+ *
+ * Un dia de entrenamiento son varias filas de `routine_items`; una tecnica de
+ * judo es ESTA fila con su video y su explicacion, sin ningun paso. Las dos en
+ * la misma tabla evita dos editores y dos respuestas a "donde subo el video".
+ */
+export const routines = pgTable(
+  'routines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    summary: text('summary'),
+    /**
+     * El video de la rutina entera. En una tecnica suelta, es EL video.
+     *
+     * Es un ENLACE, no un archivo: la version 1 no aloja video. El porque —y la
+     * limitacion que eso trae— esta en la migracion 0014 y en
+     * `packages/shared/src/routines/video.ts`.
+     */
+    videoUrl: text('video_url'),
+    /**
+     * El video SUBIDO, cuando no es un enlace. Nunca los dos a la vez: lo
+     * fuerza `routines_one_video_source`.
+     *
+     * Es lo que hace que el contenido de alumnos sea exclusivo de verdad. Un
+     * video de YouTube oculto lo ve cualquiera con la direccion; un objeto
+     * privado del bucket solo se sirve con una URL firmada que caduca, y la api
+     * solo la firma para quien pasa `checkRoutineAccess`.
+     */
+    videoAssetId: uuid('video_asset_id').references((): AnyPgColumn => routineVideos.id, {
+      onDelete: 'set null',
+    }),
+    level: routineLevelEnum('level'),
+    visibility: routineVisibilityEnum('visibility').notNull().default('members'),
+    status: routineStatusEnum('status').notNull().default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Se ensena: una biblioteca sin fechas no se distingue de una abandonada. */
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('routines_tenant_status_idx').on(t.tenantId, t.status)],
+);
+
+/**
+ * Un paso: el ejercicio del dia de pecho, la entrada del uchimata.
+ *
+ * `tenantId` esta aunque se pueda deducir por `routineId`, y es deliberado: la
+ * politica RLS tiene que poder decidir SIN join. Una politica que necesita mirar
+ * otra tabla es una politica que alguien desactiva el dia que estorbe.
+ */
+export const routineItems = pgTable(
+  'routine_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    routineId: uuid('routine_id')
+      .notNull()
+      .references(() => routines.id, { onDelete: 'cascade' }),
+    position: smallint('position').notNull(),
+    title: text('title').notNull(),
+    instructions: text('instructions'),
+    videoUrl: text('video_url'),
+    /** El video subido de ESTE paso. Nunca junto con `videoUrl`. */
+    videoAssetId: uuid('video_asset_id').references((): AnyPgColumn => routineVideos.id, {
+      onDelete: 'set null',
+    }),
+    /** "4 series de 12", "5 minutos de uchikomi". Texto libre: ver 0014. */
+    prescription: text('prescription'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('routine_items_routine_idx').on(t.routineId),
+    // El orden es un dato: un calentamiento despues del trabajo fuerte es otra
+    // rutina. Sin esto, dos pasos empatados salen en el orden que quiera
+    // Postgres y la lista cambia sola entre dos aperturas.
+    uniqueIndex('routine_items_position_per_routine').on(t.routineId, t.position),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Horarios y asistencia
 // ---------------------------------------------------------------------------
@@ -919,6 +1077,11 @@ export const TENANT_SCOPED_TABLES = [
   'checkin_devices',
   'tenant_gateway',
   'trial_bookings',
+  'gym_events',
+  'event_registrations',
+  'routines',
+  'routine_items',
+  'routine_videos',
 ] as const;
 
 /**

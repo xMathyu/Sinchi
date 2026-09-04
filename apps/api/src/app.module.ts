@@ -42,6 +42,9 @@ import { GymSettingsService } from './modules/offering/settings.service';
 import { EventsController } from './modules/events/events.controller';
 import { EventsService } from './modules/events/events.service';
 import { EventRegistrationsService } from './modules/events/registrations.service';
+import { RoutinesController } from './modules/routines/routines.controller';
+import { RoutinesService } from './modules/routines/routines.service';
+import { videoStorageProvider } from './modules/routines/video-storage';
 import { VisitorService } from './modules/identity/visitor.service';
 import { SaasGuard } from './modules/saas/saas.guard';
 
@@ -54,6 +57,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     StaffController,
     OfferingController,
     EventsController,
+    RoutinesController,
     GymsController,
     AccountsController,
     InvitesController,
@@ -77,6 +81,8 @@ import { SaasGuard } from './modules/saas/saas.guard';
     GymSettingsService,
     EventsService,
     EventRegistrationsService,
+    RoutinesService,
+    videoStorageProvider,
     VisitorService,
     RefreshDelinquencyJob,
     RefreshSaasJob,

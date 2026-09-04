@@ -132,6 +132,9 @@ export default function RootLayout() {
           <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
           <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="events/edit/[eventId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="routines/index" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="routines/[routineId]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="routines/edit/[routineId]" options={{ presentation: 'modal' }} />
         </Stack>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -232,8 +235,14 @@ function DataLoader() {
  * estar en cualquiera de esos tres estados —incluida ninguna. Una ruta que no
  * este en estas listas se redirige EN SILENCIO —sin error y sin pantalla— asi
  * que anadir una y olvidarse de esto es escribirla para nadie.
+ *
+ * `routines` va con ellas por lo mismo, y es la primera pantalla del producto
+ * que atiende a los TRES publicos a la vez: el dueno que la escribe, el alumno
+ * que la abre desde su gimnasio y quien todavia no entrena en ningun sitio y
+ * llega desde el directorio. Quien ve que NO lo decide esta lista sino la api,
+ * que a quien no le toca le devuelve el titulo y ni un video.
  */
-const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup']);
+const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup', 'routines']);
 
 const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set([

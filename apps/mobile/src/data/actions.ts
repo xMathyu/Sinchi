@@ -40,6 +40,19 @@ import {
   guardarPrecios,
   fetchEventos,
   fetchEvento,
+  fetchRutinas,
+  fetchRutina,
+  fetchRutinasDeMiGimnasio,
+  fetchRutinaDeMiGimnasio,
+  fetchRutinaPublica,
+  crearRutina,
+  editarRutina,
+  cambiarEstadoRutina,
+  cambiarPublicoRutina,
+  borrarRutina,
+  pedirSubidaDeVideo,
+  confirmarSubidaDeVideo,
+  subirArchivoDeVideo,
   crearEvento,
   editarEvento,
   cambiarEstadoEvento,
@@ -51,6 +64,10 @@ import {
   type EventoConCupo,
   type EventoDto,
   type EventoEscrito,
+  type BibliotecaDto,
+  type RutinaDto,
+  type RutinaDetalleDto,
+  type RutinaEscrita,
   type PlazaDto,
   type PlanConUso,
   type PlanEscrito,
@@ -679,6 +696,142 @@ export async function cobrarPlazaDeEvento(
 ): Promise<PlazaDto> {
   exigeServidor('Cobrar una plaza');
   return await cobrarPlaza(registrationId, rail);
+}
+
+
+// ---------------------------------------------------------------------------
+// Rutinas
+// ---------------------------------------------------------------------------
+
+/**
+ * La biblioteca exige servidor, y el motivo no es el mismo que en los eventos.
+ *
+ * Allí lo que se protege es el CUPO. Aquí es el ACCESO: quién puede ver una
+ * rutina de alumnos lo decide la api, que es la única que sabe si la suscripción
+ * sigue viva. Una caché local de contenido exclusivo sería contenido exclusivo
+ * guardado en el teléfono de alguien que quizá ya se dio de baja.
+ *
+ * Que el video en sí sea un enlace público de YouTube no cambia el argumento:
+ * una cosa es que se pueda compartir a mano y otra que la app lo reparta sola.
+ *
+ * Ojo con el guardia: `exigeServidor` descarta el rol `student` a propósito
+ * —distingue quién puede ESCRIBIR en el padrón— así que sirve para la
+ * biblioteca del mostrador y NO para la del alumno. Usarlo en las dos dejaba al
+ * alumno con «necesita conexión» teniendo sesión y wifi, y lo encontró el
+ * simulador, no la lectura del código.
+ */
+export async function bibliotecaDelGimnasio(): Promise<BibliotecaDto> {
+  exigeServidor('Ver las rutinas');
+  return await fetchRutinas();
+}
+
+export async function rutinaDelGimnasio(routineId: string): Promise<RutinaDetalleDto> {
+  exigeServidor('Ver una rutina');
+  return await fetchRutina(routineId);
+}
+
+/** Sesión de la persona, del rol que sea: la del alumno también vale. */
+function exigeSesion(que: string): void {
+  if (!haySesion()) {
+    throw new Error(`${que} necesita que hayas entrado con tu cuenta.`);
+  }
+}
+
+/** La del alumno, por su membresía en ese local. */
+export async function bibliotecaDeMiGimnasio(membershipId: string): Promise<BibliotecaDto> {
+  exigeSesion('Ver las rutinas de tu gimnasio');
+  return await fetchRutinasDeMiGimnasio(membershipId);
+}
+
+export async function rutinaDeMiGimnasio(
+  membershipId: string,
+  routineId: string,
+): Promise<RutinaDetalleDto> {
+  exigeSesion('Ver una rutina');
+  return await fetchRutinaDeMiGimnasio(membershipId, routineId);
+}
+
+/**
+ * La que se abre desde el directorio.
+ *
+ * Sin guardia ninguna, y es lo correcto: la llama gente que no tiene cuenta de
+ * nada —es la única ruta del producto que entrega contenido a un desconocido— y
+ * exigirle sesión para ver el video que el gimnasio publicó para atraerlo sería
+ * cerrarle la puerta con la que se le estaba invitando a entrar.
+ */
+export async function rutinaPublica(
+  slug: string,
+  routineId: string,
+): Promise<RutinaDetalleDto> {
+  return await fetchRutinaPublica(slug, routineId);
+}
+
+export async function guardarRutina(
+  routineId: string | null,
+  rutina: RutinaEscrita,
+): Promise<RutinaDetalleDto> {
+  exigeServidor('Guardar una rutina');
+  return routineId === null ? await crearRutina(rutina) : await editarRutina(routineId, rutina);
+}
+
+export async function publicarRutina(
+  routineId: string,
+  status: 'draft' | 'published',
+): Promise<RutinaDto> {
+  exigeServidor('Publicar una rutina');
+  return await cambiarEstadoRutina(routineId, status);
+}
+
+export async function cambiarPublicoDeRutina(
+  routineId: string,
+  visibility: 'public' | 'members',
+): Promise<RutinaDto> {
+  exigeServidor('Cambiar quién ve la rutina');
+  return await cambiarPublicoRutina(routineId, visibility);
+}
+
+/**
+ * Sube un video del gimnasio y devuelve el id con el que la rutina lo apunta.
+ *
+ * Tres pasos, y el del medio no pasa por Sinchi:
+ *
+ *  1. la api firma un permiso para escribir UN objeto, con su tipo y su tope;
+ *  2. el telefono sube DIRECTO al almacenamiento — 300 MB por un proceso de
+ *     Cloud Run con 512 MiB seria tumbar la api con una sola subida;
+ *  3. la api confirma preguntandole al almacenamiento si el archivo llego. No
+ *     se le cree al telefono: "ya subi" es justo lo que diria quien no subio.
+ *
+ * Si el paso 2 o el 3 fallan queda una fila `pending` sin archivo, y eso es
+ * exactamente lo que `pending` existe para representar: la rutina no la sirve.
+ */
+export async function subirVideoDeRutina(input: {
+  readonly fileUri: string;
+  readonly contentType: string;
+  readonly sizeBytes?: number;
+  readonly originalName?: string;
+  readonly onProgreso?: (fraccion: number) => void;
+}): Promise<string> {
+  exigeServidor('Subir un video');
+
+  const permiso = await pedirSubidaDeVideo({
+    contentType: input.contentType,
+    ...(input.sizeBytes === undefined ? {} : { sizeBytes: input.sizeBytes }),
+    ...(input.originalName === undefined ? {} : { originalName: input.originalName }),
+  });
+
+  await subirArchivoDeVideo({
+    permiso,
+    fileUri: input.fileUri,
+    ...(input.onProgreso === undefined ? {} : { onProgreso: input.onProgreso }),
+  });
+
+  await confirmarSubidaDeVideo(permiso.assetId);
+  return permiso.assetId;
+}
+
+export async function eliminarRutina(routineId: string): Promise<void> {
+  exigeServidor('Borrar una rutina');
+  await borrarRutina(routineId);
 }
 
 export async function guardarPreciosDelLocal(

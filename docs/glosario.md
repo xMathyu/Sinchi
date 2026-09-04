@@ -24,6 +24,8 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | clase gratis reservada | `TrialBooking` |
 | evento con fecha (seminario, taller) | `GymEvent` |
 | plaza en un evento | `EventRegistration` |
+| rutina o técnica en video | `Routine` |
+| paso de una rutina (ejercicio, técnica) | `RoutineItem` |
 
 ## Tipos de plan
 
@@ -93,6 +95,49 @@ también paga el alumno CON plan que agota su cupo semanal — y ese precio vive
 | motivo de rechazo de la reserva | `TrialDenialReason` / `TrialDenialCode` |
 | ya la usó en este gimnasio | `already_booked` |
 | ya entrena aquí | `already_member` |
+
+## Conceptos de la biblioteca
+
+Una `Routine` cubre DOS cosas que parecen distintas y son la misma: el «día de
+pecho», que son seis ejercicios con sus series, y el «uchimata», que es una
+técnica con un video y una explicación. Por eso los pasos son opcionales.
+
+Ojo con `visibility`: es la decisión que el gimnasio compra, y va por RUTINA, no
+por gimnasio. La misma escuela publica unas para atraer y guarda otras para
+retener.
+
+| Negocio | Código |
+|---|---|
+| biblioteca del gimnasio | `library` / `routines` |
+| quién la ve | `RoutineVisibility` (`public`, `members`) |
+| la ve cualquiera, desde el directorio | `visibility = 'public'` |
+| solo para alumnos | `visibility = 'members'` |
+| con qué ojos se mira | `RoutineViewer` (`staff`, `member`, `visitor`) |
+| motivo por el que no se ve | `RoutineAccessDenial` (`not_published`, `members_only`) |
+| borrador / publicada | `RoutineStatus` (`draft`, `published`) |
+| para quién es | `RoutineLevel` (`beginner`, `intermediate`, `advanced`); `null` = para todos |
+| el anzuelo: título y de qué va, sin videos | `teaser` |
+| cuántas se pierde quien no es alumno | `membersOnly` / `membersOnlyRoutines` |
+| portada de la rutina | `coverVideoUrl` |
+| series y repeticiones, o rondas, o minutos | `prescription` (texto libre) |
+| enlace de video entendido | `VideoLink` / `parseVideoLink` |
+| de dónde sale el video | `VideoProvider` (`youtube`, `vimeo`, `file`, `link`) |
+| cómo se reproduce | `VideoPlayback` (`file`, `embed`, `external`) |
+| video subido por el gimnasio | `RoutineVideo` / `routine_videos` |
+| subiéndose / listo | `RoutineVideoStatus` (`pending`, `ready`) |
+| ruta dentro del bucket | `objectPath` / `videoObjectPath` |
+| permiso firmado para subir | `SignedUpload` / `signUpload` |
+| URL firmada para ver | `signPlayback` |
+| tope por video | `VIDEO_MAX_BYTES` |
+
+`prescription` es texto libre a propósito: «4 series de 12» y «5 minutos de
+uchikomi con el compañero» son la misma casilla para quien la escribe, y modelar
+solo la primera deja al judoca rellenando repeticiones que no significan nada en
+su deporte. Sinchi no cuenta series; las dice.
+
+Ojo con `member`: aquí significa **suscripción viva en ese gimnasio, aunque
+deba**. No es `Membership.status`, que existe y engaña —nada en el producto la
+pone en `inactive`—. La baja de un gimnasio es una suscripción cancelada.
 
 ## Conceptos de la suscripción del gimnasio a Sinchi
 

@@ -132,6 +132,8 @@ arrancar con esa bandera en producción.
 | `GET` | `/me/memberships/:id/plans` | Planes a los que puede cambiar. |
 | `GET` `POST` | `/me/trials` | Sus clases gratis reservadas, y reservar una nueva. |
 | `POST` | `/me/trials/:id/cancel` | Cancela una reserva suya. |
+| `GET` | `/me/memberships/:id/routines` | La biblioteca de ESE gimnasio: lo público y lo de alumnos. Va por membresía porque la biblioteca es del local, y un alumno con tres gimnasios tiene tres. |
+| `GET` | `/me/memberships/:id/routines/:routineId` | Una rutina con sus pasos y sus videos. |
 | `POST` | `/me/memberships/:id/plan` | Cambio de plan. Devuelve la decisión completa. |
 | `POST` | `/me/memberships/:id/cancel` | Cancela. Sin congelamiento en el MVP. |
 
@@ -144,7 +146,8 @@ que es exactamente la persona que la clase gratis quiere convertir en alumno.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y qué cuesta su clase de prueba (0 = gratis). Anónima. |
-| `GET` | `/gyms/:slug` | Horarios, precios y las clases concretas —con fecha— que se pueden reservar. Anónima. |
+| `GET` | `/gyms/:slug` | Horarios, precios, las clases concretas —con fecha— que se pueden reservar, lo que viene y las rutinas **públicas** con `membersOnlyRoutines`, que cuenta las de alumnos sin nombrarlas. Anónima. |
+| `GET` | `/gyms/:slug/routines/:routineId` | Una rutina, desde la calle. La única ruta del producto que entrega contenido a quien no tiene cuenta de nada. Si es de alumnos devuelve 200 con `unlocked: false` y un anzuelo SIN videos ni instrucciones. Anónima. |
 | `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
 | `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada, RUC con dígito verificador y un gimnasio por persona. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
@@ -175,6 +178,14 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
 | `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
+| `GET` | `/staff/routines` | La biblioteca del local, borradores incluidos. |
+| `GET` | `/staff/routines/:id` | Una rutina con sus pasos. |
+| `POST` | `/staff/routines` · `/staff/routines/:id` | Solo el dueño: crea o reescribe una rutina entera, pasos incluidos. |
+| `POST` | `/staff/routines/:id/status` | Solo el dueño: publicar o volver a borrador. |
+| `POST` | `/staff/routines/:id/visibility` | Solo el dueño: de escaparate a contenido de alumnos, y al revés. Ruta propia porque se llega a ella con un toque desde la lista. |
+| `POST` | `/staff/routines/videos` | Solo el dueño: firma la subida de UN video y devuelve la URL. El archivo **no pasa por la api**. Declarada antes que `:routineId`, o «videos» entraría ahí como si fuera un id. |
+| `POST` | `/staff/routines/videos/:id/ready` | Solo el dueño: confirma que el archivo llegó, preguntándoselo al almacenamiento. 409 si todavía no está. |
+| `DELETE` | `/staff/routines/:id` | Solo el dueño, y solo si está sin publicar: 409 si no. |
 | `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
 | `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |
 | `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
@@ -195,6 +206,103 @@ caída de Neon, que es justo lo que no ayuda.
 ---
 
 ## Decisiones que se notan al usarla
+
+### La api nunca entrega un video a quien no le toca
+
+Las rutinas se publican con dos públicos posibles —`public` y `members`— y esa
+columna es la que el gimnasio compra: unas atraen desde el directorio y otras
+son media razón para seguir pagando la mensualidad.
+
+Filtrarlas en la pantalla sería decorativo: el JSON viaja igual. Así que quien
+pide una rutina que no le toca recibe **200 con un anzuelo**, no un 403 y no la
+rutina:
+
+```jsonc
+// GET /gyms/kaizen/routines/<id> — de alumnos, pedida desde la calle
+{
+  "unlocked": false,
+  "reason": { "code": "members_only" },
+  "teaser": { "title": "Tomoe nage", "summary": "…", "level": "advanced", "itemCount": 4 }
+}
+```
+
+Ni `videoUrl` ni `instructions` aparecen en ninguna parte del cuerpo. Que sea 200
+y no 403 tampoco es un detalle: es la única pantalla del producto donde alguien
+de fuera está mirando algo que quiere, y ahí el motivo ES el argumento de venta.
+
+Un BORRADOR es distinto: para quien no es del local responde **404**. No hay nada
+que vender de algo que el gimnasio todavía no escribió.
+
+**Quién cuenta como alumno**: quien tiene una suscripción viva en ese gimnasio,
+aunque deba. La deuda ya cierra la puerta —esa es la palanca que cobra— y quitarle
+además el video no recupera un sol: servirlo no le cuesta nada al gimnasio y es lo
+único que lo mantiene atado a la escuela mientras junta la plata. Lo que sí cierra
+la biblioteca es la BAJA.
+
+**El video es un enlace, no un archivo.** La versión 1 no aloja video: guardarlo
+significa transcodificar, CDN y una factura por GB que el local del plan gratis no
+financia. La consecuencia hay que decirla: un enlace de YouTube oculto lo ve
+cualquiera que lo tenga. Lo que la api garantiza es que nunca se lo da a quien no
+tiene acceso; que un alumno lo reparta a mano es el mismo riesgo que grabar la
+clase con el celular.
+
+### El video se sube al bucket, no a la api
+
+El archivo **nunca pasa por la api**. Meter 300 MB por un proceso de Cloud Run
+con 512 MiB de memoria y 30s de timeout es la forma conocida de tumbarla con una
+sola subida, y encima se pagaría el tráfico dos veces. Son tres pasos:
+
+```jsonc
+// 1. POST /staff/routines/videos  { contentType, sizeBytes?, originalName? }
+{
+  "assetId": "…",
+  "uploadUrl": "https://storage.googleapis.com/…?X-Goog-Signature=…",
+  "headers": { "Content-Type": "video/mp4", "x-goog-content-length-range": "0,314572800" },
+  "expiresInSeconds": 900
+}
+// 2. El teléfono hace PUT a `uploadUrl` con esas cabeceras TAL CUAL.
+// 3. POST /staff/routines/videos/<assetId>/ready
+```
+
+Las cabeceras van **firmadas**, así que no son una sugerencia: el tope de tamaño
+lo aplica el propio almacenamiento (`x-goog-content-length-range`), no una
+comprobación del cliente. Y el paso 3 no se cree lo que dice el teléfono:
+consulta el tamaño real del objeto. «Ya subí» es justo lo que diría quien no
+subió nada, y una rutina publicada contra un objeto inexistente es un reproductor
+en negro que el dueño descubre por un alumno.
+
+Un video se sirve solo cuando está `ready`. La rutina lo apunta con
+`videoAssetId`, **nunca junto con `videoUrl`**: o enlace, o archivo, o nada, y lo
+fuerza un `CHECK` en la base.
+
+**Esto es lo que hace exclusivo el contenido de alumnos.** El objeto del bucket es
+privado; la única forma de verlo es una URL firmada que caduca en dos horas, y la
+api solo la firma después de pasar `checkRoutineAccess`. Con un enlace de YouTube
+oculto, cualquiera con la dirección entraba.
+
+En las LISTAS no se firma nada, a propósito: nadie reproduce desde una lista, y un
+archivo tampoco trae miniatura. Cada fila trae `hasVideo` para pintar su marcador.
+
+**Sin `VIDEO_BUCKET` configurado, subir queda apagado** y responde 503 con un
+mensaje que lo dice; la biblioteca sigue funcionando entera con enlaces. Un
+despliegue sin bucket degrada, no rompe. Cómo crearlo:
+
+```bash
+gcloud storage buckets create gs://sinchi-videos \
+  --project=sinchi-a95913 --location=us-east4 --uniform-bucket-level-access
+# La api firma y lee; nadie más. Sin acceso público: el muro son las URLs firmadas.
+gcloud storage buckets add-iam-policy-binding gs://sinchi-videos \
+  --member=serviceAccount:<SA-DE-CLOUD-RUN> --role=roles/storage.objectAdmin
+# Para firmar sin llamar a IAM en cada URL, dale una clave a VIDEO_SIGNING_KEY_JSON
+# o concédele permiso para firmarse a sí misma:
+gcloud iam service-accounts add-iam-policy-binding <SA-DE-CLOUD-RUN> \
+  --member=serviceAccount:<SA-DE-CLOUD-RUN> --role=roles/iam.serviceAccountTokenCreator
+```
+
+**Lo que cuesta es servirlo, no guardarlo.** Guardar un GB son centavos al mes;
+que cien alumnos miren tres veces un video de 100 MB son 30 GB de salida a
+$0,12/GB. Las dos palancas —el tope por video y cuántos videos publica un
+gimnasio— están en `packages/shared/src/routines/upload.ts`.
 
 ### Un rechazo de check-in devuelve 200
 

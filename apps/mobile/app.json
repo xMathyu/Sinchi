@@ -48,6 +48,15 @@
           "resizeMode": "contain",
           "backgroundColor": "#0E0E11"
         }
+      ],
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Sinchi entra a tus videos solo para subir los que publiques en tus rutinas. No mira nada más.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

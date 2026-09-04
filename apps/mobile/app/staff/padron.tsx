@@ -259,6 +259,31 @@ export default function PadronScreen() {
         </Card>
       </Pressable>
 
+      {/* La biblioteca la ve TODO el staff: a recepción le preguntan por el
+          video de la clase del sábado tanto como por el precio. Escribirla sí es
+          del dueño, y eso se apaga dentro. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Rutinas"
+        onPress={() => router.push('/routines')}
+      >
+        <Card radius={theme.radii.lg} tone="sunken">
+          <Row>
+            <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="bodySmall" weight="semibold">
+                Rutinas
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                Tus videos y técnicas. Unos para atraer, otros solo para tus alumnos.
+              </Text>
+            </Stack>
+            <Text variant="body" color={theme.colors.textTertiary}>
+              ›
+            </Text>
+          </Row>
+        </Card>
+      </Pressable>
+
       {esDueno && (
         <Pressable
           accessibilityRole="button"
