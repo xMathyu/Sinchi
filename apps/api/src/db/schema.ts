@@ -132,6 +132,11 @@ export const routineLevelEnum = pgEnum('routine_level', [
   'intermediate',
   'advanced',
 ]);
+export const accountDeletionStatusEnum = pgEnum('account_deletion_status', [
+  'pending',
+  'done',
+  'canceled',
+]);
 export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
   'booked',
   'attended',
@@ -1193,5 +1198,51 @@ export const trialBookings = pgTable(
     index('trial_bookings_account_idx')
       .on(t.firebaseUid)
       .where(sql`firebase_uid is not null`),
+  ],
+);
+
+
+/**
+ * Baja de cuenta pedida por la propia persona.
+ *
+ * Google Play la exige para cualquier app con registro, y por dos caminos: uno
+ * dentro de la app y una URL publica. La URL es sinchi.fit/eliminar-cuenta;
+ * esta tabla es el otro lado.
+ *
+ * Es una SOLICITUD y no un borrado en el acto, y la migracion 0016 explica por
+ * que: la ficha vive en el gimnasio, los cobros son sus asientos contables y el
+ * historial es de los dos. Un `DELETE` en cascada disparado desde un boton del
+ * telefono borra en casa ajena sin que nadie lo mire, y no se deshace.
+ *
+ * Fuera de `TENANT_SCOPED_TABLES` a proposito: la baja es de la PERSONA, que
+ * puede entrenar en varios gimnasios. Se filtra por `userId` contra el `sub` de
+ * la sesion, que es lo unico que el cliente no elige.
+ */
+export const accountDeletionRequests = pgTable(
+  'account_deletion_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: accountDeletionStatusEnum('status').notNull().default('pending'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Cuando se ejecuto o se cancelo. Sin esto no se puede probar el plazo. */
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    /** Lo que escribio al pedirla. La mitad son "no puedo entrar a mi cuenta". */
+    reason: text('reason'),
+  },
+  (t) => [
+    /**
+     * UNA pendiente por persona.
+     *
+     * En la base y no solo en el servicio: dos toques seguidos al boton son dos
+     * peticiones, y sin el indice quedan dos filas y dos correos al soporte por
+     * la misma baja. Parcial — cancelar deja pedirla de nuevo.
+     */
+    uniqueIndex('account_deletion_requests_one_pending')
+      .on(t.userId)
+      .where(sql`status = 'pending'`),
+    index('account_deletion_requests_status_idx').on(t.status, t.requestedAt),
   ],
 );

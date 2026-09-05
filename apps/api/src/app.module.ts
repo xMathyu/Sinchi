@@ -28,6 +28,7 @@ import { BrandController } from './modules/brand.controller';
 import { CheckInService } from './modules/checkin/checkin.service';
 import { HealthController } from './modules/health.controller';
 import { IdentityService } from './modules/identity/identity.service';
+import { AccountDeletionService } from './modules/identity/account-deletion.service';
 import { MembersService } from './modules/members/members.service';
 import { MembershipViewService } from './modules/memberships/membership-view.service';
 import { StaffController } from './modules/staff.controller';
@@ -70,6 +71,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     { provide: APP_GUARD, useClass: SaasGuard },
     MembershipViewService,
     IdentityService,
+    AccountDeletionService,
     MembersService,
     CheckInService,
     BillingService,

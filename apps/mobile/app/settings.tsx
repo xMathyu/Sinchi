@@ -235,6 +235,22 @@ export default function SettingsScreen() {
                 </Text>
               </Card>
             </Pressable>
+
+            {/* El camino de baja DENTRO de la app que exige Google Play. Va aquí
+                y no en un menú aparte porque es donde se busca: quien quiere
+                irse abre ajustes y mira debajo de «cerrar sesión». Discreto a
+                propósito —sin recuadro y en texto terciario— para no ofrecer la
+                baja a quien solo venía a cambiar el tema. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/eliminar-cuenta')}
+              hitSlop={8}
+              style={{ paddingVertical: 6, alignSelf: 'flex-start' }}
+            >
+              <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                Eliminar mi cuenta
+              </Text>
+            </Pressable>
           </Stack>
         )}
 

@@ -6,13 +6,15 @@
  * suya antes de tocar nada. Aceptar un `tenantId` del cliente sería dejar que
  * cualquiera lea el padrón de otro local escribiendo otro uuid.
  */
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
 import { accessMessage, isDropInPlan } from '@sinchi/shared';
 import { CurrentSession } from '../auth/auth.guard';
+import { AllowedWhenReadOnly } from './saas/saas.guard';
 import type { Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
 import { IdentityService } from './identity/identity.service';
+import { AccountDeletionService } from './identity/account-deletion.service';
 import { MembershipViewService } from './memberships/membership-view.service';
 import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
@@ -32,6 +34,9 @@ const eventBookingSchema = z.object({
   slug: z.string().min(2).max(80),
   eventId: z.string().uuid(),
 });
+/** El motivo es opcional: obligar a explicarse para irse es un peaje. */
+const bajaSchema = z.object({ reason: z.string().max(500).optional() });
+
 const linkDeviceSchema = z.object({
   /** `true` cuando el alumno perdió el celular: invalida los códigos viejos. */
   rotate: z.boolean().optional(),
@@ -48,6 +53,7 @@ export class StudentController {
     private readonly trials: TrialsService,
     private readonly registrations: EventRegistrationsService,
     private readonly routines: RoutinesService,
+    private readonly bajas: AccountDeletionService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -293,5 +299,50 @@ export class StudentController {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
     await this.billing.cancelSubscription(tenantId, membershipId);
     return { canceled: true };
+  }
+
+  // -------------------------------------------------------------------------
+  // Baja de cuenta
+  // -------------------------------------------------------------------------
+
+  /**
+   * Estado de la baja.
+   *
+   * La pantalla lo pide al abrir: quien ya la pidio tiene que ver que esta en
+   * curso y desde cuando, no un boton que parece no haber hecho nada.
+   */
+  @Get('account/deletion-request')
+  async estadoDeBaja(@CurrentSession() session: Session) {
+    return { request: await this.bajas.pendiente(session.sub) };
+  }
+
+  /**
+   * Pide la baja. El camino DENTRO de la app que exige Google Play.
+   *
+   * Sirve a alumnos y a staff por igual: `sub` es la identidad global, y quien
+   * atiende el mostrador tiene el mismo derecho a irse que quien entrena.
+   */
+  /**
+   * Abierta aunque el gimnasio deba su suscripcion, y no por descuido.
+   *
+   * El `SaasGuard` solo frena a sesiones de staff con tenant, asi que un
+   * alumno pasaria igual; el que se quedaria encerrado es el recepcionista de
+   * un local moroso. Condicionar el derecho de una persona a borrarse a que
+   * su jefe le pague a Sinchi no se sostiene ante Play ni ante la ley 29733.
+   */
+  @AllowedWhenReadOnly()
+  @Post('account/deletion-request')
+  async pedirBaja(
+    @CurrentSession() session: Session,
+    @Body(parseWith(bajaSchema)) body: z.infer<typeof bajaSchema>,
+  ) {
+    return { request: await this.bajas.pedir(session.sub, body.reason ?? null) };
+  }
+
+  /** Se arrepiente. Treinta dias son muchos para no poder desdecirse. */
+  @AllowedWhenReadOnly()
+  @Delete('account/deletion-request')
+  async cancelarBaja(@CurrentSession() session: Session) {
+    return { canceled: await this.bajas.cancelar(session.sub) };
   }
 }
