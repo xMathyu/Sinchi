@@ -30,9 +30,18 @@ describe('SecretBox', () => {
   it('rechaza una fila manipulada', () => {
     // GCM autentica: alterar el texto cifrado falla al descifrar en vez de
     // devolver un secreto distinto en silencio.
+    //
+    // Se voltea un BIT del texto cifrado en vez de reescribir los dos ultimos
+    // caracteres del base64 por "AA", que es como estaba escrito. Con `base64url`
+    // no hay relleno, asi que esos dos caracteres son datos: cuando ya eran "AA"
+    // el sobre "manipulado" salia identico al original, descifraba bien y la
+    // prueba fallaba sin que nadie hubiera tocado nada. Medido: 1 de cada 1020
+    // corridas. Tumbo el CI del PR #59.
     const envelope = box.encrypt(generateTotpSecret());
     const parts = envelope.split('.');
-    const tampered = [parts[0], parts[1], parts[2], `${parts[3]!.slice(0, -2)}AA`].join('.');
+    const data = Buffer.from(parts[3]!, 'base64url');
+    data[data.length - 1]! ^= 0x01;
+    const tampered = [parts[0], parts[1], parts[2], data.toString('base64url')].join('.');
     expect(() => box.decrypt(tampered)).toThrow();
   });
 
