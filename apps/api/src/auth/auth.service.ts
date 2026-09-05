@@ -32,7 +32,7 @@ import {
 } from '../db/client';
 import { schema } from '../db/client';
 import { loadEnv } from '../config/env';
-import type { SessionClaims } from './session';
+import type { Session, SessionClaims } from './session';
 import { FirebaseVerifier } from './firebase';
 import {
   AccountLinkService,
@@ -59,6 +59,29 @@ export interface IssuedSession {
   readonly role: AppRole;
   readonly userId: string;
   readonly tenantId: string | null;
+}
+
+/** La fila de `staff` de una persona: su puesto y dónde. */
+interface StaffRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly role: string;
+}
+
+/**
+ * Los dos lados de una misma persona.
+ *
+ * `student` es true si tiene ficha activa en algún padrón; `staff` describe su
+ * puesto si trabaja en algún gimnasio. Que los dos vengan llenos es el caso que
+ * el producto no sabía enseñar: el dueño que entrena en su propio dojo.
+ */
+export interface AvailableModes {
+  readonly student: boolean;
+  readonly staff: {
+    readonly role: AppRole;
+    readonly tenantId: string;
+    readonly tenantName: string | null;
+  } | null;
 }
 
 /**
@@ -430,17 +453,7 @@ export class AuthService {
    * crear su local tiene que entrar como dueno sin volver a autenticarse.
    */
   async issueForUser(userId: string): Promise<IssuedSession> {
-    const [staffRow] = await withUser(this.db, userId, (tx) =>
-      tx
-        .select({
-          id: schema.staff.id,
-          tenantId: schema.staff.tenantId,
-          role: schema.staff.role,
-        })
-        .from(schema.staff)
-        .where(eq(schema.staff.userId, userId))
-        .limit(1),
-    );
+    const staffRow = await this.staffRowOf(userId);
 
     const claims: SessionClaims =
       staffRow === undefined
@@ -485,23 +498,10 @@ export class AuthService {
       throw new UnauthorizedException(`No hay ningún usuario con el celular ${normalized}.`);
     }
 
-    // Paso 2: el rol. Va en una transacción aparte y con contexto de IDENTIDAD,
-    // no de gimnasio: el gimnasio es justamente lo que se está averiguando. La
-    // política de `staff` permite leer la propia fila (ver migración 0001).
-    //
-    // Dos llamadas seguidas y no una anidada: anidar `withUser` dentro de otra
-    // transacción tomaría una segunda conexión del pool sin necesidad.
-    const [staffRow] = await withUser(this.db, user.id, (tx) =>
-      tx
-        .select({
-          id: schema.staff.id,
-          tenantId: schema.staff.tenantId,
-          role: schema.staff.role,
-        })
-        .from(schema.staff)
-        .where(eq(schema.staff.userId, user.id))
-        .limit(1),
-    );
+    // Paso 2: el rol. Va en una transacción aparte —no anidada— porque anidar
+    // `withUser` dentro de otra transacción tomaría una segunda conexión del
+    // pool sin necesidad.
+    const staffRow = await this.staffRowOf(user.id);
 
     // El mismo binario sirve a los tres roles (MD 4.6) y el rol lo define la
     // sesión, no una preferencia de la persona.
@@ -531,15 +531,148 @@ export class AuthService {
    * El dueño de un dojo también entrena en él. Sin esto tendría que cerrar
    * sesión para ver su propia billetera.
    */
-  async switchToStudent(userId: string): Promise<IssuedSession> {
-    const claims: SessionClaims = { sub: userId, role: 'student' };
+  async switchToStudent(session: Session): Promise<IssuedSession> {
+    const vida = remainingSeconds(session);
+    const claims: SessionClaims = { sub: session.sub, role: 'student' };
     return {
       linked: true,
-      accessToken: await this.jwt.signAsync(claims, { expiresIn: TOKEN_TTL_SECONDS }),
-      expiresInSeconds: TOKEN_TTL_SECONDS,
+      accessToken: await this.jwt.signAsync(claims, { expiresIn: vida }),
+      expiresInSeconds: vida,
       role: 'student',
-      userId,
+      userId: session.sub,
       tenantId: null,
     };
   }
+
+  /**
+   * La vuelta: de alumno a su puesto.
+   *
+   * `switchToStudent` existía sin par, y eso dejaba al dueño encerrado. La única
+   * otra entrada al modo staff es `openShift`, que pide el token del equipo del
+   * mostrador — y el teléfono del dueño no es esa tablet. Quien cambiaba a
+   * alumno para mirar su billetera se quedaba sin forma de volver que no fuera
+   * cerrar sesión y entrar de nuevo.
+   *
+   * No concede nada nuevo: vuelve a leer `staff` y devuelve exactamente lo que
+   * `issueForUser` le habría dado al entrar con Google. Si la fila ya no está
+   * —lo sacaron del equipo mientras miraba su billetera— no hay vuelta, y eso es
+   * lo correcto.
+   */
+  async switchToStaff(session: Session): Promise<IssuedSession> {
+    const staffRow = await this.staffRowOf(session.sub);
+
+    if (staffRow === undefined) {
+      throw new ForbiddenException('Esta cuenta no trabaja en ningún gimnasio.');
+    }
+
+    const vida = remainingSeconds(session);
+    const claims: SessionClaims = {
+      sub: session.sub,
+      role: staffRow.role === 'owner' ? 'owner' : 'front_desk',
+      tenantId: staffRow.tenantId,
+      staffId: staffRow.id,
+    };
+
+    return {
+      linked: true,
+      accessToken: await this.jwt.signAsync(claims, { expiresIn: vida }),
+      expiresInSeconds: vida,
+      role: claims.role,
+      userId: session.sub,
+      tenantId: staffRow.tenantId,
+    };
+  }
+
+  /**
+   * Qué otros modos tiene esta persona.
+   *
+   * Lo pregunta la pantalla de ajustes para decidir si enseña el cambio de modo,
+   * y la respuesta NO se puede deducir del token: el rol firmado dice con qué
+   * entró, no qué más es. Un dueño con ficha en su propio dojo y uno sin ella
+   * llevan sesiones idénticas.
+   *
+   * Se consulta en vivo y no se guarda en el JWT a propósito. Un dueño que se
+   * inscribe hoy vería el botón recién la semana que viene, cuando caducara su
+   * sesión — y un recepcionista al que sacaron del equipo seguiría viendo una
+   * vuelta que la api ya rechaza. Son dos consultas por índice.
+   */
+  async modesFor(userId: string): Promise<AvailableModes> {
+    const [staffRow, membership] = await Promise.all([
+      this.staffRowOf(userId),
+      withUser(this.db, userId, (tx) =>
+        tx
+          .select({ id: schema.memberships.id })
+          .from(schema.memberships)
+          .where(
+            and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, 'active')),
+          )
+          .limit(1),
+      ).then((rows) => rows[0]),
+    ]);
+
+    if (staffRow === undefined) return { student: membership !== undefined, staff: null };
+
+    // El nombre del gimnasio se lee con contexto de ESE gimnasio: `tenants`
+    // aísla por tenant y sin adoptarlo la consulta vuelve vacía.
+    const [tenant] = await withTenant(this.db, staffRow.tenantId, (tx) =>
+      tx
+        .select({ name: schema.tenants.name })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, staffRow.tenantId))
+        .limit(1),
+    );
+
+    return {
+      student: membership !== undefined,
+      staff: {
+        role: staffRow.role === 'owner' ? 'owner' : 'front_desk',
+        tenantId: staffRow.tenantId,
+        tenantName: tenant?.name ?? null,
+      },
+    };
+  }
+
+  /**
+   * La fila de `staff` de esta persona, si la tiene.
+   *
+   * Estaba escrita palabra por palabra en `issueForUser` y en `devLogin`, y el
+   * cambio de modo necesitaba dos copias más. Va con contexto de IDENTIDAD y no
+   * de gimnasio: el gimnasio es justo lo que se averigua, y la política de
+   * `staff` permite leer la propia fila (ver migración 0001).
+   */
+  private async staffRowOf(userId: string): Promise<StaffRow | undefined> {
+    const [row] = await withUser(this.db, userId, (tx) =>
+      tx
+        .select({
+          id: schema.staff.id,
+          tenantId: schema.staff.tenantId,
+          role: schema.staff.role,
+        })
+        .from(schema.staff)
+        .where(eq(schema.staff.userId, userId))
+        .limit(1),
+    );
+
+    return row;
+  }
+}
+
+/**
+ * Lo que le queda de vida a la sesión que pide el cambio.
+ *
+ * El cambio de modo REEMITE el token, y sin esto reemitir regalaba vida nueva:
+ * un turno del mostrador dura 12 horas a propósito —«quien entra a las seis no
+ * hereda la sesión de mediodía»— y bastaba pasar por alumno y volver para
+ * convertirlo en los 7 días del login normal, en una tablet compartida.
+ *
+ * Así el cambio es lo que dice ser: la misma sesión con otra etiqueta. Tampoco
+ * se renueva indefinidamente yendo y viniendo.
+ *
+ * El `exp` lo pone el propio JWT y el guard ya rechazó los vencidos; el suelo de
+ * un minuto solo evita firmar un `expiresIn` de cero o negativo si el token
+ * caduca entre la verificación y la firma.
+ */
+function remainingSeconds(session: Session): number {
+  if (session.exp === undefined) return TOKEN_TTL_SECONDS;
+  return Math.max(60, session.exp - Math.floor(Date.now() / 1000));
 }

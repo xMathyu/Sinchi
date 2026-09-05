@@ -17,7 +17,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed:kaizen": "tsx src/db/seed-kaizen.ts",
-    "db:seed:fa-meng-chuen": "tsx src/db/seed-fa-meng-chuen.ts"
+    "db:seed:fa-meng-chuen": "tsx src/db/seed-fa-meng-chuen.ts",
+    "db:purge": "tsx src/db/purge-tenants.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.22.0",

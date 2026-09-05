@@ -204,8 +204,23 @@ function DataLoader() {
     return () => {
       cancelado = true;
     };
-    // Se rehidrata al cambiar de persona, no en cada render.
-  }, [state.status, state.status === 'signed_in' ? state.session.userId : null]);
+    // Se rehidrata al cambiar de persona o de ROL, no en cada render.
+    //
+    // El rol entro con el cambio de modo. Hasta entonces no podia cambiar dentro
+    // de una sesion, asi que bastaba con la persona; ahora el dueno que pasa a
+    // alumno es el mismo `userId` y sigue `signed_in`, y sin esta dependencia el
+    // efecto NO se volvia a disparar: `cambiarDeModo` vacia el store y nadie lo
+    // volvia a llenar. La billetera quedaba en blanco y la cabecera de ajustes
+    // mostraba «· identidad Sinchi» sin nombre.
+    //
+    // Y no es solo que falte cargar: son dos cargas DISTINTAS —`hydrate` pide la
+    // billetera, `hydrateStaff` pide el padron— asi que el rol es exactamente lo
+    // que decide cual toca.
+  }, [
+    state.status,
+    state.status === 'signed_in' ? state.session.userId : null,
+    state.status === 'signed_in' ? state.session.role : null,
+  ]);
 
   return null;
 }

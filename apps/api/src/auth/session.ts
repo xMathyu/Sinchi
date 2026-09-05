@@ -17,6 +17,15 @@ export interface SessionClaims {
   readonly tenantId?: string;
   /** Solo para staff: su fila en `staff`, que es lo que se audita. */
   readonly staffId?: string;
+  /**
+   * Cuándo caduca, en segundos epoch. Lo pone `jsonwebtoken` al firmar con
+   * `expiresIn` y lo devuelve al verificar: aquí NUNCA se escribe a mano —
+   * firmar un payload que ya trae `exp` junto a `expiresIn` es un error.
+   *
+   * Se declara porque el cambio de modo lo necesita: reemitir el token no puede
+   * regalar vida nueva. Ver `switchToStudent`.
+   */
+  readonly exp?: number;
 }
 
 export interface Session extends SessionClaims {

@@ -21,6 +21,8 @@ import {
   openShift,
   signInWithGoogle,
   staffForDevice,
+  switchToStaff,
+  switchToStudent,
   type ShiftCandidate,
 } from './api';
 import {
@@ -41,6 +43,7 @@ import {
   setUnlinked,
 } from './session';
 import { forgetSecret, loadSecret, storeSecret } from './crypto';
+import { resetState } from './store';
 
 export type SignInOutcome =
   | { readonly kind: 'signed_in' }
@@ -298,6 +301,31 @@ export async function registerThisDevice(deviceToken: string): Promise<SignInOut
 export async function signOut(options: { readonly forgetTotpSecret: boolean }): Promise<void> {
   await clearSession();
   if (options.forgetTotpSecret) await forgetSecret();
+}
+
+// ---------------------------------------------------------------------------
+// Cambio de modo
+// ---------------------------------------------------------------------------
+
+/**
+ * De alumno a su puesto y de vuelta, sin volver a autenticarse.
+ *
+ * El dueño de un dojo también entrena en él, y hasta ahora la app le hacía
+ * elegir: el rol lo decide la api al mirar si esa persona tiene fila en `staff`,
+ * así que quien la tenía no veía nunca su propia billetera.
+ *
+ * El store se vacía ANTES de guardar la sesión nueva. Si no, la pantalla del
+ * otro modo se pinta con lo que quedó del anterior —el padrón del gimnasio
+ * asomando en la billetera— durante el segundo que tarda la carga: `DataLoader`
+ * reacciona al cambio de sesión, pero pide los datos por red.
+ *
+ * El secreto del QR NO se olvida: sigue siendo la misma persona en el mismo
+ * teléfono, y borrarlo obligaría a resembrarlo al volver a alumno.
+ */
+export async function cambiarDeModo(destino: 'student' | 'staff'): Promise<void> {
+  const sesion = destino === 'student' ? await switchToStudent() : await switchToStaff();
+  resetState();
+  await saveSession(sesion);
 }
 
 // ---------------------------------------------------------------------------
