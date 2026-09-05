@@ -1405,3 +1405,34 @@ export async function ping(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Baja de cuenta
+// ---------------------------------------------------------------------------
+
+export interface DeletionRequestDto {
+  readonly id: string;
+  readonly status: 'pending' | 'done' | 'canceled';
+  readonly requestedAt: string;
+  readonly reason: string | null;
+}
+
+/**
+ * El camino DENTRO de la app que exige Google Play para toda app con registro.
+ *
+ * Es una solicitud, no un borrado en el acto: la ficha vive en el gimnasio y
+ * sus cobros son asientos contables suyos. El compromiso —y el plazo de 30
+ * dias de la politica— empieza a correr al crearla.
+ */
+export const pedirBajaDeCuenta = (reason?: string): Promise<{ request: DeletionRequestDto }> =>
+  request('/me/account/deletion-request', {
+    method: 'POST',
+    body: reason === undefined || reason.trim() === '' ? {} : { reason: reason.trim() },
+  });
+
+/** La pendiente, si la hay. La pantalla la pide al abrir. */
+export const consultarBajaDeCuenta = (): Promise<{ request: DeletionRequestDto | null }> =>
+  request('/me/account/deletion-request');
+
+export const cancelarBajaDeCuenta = (): Promise<{ canceled: boolean }> =>
+  request('/me/account/deletion-request', { method: 'DELETE' });
