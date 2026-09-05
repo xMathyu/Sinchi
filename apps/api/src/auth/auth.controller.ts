@@ -14,7 +14,12 @@
  */
 import { BadRequestException, Body, Controller, Get, Headers, Post } from '@nestjs/common';
 import { z } from 'zod';
-import { AuthService, type IssuedSession, type UnlinkedAccount } from './auth.service';
+import {
+  AuthService,
+  type AvailableModes,
+  type IssuedSession,
+  type UnlinkedAccount,
+} from './auth.service';
 import { CurrentSession, Public } from './auth.guard';
 import type { Session } from './session';
 import { parseWith } from '../common/zod.pipe';
@@ -89,10 +94,32 @@ export class AuthController {
     });
   }
 
+  /**
+   * Qué otros modos tiene quien pregunta.
+   *
+   * La pantalla de ajustes la necesita para decidir si enseña el cambio de modo.
+   * No sale del token: el rol firmado dice con qué entró, no qué más es.
+   */
+  @Get('modes')
+  modes(@CurrentSession() session: Session): Promise<AvailableModes> {
+    return this.auth.modesFor(session.sub);
+  }
+
   /** El dueño del dojo también entrena en él: puede mirar su propia billetera. */
   @Post('switch-to-student')
   switchToStudent(@CurrentSession() session: Session): Promise<IssuedSession> {
-    return this.auth.switchToStudent(session.sub);
+    return this.auth.switchToStudent(session);
+  }
+
+  /**
+   * Y la vuelta a su puesto.
+   *
+   * Sin esto el cambio era de ida y sin regreso: la otra entrada al modo staff
+   * es `POST /auth/shift`, que pide el token del equipo del mostrador.
+   */
+  @Post('switch-to-staff')
+  switchToStaff(@CurrentSession() session: Session): Promise<IssuedSession> {
+    return this.auth.switchToStaff(session);
   }
 
   /**

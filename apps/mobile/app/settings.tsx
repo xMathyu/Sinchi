@@ -11,8 +11,8 @@
  *    (MD 4.6). En producción el rol viene de la sesión; hasta que exista la api,
  *    este es el único camino para recorrer el modo staff.
  */
-import { useState } from 'react';
-import { Pressable, Switch, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Switch, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
 import { SEMAPHORE_COLORBLIND_SAFE, SEMAPHORE_DEFAULT } from '@sinchi/ui';
@@ -20,8 +20,9 @@ import { Card, Divider, Dot, Eyebrow, Logo, Row, Stack, Text } from '../src/desi
 import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
-import { signOut } from '../src/data/auth';
+import { cambiarDeModo, signOut } from '../src/data/auth';
 import { fijarMiPin } from '../src/data/actions';
+import { fetchModes, type AvailableModesDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
 import { cargarDemostracion, resetState, setRole } from '../src/data/store';
 
@@ -47,6 +48,51 @@ export default function SettingsScreen() {
   // recepcionista el nombre de Mathyu Quispe.
   const esTurno = session.status === 'signed_in' && session.session.role !== 'student';
   const enTurno = tenants.find((t) => t.id === staff.tenantId);
+
+  /**
+   * Los dos lados de esta persona.
+   *
+   * No sale de la sesion: el rol firmado dice con QUE entro, no que mas es. Un
+   * dueno con ficha en su propio dojo y uno sin ella llevan tokens identicos, y
+   * la diferencia es justo lo que decide si este bloque se ensena.
+   *
+   * Se pregunta al abrir ajustes y no al arrancar la app: es una pantalla que se
+   * visita poco, y el dato caduca —el dueno puede inscribirse hoy— asi que
+   * guardarlo costaria mas que volver a pedirlo.
+   */
+  const [modos, setModos] = useState<AvailableModesDto | null>(null);
+  const [cambiando, setCambiando] = useState(false);
+  const [errorDeModo, setErrorDeModo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session.status !== 'signed_in') return;
+
+    let vivo = true;
+    void fetchModes().then(
+      (m) => {
+        if (vivo) setModos(m);
+      },
+      () => {
+        // Sin respuesta no se ensena nada. Un boton que lleva a una ruta que no
+        // se pudo consultar es peor que la ausencia del boton.
+      },
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [session.status]);
+
+  // Lo que se ofrece es SIEMPRE el otro lado, y solo si existe de verdad.
+  const otroModo: 'student' | 'staff' | null =
+    modos === null
+      ? null
+      : esTurno
+        ? modos.student
+          ? 'student'
+          : null
+        : modos.staff !== null
+          ? 'staff'
+          : null;
 
   return (
     <Screen scroll>
@@ -78,6 +124,75 @@ export default function SettingsScreen() {
       </Card>
 
       {esTurno && <PinDeTurno />}
+
+      {/* El dueño de un dojo también entrena en él.
+          La api sabía hacerlo desde el principio —`switch-to-student`— pero
+          nadie lo llamaba, y el rol lo decide la api al mirar si esa persona
+          tiene fila en `staff`: quien la tenía no veía nunca su propia
+          billetera. Solo aparece si el otro lado EXISTE; ofrecerle el modo
+          alumno a un recepcionista sin ficha lleva a una billetera vacía. */}
+      {otroModo !== null && (
+        <Stack gap={10} style={{ marginTop: 20 }}>
+          <Eyebrow>Modo</Eyebrow>
+          <Pressable
+            accessibilityRole="button"
+            disabled={cambiando}
+            onPress={() => {
+              setCambiando(true);
+              setErrorDeModo(null);
+              void cambiarDeModo(otroModo).then(
+                () => {
+                  // Sin `replace` explícito: `SessionRouter` reacciona al cambio
+                  // de sesión y lleva a la zona que toca. Cerrar ajustes deja
+                  // atrás una pantalla que ya no es de este rol.
+                  setCambiando(false);
+                  router.back();
+                },
+                (error: unknown) => {
+                  setCambiando(false);
+                  setErrorDeModo(
+                    error instanceof Error ? error.message : 'No se pudo cambiar de modo.',
+                  );
+                },
+              );
+            }}
+          >
+            <Card radius={theme.radii.xl}>
+              <Row gap={12}>
+                <Stack gap={2} style={{ flex: 1 }}>
+                  <Text variant="bodySmall" weight="semibold">
+                    {otroModo === 'student'
+                      ? 'Ver como alumno'
+                      : `Volver a ${modos?.staff?.tenantName ?? 'tu gimnasio'}`}
+                  </Text>
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    {otroModo === 'student'
+                      ? 'Tu plan, tu QR y tu historial en este gimnasio'
+                      : modos?.staff?.role === 'owner'
+                        ? 'El padrón, los planes y los reportes del local'
+                        : 'Escanear, marcar manual y cobrar'}
+                  </Text>
+                </Stack>
+                {cambiando ? (
+                  <ActivityIndicator color={theme.colors.textSecondary} />
+                ) : (
+                  <Text variant="body" color={theme.colors.textSecondary}>
+                    ›
+                  </Text>
+                )}
+              </Row>
+            </Card>
+          </Pressable>
+          {errorDeModo !== null && (
+            <Text variant="captionSmall" color={theme.semaphore.bad}>
+              {errorDeModo}
+            </Text>
+          )}
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Es la misma sesión con otra etiqueta: cambiar de modo no la alarga ni la renueva.
+          </Text>
+        </Stack>
+      )}
 
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Accesibilidad</Eyebrow>

@@ -399,3 +399,124 @@ suite('turno en el equipo del mostrador', () => {
     await http.get('/v1/auth/shift/staff').set({ 'X-Device-Token': deviceToken }).expect(401);
   });
 });
+
+/**
+ * El dueño de un dojo también entrena en él.
+ *
+ * `switchToStudent` existía sin par desde el principio, así que el cambio era de
+ * ida y sin vuelta: la única otra entrada al modo staff es `POST /auth/shift`,
+ * que pide el token del equipo del mostrador — y el teléfono del dueño no es esa
+ * tablet. Quien cambiaba a alumno para mirar su billetera se quedaba encerrado.
+ *
+ * Lo que estas pruebas cuidan no es que el cambio funcione, que es una línea,
+ * sino que no regale nada: ni un rol que la base no respalde, ni vida nueva a un
+ * turno de doce horas.
+ */
+suite('cambio de modo', () => {
+  /** Sergio es `owner` de Iron Muay Thai y se inscribe en su propio local. */
+  const SERGIO_DNI = '42447799';
+
+  const modes = async (bearer: string) => {
+    const { body } = await http.get('/v1/auth/modes').set(auth(bearer)).expect(200);
+    return body as { student: boolean; staff: { role: string; tenantName: string } | null };
+  };
+
+  it('un alumno sin puesto no tiene a dónde cambiar', async () => {
+    const alumno = await devLogin('+51987111222'); // Lucía, solo alumna
+    const disponibles = await modes(alumno);
+
+    expect(disponibles.student).toBe(true);
+    expect(disponibles.staff).toBeNull();
+
+    // Y la api lo sostiene: el botón no se enseña, pero la ruta tampoco cede.
+    await http.post('/v1/auth/switch-to-staff').set(auth(alumno)).expect(403);
+  });
+
+  it('el dueño sin ficha ve su puesto y ninguna billetera', async () => {
+    const disponibles = await modes(owner);
+    expect(disponibles.student).toBe(false);
+    expect(disponibles.staff?.role).toBe('owner');
+    expect(disponibles.staff?.tenantName).toBe('Iron Muay Thai Lince');
+  });
+
+  it('inscribirse en su propio dojo le abre el modo alumno', async () => {
+    // El alta se ancla en el DOCUMENTO, así que reutiliza su identidad en vez de
+    // crear un segundo Sergio. Es lo que hace posible ser las dos cosas.
+    const { body: plans } = await http.get('/v1/staff/plans').set(auth(owner)).expect(200);
+
+    await http
+      .post('/v1/staff/members')
+      .set(auth(owner))
+      .send({ documentId: SERGIO_DNI, planId: plans[0].id })
+      .expect(201);
+
+    const disponibles = await modes(owner);
+    expect(disponibles.student).toBe(true);
+    expect(disponibles.staff?.role).toBe('owner');
+  });
+
+  it('va a alumno y vuelve a su puesto', async () => {
+    const ida = await http.post('/v1/auth/switch-to-student').set(auth(owner)).expect(201);
+    expect(ida.body.role).toBe('student');
+    expect(ida.body.tenantId).toBeNull();
+
+    // La sesión de alumno sirve: es su billetera, con la ficha que acaba de crear.
+    const { body: yo } = await http.get('/v1/me').set(auth(ida.body.accessToken)).expect(200);
+    expect(yo.wallet).toHaveLength(1);
+
+    // Y con ella NO puede tocar el padrón, aunque sea el dueño: el rol de la
+    // sesión es lo que manda, no quién es la persona.
+    await http.get('/v1/staff/roster').set(auth(ida.body.accessToken)).expect(403);
+
+    const vuelta = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(ida.body.accessToken))
+      .expect(201);
+    expect(vuelta.body.role).toBe('owner');
+    await http.get('/v1/staff/roster').set(auth(vuelta.body.accessToken)).expect(200);
+  });
+
+  it('el cambio NO regala vida: un turno de 12 h sigue muriendo a las 12 h', async () => {
+    // Es el agujero que el cambio abría. `openShift` dura doce horas a propósito
+    // —«quien entra a las seis no hereda la sesión de mediodía»— y reemitir el
+    // token al cambiar de modo lo convertía en los siete días del login normal,
+    // en una tablet compartida. Basta pasar por alumno y volver.
+    const { body: device } = await http
+      .post('/v1/staff/devices')
+      .set(auth(owner))
+      .send({ name: 'Tablet del cambio de modo' })
+      .expect(201);
+
+    // Sergio quedó bloqueado por la prueba del PIN: asignarle uno nuevo limpia
+    // el contador, que es justo lo que hace `setPin`.
+    await http.post('/v1/staff/pin').set(auth(owner)).send({ pin: '7391' }).expect(201);
+
+    const { body: candidatos } = await http
+      .get('/v1/auth/shift/staff')
+      .set({ 'X-Device-Token': device.deviceToken })
+      .expect(200);
+    const sergio = (candidatos as { id: string; displayName: string }[]).find(
+      (c) => c.displayName === 'Sergio Paz',
+    )!;
+
+    const turno = await http
+      .post('/v1/auth/shift')
+      .set({ 'X-Device-Token': device.deviceToken })
+      .send({ staffId: sergio.id, pin: '7391' })
+      .expect(201);
+    expect(turno.body.expiresInSeconds).toBe(12 * 60 * 60);
+
+    const comoAlumno = await http
+      .post('/v1/auth/switch-to-student')
+      .set(auth(turno.body.accessToken))
+      .expect(201);
+    const devuelta = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(comoAlumno.body.accessToken))
+      .expect(201);
+
+    // Lo que queda del turno, no una semana nueva.
+    expect(devuelta.body.expiresInSeconds).toBeLessThanOrEqual(12 * 60 * 60);
+    expect(devuelta.body.expiresInSeconds).toBeGreaterThan(11 * 60 * 60);
+  });
+});

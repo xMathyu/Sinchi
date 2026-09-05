@@ -483,6 +483,30 @@ export const openShift = (staffId: string, pin: string): Promise<IssuedSessionDt
     withDeviceToken: true,
   });
 
+/**
+ * Los dos lados de quien tiene la sesion abierta.
+ *
+ * No sale del token: el rol firmado dice con QUE entro, no que mas es. Un dueno
+ * con ficha en su propio dojo y uno sin ella llevan sesiones identicas.
+ */
+export interface AvailableModesDto {
+  readonly student: boolean;
+  readonly staff: {
+    readonly role: AppRole;
+    readonly tenantId: string;
+    readonly tenantName: string | null;
+  } | null;
+}
+
+export const fetchModes = (): Promise<AvailableModesDto> => request('/auth/modes');
+
+/** Cambia el modo de la sesion sin volver a autenticarse. */
+export const switchToStudent = (): Promise<IssuedSessionDto> =>
+  request('/auth/switch-to-student', { method: 'POST' });
+
+export const switchToStaff = (): Promise<IssuedSessionDto> =>
+  request('/auth/switch-to-staff', { method: 'POST' });
+
 // ---------------------------------------------------------------------------
 // Vistas del dominio
 // ---------------------------------------------------------------------------

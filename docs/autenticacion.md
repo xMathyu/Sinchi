@@ -124,6 +124,69 @@ Confundirlo es el error clásico, y va en las dos direcciones:
 
 ---
 
+## El dueño de un dojo también entrena en él
+
+El rol no lo elige la persona: lo decide la api al mirar si tiene fila en
+`staff`. Es lo correcto —una preferencia del usuario no puede conceder permisos—
+pero tenía un efecto que nadie quiso: **quien tiene esa fila no veía nunca su
+propia billetera**. El dueño que entrena en su propio local, o la recepcionista
+inscrita donde trabaja, existían en el padrón y no podían mirar su plan, su QR ni
+lo que deben.
+
+`switchToStudent` estaba escrito desde el principio, con este mismo comentario en
+el código. Faltaban dos cosas, y la segunda es la que importaba:
+
+1. **Nadie lo llamaba.** El selector de rol de ajustes es de demostración y está
+   escondido cuando hay sesión real, así que la ruta no tenía botón.
+2. **No había vuelta.** No existía `switch-to-staff`. La otra entrada al modo
+   staff es `POST /auth/shift`, que pide el token del equipo del mostrador — y el
+   teléfono del dueño no es esa tablet. Cambiar a alumno era un viaje de ida:
+   para volver había que cerrar sesión y entrar de nuevo.
+
+```
+POST /auth/switch-to-student   staff  -> sesión de alumno
+POST /auth/switch-to-staff     quien tenga fila en `staff` -> vuelve a su puesto
+GET  /auth/modes               cualquiera -> { student, staff }
+```
+
+### No concede nada
+
+`switch-to-staff` vuelve a leer `staff` y devuelve exactamente lo que
+`issueForUser` le habría dado al entrar con Google. No es una escalada: si la
+fila ya no está —lo sacaron del equipo mientras miraba su billetera— no hay
+vuelta. Y la sesión de alumno tampoco puede tocar el padrón aunque la persona sea
+la dueña: manda el rol del token, no quién es.
+
+### El agujero que abría, y que costó una prueba
+
+Reemitir el token **regalaba vida nueva**. El turno del mostrador dura 12 horas a
+propósito: «quien entra a las seis no hereda la sesión de mediodía». Pero
+`switch-to-student` y su vuelta firmaban con el TTL del login normal, así que en
+una tablet compartida bastaba pasar por alumno y volver para convertir un turno
+de 12 horas en una sesión de **7 días**.
+
+Se cierra atando la reemisión al `exp` del token que pide el cambio: lo que queda
+de vida, nunca más. Así el cambio es lo que dice ser —la misma sesión con otra
+etiqueta— y tampoco se renueva indefinidamente yendo y viniendo. La app lo dice
+en voz alta debajo del botón, porque un cambio de sesión que parece gratis
+invita a usarlo como si lo fuera.
+
+### Por qué `/auth/modes` y no un campo en el token
+
+Qué **más** es una persona no se puede deducir del token: un dueño con ficha en
+su propio dojo y uno sin ella llevan sesiones idénticas. Meterlo en el JWT lo
+congelaría hasta que caducara: el dueño que se inscribe hoy vería el botón la
+semana que viene, y el recepcionista al que sacaron del equipo seguiría viendo
+una vuelta que la api ya rechaza. Son dos consultas por índice, y la pantalla de
+ajustes se visita poco.
+
+La app **solo enseña el otro modo si existe de verdad**. Ofrecerle «ver como
+alumno» a un recepcionista sin ficha lleva a una billetera vacía, que es la forma
+más común de este defecto en el producto: una acción que invita a algo que la api
+va a rechazar.
+
+---
+
 ## Rutas
 
 | Método | Ruta | Quién |
@@ -133,6 +196,9 @@ Confundirlo es el error clásico, y va en las dos direcciones:
 | `POST` | `/auth/shift` | equipo + PIN — abre turno |
 | `GET` | `/staff/claims` | staff — códigos vigentes |
 | `POST` | `/staff/claims/confirm` | staff — vincula `{ code, membershipId }` |
+| `GET` | `/auth/modes` | cualquier sesión — qué otros modos tiene |
+| `POST` | `/auth/switch-to-student` | staff con ficha — mira su billetera |
+| `POST` | `/auth/switch-to-staff` | quien tenga fila en `staff` — vuelve a su puesto |
 | `DELETE` | `/staff/members/:id/account` | dueño — desvincula |
 | `POST` | `/staff/pin` | staff (el propio) / dueño (de cualquiera) |
 | `GET` `POST` | `/staff/devices` | dueño |
