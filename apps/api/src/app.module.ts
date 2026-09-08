@@ -39,6 +39,7 @@ import { SaasService } from './modules/saas/saas.service';
 import { OnboardingService } from './modules/onboarding/onboarding.service';
 import { OfferingController } from './modules/offering/offering.controller';
 import { PlansService } from './modules/offering/plans.service';
+import { SchedulesService } from './modules/offering/schedules.service';
 import { GymSettingsService } from './modules/offering/settings.service';
 import { EventsController } from './modules/events/events.controller';
 import { EventsService } from './modules/events/events.service';
@@ -80,6 +81,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     SaasService,
     OnboardingService,
     PlansService,
+    SchedulesService,
     GymSettingsService,
     EventsService,
     EventRegistrationsService,

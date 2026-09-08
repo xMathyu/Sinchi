@@ -19,6 +19,7 @@ import { parseWith } from '../../common/zod.pipe';
 import { MembersService } from '../members/members.service';
 import { GymSettingsService } from './settings.service';
 import { PlansService } from './plans.service';
+import { SchedulesService } from './schedules.service';
 
 /**
  * El plan que llega del formulario.
@@ -39,6 +40,24 @@ const planSchema = z.object({
 
 const activeSchema = z.object({ active: z.boolean() });
 
+/**
+ * El bloque de horario que llega del formulario.
+ *
+ * Igual que `planSchema`: aqui solo se acota la FORMA. La regla de que una clase
+ * no pueda terminar antes de empezar vive en `checkScheduleDraft`, en el
+ * dominio, porque es la misma que apaga el boton en la app.
+ */
+const scheduleSchema = z.object({
+  name: z.string().min(1).max(120),
+  /** Dia ISO: 1 = lunes .. 7 = domingo. */
+  weekday: z.number().int(),
+  startTime: z.string().max(5),
+  endTime: z.string().max(5),
+  capacity: z.number().int().nullable().default(null),
+  instructor: z.string().max(120).nullable().default(null),
+  active: z.boolean().default(true),
+});
+
 const pricingSchema = z.object({
   enrollmentFeeCents: z.number().int(),
   dropInPriceCents: z.number().int().nullable(),
@@ -54,6 +73,7 @@ export class OfferingController {
     private readonly plans: PlansService,
     private readonly settings: GymSettingsService,
     private readonly members: MembersService,
+    private readonly schedules: SchedulesService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -125,6 +145,80 @@ export class OfferingController {
     @Param('planId', ParseUUIDPipe) planId: string,
   ) {
     return this.plans.remove(assertStaffSession(session).tenantId, planId);
+  }
+
+  // -------------------------------------------------------------------------
+  // Horarios
+  // -------------------------------------------------------------------------
+
+  /**
+   * La lista del dueno: tambien los archivados, con cuanta gente viene a probar
+   * en cada bloque y cuales se pisan entre si.
+   *
+   * `GET /staff/schedules` —la del mostrador— se queda en `StaffController` y
+   * sigue devolviendo solo los activos: el escaner valida contra lo que el local
+   * da HOY, y un bloque archivado abriria la puerta a deshora.
+   */
+  @OwnerOnly()
+  @Get('schedules/all')
+  allSchedules(@CurrentSession() session: Session) {
+    return this.schedules.listForOwner(assertStaffSession(session).tenantId);
+  }
+
+  @OwnerOnly()
+  @Post('schedules')
+  createSchedule(
+    @CurrentSession() session: Session,
+    @Body(parseWith(scheduleSchema)) body: z.infer<typeof scheduleSchema>,
+  ) {
+    return this.schedules.create(assertStaffSession(session).tenantId, body);
+  }
+
+  @OwnerOnly()
+  @Post('schedules/:scheduleId')
+  updateSchedule(
+    @CurrentSession() session: Session,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+    @Body(parseWith(scheduleSchema)) body: z.infer<typeof scheduleSchema>,
+  ) {
+    return this.schedules.update(assertStaffSession(session).tenantId, scheduleId, body);
+  }
+
+  /**
+   * Quitar del horario publicado y devolver.
+   *
+   * Es el bloque de temporada: la clase de las 7am que el local suspende en
+   * vacaciones deja de ofrecerse y en diciembre vuelve con un toque, sin
+   * volver a teclearla.
+   */
+  @OwnerOnly()
+  @Post('schedules/:scheduleId/active')
+  setScheduleActive(
+    @CurrentSession() session: Session,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+    @Body(parseWith(activeSchema)) body: z.infer<typeof activeSchema>,
+  ) {
+    return this.schedules.setActive(
+      assertStaffSession(session).tenantId,
+      scheduleId,
+      body.active,
+    );
+  }
+
+  /**
+   * Borra el bloque de verdad, y siempre.
+   *
+   * Al reves que un plan: las dos tablas que lo apuntan —`attendance` y
+   * `trial_bookings`— son ON DELETE set null y llevan copiado lo que hace falta
+   * para leerlas despues, asi que borrar no deja ningun historial sin explicar.
+   */
+  @OwnerOnly()
+  @Delete('schedules/:scheduleId')
+  deleteSchedule(
+    @CurrentSession() session: Session,
+    @Param('scheduleId', ParseUUIDPipe) scheduleId: string,
+  ) {
+    return this.schedules.remove(assertStaffSession(session).tenantId, scheduleId);
   }
 
   // -------------------------------------------------------------------------

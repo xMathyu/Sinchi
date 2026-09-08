@@ -293,8 +293,14 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
               </Text>
             </Stack>
             {/* Con precio cuando lo tiene: «1 CLASE GRATIS» en un local que
-                cobra S/40 por probar promete algo que la reserva desmiente. */}
-            {gym.trialClassEnabled ? (
+                cobra S/40 por probar promete algo que la reserva desmiente.
+
+                Y solo si el local tiene horario publicado: sin bloques no hay ni
+                una hora reservable, asi que la insignia manda a una pantalla que
+                contesta «este gimnasio todavia no publico sus horarios». Le
+                pasaba a TODO gimnasio recien dado de alta, que nace con la clase
+                gratis encendida y sin horarios. */}
+            {gym.trialClassEnabled && gym.weeklyClasses > 0 ? (
               <Badge
                 label={
                   (gym.trialClassPriceCents ?? 0) === 0

@@ -140,6 +140,36 @@ export interface SignUpGymResult {
 
 const normalizePhone = (raw: string): string => raw.replace(/[^\d+]/g, '');
 
+/**
+ * Lo que se le dice a quien choca con el indice del celular.
+ *
+ * Un solo texto para las dos puertas —la comprobacion previa y la carrera— para
+ * que el mismo problema no se lea de dos maneras.
+ */
+const CELULAR_OCUPADO =
+  'Ese celular ya está registrado en Sinchi con otro documento. Si es tuyo, revisa el documento que escribiste; si lo compartes con alguien, usa otro número.';
+
+/**
+ * `23505` es la violacion de un indice unico en Postgres.
+ *
+ * Se mira tambien en `cause` porque drizzle envuelve el error de `pg`: el codigo
+ * viaja dentro, y comprobar solo el de fuera no encuentra nunca ninguno.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  const code = (candidate: unknown): unknown =>
+    typeof candidate === 'object' && candidate !== null && 'code' in candidate
+      ? (candidate as { code: unknown }).code
+      : undefined;
+
+  if (code(error) === '23505') return true;
+
+  const cause =
+    typeof error === 'object' && error !== null
+      ? (error as { cause?: unknown }).cause
+      : undefined;
+  return code(cause) === '23505';
+}
+
 /** `Asociación Deportiva Club Kaizen` → `asociacion-deportiva-club-kaizen`. */
 export function slugify(name: string): string {
   return name
@@ -298,6 +328,28 @@ export class OnboardingService {
         throw new BadRequestException('Faltan tu nombre y tu celular.');
       }
 
+      /**
+       * El celular es UNICO en toda la red, y aqui es donde eso se nota.
+       *
+       * Sin esta comprobacion el alta reventaba con un 500 y «Internal server
+       * error» —el indice `users_phone_key` hablando por si solo— en un caso que
+       * no es raro: quien ya entrena en otro local esta en `users` con ese
+       * celular, y si teclea su documento con un digito cambiado no lo encuentra
+       * la busqueda de arriba. Tambien le pasa a la pareja que comparte numero.
+       *
+       * Es una RUTA PUBLICA: un 500 ahi no le dice al dueno que corregir, y lo
+       * que estamos perdiendo es un alta. El documento no necesita el mismo
+       * cuidado porque su choque ya se resuelve arriba adoptando la identidad.
+       */
+      const [conEseCelular] = await tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.phone, phone))
+        .limit(1);
+      if (conEseCelular !== undefined) {
+        throw new ConflictException(CELULAR_OCUPADO);
+      }
+
       const [creada] = await tx
         .insert(schema.users)
         .values({
@@ -307,7 +359,16 @@ export class OnboardingService {
           email: input.email?.toLowerCase() ?? null,
           firebaseUid: input.firebaseUid,
         })
-        .returning({ id: schema.users.id });
+        .returning({ id: schema.users.id })
+        // Dos altas con el mismo celular a la vez pasan la comprobacion de
+        // arriba las dos y solo una entra. Sin esto, la que pierde vuelve a ser
+        // el 500 que acabamos de quitar.
+        .catch((causa: unknown) => {
+          if (isUniqueViolation(causa)) {
+            throw new ConflictException(CELULAR_OCUPADO);
+          }
+          throw causa;
+        });
 
       return { userId: creada!.id, fullName };
     });

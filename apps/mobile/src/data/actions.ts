@@ -14,7 +14,7 @@
  * Así no hay forma de tener una app "conectada" que escriba en memoria.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { CheckInMethod, PaymentRail, Plan } from '@sinchi/shared';
+import type { CheckInMethod, ClassSchedule, PaymentRail, Plan } from '@sinchi/shared';
 import {
   ApiError,
   cancelMembership,
@@ -37,6 +37,11 @@ import {
   editarPlan,
   archivarPlan,
   borrarPlan,
+  fetchHorariosDelDueno,
+  crearHorario,
+  editarHorario,
+  archivarHorario,
+  borrarHorario,
   guardarPrecios,
   fetchEventos,
   fetchEvento,
@@ -71,6 +76,8 @@ import {
   type PlazaDto,
   type PlanConUso,
   type PlanEscrito,
+  type HorarioConUso,
+  type HorarioEscrito,
   type PreciosDelLocal,
   markManual,
   recordPayment,
@@ -619,6 +626,34 @@ export async function archivarOReactivarPlan(planId: string, activo: boolean): P
 export async function eliminarPlan(planId: string): Promise<void> {
   exigeServidor('Borrar un plan');
   await borrarPlan(planId);
+}
+
+export async function horariosDelDueno(): Promise<readonly HorarioConUso[]> {
+  exigeServidor('Ver tus horarios');
+  return await fetchHorariosDelDueno();
+}
+
+export async function guardarHorario(
+  scheduleId: string | null,
+  horario: HorarioEscrito,
+): Promise<ClassSchedule> {
+  exigeServidor('Guardar un horario');
+  return scheduleId === null
+    ? await crearHorario(horario)
+    : await editarHorario(scheduleId, horario);
+}
+
+export async function archivarOReactivarHorario(
+  scheduleId: string,
+  activo: boolean,
+): Promise<ClassSchedule> {
+  exigeServidor('Archivar un horario');
+  return await archivarHorario(scheduleId, activo);
+}
+
+export async function eliminarHorario(scheduleId: string): Promise<void> {
+  exigeServidor('Borrar un horario');
+  await borrarHorario(scheduleId);
 }
 
 export async function preciosDelLocal(): Promise<PreciosDelLocal> {

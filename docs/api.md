@@ -165,7 +165,11 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/members/:id` | Detalle para la pantalla de cobro. |
 | `POST` | `/staff/members` | Alta. Reutiliza la identidad si ya existe en la red. |
 | `POST` | `/staff/members/:id/resubscribe` | Vuelve tras cancelar, sin re-registrar a la persona. |
-| `GET` | `/staff/plans` · `/staff/schedules` | Configuración del local. |
+| `GET` | `/staff/plans` · `/staff/schedules` | Configuración del local. Lo ACTIVO, que es contra lo que se inscribe y contra lo que valida la puerta. |
+| `GET` | `/staff/schedules/all` | Solo el dueño: también los archivados, con cuánta gente viene a probar en cada bloque y cuáles se pisan entre sí. |
+| `POST` | `/staff/schedules` · `/staff/schedules/:id` | Solo el dueño: publica o reescribe un bloque. Un bloque es de UN día; la clase de martes y jueves son dos. |
+| `POST` | `/staff/schedules/:id/active` | Solo el dueño: lo saca del horario publicado o lo devuelve. Es el bloque de temporada. |
+| `DELETE` | `/staff/schedules/:id` | Solo el dueño, y **siempre**: al revés que un plan. `attendance` y `trial_bookings` lo apuntan con ON DELETE set null y llevan copiadas la clase y la hora, así que no queda historial sin explicar. |
 | `POST` | `/staff/checkin/qr` | Modo A: el staff escanea. Verifica la firma TOTP. |
 | `POST` | `/staff/checkin/manual` | Alumno sin celular. Queda auditado. |
 | `GET` | `/staff/checkin/recent` | "Últimos marcados" de la puerta. |
