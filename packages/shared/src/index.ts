@@ -18,6 +18,7 @@ export * from './money/cents.js';
 export * from './domain/types.js';
 export * from './domain/membership-status.js';
 export * from './domain/plan-draft.js';
+export * from './domain/schedule-draft.js';
 
 // Cobro
 export * from './billing/cycle.js';

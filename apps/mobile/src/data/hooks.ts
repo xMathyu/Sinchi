@@ -32,6 +32,7 @@ import {
   type BibliotecaDto,
   type EventoConCupo,
   type PlanConUso,
+  type HorarioConUso,
   type RutinaDetalleDto,
   type PlazaDto,
   type PreciosDelLocal,
@@ -48,6 +49,7 @@ import {
   refrescarDatos,
   resumenDelGimnasio,
   planesDelDueno,
+  horariosDelDueno,
   preciosDelLocal,
   eventosDelGimnasio,
   eventoDelGimnasio,
@@ -555,6 +557,48 @@ export function useOwnerSummary(): SummaryDto | null {
  * escriben, así que después de guardar hay que volver a pedirlos o la lista
  * enseña lo de antes justo donde el dueño acaba de cambiar algo.
  */
+/**
+ * Los horarios del local, con sus avisos.
+ *
+ * Mismo molde que `usePlanesDelDueno`, y por la misma razon: se abre desde un
+ * enlace y no viene con el padron, asi que se pide al montar y se recarga
+ * despues de cada escritura.
+ */
+export function useHorariosDelDueno(): {
+  readonly horarios: readonly HorarioConUso[] | null;
+  readonly error: string | null;
+  readonly cargando: boolean;
+  readonly recargar: () => void;
+} {
+  const [horarios, setHorarios] = useState<readonly HorarioConUso[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void horariosDelDueno()
+      .then((valor) => {
+        if (!cancelado) setHorarios(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudieron traer tus horarios.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  return {
+    horarios,
+    error,
+    cargando: horarios === null && error === null,
+    recargar: () => setIntento((n) => n + 1),
+  };
+}
+
 export function usePlanesDelDueno(): {
   readonly planes: readonly PlanConUso[] | null;
   readonly error: string | null;

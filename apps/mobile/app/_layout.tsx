@@ -276,6 +276,7 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     // Sin esto la ruta se redirige EN SILENCIO —sin error, sin pantalla— y la
     // pantalla queda escrita para nadie. Ya se pagó una vez con `plans`.
     'events',
+    'schedules',
   ]),
   student: new Set(['pay', 'plan-change']),
 };

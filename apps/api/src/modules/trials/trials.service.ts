@@ -221,7 +221,17 @@ export class TrialsService {
     });
   }
 
-  /** Los tres numeros de la tarjeta, en un viaje. Exige contexto de gimnasio. */
+  /**
+   * Los tres numeros de la tarjeta, en un viaje. Exige contexto de gimnasio.
+   *
+   * `from_price_cents` deja fuera los planes `drop_in` A PROPOSITO: la tarjeta lo
+   * lee "desde S/ X al mes", y la clase suelta es el precio de UNA clase. Un
+   * local que arranca con las tarifas de `PLANES_DE_ARRANQUE` salia anunciado
+   * como "desde S/ 25 al mes" teniendo la mensualidad mas barata en S/ 120 —
+   * cinco veces menos, y en la pantalla donde la gente compara dojos. Si el
+   * local solo vende por clase, queda `null` y la tarjeta dice "precios en el
+   * local", que es verdad.
+   */
   private async aggregates(
     tx: Tx,
   ): Promise<Pick<GymCard, 'fromPriceCents' | 'weeklyClasses' | 'disciplines'>> {
@@ -231,7 +241,8 @@ export class TrialsService {
       disciplines: string[] | null;
     }>(sql`
       select
-        (select min(price_cents)::int from plans where active) as from_price_cents,
+        (select min(price_cents)::int from plans where active and type <> 'drop_in')
+          as from_price_cents,
         (select count(*)::int from class_schedules where active) as weekly_classes,
         (select array_agg(distinct name) from class_schedules where active) as disciplines
     `);
@@ -288,7 +299,9 @@ export class TrialsService {
         timezone: gym.timezone,
         enrollmentFeeCents: gym.enrollmentFeeCents,
         dropInPriceCents: gym.dropInPriceCents,
-        fromPriceCents: plans[0]?.priceCents ?? null,
+        // Sin la clase suelta, por lo mismo que en `aggregates`: este numero se
+        // lee "al mes" y el `drop_in` es el precio de una clase.
+        fromPriceCents: plans.find((plan) => plan.type !== 'drop_in')?.priceCents ?? null,
         weeklyClasses: schedules.length,
         disciplines: [...new Set(schedules.map((s) => s.name))].sort(),
         plans,

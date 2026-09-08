@@ -234,6 +234,37 @@ export default function PadronScreen() {
 
           Por ROL y no por `resumen === null`: ese llega tarde y la fila
           aparecía y se esfumaba sola al cargar el resumen. */}
+      {/* El primero de los cuatro, y no por orden alfabético: un local recién
+          dado de alta nace con sus planes —`PLANES_DE_ARRANQUE` los siembra— y
+          con el horario EN BLANCO, y el horario vacío es lo que lo deja
+          anunciado como «0 clases por semana» y sin una sola hora que alguien
+          pueda reservar. Debajo de eventos y rutinas quedaba fuera de pantalla,
+          que para lo único que le falta al dueño nuevo es como no estar. */}
+      {esDueno && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Horarios"
+          onPress={() => router.push('/schedules')}
+        >
+          <Card radius={theme.radii.lg} tone="sunken">
+            <Row>
+              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodySmall" weight="semibold">
+                  Horarios
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Las clases de cada semana. Es lo que ve quien te busca y lo que valida la
+                  puerta.
+                </Text>
+              </Stack>
+              <Text variant="body" color={theme.colors.textTertiary}>
+                ›
+              </Text>
+            </Row>
+          </Card>
+        </Pressable>
+      )}
+
       {/* Los eventos los ve TODO el staff, no solo el dueño: la lista del día
           del seminario la opera quien recibe a la gente en la puerta. Escribir
           el evento sí es del dueño, y eso se apaga dentro. */}

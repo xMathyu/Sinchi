@@ -17,7 +17,7 @@ gimnasios a los que asiste.
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (239 tests, 146 de punta a punta) |
 | `apps/web` — panel Next.js | **No empezado** |
 | Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
-| Alta de gimnasio | **Desde la app.** Falta crear planes: sin ellos el local no puede inscribir |
+| Alta de gimnasio | **Desde la app, y el local queda usable el mismo día**: nace con tarifas y el dueño escribe su horario |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
 | Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
 | CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo. **La base se migra sola antes de desplegar** |
@@ -107,9 +107,24 @@ verificador comprobado—, escalón, sus datos y, si lo tiene, un código de
 promoción. Al terminar entra como dueño, con su mes gratis corriendo.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
-verificada y **un gimnasio por persona**. Falta lo siguiente para que sirva de
-verdad: un gimnasio recién creado **no tiene planes**, y sin planes no puede
-inscribir a nadie.
+verificada y **un gimnasio por persona**.
+
+**Nace usable, y eso costó dos huecos.** El primero eran las tarifas: `plans`
+quedaba vacía y el alta de un alumno exige `plan_id`, así que el local se
+registraba un martes y no podía inscribir a nadie. Lo tapa `PLANES_DE_ARRANQUE`,
+cuatro precios corrientes de Lima que se crean editables — una propuesta, no una
+decisión nuestra.
+
+El segundo era el **horario**, y no daba la cara: el gimnasio nacía con cero
+bloques y `class_schedules` solo la sabía llenar un script nuestro. Sin bloques
+su ficha pública no tiene ni una hora que reservar — la tarjeta del directorio
+ofrecía «1 clase gratis» y la pantalla de dentro contestaba «este gimnasio
+todavía no publicó sus horarios» —, y el directorio lo listaba con «0 clases por
+semana», que es como se ve un local cerrado. **La única vía de alta que empieza
+fuera del local estaba muerta para todos los locales nuevos.** Ahora el dueño
+escribe su horario desde la app (Padrón → Horarios): un bloque por día, con su
+aforo y su profesor, que se archiva para la temporada y se borra sin llevarse
+por delante lo ya reservado.
 
 ---
 

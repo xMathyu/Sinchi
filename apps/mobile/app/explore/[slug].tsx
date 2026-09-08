@@ -168,7 +168,12 @@ export default function GymScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Volver />
-        {gym.trialClassEnabled ? (
+        {/* Sin horario publicado la insignia promete una reserva que esta misma
+            pantalla no puede ofrecer: debajo solo hay siete días vacíos y un
+            «este gimnasio todavía no publicó sus horarios». Es el estado de todo
+            local recién dado de alta, que nace con la clase gratis encendida y
+            sin bloques. */}
+        {gym.trialClassEnabled && gym.schedules.length > 0 ? (
           <Badge
             label={gratis ? '1 CLASE GRATIS' : `PRUEBA ${precioCorto}`}
             color={theme.semaphoreInk.ok}
@@ -263,8 +268,11 @@ export default function GymScreen() {
           responder «¿cuándo puedo ir?». Ahora es un solo horario, y sus filas se
           tocan cuando esa clase se puede reservar. */}
       <Stack gap={12} style={{ marginTop: 24 }}>
+        {/* Sin bloques publicados no hay nada que reservar, así que el título no
+            puede prometerlo: debajo solo va el aviso de que este local todavía
+            no publicó su horario. */}
         <Eyebrow>
-          {!gym.trialClassEnabled
+          {!gym.trialClassEnabled || gym.schedules.length === 0
             ? 'Horarios'
             : gratis
               ? 'Tu primera clase, gratis'

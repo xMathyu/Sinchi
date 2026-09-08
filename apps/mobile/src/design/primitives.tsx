@@ -498,6 +498,14 @@ export interface FieldProps {
   readonly autoComplete?: TextInputProps['autoComplete'];
   readonly returnKeyType?: TextInputProps['returnKeyType'];
   readonly onSubmitEditing?: () => void;
+  /**
+   * Al salir del campo.
+   *
+   * Existe para normalizar lo tecleado en el sitio donde ya no molesta: la hora
+   * de una clase se escribe «1900» y se guarda «19:00», y hacerlo en
+   * `onChangeText` pelearia con el dedo a mitad del numero.
+   */
+  readonly onBlur?: () => void;
 }
 
 /**
@@ -528,6 +536,7 @@ export function Field({
   autoComplete,
   returnKeyType,
   onSubmitEditing,
+  onBlur,
 }: FieldProps) {
   const theme = useTheme();
   const conError = error !== undefined && error.length > 0;
@@ -551,6 +560,7 @@ export function Field({
         autoCorrect={false}
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
+        onBlur={onBlur}
         accessibilityLabel={label}
         style={{
           // Alta y crecida desde arriba cuando es de parrafos: con `height`

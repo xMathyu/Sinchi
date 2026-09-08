@@ -773,6 +773,62 @@ export const borrarPlan = (planId: string): Promise<unknown> =>
   request(`/staff/plans/${planId}`, { method: 'DELETE' });
 
 /**
+ * Un bloque de horario con lo que hace falta saber ANTES de tocarlo.
+ *
+ * `upcomingTrials` es lo que `activeMembers` es para un plan: la diferencia
+ * entre «esto se puede quitar» y «hay tres personas que vienen a probar aquí el
+ * jueves». `overlaps` avisa de que se pisa con otro bloque del mismo día, que no
+ * siempre es un error —dos tatamis, dos clases a la misma hora— y por eso avisa
+ * en vez de impedir.
+ */
+export interface HorarioConUso {
+  readonly schedule: ClassSchedule;
+  readonly active: boolean;
+  readonly upcomingTrials: number;
+  readonly overlaps: boolean;
+}
+
+/** Lo que se manda al crear o editar. `id` no va: la ruta ya lo dice. */
+export interface HorarioEscrito {
+  readonly name: string;
+  readonly weekday: number;
+  readonly startTime: string;
+  readonly endTime: string;
+  readonly capacity: number | null;
+  readonly instructor: string | null;
+  readonly active: boolean;
+}
+
+/** La lista del dueño: también los archivados, con sus avisos. */
+export const fetchHorariosDelDueno = (): Promise<readonly HorarioConUso[]> =>
+  request('/staff/schedules/all');
+
+export const crearHorario = (horario: HorarioEscrito): Promise<ClassSchedule> =>
+  request('/staff/schedules', { method: 'POST', body: horario });
+
+export const editarHorario = (
+  scheduleId: string,
+  horario: HorarioEscrito,
+): Promise<ClassSchedule> =>
+  request(`/staff/schedules/${scheduleId}`, { method: 'POST', body: horario });
+
+/** Lo saca del horario publicado sin perderlo: el bloque de temporada vuelve. */
+export const archivarHorario = (
+  scheduleId: string,
+  active: boolean,
+): Promise<ClassSchedule> =>
+  request(`/staff/schedules/${scheduleId}/active`, { method: 'POST', body: { active } });
+
+/**
+ * Borra de verdad, y siempre.
+ *
+ * Al revés que un plan: lo que apunta al bloque —asistencias y reservas— lleva
+ * copiada la clase y la hora, así que borrarlo no deja historial sin explicar.
+ */
+export const borrarHorario = (scheduleId: string): Promise<unknown> =>
+  request(`/staff/schedules/${scheduleId}`, { method: 'DELETE' });
+
+/**
  * Lo que el local cobra aparte de los planes.
  *
  * Ojo con no confundir las dos clases sueltas: `dropInPriceCents` es lo que paga
