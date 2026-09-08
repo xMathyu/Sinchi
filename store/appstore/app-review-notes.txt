@@ -1,0 +1,19 @@
+Sinchi is a management app for gyms and martial-arts schools. The app's interface is in Spanish.
+
+HOW TO SIGN IN
+1. Open the app and tap "Entrar" (Sign in).
+2. Type the demo credentials into the fields labelled "Correo" (email) and "Contrasena" (password).
+3. Please do NOT use the "Entrar con Google" button. The demo account works with email and password only.
+
+WHAT THE DEMO ACCOUNT SHOWS
+The account owns a demo gym called "Sinchi Demo" with students, plans and payments already loaded.
+- Staff mode (the default view): student roster, door check-in by scanning a student's QR code, manual payment records, membership plans, class schedule and routine videos.
+- Member mode: tap the gear icon, then "Modo" > "Ver como alumno" to switch to the student view (membership card, personal QR code, class schedule, routines).
+
+CAMERA
+The camera is used only to scan students' QR codes at the door. If you prefer not to grant camera access, students can also be checked in manually from the roster.
+
+PAYMENTS
+There are no in-app purchases or subscriptions. Payments are recorded by hand by gym staff at the counter (cash, Yape or bank transfer); the app does not process any transaction.
+
+Support: soporte@sinchi.fit
