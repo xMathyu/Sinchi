@@ -191,11 +191,19 @@ jobs:
         working-directory: apps/mobile
         run: npm test
 
-      - name: El bundle se genera
+      - name: El bundle se genera en las dos plataformas
         # No compila binarios nativos —eso necesita Xcode y un runner de macOS—
         # pero sí comprueba que Metro resuelva todo el árbol de imports.
+        #
+        # Las dos por separado y no `--platform all`: la resolución es
+        # específica de plataforma (`.ios.ts` / `.android.ts`, un módulo nativo
+        # que solo existe de un lado), así que exportar solo iOS dejaba a
+        # Android sin cubrir. Cuesta un minuto más y atrapa lo que antes
+        # aparecía recién en el build de EAS, media hora después.
         working-directory: apps/mobile
-        run: npx expo export --platform ios --output-dir /tmp/expo-ci
+        run: |
+          npx expo export --platform ios --output-dir /tmp/expo-ci-ios
+          npx expo export --platform android --output-dir /tmp/expo-ci-android
 
   # ---------------------------------------------------------------------------
   # Landing
