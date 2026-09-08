@@ -1,0 +1,88 @@
+name: Enviar a testers
+
+# Builds de prueba: TestFlight (iOS) y la pista cerrada Alpha de Play (Android).
+#
+# NO HAY DISPARADOR AUTOMATICO, a proposito. Sin expo-updates cada envio es un
+# binario completo — veinte a cuarenta minutos y un credito de EAS por
+# plataforma. Un merge cualquiera no vale eso; una tanda de pruebas si. Se
+# dispara desde Actions cuando hay algo que probar.
+#
+# POR QUE ALPHA Y NO EL CANAL INTERNO DE PLAY. El interno llega en segundos,
+# pero el requisito de la cuenta personal —12 testers durante 14 dias seguidos
+# antes de poder pedir produccion— solo cuenta pruebas CERRADAS. Un build que va
+# al canal interno no mueve ese reloj. La pista esta configurada en
+# `eas.json` (`submit.production.android.track`), no aqui.
+#
+# LAS DOS PLATAFORMAS USAN EL PERFIL `production`. TestFlight y las pistas de
+# Play exigen binarios firmados para tienda; los de `preview` son
+# `distribution: internal`, que es otra cosa — se instalan por enlace y no
+# pasan por ninguna tienda.
+
+on:
+  workflow_dispatch:
+    inputs:
+      plataforma:
+        description: 'Que compilar'
+        type: choice
+        options:
+          - ambas
+          - ios
+          - android
+        default: ambas
+
+concurrency:
+  # Comparte contador de build number con `publicar-ios.yml`: dos envios a la
+  # vez y el segundo sale con el numero del primero.
+  group: builds-tienda
+  cancel-in-progress: false
+
+jobs:
+  # Un job de una linea para traducir el desplegable a la matriz del siguiente.
+  # `strategy.matrix` no acepta condicionales, asi que la lista se arma antes.
+  elegir:
+    runs-on: ubuntu-latest
+    outputs:
+      plataformas: ${{ steps.lista.outputs.plataformas }}
+    steps:
+      - id: lista
+        run: |
+          case "${{ inputs.plataforma }}" in
+            ios)     echo 'plataformas=["ios"]'           >> "$GITHUB_OUTPUT" ;;
+            android) echo 'plataformas=["android"]'       >> "$GITHUB_OUTPUT" ;;
+            *)       echo 'plataformas=["ios","android"]' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  enviar:
+    needs: elegir
+    runs-on: ubuntu-latest
+    strategy:
+      # Sin fail-fast: que iOS falle no es razon para tirar el build de Android
+      # que ya lleva media hora en la cola de EAS.
+      fail-fast: false
+      matrix:
+        plataforma: ${{ fromJson(needs.elegir.outputs.plataformas) }}
+    name: ${{ matrix.plataforma }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Igual que en `publicar-ios.yml`: sin `npm ci`. Las dependencias del
+      # workspace las compila EAS con el hook `eas-build-post-install`.
+
+      - name: Compilar
+        working-directory: apps/mobile
+        run: eas build --platform ${{ matrix.plataforma }} --profile production --non-interactive --wait
+
+      - name: Enviar
+        working-directory: apps/mobile
+        # iOS aterriza en TestFlight y los testers internos lo ven sin revision
+        # de Apple. Android va a la pista que diga eas.json.
+        run: eas submit --platform ${{ matrix.plataforma }} --latest --non-interactive

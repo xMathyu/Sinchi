@@ -1,0 +1,89 @@
+name: Publicar app iOS
+
+# Build de tienda de apps/mobile y subida a App Store Connect.
+#
+# POR QUE NO XCODE CLOUD. `apps/mobile/ios/` esta en .gitignore a proposito (ver
+# README, seccion Convenciones): el proyecto nativo lo genera `expo prebuild`
+# desde app.json y los plugins. Xcode Cloud clona el repositorio y necesita el
+# .xcworkspace ahi para poder elegir el scheme, asi que usarlo obligaria a
+# versionar el directorio nativo y a regenerarlo a mano cada vez que cambie un
+# plugin de Expo. EAS corre el prebuild dentro del build, en sus maquinas macOS.
+#
+# ESTE WORKFLOW SI USA UN SECRETO, a diferencia de `deploy-api.yml`. No es
+# descuido: EAS no habla OIDC, y la unica forma de autenticar a un runner es un
+# token de acceso de Expo. Se mitiga por alcance, no por rotacion — el token
+# solo puede disparar builds del proyecto. Las credenciales de firma de Apple no
+# pasan por aqui: viven en los servidores de EAS y se administran con
+# `eas credentials`, que es justamente lo que evita tener un .p12 en el repo.
+
+on:
+  push:
+    tags:
+      # Solo tags de version. Un tag suelto no gasta una hora de build.
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      enviar:
+        description: 'Subir el binario a App Store Connect al terminar'
+        type: boolean
+        default: true
+
+concurrency:
+  # Nunca dos builds de tienda a la vez: comparten el contador remoto de build
+  # number y el segundo saldria con el numero del primero. Y sin cancelar el que
+  # esta a medio camino — abortar deja el artefacto huerfano en EAS.
+  group: publicar-ios
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    # Ubuntu y no macOS a proposito: aqui no se compila nada. El binario lo hace
+    # EAS en sus maquinas; este runner orquesta y espera.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: El tag y app.json dicen la misma version
+        # Sin esto el binario sube con una version que no es la del tag, y a los
+        # tres meses no hay forma de saber que commit hay publicado en la tienda.
+        # Falla aqui, que cuesta diez segundos.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          app=$(node -p "require('./apps/mobile/app.json').expo.version")
+          if [ "$tag" != "$app" ]; then
+            echo "::error::El tag dice $tag y app.json dice $app. Igualalos antes de publicar."
+            exit 1
+          fi
+          echo "Version $app"
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Sin `npm ci` a proposito. Las dependencias del workspace las instala y
+      # compila EAS en su maquina: `apps/mobile/package.json` ya trae el hook
+      # `eas-build-post-install`, que construye @sinchi/shared y @sinchi/ui antes
+      # del bundle. Instalarlas aqui seria trabajo tirado — este runner no
+      # empaqueta nada.
+
+      - name: Compilar
+        working-directory: apps/mobile
+        # `--wait` mantiene el job vivo hasta que EAS termina (20-40 min), para
+        # que el check en verde signifique "hay binario" y no "se encolo".
+        # `--non-interactive` exige que las credenciales de firma ya existan en
+        # EAS: se crean una sola vez con `eas credentials` (ver docs/publicar-ios.md).
+        run: eas build --platform ios --profile production --non-interactive --wait
+
+      - name: Subir a App Store Connect
+        # En un tag siempre sube; a mano, solo si lo pediste.
+        if: github.event_name == 'push' || inputs.enviar
+        working-directory: apps/mobile
+        # `--latest` toma el build que acaba de terminar. El ascAppId y el
+        # appleTeamId estan en eas.json, asi que no pregunta nada.
+        run: eas submit --platform ios --latest --non-interactive
