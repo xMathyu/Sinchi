@@ -25,7 +25,8 @@ import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
 import { restaurarCuentaDeFirebase } from '../src/data/auth';
-import { useSession } from '../src/data/session-hooks';
+import { useBienvenida, useSession } from '../src/data/session-hooks';
+import { marcarBienvenidaVista, restaurarBienvenida } from '../src/data/bienvenida';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
 import { marcarHidratando, marcarIntentoTerminado } from '../src/data/store';
 import { CargandoSeccion } from '../src/design/loading';
@@ -77,6 +78,7 @@ export default function RootLayout() {
   // segundo intento volvia al login en cada arranque.
   useEffect(() => {
     void restoreSession(restaurarCuentaDeFirebase);
+    void restaurarBienvenida();
   }, []);
 
   if (!fontsLoaded && fontError === null) {
@@ -97,6 +99,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
+          <Stack.Screen name="bienvenida" options={{ animation: 'fade' }} />
           <Stack.Screen name="login" options={{ animation: 'fade' }} />
           <Stack.Screen name="link" options={{ animation: 'fade' }} />
           <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
@@ -305,13 +308,17 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
  */
 function Portada() {
   const state = useSession();
+  const bienvenida = useBienvenida();
 
   // Solo mientras se lee el llavero, que son milisegundos. Es corto pero no
   // se puede saltar: hasta que no se sabe el rol no se sabe QUE barra de
   // pestanas toca, y montar la del alumno para cambiarla por la del staff se
   // ve como un fallo. La espera larga —la de la red— ya no se tapa: ocurre
   // dentro de la app, en `CargandoSeccion`.
-  if (state.status !== 'loading') return null;
+  // También mientras se resuelve si toca la bienvenida: son dos lecturas del
+  // mismo llavero, lanzadas a la vez, y decidir con una sola manda al login a
+  // quien iba a ver la bienvenida y lo saca un instante después.
+  if (state.status !== 'loading' && bienvenida !== 'cargando') return null;
 
   return (
     <View style={styles.portada}>
@@ -322,15 +329,17 @@ function Portada() {
 
 function SessionRouter() {
   const state = useSession();
+  const bienvenida = useBienvenida();
   const router = useRouter();
   // `useSegments` viene tipado como tupla segun las rutas conocidas, y aqui se
   // lee por posicion sin importar cuantos niveles haya.
   const segments = useSegments() as readonly string[];
 
   useEffect(() => {
-    if (state.status === 'loading') return;
+    if (state.status === 'loading' || bienvenida === 'cargando') return;
 
     const primero = segments[0];
+    const enBienvenida = primero === 'bienvenida';
     const enLogin = primero === 'login' || primero === 'link';
     // El registro del equipo y la apertura de turno se hacen SIN sesion: son
     // justamente lo que produce una.
@@ -357,6 +366,20 @@ function SessionRouter() {
 
     if (state.status === 'signed_out') {
       /**
+       * La bienvenida intercepta el ARRANQUE, y nada más.
+       *
+       * Quien llega por un enlace —una invitación, la ficha de un gimnasio del
+       * directorio, el alta de un local— viene a algo concreto, y meterle tres
+       * láminas por delante es perderlo en la puerta. Por eso la condición no
+       * es «no la ha visto» sino «no la ha visto Y no venía a otra cosa».
+       */
+      const enArranque = primero === undefined || primero === 'index' || primero === 'login';
+      if (bienvenida === 'pendiente' && enArranque) {
+        if (!enBienvenida) router.replace('/bienvenida');
+        return;
+      }
+
+      /**
        * El alta de un gimnasio tambien se abre SIN sesion, y no por comodidad.
        *
        * Su primera vista es la oferta —lo que Sinchi le hace a un gimnasio y
@@ -366,7 +389,15 @@ function SessionRouter() {
        * del flujo, en el paso siguiente, que es donde de verdad hace falta:
        * `registrarGimnasio` firma el alta con la credencial de Firebase.
        */
-      if (!enLogin && !enTurno && !enDev && !enInvitacion && !enDirectorio && !enAltaDeGimnasio) {
+      if (
+        !enLogin &&
+        !enTurno &&
+        !enDev &&
+        !enInvitacion &&
+        !enDirectorio &&
+        !enAltaDeGimnasio &&
+        !enBienvenida
+      ) {
         router.replace('/login');
       }
       return;
@@ -401,6 +432,8 @@ function SessionRouter() {
       return;
     }
 
+    void marcarBienvenidaVista();
+
     // Con sesion: cada rol a su sitio. El staff no entra a las pantallas del
     // alumno con su sesion de turno — para ver su propia billetera existe
     // `/auth/switch-to-student`.
@@ -416,7 +449,7 @@ function SessionRouter() {
     const permitida =
       primero === zona || RUTAS_COMPARTIDAS.has(primero) || RUTAS_DE[zona].has(primero);
     if (!permitida) router.replace(destino);
-  }, [state, segments, router]);
+  }, [state, bienvenida, segments, router]);
 
   return null;
 }
