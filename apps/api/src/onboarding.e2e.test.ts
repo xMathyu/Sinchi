@@ -224,19 +224,56 @@ suite('dar de alta un gimnasio desde la app', () => {
     expect(body.slug).toBe(`${SLUG}-2`);
   });
 
-  it('una persona no puede llenar la red de gimnasios', async () => {
-    // Multi-sede es el escalón de S/499 y una conversación, no un botón.
-    const token = declareIdentity(`dueno-${runId}-1`);
-    const { status } = await http.post('/v1/gyms/signup').send({
-      idToken: token,
+  /**
+   * El segundo local SÍ entra, y el sexto no.
+   *
+   * Antes el segundo daba 409: «para abrir un segundo local, escríbenos». Se
+   * abrió porque el caso que bloqueaba es corriente —el profesor con la escuela
+   * de una universidad y sus clases aparte— y porque no se pierde plata: el
+   * escalón lo calcula `tierFor` por local contra su padrón real. Lo único que
+   * cada local nuevo regala es su mes gratis, y para eso está el tope.
+   *
+   * Van por `alta` y no por `http.post` a pelo para que el `afterAll` los
+   * borre: un tenant de prueba que sobrevive deja una fila de `staff` que la
+   * semilla de la siguiente corrida no sabe quitar.
+   */
+  it('la misma persona abre su segundo local', async () => {
+    const { status, body } = await alta({
+      uid: `dueno-${runId}-1`,
       gymName: `Su Segundo Local ${runId}`,
       taxId: RUC[2]!,
-      saasTier: 'up_to_60',
-      documentId: siguiente(),
-      phone: `+519${siguiente().slice(0, 8)}`,
     });
 
+    expect(status).toBe(201);
+
+    // Local NUEVO, no el de antes con otro nombre: cada uno lleva su padrón.
+    const { body: modos } = await http
+      .get('/v1/auth/modes')
+      .set(auth(body.session.accessToken))
+      .expect(200);
+    expect(modos.staff).toHaveLength(2);
+    expect(new Set((modos.staff as { tenantId: string }[]).map((p) => p.tenantId)).size).toBe(2);
+  });
+
+  it('pero no puede llenar la red de gimnasios', async () => {
+    // Cinco es el tope. Ya lleva dos, así que los tres siguientes entran y el
+    // sexto choca — que es lo que cierra la puerta a granjear meses gratis.
+    for (const n of [3, 4, 5]) {
+      const { status } = await alta({
+        uid: `dueno-${runId}-1`,
+        gymName: `Local ${n} de ${runId}`,
+        taxId: RUC[0]!,
+      });
+      expect(status, `el local ${n} debería entrar`).toBe(201);
+    }
+
+    const { status, body } = await alta({
+      uid: `dueno-${runId}-1`,
+      gymName: `Local 6 de ${runId}`,
+      taxId: RUC[0]!,
+    });
     expect(status).toBe(409);
+    expect(JSON.stringify(body)).toMatch(/máximo por cuenta/i);
   });
 });
 

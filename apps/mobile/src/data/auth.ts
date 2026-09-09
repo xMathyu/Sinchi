@@ -328,6 +328,22 @@ export async function cambiarDeModo(destino: 'student' | 'staff'): Promise<void>
   await saveSession(sesion);
 }
 
+/**
+ * De un local a otro, sin pasar por el login.
+ *
+ * Es `cambiarDeModo('staff')` apuntando a un gimnasio concreto, y comparte con
+ * el lo que de verdad importa: **vaciar el store antes de guardar la sesion
+ * nueva**. Sin eso el padron del otro local se queda pintado mientras carga el
+ * que toca, y en esta pantalla eso no es un parpadeo feo — es el dueno mirando
+ * las cifras del local equivocado y creyendo que son las del que acaba de
+ * elegir.
+ */
+export async function cambiarDeLocal(tenantId: string): Promise<void> {
+  const sesion = await switchToStaff(tenantId);
+  resetState();
+  await saveSession(sesion);
+}
+
 // ---------------------------------------------------------------------------
 // Secreto del QR
 // ---------------------------------------------------------------------------

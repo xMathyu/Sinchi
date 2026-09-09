@@ -23,6 +23,7 @@ import {
   fetchCheckInPreview,
   fetchGym,
   fetchGyms,
+  fetchModes,
   fetchRecentCheckIns,
   fetchTrialSettings,
   fetchTrials,
@@ -37,6 +38,7 @@ import {
   type PlazaDto,
   type PreciosDelLocal,
   type SaasSubscriptionDto,
+  type StaffPostDto,
   type SummaryDto,
   type TrialBookingDto,
 } from './api';
@@ -451,6 +453,40 @@ export function usePlansFor(membershipId: string): {
   }, [membershipId]);
 
   return { plans: plans ?? locales, cargando, error };
+}
+
+/**
+ * En qué locales trabaja quien tiene la sesión abierta.
+ *
+ * No sale del token —ahí viaja UNO, el de esta sesión— así que hay que
+ * preguntarlo. Existe para que el padrón pueda decir cuál está enseñando: con
+ * dos locales, una pantalla que solo dice «23 alumnos» no dice de quién, y las
+ * cifras de «Este mes» del local equivocado se leen igual de bien que las del
+ * bueno.
+ *
+ * Falla en silencio a propósito. Es un rótulo, no una función: quien tiene un
+ * solo local no pierde nada si la consulta no vuelve, y quien tiene dos ya sabe
+ * cambiarse desde Ajustes.
+ */
+export function useMisLocales(): readonly StaffPostDto[] {
+  const [locales, setLocales] = useState<readonly StaffPostDto[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    void fetchModes().then(
+      (modos) => {
+        if (!cancelado) setLocales(modos.staff);
+      },
+      () => {
+        // Sin respuesta, el padrón se pinta como siempre.
+      },
+    );
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  return locales;
 }
 
 /**

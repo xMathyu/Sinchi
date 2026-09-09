@@ -23,6 +23,7 @@ import {
   fetchGym,
   fetchGyms,
   fetchMe,
+  fetchModes,
   fetchMyTrials,
   fetchTrials,
   fetchMembership,
@@ -39,6 +40,7 @@ import {
   recordPayment,
   setApiBase,
   setCredentialProvider,
+  switchToStaff,
 } from './api';
 
 const API_URL = process.env.TEST_API_URL;
@@ -82,6 +84,46 @@ afterAll(() => {
 suite('salud', () => {
   it('responde', async () => {
     expect(await ping()).toBe(true);
+  });
+});
+
+suite('modos y locales', () => {
+  beforeAll(() => {
+    active = 'staff';
+  });
+
+  /**
+   * `staff` paso de ser un puesto suelto a una LISTA cuando el dueno pudo tener
+   * varios locales. Es exactamente el desfase que este archivo existe para
+   * cazar: la app hace `modos.staff.length` y con un objeto eso es `undefined`,
+   * que en un `> 0` no lanza — simplemente esconde el boton para siempre.
+   */
+  it('/auth/modes devuelve los puestos como lista', async () => {
+    const modos = await fetchModes();
+
+    expect(Array.isArray(modos.staff)).toBe(true);
+    expect(typeof modos.student).toBe('boolean');
+    expect(modos.staff.length).toBeGreaterThan(0);
+
+    for (const puesto of modos.staff) {
+      expect(['owner', 'front_desk']).toContain(puesto.role);
+      expect(puesto.tenantId).toBeTruthy();
+    }
+  });
+
+  it('volver al puesto sin pedir local manda un POST sin cuerpo y funciona', async () => {
+    // El camino de siempre. El esquema del servidor lleva `.default({})` justo
+    // para que este POST pelado no empiece a responder 400 el dia que se le
+    // agrego el `tenantId` opcional.
+    const sesion = await switchToStaff();
+
+    expect(sesion.role).toBe('front_desk');
+    expect(sesion.tenantId).toBeTruthy();
+  });
+
+  it('pedir un local ajeno se rechaza, no se concede', async () => {
+    // El control de acceso del cambio de local, visto desde el cliente.
+    await expect(switchToStaff('00000000-0000-4000-8000-000000000000')).rejects.toThrow();
   });
 });
 

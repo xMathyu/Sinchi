@@ -20,7 +20,7 @@ import { Card, Divider, Dot, Eyebrow, Logo, Row, Stack, Text } from '../src/desi
 import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
-import { cambiarDeModo, signOut } from '../src/data/auth';
+import { cambiarDeLocal, cambiarDeModo, signOut } from '../src/data/auth';
 import { fijarMiPin } from '../src/data/actions';
 import { fetchModes, type AvailableModesDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
@@ -90,9 +90,25 @@ export default function SettingsScreen() {
         ? modos.student
           ? 'student'
           : null
-        : modos.staff !== null
+        : modos.staff.length > 0
           ? 'staff'
           : null;
+
+  /** El puesto al que lleva «volver»: el de siempre, como hace la api. */
+  const puestoPorDefecto = modos?.staff[0] ?? null;
+
+  /**
+   * Los OTROS locales de esta persona.
+   *
+   * Solo tiene sentido enseñarlos en modo staff: desde la billetera el botón de
+   * arriba ya la devuelve a su puesto, y ofrecerle además elegir local sería
+   * hacerle tomar dos decisiones para volver de una.
+   */
+  const tenantActual = session.status === 'signed_in' ? session.session.tenantId : null;
+  const otrosLocales =
+    modos === null || !esTurno
+      ? []
+      : modos.staff.filter((puesto) => puesto.tenantId !== tenantActual);
 
   return (
     <Screen scroll>
@@ -163,12 +179,12 @@ export default function SettingsScreen() {
                   <Text variant="bodySmall" weight="semibold">
                     {otroModo === 'student'
                       ? 'Ver como alumno'
-                      : `Volver a ${modos?.staff?.tenantName ?? 'tu gimnasio'}`}
+                      : `Volver a ${puestoPorDefecto?.tenantName ?? 'tu gimnasio'}`}
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
                     {otroModo === 'student'
                       ? 'Tu plan, tu QR y tu historial en este gimnasio'
-                      : modos?.staff?.role === 'owner'
+                      : puestoPorDefecto?.role === 'owner'
                         ? 'El padrón, los planes y los reportes del local'
                         : 'Escanear, marcar manual y cobrar'}
                   </Text>
@@ -190,6 +206,67 @@ export default function SettingsScreen() {
           )}
           <Text variant="micro" color={theme.colors.textFaint}>
             Es la misma sesión con otra etiqueta: cambiar de modo no la alarga ni la renueva.
+          </Text>
+        </Stack>
+      )}
+
+      {/* Los otros locales de esta persona.
+          El caso que lo pide: el profesor que lleva la escuela de una
+          universidad —alumnos becados, nadie paga— y aparte cobra sus clases
+          por su cuenta. Son dos padrones y dos cajas, y hasta ahora la sesión
+          solo sabía llevarlo a uno: el `tenantId` va firmado en el token, así
+          que cambiar de local es pedir un token nuevo. Solo aparece si de
+          verdad tiene otro. */}
+      {otrosLocales.length > 0 && (
+        <Stack gap={10} style={{ marginTop: 20 }}>
+          <Eyebrow>Tus locales</Eyebrow>
+          {otrosLocales.map((local) => (
+            <Pressable
+              key={local.tenantId}
+              accessibilityRole="button"
+              accessibilityLabel={`Cambiar a ${local.tenantName ?? 'el otro local'}`}
+              disabled={cambiando}
+              onPress={() => {
+                setCambiando(true);
+                setErrorDeModo(null);
+                void cambiarDeLocal(local.tenantId).then(
+                  () => {
+                    setCambiando(false);
+                    router.back();
+                  },
+                  (error: unknown) => {
+                    setCambiando(false);
+                    setErrorDeModo(
+                      error instanceof Error ? error.message : 'No se pudo cambiar de local.',
+                    );
+                  },
+                );
+              }}
+            >
+              <Card radius={theme.radii.xl}>
+                <Row gap={12}>
+                  <Stack gap={2} style={{ flex: 1 }}>
+                    <Text variant="bodySmall" weight="semibold">
+                      {local.tenantName ?? 'Otro local'}
+                    </Text>
+                    <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                      {local.role === 'owner' ? 'Dueño' : 'Recepción'}
+                    </Text>
+                  </Stack>
+                  {cambiando ? (
+                    <ActivityIndicator color={theme.colors.textSecondary} />
+                  ) : (
+                    <Text variant="body" color={theme.colors.textSecondary}>
+                      ›
+                    </Text>
+                  )}
+                </Row>
+              </Card>
+            </Pressable>
+          ))}
+          <Text variant="micro" color={theme.colors.textFaint}>
+            Cada local lleva su propio padrón, sus planes y su caja. Cambiar tampoco alarga la
+            sesión.
           </Text>
         </Stack>
       )}

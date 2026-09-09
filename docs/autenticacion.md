@@ -146,7 +146,8 @@ el código. Faltaban dos cosas, y la segunda es la que importaba:
 ```
 POST /auth/switch-to-student   staff  -> sesión de alumno
 POST /auth/switch-to-staff     quien tenga fila en `staff` -> vuelve a su puesto
-GET  /auth/modes               cualquiera -> { student, staff }
+POST /auth/switch-to-staff     { tenantId } -> salta a ESE local suyo
+GET  /auth/modes               cualquiera -> { student, staff: [...] }
 ```
 
 ### No concede nada
@@ -187,6 +188,60 @@ va a rechazar.
 
 ---
 
+## Una persona, varios locales
+
+`staff` siempre pudo tener varias filas de la misma persona —el índice único es
+`(tenant_id, user_id)`— pero la sesión no sabía leerlas. `staffRowOf` hacía
+`limit(1)` **sin orden**, así que un dueño con dos locales entraba a uno de los
+dos al azar, y no había forma de ir al otro: el `tenantId` va firmado dentro del
+JWT.
+
+El caso que lo pide es corriente: el profesor que lleva la escuela de una
+universidad —alumnos becados, nadie paga— y aparte cobra sus clases por su
+cuenta. Son dos padrones, dos tarifarios y dos cajas.
+
+Tres cambios, y ninguno toca el esquema:
+
+1. **`staffRowsOf` devuelve todas**, ordenadas por `created_at` y desempatadas
+   por `id`. El orden tiene que ser TOTAL: dos filas sembradas en la misma
+   transacción comparten fecha, y sin el desempate el login vuelve a ser una
+   lotería.
+2. **`/auth/modes` devuelve una lista** con el nombre de cada local puesto —
+   «cambiar a `b3f1-…`» no lo elige nadie. Vacía, no nula, cuando no trabaja en
+   ninguno.
+3. **`switch-to-staff` acepta `tenantId`.** Es la misma operación de siempre
+   mirada de cerca: «emíteme una sesión de staff, en este gimnasio».
+
+### Dónde está el control de acceso
+
+En un `find` sobre la lista que devuelve `staffRowsOf`, y se sostiene en que esa
+lista se lee bajo contexto de IDENTIDAD: la política de `staff` es
+`tenant_id = app_current_tenant() OR user_id = app_current_user()`, así que con
+solo el usuario puesto devuelve **sus** filas y ninguna más. Preguntarle a la
+base «¿existe un staff en ese tenant?» sí sería un agujero — existe, y puede no
+ser el suyo.
+
+Una sola ruta y no dos a propósito: dos sitios que firman tokens de staff son
+dos sitios donde comprobar que el puesto es suyo, y el segundo es el que un día
+se olvida.
+
+Cambiar de local **no alarga la sesión**, por lo mismo que no la alarga cambiar
+de modo: saltar de un local al otro y volver renovaría un turno de doce horas
+para siempre.
+
+### El alta del segundo local
+
+`assertNotStaffYet` rechazaba con 409 y «para abrir un segundo local,
+escríbenos». Ahora es `assertLocalesDisponibles`, con tope de **cinco**.
+
+No se pierde plata al abrirlo: `tierFor` calcula el escalón **por local** contra
+su padrón real, así que dos locales pagan dos escalones y una selección de diez
+becados cae en el plan gratis — que es lo correcto, no es un cliente que se
+escapa sino un local que no factura. Lo único que cada local nuevo regala es su
+mes gratis, y para eso está el tope.
+
+---
+
 ## Rutas
 
 | Método | Ruta | Quién |
@@ -198,7 +253,7 @@ va a rechazar.
 | `POST` | `/staff/claims/confirm` | staff — vincula `{ code, membershipId }` |
 | `GET` | `/auth/modes` | cualquier sesión — qué otros modos tiene |
 | `POST` | `/auth/switch-to-student` | staff con ficha — mira su billetera |
-| `POST` | `/auth/switch-to-staff` | quien tenga fila en `staff` — vuelve a su puesto |
+| `POST` | `/auth/switch-to-staff` | quien tenga fila en `staff` — vuelve a su puesto, o salta al local que pida en `{ tenantId }` |
 | `DELETE` | `/staff/members/:id/account` | dueño — desvincula |
 | `POST` | `/staff/pin` | staff (el propio) / dueño (de cualquiera) |
 | `GET` `POST` | `/staff/devices` | dueño |
