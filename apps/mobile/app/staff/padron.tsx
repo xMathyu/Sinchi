@@ -14,7 +14,14 @@
  * a abrir un cargo para responder "¿por qué no pasa?" y a cancelarlo después.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  TextInput,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { screenPadding } from '@sinchi/ui';
 import { formatPEN, type Cents } from '@sinchi/shared';
@@ -25,9 +32,12 @@ import { useTheme } from '../../src/design/theme';
 import {
   canjearCodigo,
 } from '../../src/data/actions';
+import { cambiarDeLocal } from '../../src/data/auth';
+import type { StaffPostDto } from '../../src/data/api';
 import {
   useBajas,
   useClaims,
+  useMisLocales,
   useOwnerSummary,
   useRefresco,
   useRoster,
@@ -53,6 +63,20 @@ export default function PadronScreen() {
    */
   const puedeInscribir = suscripcion === null || suscripcion.state.canWrite;
   const { refrescando, refrescar } = useRefresco();
+
+  /**
+   * En que local esta parada esta pantalla.
+   *
+   * Con un solo local no se ensena: «PADRON» ya lo dice todo y el nombre del
+   * gimnasio en cada pantalla es ruido. Con dos empieza a importar mas que
+   * ninguna otra cosa de la cabecera — las cifras de «Este mes» del local
+   * equivocado se leen igual de bien que las del bueno, y no hay forma de
+   * notarlo.
+   */
+  const locales = useMisLocales();
+  const tenantId = useStore((s) => s.staff.tenantId);
+  const localActual =
+    locales.length > 1 ? (locales.find((l) => l.tenantId === tenantId) ?? null) : null;
   const [query, setQuery] = useState('');
   // Las bajas no entran en el padron normal —el mostrador mira «quien entrena
   // aqui» todo el dia— pero tienen que ser alcanzables: son las unicas fichas
@@ -165,6 +189,10 @@ export default function PadronScreen() {
         <Text variant="title" numberOfLines={1}>
           {roster.length} {roster.length === 1 ? 'alumno' : 'alumnos'}
         </Text>
+
+        {localActual !== null && (
+          <SelectorDeLocal locales={locales} actual={localActual} />
+        )}
 
         {/* A lo ancho, y solo para recepción: al dueño se lo dicen con más
             detalle las cifras de «Este mes», que van veinte píxeles más abajo.
@@ -616,5 +644,113 @@ function AvisoSuscripcion({
         )}
       </Stack>
     </Card>
+  );
+}
+
+/**
+ * En qué local estoy, y el salto al otro.
+ *
+ * Vive en el padrón y no solo en Ajustes porque el problema que resuelve es de
+ * ESTA pantalla: el dueño con dos locales llega aquí a preguntar «cuánto entró y
+ * quién debe», y las cifras del local equivocado responden esa pregunta igual de
+ * bien. El nombre delante es la mitad que importa; el cambio es la comodidad.
+ *
+ * Solo se monta con más de un local (`localActual` es `null` con uno), así que
+ * quien tiene un dojo y nada más no ve una línea de más.
+ *
+ * Desplegable y no una lista siempre abierta: son dos o tres nombres, pero
+ * ocupan el sitio donde el mostrador mira la deuda todo el día.
+ */
+function SelectorDeLocal({
+  locales,
+  actual,
+}: {
+  readonly locales: readonly StaffPostDto[];
+  readonly actual: StaffPostDto;
+}) {
+  const theme = useTheme();
+  const [abierto, setAbierto] = useState(false);
+  const [cambiando, setCambiando] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const otros = locales.filter((local) => local.tenantId !== actual.tenantId);
+
+  return (
+    <Stack gap={8}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: abierto }}
+        accessibilityLabel={`${actual.tenantName ?? 'Este local'}. Cambiar de local`}
+        hitSlop={8}
+        onPress={() => setAbierto((v) => !v)}
+      >
+        <Row gap={8} justify="flex-start">
+          <Text
+            variant="captionSmall"
+            weight="semibold"
+            numberOfLines={1}
+            style={{ flexShrink: 1 }}
+          >
+            {actual.tenantName ?? 'Este local'}
+          </Text>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            {abierto ? 'cerrar' : 'cambiar'}
+          </Text>
+        </Row>
+      </Pressable>
+
+      {abierto &&
+        otros.map((local) => (
+          <Pressable
+            key={local.tenantId}
+            accessibilityRole="button"
+            accessibilityLabel={`Cambiar a ${local.tenantName ?? 'el otro local'}`}
+            disabled={cambiando !== null}
+            onPress={() => {
+              setCambiando(local.tenantId);
+              setError(null);
+              /**
+               * No hay `then` de éxito, y es a propósito: `cambiarDeLocal`
+               * vacía el store y guarda la sesión nueva, y esta pantalla se
+               * vuelve a montar con el padrón del otro local. Apagar el
+               * indicador después sería tocar el estado de un componente que
+               * ya no existe.
+               */
+              void cambiarDeLocal(local.tenantId).catch((causa: unknown) => {
+                setCambiando(null);
+                setError(
+                  causa instanceof Error ? causa.message : 'No se pudo cambiar de local.',
+                );
+              });
+            }}
+          >
+            <Card radius={theme.radii.lg} tone="sunken">
+              <Row gap={10}>
+                <Stack gap={1} style={{ flex: 1 }}>
+                  <Text variant="captionSmall" weight="semibold" numberOfLines={1}>
+                    {local.tenantName ?? 'Otro local'}
+                  </Text>
+                  <Text variant="micro" color={theme.colors.textSecondary}>
+                    {local.role === 'owner' ? 'Dueño' : 'Recepción'}
+                  </Text>
+                </Stack>
+                {cambiando === local.tenantId ? (
+                  <ActivityIndicator color={theme.colors.textSecondary} />
+                ) : (
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    ›
+                  </Text>
+                )}
+              </Row>
+            </Card>
+          </Pressable>
+        ))}
+
+      {error !== null && (
+        <Text variant="micro" color={theme.semaphore.bad}>
+          {error}
+        </Text>
+      )}
+    </Stack>
   );
 }

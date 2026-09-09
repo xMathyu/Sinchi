@@ -13,9 +13,10 @@
  *  · **cuenta de Google verificada**, igual que para reservar una clase gratis;
  *  · **RUC con digito verificador**, comprobado de verdad (`checkRuc`). La
  *    columna es NOT NULL y lo que entre ahi sale despues en las boletas;
- *  · **un gimnasio por persona**. Quien ya trabaja en un local no puede crear
- *    otro desde aqui. Multi-sede es el escalon de S/499 y una conversacion, no
- *    un boton.
+ *  · **hasta cinco locales por persona**. El profesor que lleva la escuela de
+ *    una universidad y ademas cobra sus clases aparte son DOS padrones, y el
+ *    alta lo permite; el tope existe solo porque cada local nuevo estrena su
+ *    mes gratis (ver `assertLocalesDisponibles`).
  *
  * El codigo de promocion es lo ULTIMO y no puede tumbar el alta: si esta mal
  * escrito, el gimnasio queda creado igual y la app dice por que no se aplico.
@@ -47,6 +48,14 @@ import {
 import { AuthService, type IssuedSession } from '../../auth/auth.service';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { SaasService } from '../saas/saas.service';
+
+/**
+ * Tope de locales por persona. Ver `assertLocalesDisponibles`.
+ *
+ * Es un tope de ABUSO, no un escalon comercial: lo que se cobra sigue saliendo
+ * del padron de cada local, uno por uno.
+ */
+const MAX_LOCALES_POR_PERSONA = 5;
 
 /**
  * Con que tarifas nace un gimnasio.
@@ -210,7 +219,7 @@ export class OnboardingService {
 
     const persona = await this.resolveOwner(input);
 
-    await this.assertNotStaffYet(persona.userId);
+    await this.assertLocalesDisponibles(persona.userId);
 
     const { tenantId, slug } = await withoutTenantIsolation(this.db, async (tx) => {
       const slug = await this.freeSlug(tx, base);
@@ -375,28 +384,45 @@ export class OnboardingService {
   }
 
   /**
-   * Multi-sede es el escalon de S/499 y una conversacion, no un boton.
+   * Cuantos locales puede abrir una persona.
    *
-   * Va con CONTEXTO DE USUARIO y no sin contexto: `staff` esta bajo RLS forzado
-   * y su politica es `tenant_id = app_current_tenant() OR user_id =
-   * app_current_user()`. Sin ninguno de los dos puestos no devuelve ni una fila
-   * — la primera version preguntaba en SQL crudo creyendo que eso esquivaba las
-   * politicas, y la comprobacion no se disparaba NUNCA: la misma persona podia
-   * crear gimnasios sin limite y nada fallaba. Lo encontro el e2e, no el
-   * typecheck.
+   * Antes era UNO, y la puerta decia "para abrir un segundo local, escribenos".
+   * Se abrio porque el caso que bloqueaba es real y comun: el profesor que lleva
+   * la escuela de una universidad —alumnos becados, nadie paga— y ademas cobra
+   * sus clases por su cuenta el fin de semana. Son dos padrones, dos tarifarios
+   * y dos cajas; meterlos en un solo local obliga a leer el dinero de los dos
+   * sumado, que es justo lo que no sirve.
+   *
+   * Y no se pierde plata: el escalon lo calcula `tierFor` POR LOCAL contra su
+   * padron real, asi que dos locales pagan dos escalones. Una seleccion de diez
+   * becados cae en el plan gratis, que es lo correcto — no es un cliente que se
+   * escapa, es un local que no factura.
+   *
+   * El tope se queda por lo unico que si se regala: cada local nuevo estrena su
+   * mes gratis. Cinco es holgado para cualquier escuela de verdad y cierra la
+   * puerta a granjear meses abriendo locales de mentira.
    */
-  private async assertNotStaffYet(userId: string): Promise<void> {
-    const [existente] = await withUser(this.db, userId, (tx) =>
+  private async assertLocalesDisponibles(userId: string): Promise<void> {
+    /**
+     * Va con CONTEXTO DE USUARIO y no sin contexto: `staff` esta bajo RLS
+     * forzado y su politica es `tenant_id = app_current_tenant() OR user_id =
+     * app_current_user()`. Sin ninguno de los dos puestos no devuelve ni una
+     * fila — la primera version preguntaba en SQL crudo creyendo que eso
+     * esquivaba las politicas, y la comprobacion no se disparaba NUNCA: la misma
+     * persona podia crear gimnasios sin limite y nada fallaba. Lo encontro el
+     * e2e, no el typecheck.
+     */
+    const suyos = await withUser(this.db, userId, (tx) =>
       tx
         .select({ tenantId: schema.staff.tenantId })
         .from(schema.staff)
-        .where(eq(schema.staff.userId, userId))
-        .limit(1),
+        .where(eq(schema.staff.userId, userId)),
     );
 
-    if (existente !== undefined) {
+    if (suyos.length >= MAX_LOCALES_POR_PERSONA) {
       throw new ConflictException(
-        'Ya trabajas en un gimnasio de Sinchi. Para abrir un segundo local, escríbenos.',
+        `Ya llevas ${MAX_LOCALES_POR_PERSONA} locales en Sinchi, que es el máximo por cuenta. ` +
+          'Si necesitas más, escríbenos.',
       );
     }
   }

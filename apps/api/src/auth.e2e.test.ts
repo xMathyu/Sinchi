@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { UnauthorizedException, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { inArray } from 'drizzle-orm';
 import { FirebaseVerifier, type VerifiedIdentity } from './auth/firebase';
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -81,6 +82,17 @@ const findMembership = async (staffToken: string, name: string): Promise<string>
 let frontDesk = '';
 let owner = '';
 
+/**
+ * Gimnasios que crean las pruebas, para borrarlos al terminar.
+ *
+ * No es limpieza por pulcritud. `staff.user_id` es ON DELETE restrict, asi que
+ * un tenant de prueba que sobrevive deja a Sergio con una fila de `staff` que
+ * la semilla no conoce — y `runSeed({ reset: true })` de la SIGUIENTE corrida
+ * revienta al intentar borrar su usuario. Se veia como un fallo del arranque,
+ * lejisimos de la prueba que lo causo.
+ */
+const tenantsCreados: string[] = [];
+
 beforeAll(async () => {
   if (DATABASE_URL === undefined) return;
 
@@ -112,6 +124,15 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
+  if (app !== undefined && tenantsCreados.length > 0) {
+    const { schema, withoutTenantIsolation } = await import('./db/client');
+    const { DATABASE } = await import('./db/db.module');
+    const db = app.get(DATABASE);
+    // `staff` y `saas_subscriptions` se van en cascada con el tenant.
+    await withoutTenantIsolation(db, (tx) =>
+      tx.delete(schema.tenants).where(inArray(schema.tenants.id, tenantsCreados)),
+    );
+  }
   await app?.close();
 });
 
@@ -418,7 +439,10 @@ suite('cambio de modo', () => {
 
   const modes = async (bearer: string) => {
     const { body } = await http.get('/v1/auth/modes').set(auth(bearer)).expect(200);
-    return body as { student: boolean; staff: { role: string; tenantName: string } | null };
+    return body as {
+      student: boolean;
+      staff: readonly { role: string; tenantName: string }[];
+    };
   };
 
   it('un alumno sin puesto no tiene a dónde cambiar', async () => {
@@ -426,7 +450,7 @@ suite('cambio de modo', () => {
     const disponibles = await modes(alumno);
 
     expect(disponibles.student).toBe(true);
-    expect(disponibles.staff).toBeNull();
+    expect(disponibles.staff).toEqual([]);
 
     // Y la api lo sostiene: el botón no se enseña, pero la ruta tampoco cede.
     await http.post('/v1/auth/switch-to-staff').set(auth(alumno)).expect(403);
@@ -435,8 +459,9 @@ suite('cambio de modo', () => {
   it('el dueño sin ficha ve su puesto y ninguna billetera', async () => {
     const disponibles = await modes(owner);
     expect(disponibles.student).toBe(false);
-    expect(disponibles.staff?.role).toBe('owner');
-    expect(disponibles.staff?.tenantName).toBe('Iron Muay Thai Lince');
+    expect(disponibles.staff).toHaveLength(1);
+    expect(disponibles.staff[0]?.role).toBe('owner');
+    expect(disponibles.staff[0]?.tenantName).toBe('Iron Muay Thai Lince');
   });
 
   it('inscribirse en su propio dojo le abre el modo alumno', async () => {
@@ -452,7 +477,7 @@ suite('cambio de modo', () => {
 
     const disponibles = await modes(owner);
     expect(disponibles.student).toBe(true);
-    expect(disponibles.staff?.role).toBe('owner');
+    expect(disponibles.staff[0]?.role).toBe('owner');
   });
 
   it('va a alumno y vuelve a su puesto', async () => {
@@ -518,5 +543,177 @@ suite('cambio de modo', () => {
     // Lo que queda del turno, no una semana nueva.
     expect(devuelta.body.expiresInSeconds).toBeLessThanOrEqual(12 * 60 * 60);
     expect(devuelta.body.expiresInSeconds).toBeGreaterThan(11 * 60 * 60);
+  });
+});
+
+/**
+ * El profesor con dos locales.
+ *
+ * El caso real que lo pide: lleva la escuela de una universidad —alumnos
+ * becados, nadie paga— y aparte cobra sus clases por su cuenta. Son dos
+ * padrones, dos tarifarios y dos cajas.
+ *
+ * Antes esto no existía por dos rejas distintas, y hay que probar las dos:
+ * el alta lo rechazaba con un 409, y la sesión llevaba el `tenantId` firmado
+ * leyendo `staff` con un `limit(1)` SIN ORDEN — así que aunque le metieras la
+ * segunda fila a mano, el login lo dejaba en uno de los dos al azar.
+ *
+ * Lo que estas pruebas cuidan no es que el cambio funcione. Es que los dos
+ * locales sigan siendo dos: que el padrón que se ve sea el del local elegido, y
+ * que pedir uno ajeno no cuele.
+ */
+suite('el dueño con dos locales', () => {
+  /** Sergio, ya `owner` de Iron Muay Thai por la semilla. */
+  const SERGIO_DNI = '42447799';
+  /** RUC real y válido: el alta comprueba el dígito verificador. */
+  const RUC_SEGUNDO = '20131312955';
+
+  let segundoTenantId = '';
+  let ironTenantId = '';
+
+  interface Puesto {
+    role: string;
+    tenantId: string;
+    tenantName: string | null;
+  }
+
+  const puestos = async (bearer: string): Promise<Puesto[]> => {
+    const { body } = await http.get('/v1/auth/modes').set(auth(bearer)).expect(200);
+    return (body as { staff: Puesto[] }).staff;
+  };
+
+  it('abre su segundo local desde la app', async () => {
+    // La reja de antes: «Ya trabajas en un gimnasio de Sinchi». Ahora el tope
+    // son cinco, y esto es el segundo.
+    const token = declareIdentity('sergio-segundo-local');
+    const { body } = await http
+      .post('/v1/gyms/signup')
+      .send({
+        idToken: token,
+        gymName: 'Selección UPC',
+        taxId: RUC_SEGUNDO,
+        saasTier: 'free',
+        documentId: SERGIO_DNI,
+      })
+      .expect(201);
+
+    segundoTenantId = body.tenantId as string;
+    tenantsCreados.push(segundoTenantId);
+
+    // Se enganchó a la identidad que YA existía en vez de crear un segundo
+    // Sergio: es lo que hace que sea la misma persona en los dos locales.
+    const misPuestos = await puestos(owner);
+    expect(misPuestos).toHaveLength(2);
+    expect(misPuestos.map((p) => p.tenantName).sort()).toEqual([
+      'Iron Muay Thai Lince',
+      'Selección UPC',
+    ]);
+
+    ironTenantId = misPuestos.find((p) => p.tenantName === 'Iron Muay Thai Lince')!.tenantId;
+    expect(segundoTenantId).not.toBe(ironTenantId);
+  });
+
+  it('entrar lo deja en el local de siempre, no en el último que abrió', async () => {
+    // Es lo que rompía el `limit(1)` sin orden. Abrir un local nuevo no puede
+    // cambiar dónde amanece la app al día siguiente.
+    const { body } = await http
+      .post('/v1/auth/dev-login')
+      .send({ phone: '+51987000333' })
+      .expect(201);
+
+    expect(body.tenantId).toBe(ironTenantId);
+  });
+
+  it('cambia de local y el padrón cambia con él', async () => {
+    // LA prueba. Sin esto el cambio sería una etiqueta distinta sobre los
+    // mismos datos, que es peor que no tenerlo: el dueño leería las cifras de
+    // un local creyendo que son las del otro.
+    const { body: enIron } = await http.get('/v1/staff/roster').set(auth(owner)).expect(200);
+    expect(enIron.length).toBeGreaterThan(0);
+
+    const salto = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(owner))
+      .send({ tenantId: segundoTenantId })
+      .expect(201);
+
+    expect(salto.body.role).toBe('owner');
+    expect(salto.body.tenantId).toBe(segundoTenantId);
+
+    // El local recién abierto no tiene a nadie. Que el padrón venga vacío es
+    // justo la prueba de que no está mirando el de Iron Muay Thai.
+    const { body: enUpc } = await http
+      .get('/v1/staff/roster')
+      .set(auth(salto.body.accessToken))
+      .expect(200);
+    expect(enUpc).toHaveLength(0);
+
+    // Y la vuelta, que es el mismo camino al revés.
+    const vuelta = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(salto.body.accessToken))
+      .send({ tenantId: ironTenantId })
+      .expect(201);
+    const { body: otraVez } = await http
+      .get('/v1/staff/roster')
+      .set(auth(vuelta.body.accessToken))
+      .expect(200);
+    expect(otraVez.length).toBe(enIron.length);
+  });
+
+  it('no puede saltar a un local que no es suyo', async () => {
+    // El control de acceso entero del cambio de local. Ana trabaja en Dojo
+    // Shotokan y Sergio no: pedir ese tenant tiene que morir aquí, no en la
+    // consulta siguiente.
+    const puestosDeAna = await puestos(frontDesk);
+    const shotokan = puestosDeAna[0]!.tenantId;
+    expect(shotokan).not.toBe(ironTenantId);
+
+    await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(owner))
+      .send({ tenantId: shotokan })
+      .expect(403);
+  });
+
+  it('un tenant que no existe tampoco abre nada', async () => {
+    await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(owner))
+      .send({ tenantId: '00000000-0000-4000-8000-000000000000' })
+      .expect(403);
+  });
+
+  it('volver sin pedir local sigue funcionando', async () => {
+    // El camino que ya existía: `POST` pelado, sin cuerpo. Lleva al de siempre.
+    const comoAlumno = await http
+      .post('/v1/auth/switch-to-student')
+      .set(auth(owner))
+      .expect(201);
+
+    const vuelta = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(comoAlumno.body.accessToken))
+      .expect(201);
+
+    expect(vuelta.body.tenantId).toBe(ironTenantId);
+  });
+
+  it('cambiar de local NO regala vida a la sesión', async () => {
+    // Mismo agujero que cerró el cambio de modo, con otra puerta: saltar de un
+    // local al otro y volver renovaría un turno de doce horas para siempre.
+    const antes = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(owner))
+      .send({ tenantId: segundoTenantId })
+      .expect(201);
+
+    const despues = await http
+      .post('/v1/auth/switch-to-staff')
+      .set(auth(antes.body.accessToken))
+      .send({ tenantId: ironTenantId })
+      .expect(201);
+
+    expect(despues.body.expiresInSeconds).toBeLessThanOrEqual(antes.body.expiresInSeconds);
   });
 });

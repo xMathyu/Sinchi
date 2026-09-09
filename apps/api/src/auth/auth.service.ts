@@ -20,7 +20,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { AppRole } from '@sinchi/shared';
 import { InjectDb } from '../db/db.module';
 import {
@@ -68,20 +68,29 @@ interface StaffRow {
   readonly role: string;
 }
 
+/** Un puesto con el nombre del local puesto, que es lo que se enseña. */
+export interface StaffPost {
+  readonly role: AppRole;
+  readonly tenantId: string;
+  readonly tenantName: string | null;
+}
+
 /**
  * Los dos lados de una misma persona.
  *
- * `student` es true si tiene ficha activa en algún padrón; `staff` describe su
- * puesto si trabaja en algún gimnasio. Que los dos vengan llenos es el caso que
- * el producto no sabía enseñar: el dueño que entrena en su propio dojo.
+ * `student` es true si tiene ficha activa en algún padrón; `staff` son sus
+ * puestos, uno por gimnasio donde trabaja. Que los dos vengan llenos es el caso
+ * que el producto no sabía enseñar: el dueño que entrena en su propio dojo.
+ *
+ * `staff` es una LISTA y no un puesto suelto porque una persona puede trabajar
+ * en varios locales: el profesor que lleva la escuela de la universidad y da
+ * clases por su cuenta el fin de semana es un solo `users` con dos filas en
+ * `staff`. Va vacía —no nula— cuando no trabaja en ninguno: así el cliente
+ * pregunta por `length` y no tiene dos formas de decir «ninguno».
  */
 export interface AvailableModes {
   readonly student: boolean;
-  readonly staff: {
-    readonly role: AppRole;
-    readonly tenantId: string;
-    readonly tenantName: string | null;
-  } | null;
+  readonly staff: readonly StaffPost[];
 }
 
 /**
@@ -453,7 +462,7 @@ export class AuthService {
    * crear su local tiene que entrar como dueno sin volver a autenticarse.
    */
   async issueForUser(userId: string): Promise<IssuedSession> {
-    const staffRow = await this.staffRowOf(userId);
+    const staffRow = await this.primaryStaffRow(userId);
 
     const claims: SessionClaims =
       staffRow === undefined
@@ -501,7 +510,7 @@ export class AuthService {
     // Paso 2: el rol. Va en una transacción aparte —no anidada— porque anidar
     // `withUser` dentro de otra transacción tomaría una segunda conexión del
     // pool sin necesidad.
-    const staffRow = await this.staffRowOf(user.id);
+    const staffRow = await this.primaryStaffRow(user.id);
 
     // El mismo binario sirve a los tres roles (MD 4.6) y el rol lo define la
     // sesión, no una preferencia de la persona.
@@ -557,12 +566,38 @@ export class AuthService {
    * `issueForUser` le habría dado al entrar con Google. Si la fila ya no está
    * —lo sacaron del equipo mientras miraba su billetera— no hay vuelta, y eso es
    * lo correcto.
+   *
+   * Con `tenantId` es además el CAMBIO DE LOCAL, y es la misma operación mirada
+   * de cerca: «emíteme una sesión de staff, en este gimnasio». Tener una sola
+   * puerta importa — dos rutas que firman tokens de staff son dos sitios donde
+   * comprobar que el puesto es suyo, y la segunda es la que un día se olvida.
+   *
+   * Cambiar de local NO alarga la sesión: `remainingSeconds` la deja con lo que
+   * le quedaba. Si no, un turno de doce horas se renovaría solo saltando de un
+   * gimnasio al otro y de vuelta.
    */
-  async switchToStaff(session: Session): Promise<IssuedSession> {
-    const staffRow = await this.staffRowOf(session.sub);
+  async switchToStaff(session: Session, tenantId?: string): Promise<IssuedSession> {
+    const puestos = await this.staffRowsOf(session.sub);
+
+    /**
+     * Sin gimnasio pedido, el de siempre. Con uno pedido, tiene que ser SUYO.
+     *
+     * Este `find` es el control de acceso entero del cambio de local, y se
+     * sostiene en que `staffRowsOf` lee bajo contexto de identidad: la política
+     * de `staff` solo deja ver las filas propias, así que la lista contra la que
+     * se busca no puede contener el puesto de otra persona. Comprobar contra la
+     * base «¿existe un staff en ese tenant?» sí sería un agujero — existe, pero
+     * puede no ser el suyo.
+     */
+    const staffRow =
+      tenantId === undefined ? puestos[0] : puestos.find((p) => p.tenantId === tenantId);
 
     if (staffRow === undefined) {
-      throw new ForbiddenException('Esta cuenta no trabaja en ningún gimnasio.');
+      throw new ForbiddenException(
+        tenantId === undefined
+          ? 'Esta cuenta no trabaja en ningún gimnasio.'
+          : 'Esta cuenta no trabaja en ese gimnasio.',
+      );
     }
 
     const vida = remainingSeconds(session);
@@ -595,10 +630,13 @@ export class AuthService {
    * inscribe hoy vería el botón recién la semana que viene, cuando caducara su
    * sesión — y un recepcionista al que sacaron del equipo seguiría viendo una
    * vuelta que la api ya rechaza. Son dos consultas por índice.
+   *
+   * Es además de donde sale el selector de local: los puestos vienen con el
+   * nombre del gimnasio puesto, porque «cambiar a b3f1-…» no lo elige nadie.
    */
   async modesFor(userId: string): Promise<AvailableModes> {
-    const [staffRow, membership] = await Promise.all([
-      this.staffRowOf(userId),
+    const [puestos, membership] = await Promise.all([
+      this.staffRowsOf(userId),
       withUser(this.db, userId, (tx) =>
         tx
           .select({ id: schema.memberships.id })
@@ -610,38 +648,56 @@ export class AuthService {
       ).then((rows) => rows[0]),
     ]);
 
-    if (staffRow === undefined) return { student: membership !== undefined, staff: null };
+    const student = membership !== undefined;
+    if (puestos.length === 0) return { student, staff: [] };
 
-    // El nombre del gimnasio se lee con contexto de ESE gimnasio: `tenants`
-    // aísla por tenant y sin adoptarlo la consulta vuelve vacía.
-    const [tenant] = await withTenant(this.db, staffRow.tenantId, (tx) =>
+    /**
+     * Los nombres, en UNA consulta y sin adoptar ningún gimnasio.
+     *
+     * `tenants` no lleva RLS —la identidad y el catálogo de locales son
+     * globales, y hay un test que lo fija— así que un `IN` los trae todos de
+     * golpe. Antes esto era un `withTenant` por puesto; con un solo local daba
+     * igual, con cinco son cinco transacciones para leer cinco nombres.
+     */
+    const nombres = await withoutTenantIsolation(this.db, (tx) =>
       tx
-        .select({ name: schema.tenants.name })
+        .select({ id: schema.tenants.id, name: schema.tenants.name })
         .from(schema.tenants)
-        .where(eq(schema.tenants.id, staffRow.tenantId))
-        .limit(1),
+        .where(
+          inArray(
+            schema.tenants.id,
+            puestos.map((p) => p.tenantId),
+          ),
+        ),
     );
+    const nombrePorId = new Map(nombres.map((t) => [t.id, t.name]));
 
     return {
-      student: membership !== undefined,
-      staff: {
-        role: staffRow.role === 'owner' ? 'owner' : 'front_desk',
-        tenantId: staffRow.tenantId,
-        tenantName: tenant?.name ?? null,
-      },
+      student,
+      staff: puestos.map((puesto) => ({
+        role: puesto.role === 'owner' ? ('owner' as const) : ('front_desk' as const),
+        tenantId: puesto.tenantId,
+        tenantName: nombrePorId.get(puesto.tenantId) ?? null,
+      })),
     };
   }
 
   /**
-   * La fila de `staff` de esta persona, si la tiene.
+   * TODAS las filas de `staff` de esta persona, de la más antigua a la más nueva.
    *
-   * Estaba escrita palabra por palabra en `issueForUser` y en `devLogin`, y el
-   * cambio de modo necesitaba dos copias más. Va con contexto de IDENTIDAD y no
-   * de gimnasio: el gimnasio es justo lo que se averigua, y la política de
-   * `staff` permite leer la propia fila (ver migración 0001).
+   * Va con contexto de IDENTIDAD y no de gimnasio: el gimnasio es justo lo que
+   * se averigua, y la política de `staff` permite leer las filas propias sin
+   * importar el tenant (`user_id = app_current_user()`, migración 0001). Por eso
+   * una sola consulta devuelve los puestos de todos sus locales.
+   *
+   * El orden es el del alta y se desempata por `id`. Tiene que ser TOTAL, no
+   * solo estable: sin el desempate, dos filas sembradas en la misma
+   * transacción comparten `created_at` y Postgres puede devolverlas en
+   * cualquier orden — que es como el login de un dueño con dos locales acabaría
+   * llevándolo a uno distinto cada vez.
    */
-  private async staffRowOf(userId: string): Promise<StaffRow | undefined> {
-    const [row] = await withUser(this.db, userId, (tx) =>
+  private async staffRowsOf(userId: string): Promise<readonly StaffRow[]> {
+    return withUser(this.db, userId, (tx) =>
       tx
         .select({
           id: schema.staff.id,
@@ -650,10 +706,19 @@ export class AuthService {
         })
         .from(schema.staff)
         .where(eq(schema.staff.userId, userId))
-        .limit(1),
+        .orderBy(schema.staff.createdAt, schema.staff.id),
     );
+  }
 
-    return row;
+  /**
+   * A qué local entra quien no pidió ninguno.
+   *
+   * El primero por antigüedad: el local de siempre. Abrir un segundo no puede
+   * cambiar dónde amanece la app del dueño al día siguiente, y de ahí que el
+   * criterio sea el alta y no algo que se mueve, como el nombre.
+   */
+  private async primaryStaffRow(userId: string): Promise<StaffRow | undefined> {
+    return (await this.staffRowsOf(userId))[0];
   }
 }
 

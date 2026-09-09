@@ -331,14 +331,24 @@ burocracia: es lo único que separa un padrón real de una tabla de pruebas.
 - **RUC con dígito verificador**, comprobado de verdad y no solo por longitud: un
   tipeo cambia un dígito y la longitud sigue siendo once. La columna es `NOT
   NULL` y lo que entre ahí sale después en las boletas del gimnasio.
-- **Un gimnasio por persona.** Multi-sede es el escalón de S/ 499 y una
-  conversación, no un botón.
+- **Hasta cinco locales por persona.** Empezó siendo uno —«multi-sede es el
+  escalón de S/ 499 y una conversación, no un botón»— y se abrió: el caso que
+  bloqueaba es corriente, el profesor que lleva la escuela de una universidad
+  con alumnos becados y aparte cobra sus clases por su cuenta. Son dos padrones
+  y dos cajas, y meterlos en un local obliga a leer el dinero de los dos sumado.
+
+  No se pierde plata al permitirlo: `tierFor` calcula el escalón **por local**
+  contra su padrón real, así que dos locales pagan dos escalones y una selección
+  de diez becados cae en el plan gratis. Lo único que cada local nuevo regala es
+  su mes gratis, y el tope está por eso — es un freno al abuso, no un escalón
+  comercial.
 
 Esa última comprobación se escribió mal la primera vez: preguntaba por `staff` en
 SQL crudo creyendo que eso esquivaba las políticas. No las esquiva —RLS aplica al
 rol, no al estilo de la consulta— así que devolvía cero filas y **no se disparaba
 nunca**. La misma persona podía crear gimnasios sin límite y nada fallaba. Lo
-encontró la prueba de punta a punta, no el typecheck.
+encontró la prueba de punta a punta, no el typecheck. Hoy el límite es cinco en
+vez de uno, pero se cuenta igual y por el mismo camino.
 
 El código de promoción va **al final y fuera de la transacción**: si está mal
 escrito, el gimnasio queda creado igual y la app dice por qué no se aplicó.

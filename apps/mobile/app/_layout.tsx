@@ -216,10 +216,19 @@ function DataLoader() {
     // Y no es solo que falte cargar: son dos cargas DISTINTAS —`hydrate` pide la
     // billetera, `hydrateStaff` pide el padron— asi que el rol es exactamente lo
     // que decide cual toca.
+    //
+    // El TENANT entro con el cambio de local, y volvio a pasar exactamente lo
+    // mismo un escalon mas abajo: el dueno que salta de un gimnasio suyo al otro
+    // es el mismo `userId`, el mismo `role` y sigue `signed_in` — solo cambia el
+    // gimnasio. Sin esta dependencia el efecto no se disparaba, y como
+    // `cambiarDeLocal` vacia el store, el padron se quedaba en «Trayendo el
+    // padron...» para siempre. La sesion nueva ya era la correcta; lo que
+    // faltaba era ir a buscar los datos.
   }, [
     state.status,
     state.status === 'signed_in' ? state.session.userId : null,
     state.status === 'signed_in' ? state.session.role : null,
+    state.status === 'signed_in' ? state.session.tenantId : null,
   ]);
 
   return null;

@@ -51,6 +51,24 @@ const devLoginSchema = z.object({
   phone: z.string().min(6).max(20),
 });
 
+/**
+ * A qué local se vuelve.
+ *
+ * Todo el cuerpo es opcional: quien solo quiere volver a su puesto manda `POST`
+ * pelado, como siempre. El `tenantId` lo pone el selector de local de quien
+ * trabaja en más de uno.
+ *
+ * El `.default({})` no es decoración. Un `POST` sin cuerpo llega aquí como
+ * `undefined` —el parser de JSON solo actúa si hay `Content-Type`— y
+ * `z.object({})` rechaza `undefined`: sin esto, la vuelta al puesto de siempre,
+ * que es el camino que ya existía, empezaría a responder 400.
+ */
+const switchToStaffSchema = z
+  .object({
+    tenantId: z.string().uuid().optional(),
+  })
+  .default({});
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -112,14 +130,22 @@ export class AuthController {
   }
 
   /**
-   * Y la vuelta a su puesto.
+   * Y la vuelta a su puesto — o el salto a otro de sus locales.
    *
    * Sin esto el cambio era de ida y sin regreso: la otra entrada al modo staff
    * es `POST /auth/shift`, que pide el token del equipo del mostrador.
+   *
+   * Con `tenantId` es el cambio de local, y es la misma operación: emitir una
+   * sesión de staff en un gimnasio donde esa persona tiene puesto. Que sea una
+   * sola ruta y no dos es deliberado — la comprobación de que el puesto es suyo
+   * vive en un único sitio.
    */
   @Post('switch-to-staff')
-  switchToStaff(@CurrentSession() session: Session): Promise<IssuedSession> {
-    return this.auth.switchToStaff(session);
+  switchToStaff(
+    @CurrentSession() session: Session,
+    @Body(parseWith(switchToStaffSchema)) body: z.infer<typeof switchToStaffSchema>,
+  ): Promise<IssuedSession> {
+    return this.auth.switchToStaff(session, body.tenantId);
   }
 
   /**

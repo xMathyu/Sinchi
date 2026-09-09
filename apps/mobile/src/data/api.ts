@@ -483,19 +483,25 @@ export const openShift = (staffId: string, pin: string): Promise<IssuedSessionDt
     withDeviceToken: true,
   });
 
+/** Un puesto de trabajo: el rol, y en que local. */
+export interface StaffPostDto {
+  readonly role: AppRole;
+  readonly tenantId: string;
+  readonly tenantName: string | null;
+}
+
 /**
  * Los dos lados de quien tiene la sesion abierta.
  *
  * No sale del token: el rol firmado dice con QUE entro, no que mas es. Un dueno
  * con ficha en su propio dojo y uno sin ella llevan sesiones identicas.
+ *
+ * `staff` es una LISTA: la misma persona puede trabajar en varios locales, y de
+ * aqui sale el selector. Vacia cuando no trabaja en ninguno.
  */
 export interface AvailableModesDto {
   readonly student: boolean;
-  readonly staff: {
-    readonly role: AppRole;
-    readonly tenantId: string;
-    readonly tenantName: string | null;
-  } | null;
+  readonly staff: readonly StaffPostDto[];
 }
 
 export const fetchModes = (): Promise<AvailableModesDto> => request('/auth/modes');
@@ -504,8 +510,17 @@ export const fetchModes = (): Promise<AvailableModesDto> => request('/auth/modes
 export const switchToStudent = (): Promise<IssuedSessionDto> =>
   request('/auth/switch-to-student', { method: 'POST' });
 
-export const switchToStaff = (): Promise<IssuedSessionDto> =>
-  request('/auth/switch-to-staff', { method: 'POST' });
+/**
+ * Vuelve al puesto de staff. Con `tenantId`, al de ESE local.
+ *
+ * Sin el va al de siempre —el mas antiguo— que es lo que hace que el boton
+ * "volver a tu gimnasio" siga sirviendo igual para quien solo tiene uno.
+ */
+export const switchToStaff = (tenantId?: string): Promise<IssuedSessionDto> =>
+  request('/auth/switch-to-staff', {
+    method: 'POST',
+    body: tenantId === undefined ? {} : { tenantId },
+  });
 
 // ---------------------------------------------------------------------------
 // Vistas del dominio
