@@ -17,12 +17,12 @@ import { durations } from '@sinchi/ui';
 import { Logo, Text } from './primitives';
 import { useTheme } from './theme';
 
-export function CargandoSeccion({
-  texto = 'Trayendo tus datos…',
+export function SectionLoader({
+  text = 'Trayendo tus datos…',
   size = 46,
 }: {
   /** Cadena vacia para el logo a secas, sin pie. */
-  readonly texto?: string;
+  readonly text?: string;
   readonly size?: number;
 }) {
   const theme = useTheme();
@@ -61,14 +61,14 @@ export function CargandoSeccion({
         gap: 16,
       }}
       accessibilityRole="progressbar"
-      accessibilityLabel={texto}
+      accessibilityLabel={text}
     >
       <Animated.View style={{ opacity: latido }}>
         <Logo size={size} />
       </Animated.View>
-      {texto.length === 0 ? null : (
+      {text.length === 0 ? null : (
         <Text variant="captionSmall" color={theme.colors.textTertiary}>
-          {texto}
+          {text}
         </Text>
       )}
     </View>

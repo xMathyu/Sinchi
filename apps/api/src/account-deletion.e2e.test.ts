@@ -35,7 +35,7 @@ let lucia = '';
 /** Otro alumno: sirve para comprobar que una baja no toca la del vecino. */
 let diego = '';
 /** Recepcionista. Su sesion lleva tenant, que es la que el SaasGuard mira. */
-let recepcion = '';
+let frontDesk = '';
 
 beforeAll(async () => {
   if (DATABASE_URL === undefined) return;
@@ -61,7 +61,7 @@ beforeAll(async () => {
 
   lucia = await devLogin('+51987111222');
   diego = await devLogin('+51987222333');
-  recepcion = await devLogin('+51987000111');
+  frontDesk = await devLogin('+51987000111');
 }, 90_000);
 
 afterAll(async () => {
@@ -96,11 +96,11 @@ suite('baja de cuenta', () => {
     // La fecha es lo que hace exigible el plazo de 30 dias de la politica.
     expect(new Date(body.request.requestedAt).getTime()).toBeLessThanOrEqual(Date.now());
 
-    const { body: estado } = await http
+    const { body: state } = await http
       .get('/v1/me/account/deletion-request')
       .set(auth(lucia))
       .expect(200);
-    expect(estado.request.id).toBe(body.request.id);
+    expect(state.request.id).toBe(body.request.id);
   });
 
   it('pedirla dos veces devuelve la MISMA, no abre otra', async () => {
@@ -112,11 +112,11 @@ suite('baja de cuenta', () => {
       .send({ reason: 'otro texto que NO debe pisar al primero' })
       .expect(201);
 
-    const { body: estado } = await http
+    const { body: state } = await http
       .get('/v1/me/account/deletion-request')
       .set(auth(lucia))
       .expect(200);
-    expect(body.request.id).toBe(estado.request.id);
+    expect(body.request.id).toBe(state.request.id);
     expect(body.request.reason).toBe('Me mudo de ciudad');
   });
 
@@ -159,16 +159,16 @@ suite('baja de cuenta', () => {
       .expect(200);
     expect(tras.request).toBeNull();
 
-    const { body: otra } = await http
+    const { body: other } = await http
       .post('/v1/me/account/deletion-request')
       .set(auth(diego))
       .send({})
       .expect(201);
-    expect(otra.request.status).toBe('pending');
+    expect(other.request.status).toBe('pending');
   });
 
   it('cancelar cuando no hay nada pendiente no revienta', async () => {
-    await http.delete('/v1/me/account/deletion-request').set(auth(recepcion)).expect(200);
+    await http.delete('/v1/me/account/deletion-request').set(auth(frontDesk)).expect(200);
   });
 
   it('el staff tambien puede irse, y sin depender de que su gimnasio pague', async () => {
@@ -177,7 +177,7 @@ suite('baja de cuenta', () => {
     // moroso seria el unico que no podria borrar su cuenta.
     const { body } = await http
       .post('/v1/me/account/deletion-request')
-      .set(auth(recepcion))
+      .set(auth(frontDesk))
       .send({})
       .expect(201);
     expect(body.request.status).toBe('pending');

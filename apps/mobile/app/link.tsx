@@ -39,8 +39,8 @@ export default function LinkScreen() {
   // raíz enruta. Esta pantalla no tiene que hacer nada.
   if (state.status !== 'unlinked') return null;
 
-  const grupos = [state.code.slice(0, 3), state.code.slice(3)];
-  const vencido = secondsLeft <= 0;
+  const groups = [state.code.slice(0, 3), state.code.slice(3)];
+  const overdue = secondsLeft <= 0;
 
   return (
     <Screen scroll>
@@ -57,23 +57,23 @@ export default function LinkScreen() {
         </Stack>
 
         <Card
-          accent={vencido ? theme.semaphore.alert : theme.semaphore.ok}
-          borderColor={withAlpha(vencido ? theme.semaphore.alert : theme.semaphore.ok, 0.26)}
+          accent={overdue ? theme.semaphore.alert : theme.semaphore.ok}
+          borderColor={withAlpha(overdue ? theme.semaphore.alert : theme.semaphore.ok, 0.26)}
         >
           <Stack gap={16} style={{ alignItems: 'center', paddingVertical: 10 }}>
             <Eyebrow>Tu código</Eyebrow>
 
             <Row gap={18}>
-              {grupos.map((grupo, i) => (
+              {groups.map((group, i) => (
                 // `variant="hero"` y con espacio entre grupos: se lee desde el
                 // otro lado del mostrador, que es donde está quien lo escribe.
                 <Text key={i} variant="hero" style={{ letterSpacing: 4 }}>
-                  {grupo}
+                  {group}
                 </Text>
               ))}
             </Row>
 
-            {vencido ? (
+            {overdue ? (
               <Text variant="bodySmall" color={theme.semaphore.alert} align="center">
                 Este código ya venció. Vuelve a entrar para conseguir uno nuevo.
               </Text>
@@ -125,7 +125,7 @@ export default function LinkScreen() {
 
 function formatCountdown(seconds: number): string {
   const minutos = Math.floor(seconds / 60);
-  const resto = seconds % 60;
-  if (minutos === 0) return `${resto} s`;
-  return `${minutos}:${String(resto).padStart(2, '0')}`;
+  const rest = seconds % 60;
+  if (minutos === 0) return `${rest} s`;
+  return `${minutos}:${String(rest).padStart(2, '0')}`;
 }

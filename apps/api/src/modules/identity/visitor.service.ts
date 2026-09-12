@@ -119,7 +119,7 @@ export class VisitorService {
      * acaba de dar al crear su cuenta. El cuerpo de la peticion manda por si
      * quiere corregirlo, y el nombre de Google queda de ultimo recurso.
      */
-    const registro = await this.accountLink.datosDeRegistro(account.uid);
+    const registro = await this.accountLink.signUpDetails(account.uid);
 
     const fullName = (
       overrides.fullName ??

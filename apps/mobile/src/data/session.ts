@@ -138,7 +138,7 @@ interface StoredMeta {
  * pedir sin fricción, y guardar uno más solo suma superficie que proteger.
  */
 export async function restoreSession(
-  recuperarCuentaSinFicha?: () => Promise<boolean>,
+  recoverUnlinkedAccount?: () => Promise<boolean>,
 ): Promise<void> {
   /**
    * Antes de darse por vencido, el intento de la cuenta sin ficha.
@@ -149,7 +149,7 @@ export async function restoreSession(
    */
   const caer = async (): Promise<void> => {
     try {
-      if (recuperarCuentaSinFicha !== undefined && (await recuperarCuentaSinFicha())) return;
+      if (recoverUnlinkedAccount !== undefined && (await recoverUnlinkedAccount())) return;
     } catch {
       // El intento de recuperar no puede impedir que la app arranque: si falla,
       // se muestra el login, que es exactamente lo que hay que hacer.
@@ -305,9 +305,9 @@ export async function saveAccountDetails(details: AccountDetails): Promise<void>
    * a medias dejaba eso guardado encima del número de verdad — y la siguiente
    * reserva volvía a preguntar.
    */
-  const util = (valor: string | null, minimo: number): string | null => {
-    const limpio = (valor ?? '').trim();
-    return limpio.length >= minimo ? limpio : null;
+  const util = (value: string | null, minimo: number): string | null => {
+    const trimmed = (value ?? '').trim();
+    return trimmed.length >= minimo ? trimmed : null;
   };
 
   const previo = await loadAccountDetails();

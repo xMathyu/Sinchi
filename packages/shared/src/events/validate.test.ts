@@ -11,7 +11,7 @@ import { plainDate } from '../time/plain-date.js';
 
 const HOY = plainDate(2026, 9, 3);
 
-function evento(overrides: Partial<GymEvent> = {}): GymEvent {
+function event(overrides: Partial<GymEvent> = {}): GymEvent {
   return {
     id: asId('event-1'),
     tenantId: asId('tenant-1'),
@@ -32,7 +32,7 @@ function evento(overrides: Partial<GymEvent> = {}): GymEvent {
 function contexto(overrides: Partial<EventBookingContext> = {}): EventBookingContext {
   return {
     gymActive: true,
-    event: evento(),
+    event: event(),
     seatsTaken: 0,
     existing: null,
     isMember: false,
@@ -64,27 +64,27 @@ describe('lo que no depende de la persona va primero', () => {
   });
 
   it('un borrador no se puede reservar', () => {
-    const r = validateEventBooking(contexto({ event: evento({ status: 'draft' }) }));
+    const r = validateEventBooking(contexto({ event: event({ status: 'draft' }) }));
     if (r.allowed) throw new Error('debía rechazar');
     expect(r.reason.code).toBe('not_published');
   });
 
   it('cancelado no es lo mismo que sin publicar, y se dice distinto', () => {
-    const r = validateEventBooking(contexto({ event: evento({ status: 'canceled' }) }));
+    const r = validateEventBooking(contexto({ event: event({ status: 'canceled' }) }));
     if (r.allowed) throw new Error('debía rechazar');
     expect(r.reason.code).toBe('event_canceled');
   });
 
   it('lo que ya pasó no se reserva', () => {
     const r = validateEventBooking(
-      contexto({ event: evento({ date: plainDate(2026, 9, 2) }) }),
+      contexto({ event: event({ date: plainDate(2026, 9, 2) }) }),
     );
     if (r.allowed) throw new Error('debía rechazar');
     expect(r.reason.code).toBe('already_over');
   });
 
   it('el mismo día sigue abierto: a las 19:05 de un evento de las 19:00 se llega', () => {
-    const r = validateEventBooking(contexto({ event: evento({ date: HOY }) }));
+    const r = validateEventBooking(contexto({ event: event({ date: HOY }) }));
     expect(r.allowed).toBe(true);
   });
 });
@@ -103,15 +103,15 @@ describe('cupo', () => {
   });
 
   it('sin cupo declarado no se llena nunca', () => {
-    const abierto = evento({ capacity: null });
-    expect(validateEventBooking(contexto({ event: abierto, seatsTaken: 500 })).allowed).toBe(true);
-    expect(seatsLeft(abierto, 500)).toBeNull();
+    const opened = event({ capacity: null });
+    expect(validateEventBooking(contexto({ event: opened, seatsTaken: 500 })).allowed).toBe(true);
+    expect(seatsLeft(opened, 500)).toBeNull();
   });
 
   it('cuenta las plazas que quedan', () => {
-    expect(seatsLeft(evento(), 28)).toBe(2);
+    expect(seatsLeft(event(), 28)).toBe(2);
     // Nunca negativo: si el mostrador metió a dos de más, quedan cero, no -2.
-    expect(seatsLeft(evento(), 32)).toBe(0);
+    expect(seatsLeft(event(), 32)).toBe(0);
   });
 });
 
@@ -126,23 +126,23 @@ describe('quien ya tiene plaza', () => {
 
   it('el mensaje cambia según la haya pagado o no', () => {
     const pagada = validateEventBooking(contexto({ existing: { paid: true } }));
-    const sinPagar = validateEventBooking(contexto({ existing: { paid: false } }));
-    if (pagada.allowed || sinPagar.allowed) throw new Error('debían rechazar');
+    const unpaid = validateEventBooking(contexto({ existing: { paid: false } }));
+    if (pagada.allowed || unpaid.allowed) throw new Error('debían rechazar');
     expect(eventBookingDenialMessage(pagada.reason)).toContain('pagada');
-    expect(eventBookingDenialMessage(sinPagar.reason)).toContain('mostrador');
+    expect(eventBookingDenialMessage(unpaid.reason)).toContain('mostrador');
   });
 });
 
 describe('precio', () => {
   it('sale del evento y no de la pantalla', () => {
-    expect(eventPriceFor(evento(), true)).toBe(fromSoles(80));
-    expect(eventPriceFor(evento(), false)).toBe(fromSoles(120));
+    expect(eventPriceFor(event(), true)).toBe(fromSoles(80));
+    expect(eventPriceFor(event(), false)).toBe(fromSoles(120));
   });
 });
 
 describe('mensajes', () => {
   it('todo motivo tiene texto', () => {
-    const motivos = [
+    const denials = [
       { code: 'gym_unavailable' },
       { code: 'not_published' },
       { code: 'event_canceled' },
@@ -150,8 +150,8 @@ describe('mensajes', () => {
       { code: 'already_registered', paid: true },
       { code: 'sold_out', capacity: 30 },
     ] as const;
-    for (const motivo of motivos) {
-      expect(eventBookingDenialMessage(motivo).length).toBeGreaterThan(10);
+    for (const denial of denials) {
+      expect(eventBookingDenialMessage(denial).length).toBeGreaterThan(10);
     }
   });
 });

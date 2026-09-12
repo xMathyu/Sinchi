@@ -31,22 +31,22 @@ import { useTheme } from './theme';
  * horario que nunca fue suyo suena a que se perdio algo. Por eso las dos lineas
  * se pueden cambiar.
  */
-export function EstadoSinConexion({
+export function OfflineState({
   error,
   onReintentar,
-  titulo = 'No se pudieron traer tus datos',
-  cuerpo = 'Tu información sigue ahí: es la conexión con el servidor la que falló.',
+  title = 'No se pudieron traer tus datos',
+  body = 'Tu información sigue ahí: es la conexión con el servidor la que falló.',
 }: {
   readonly error: string;
   readonly onReintentar: () => void;
-  readonly titulo?: string;
-  readonly cuerpo?: string;
+  readonly title?: string;
+  readonly body?: string;
 }) {
   const theme = useTheme();
   return (
-    <EstadoVacio
-      titulo={titulo}
-      cuerpo={cuerpo}
+    <EmptyState
+      title={title}
+      body={body}
       pie={error}
       accion={
         <Pressable accessibilityRole="button" onPress={onReintentar}>
@@ -70,14 +70,14 @@ export function EstadoSinConexion({
   );
 }
 
-export function EstadoVacio({
-  titulo,
-  cuerpo,
+export function EmptyState({
+  title,
+  body,
   pie,
   accion,
 }: {
-  readonly titulo: string;
-  readonly cuerpo: string;
+  readonly title: string;
+  readonly body: string;
   /** Una linea mas pequena debajo del cuerpo. Para la letra pequena. */
   readonly pie?: string;
   readonly accion?: ReactNode;
@@ -111,7 +111,7 @@ export function EstadoVacio({
 
       <Stack gap={8} style={{ alignItems: 'center' }}>
         <Text variant="titleSmall" weight="bold" align="center">
-          {titulo}
+          {title}
         </Text>
         <Text
           variant="bodySmall"
@@ -119,7 +119,7 @@ export function EstadoVacio({
           align="center"
           style={{ maxWidth: 290 }}
         >
-          {cuerpo}
+          {body}
         </Text>
         {pie === undefined ? null : (
           <Text

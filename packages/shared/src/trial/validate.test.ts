@@ -11,7 +11,7 @@ import { plainDate } from '../time/plain-date.js';
 
 const JUEVES = plainDate(2026, 8, 20);
 const LUNES_19 = makeSchedule(1, '19:00', '20:30', { name: 'Fundamentos' });
-const LUNES_QUE_VIENE = plainDate(2026, 8, 24);
+const NEXT_MONDAY = plainDate(2026, 8, 24);
 
 const slots = upcomingClassSlots({ schedules: [LUNES_19], today: JUEVES, now: '06:00' });
 
@@ -23,7 +23,7 @@ function contexto(overrides: Partial<TrialBookingContext> = {}): TrialBookingCon
     existing: null,
     slots,
     scheduleId: LUNES_19.id,
-    date: LUNES_QUE_VIENE,
+    date: NEXT_MONDAY,
     ...overrides,
   };
 }
@@ -61,7 +61,7 @@ describe('reservar la clase gratis', () => {
   it('es una por gimnasio, y recuerda cual', () => {
     const r = validateTrialBooking(
       contexto({
-        existing: { date: LUNES_QUE_VIENE, startTime: '19:00', className: 'Fundamentos' },
+        existing: { date: NEXT_MONDAY, startTime: '19:00', className: 'Fundamentos' },
       }),
     );
     expect(r.allowed).toBe(false);
@@ -76,7 +76,7 @@ describe('reservar la clase gratis', () => {
     const r = validateTrialBooking(
       contexto({
         gymActive: false,
-        existing: { date: LUNES_QUE_VIENE, startTime: '19:00', className: 'Fundamentos' },
+        existing: { date: NEXT_MONDAY, startTime: '19:00', className: 'Fundamentos' },
       }),
     );
     expect(r.allowed).toBe(false);
@@ -99,27 +99,27 @@ describe('reservar la clase gratis', () => {
   });
 
   it('cada rechazo dice algo distinto', () => {
-    const codigos = ['gym_unavailable', 'not_offered', 'already_member', 'slot_not_available'] as const;
-    const titulos = codigos.map((code) => trialMessage({ code }).title);
-    expect(new Set(titulos).size).toBe(codigos.length);
+    const codes = ['gym_unavailable', 'not_offered', 'already_member', 'slot_not_available'] as const;
+    const titulos = codes.map((code) => trialMessage({ code }).title);
+    expect(new Set(titulos).size).toBe(codes.length);
   });
 });
 
 describe('mover la clase gratis a otra hora', () => {
   const JUEVES_19 = makeSchedule(4, '19:00', '20:30', { name: 'Sparring' });
-  const dosClases = upcomingClassSlots({
+  const twoClasses = upcomingClassSlots({
     schedules: [LUNES_19, JUEVES_19],
     today: JUEVES,
     now: '06:00',
   });
-  const JUEVES_QUE_VIENE = plainDate(2026, 8, 27);
+  const NEXT_THURSDAY = plainDate(2026, 8, 27);
 
   it('acepta otra hora publicada del mismo gimnasio', () => {
     const r = validateTrialReschedule({
       gymActive: true,
-      slots: dosClases,
+      slots: twoClasses,
       scheduleId: JUEVES_19.id,
-      date: JUEVES_QUE_VIENE,
+      date: NEXT_THURSDAY,
     });
     expect(r.allowed).toBe(true);
     if (!r.allowed) return;
@@ -137,32 +137,32 @@ describe('mover la clase gratis a otra hora', () => {
    * entre una cosa y otra.
    */
   it('no la rechaza por tener ya una reserva: es esa la que se mueve', () => {
-    const comoReserva = validateTrialBooking(
+    const asBooking = validateTrialBooking(
       contexto({
-        slots: dosClases,
+        slots: twoClasses,
         scheduleId: JUEVES_19.id,
-        date: JUEVES_QUE_VIENE,
-        existing: { date: LUNES_QUE_VIENE, startTime: '19:00', className: 'Fundamentos' },
+        date: NEXT_THURSDAY,
+        existing: { date: NEXT_MONDAY, startTime: '19:00', className: 'Fundamentos' },
       }),
     );
-    expect(comoReserva.allowed).toBe(false);
+    expect(asBooking.allowed).toBe(false);
 
-    const comoCambio = validateTrialReschedule({
+    const asReschedule = validateTrialReschedule({
       gymActive: true,
-      slots: dosClases,
+      slots: twoClasses,
       scheduleId: JUEVES_19.id,
-      date: JUEVES_QUE_VIENE,
+      date: NEXT_THURSDAY,
     });
-    expect(comoCambio.allowed).toBe(true);
+    expect(asReschedule.allowed).toBe(true);
   });
 
   it('deja quedarse en la misma hora sin quejarse', () => {
     // Tocar dos veces el mismo boton no es un error: es la respuesta correcta.
     const r = validateTrialReschedule({
       gymActive: true,
-      slots: dosClases,
+      slots: twoClasses,
       scheduleId: LUNES_19.id,
-      date: LUNES_QUE_VIENE,
+      date: NEXT_MONDAY,
     });
     expect(r.allowed).toBe(true);
   });
@@ -170,7 +170,7 @@ describe('mover la clase gratis a otra hora', () => {
   it('rechaza una hora que el gimnasio no dicta', () => {
     const r = validateTrialReschedule({
       gymActive: true,
-      slots: dosClases,
+      slots: twoClasses,
       scheduleId: LUNES_19.id,
       date: plainDate(2026, 8, 25),
     });
@@ -182,9 +182,9 @@ describe('mover la clase gratis a otra hora', () => {
   it('no deja mover nada en un gimnasio suspendido', () => {
     const r = validateTrialReschedule({
       gymActive: false,
-      slots: dosClases,
+      slots: twoClasses,
       scheduleId: JUEVES_19.id,
-      date: JUEVES_QUE_VIENE,
+      date: NEXT_THURSDAY,
     });
     expect(r.allowed).toBe(false);
     if (r.allowed) return;

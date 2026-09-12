@@ -52,8 +52,8 @@ export interface GymLocation {
 }
 
 /** Lo minimo que se acepta: «Lima» son cuatro letras y no lleva a una puerta. */
-const DIRECCION_MINIMA = 10;
-const DIRECCION_MAXIMA = 240;
+const ADDRESS_MIN = 10;
+const ADDRESS_MAX = 240;
 
 @Injectable()
 export class GymSettingsService {
@@ -78,14 +78,14 @@ export class GymSettingsService {
 
   async writeLocation(tenantId: string, input: GymLocation): Promise<GymLocation> {
     const address = (input.address ?? '').trim();
-    if (address.length < DIRECCION_MINIMA) {
+    if (address.length < ADDRESS_MIN) {
       throw new BadRequestException(
         'Escribe dónde queda tu gimnasio: calle, número y distrito. Es lo primero que mira quien te busca.',
       );
     }
-    if (address.length > DIRECCION_MAXIMA) {
+    if (address.length > ADDRESS_MAX) {
       throw new BadRequestException(
-        `La dirección no puede pasar de ${DIRECCION_MAXIMA} caracteres.`,
+        `La dirección no puede pasar de ${ADDRESS_MAX} caracteres.`,
       );
     }
 
@@ -96,12 +96,12 @@ export class GymSettingsService {
      * Greenwich, y el mapa lo dibujaria sin dudar. El CHECK de la base dice lo
      * mismo; aqui se dice antes para que el mensaje sea del producto.
      */
-    const tienePin = input.latitude !== null && input.longitude !== null;
-    if (!tienePin && (input.latitude !== null || input.longitude !== null)) {
+    const hasPin = input.latitude !== null && input.longitude !== null;
+    if (!hasPin && (input.latitude !== null || input.longitude !== null)) {
       throw new BadRequestException('El punto del mapa necesita latitud y longitud.');
     }
     if (
-      tienePin &&
+      hasPin &&
       (Math.abs(input.latitude!) > 90 || Math.abs(input.longitude!) > 180)
     ) {
       throw new BadRequestException('Ese punto no está en el mapa.');
@@ -112,8 +112,8 @@ export class GymSettingsService {
         .update(schema.tenants)
         .set({
           address,
-          latitude: tienePin ? input.latitude : null,
-          longitude: tienePin ? input.longitude : null,
+          latitude: hasPin ? input.latitude : null,
+          longitude: hasPin ? input.longitude : null,
         })
         .where(eq(schema.tenants.id, tenantId))
         .returning({

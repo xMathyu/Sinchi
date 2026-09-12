@@ -33,12 +33,12 @@ import {
   Text,
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
-import { CargandoSeccion } from '../../src/design/loading';
+import { OfflineState, EmptyState } from '../../src/design/empty';
+import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import {
-  useClasesGratisDelGimnasio,
-  useOfreceClaseGratis,
+  useGymTrialClasses,
+  useTrialClassEnabled,
   useStore,
   useToday,
 } from '../../src/data/hooks';
@@ -51,13 +51,13 @@ export default function TrialsScreen() {
   const theme = useTheme();
   const [vista, setVista] = useState<Vista>('proximas');
   const {
-    datos: reservas,
-    cargando,
+    details: bookings,
+    loading,
     error,
-    recargar,
-  } = useClasesGratisDelGimnasio(vista === 'pasadas');
+    reload,
+  } = useGymTrialClasses(vista === 'pasadas');
 
-  const vigentes = reservas.filter((reserva) => reserva.status !== 'canceled');
+  const vigentes = bookings.filter((booking) => booking.status !== 'canceled');
 
   return (
     <Screen scroll>
@@ -83,19 +83,19 @@ export default function TrialsScreen() {
         />
       </View>
 
-      {cargando && reservas.length === 0 ? (
+      {loading && bookings.length === 0 ? (
         <View style={{ minHeight: 320 }}>
-          <CargandoSeccion texto="Trayendo la lista…" />
+          <SectionLoader text="Trayendo la lista…" />
         </View>
-      ) : error !== null && reservas.length === 0 ? (
+      ) : error !== null && bookings.length === 0 ? (
         <View style={{ minHeight: 320 }}>
-          <EstadoSinConexion error={error} onReintentar={recargar} />
+          <OfflineState error={error} onReintentar={reload} />
         </View>
       ) : vigentes.length === 0 ? (
         <View style={{ minHeight: 320 }}>
-          <EstadoVacio
-            titulo={vista === 'proximas' ? 'Nadie viene a probar todavía' : 'Sin historial'}
-            cuerpo={
+          <EmptyState
+            title={vista === 'proximas' ? 'Nadie viene a probar todavía' : 'Sin historial'}
+            body={
               vista === 'proximas'
                 ? 'Cuando alguien reserve su clase de prueba desde la app, aparecerá aquí con el día, la hora y su WhatsApp.'
                 : 'Aquí quedan las clases de prueba que ya pasaron, con quién vino y quién no.'
@@ -108,8 +108,8 @@ export default function TrialsScreen() {
           <Eyebrow>
             {vigentes.length} {vigentes.length === 1 ? 'persona' : 'personas'}
           </Eyebrow>
-          {vigentes.map((reserva) => (
-            <TrialCard key={reserva.id} reserva={reserva} onCambio={recargar} />
+          {vigentes.map((booking) => (
+            <TrialCard key={booking.id} booking={booking} onChange={reload} />
           ))}
         </Stack>
       )}
@@ -130,33 +130,33 @@ export default function TrialsScreen() {
  */
 function Interruptor() {
   const theme = useTheme();
-  const rol = useStore((estado) => estado.staff.role);
-  const { datos: remoto, error, recargar } = useOfreceClaseGratis();
+  const rol = useStore((state) => state.staff.role);
+  const { details: remoto, error, reload } = useTrialClassEnabled();
   const [local, setLocal] = useState<boolean | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Lo que se pinta es lo último decidido aquí, si lo hay; si no, lo que dijo el
   // servidor. `null` = todavía no se sabe, y el interruptor no puede adivinar.
   const activa = local ?? remoto;
   const esDueño = rol === 'owner';
 
-  const cambiar = (valor: boolean): void => {
-    setLocal(valor);
-    setGuardando(true);
+  const change = (value: boolean): void => {
+    setLocal(value);
+    setSaving(true);
 
-    void setTrialClassEnabled(valor)
-      .then((salida) => setLocal(salida.trialClassEnabled))
+    void setTrialClassEnabled(value)
+      .then((outcome) => setLocal(outcome.trialClassEnabled))
       .catch((causa: unknown) => {
         // Se revierte: dejar el interruptor donde el dedo lo puso, cuando el
         // servidor no lo aceptó, es mentirle al dueño sobre su propio gimnasio.
         setLocal(null);
-        recargar();
+        reload();
         Alert.alert(
           'No se pudo cambiar',
           causa instanceof Error ? causa.message : 'Intenta de nuevo.',
         );
       })
-      .finally(() => setGuardando(false));
+      .finally(() => setSaving(false));
   };
 
   return (
@@ -175,8 +175,8 @@ function Interruptor() {
           </Stack>
           <Switch
             value={activa === true}
-            onValueChange={cambiar}
-            disabled={!esDueño || activa === null || guardando}
+            onValueChange={change}
+            disabled={!esDueño || activa === null || saving}
             accessibilityLabel="Ofrecer la primera clase gratis"
             trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
             thumbColor={theme.colors.ink}
@@ -204,15 +204,15 @@ function Interruptor() {
 }
 
 function TrialCard({
-  reserva,
-  onCambio,
+  booking,
+  onChange,
 }: {
-  readonly reserva: TrialBooking;
-  readonly onCambio: () => void;
+  readonly booking: TrialBooking;
+  readonly onChange: () => void;
 }) {
   const theme = useTheme();
   const hoy = useToday();
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   /**
    * Marcar quien vino solo tiene sentido desde el DIA de la clase.
@@ -229,27 +229,27 @@ function TrialCard({
    * Si una reserva futura ya viniera marcada, los chips se quedan: es la unica
    * forma de deshacer un marcado hecho por error.
    */
-  const yaToca = !isAfter(reserva.date, hoy) || reserva.status !== 'booked';
+  const dueNow = !isAfter(booking.date, hoy) || booking.status !== 'booked';
 
-  const marcar = (status: TrialBookingStatus): void => {
+  const mark = (status: TrialBookingStatus): void => {
     // Ya está en ese estado, o hay una petición en vuelo: no se manda otra.
-    if (guardando || reserva.status === status) return;
-    setGuardando(true);
-    void setTrialStatus(reserva.id, status)
-      .then(() => onCambio())
+    if (saving || booking.status === status) return;
+    setSaving(true);
+    void setTrialStatus(booking.id, status)
+      .then(() => onChange())
       .catch((causa: unknown) => {
         Alert.alert(
           'No se pudo guardar',
           causa instanceof Error ? causa.message : 'Intenta de nuevo.',
         );
       })
-      .finally(() => setGuardando(false));
+      .finally(() => setSaving(false));
   };
 
   const color =
-    reserva.status === 'attended'
+    booking.status === 'attended'
       ? theme.semaphore.ok
-      : reserva.status === 'no_show'
+      : booking.status === 'no_show'
         ? theme.semaphore.alert
         : theme.colors.textTertiary;
 
@@ -259,7 +259,7 @@ function TrialCard({
         <Row align="flex-start" style={{ gap: 10 }}>
           <Stack gap={2} style={{ flex: 1 }}>
             <Text variant="heading" weight="bold" numberOfLines={1}>
-              {reserva.fullName}
+              {booking.fullName}
             </Text>
             {/* El celular ABRE WhatsApp. Es por donde se coordina de verdad en
                 este mercado —confirmar, mover la hora, decir cómo llegar— y sin
@@ -267,24 +267,24 @@ function TrialCard({
                 quiere responder rápido. */}
             <Pressable
               accessibilityRole="link"
-              accessibilityLabel={`Escribir por WhatsApp a ${reserva.fullName}`}
+              accessibilityLabel={`Escribir por WhatsApp a ${booking.fullName}`}
               hitSlop={8}
               onPress={() => {
-                const digitos = reserva.phone.replace(/\D/g, '');
+                const digitos = booking.phone.replace(/\D/g, '');
                 if (digitos.length < 9) return;
                 void Linking.openURL(`https://wa.me/${digitos}`).catch(() => {
-                  Alert.alert('No se pudo abrir WhatsApp', reserva.phone);
+                  Alert.alert('No se pudo abrir WhatsApp', booking.phone);
                 });
               }}
             >
               <Text variant="captionSmall" color={theme.semaphore.ok}>
-                {reserva.phone} · WhatsApp
+                {booking.phone} · WhatsApp
               </Text>
             </Pressable>
           </Stack>
-          {reserva.status === 'booked' ? null : (
+          {booking.status === 'booked' ? null : (
             <Badge
-              label={reserva.status === 'attended' ? 'VINO' : 'NO VINO'}
+              label={booking.status === 'attended' ? 'VINO' : 'NO VINO'}
               color={color}
               background={withAlpha(color, 0.14)}
             />
@@ -292,22 +292,22 @@ function TrialCard({
         </Row>
 
         <Text variant="bodySmall">
-          {formatWeekdayAndDay(reserva.date)} · {reserva.startTime}–{reserva.endTime}
+          {formatWeekdayAndDay(booking.date)} · {booking.startTime}–{booking.endTime}
         </Text>
         <Row justify="flex-start" gap={8}>
           <Text variant="captionSmall" color={theme.colors.textTertiary}>
-            {reserva.className}
+            {booking.className}
           </Text>
-          {reserva.priceCents > 0 ? (
+          {booking.priceCents > 0 ? (
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              · cobrar {formatPENShort(reserva.priceCents)}
+              · cobrar {formatPENShort(booking.priceCents)}
             </Text>
           ) : null}
         </Row>
 
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
-        {yaToca ? (
+        {dueNow ? (
           <Row justify="flex-start" style={{ gap: 8, marginTop: 2 }}>
             {/* Chips, y no dos textos con uno «apagado».
               
@@ -324,15 +324,15 @@ function TrialCard({
               equivoca y tiene que poder corregir. */}
             <Chip
               label="Vino"
-              selected={reserva.status === 'attended'}
+              selected={booking.status === 'attended'}
               selectedColor={theme.semaphore.ok}
-              onPress={() => marcar('attended')}
+              onPress={() => mark('attended')}
             />
             <Chip
               label="No vino"
-              selected={reserva.status === 'no_show'}
+              selected={booking.status === 'no_show'}
               selectedColor={theme.semaphore.alert}
-              onPress={() => marcar('no_show')}
+              onPress={() => mark('no_show')}
             />
           </Row>
         ) : null}

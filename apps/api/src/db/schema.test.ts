@@ -488,12 +488,12 @@ describe('suscripcion del gimnasio a Sinchi', () => {
     // Un pago en efectivo no siempre trae comprobante. Que dos filas sin
     // referencia choquen entre si bloquearia el caso normal.
     for (const periodo of ['2027-03-02', '2027-04-02']) {
-      const fila = await db.query(
+      const found = await db.query(
         `insert into saas_charges (tenant_id, amount_cents, tier, rail, status, period_start, period_end)
          values ($1, 14900, 'up_to_60', 'cash', 'succeeded', $2, '2027-12-02') returning id`,
         [TENANT, periodo],
       );
-      expect(fila.rows).toHaveLength(1);
+      expect(found.rows).toHaveLength(1);
     }
   });
 
@@ -566,10 +566,10 @@ describe('codigos de promocion', () => {
   });
 
   it('sin tope, el contador sube sin limite', async () => {
-    const abierto = await db.query<{ id: string }>(
+    const opened = await db.query<{ id: string }>(
       `insert into saas_promo_codes (code, free_months) values ('ABIERTO', 1) returning id`,
     );
-    const id = abierto.rows[0]!.id;
+    const id = opened.rows[0]!.id;
     const subido = await db.query(
       `update saas_promo_codes set redeemed_count = 99999 where id = $1 returning id`,
       [id],
@@ -604,12 +604,12 @@ describe('codigos de promocion', () => {
   });
 
   it('otro gimnasio si puede canjearlo', async () => {
-    const otro = await db.query(
+    const other = await db.query(
       `insert into saas_redemptions (promo_code_id, tenant_id, free_months, free_until_after)
        values ($1, $2, 1, '2026-11-02') returning id`,
       [promoId, OTHER_TENANT],
     );
-    expect(otro.rows).toHaveLength(1);
+    expect(other.rows).toHaveLength(1);
   });
 });
 
@@ -617,14 +617,14 @@ describe('plan gratis', () => {
   it('los enums aceptan el escalon y el estado nuevos', async () => {
     // Se agregaron con ALTER TYPE ADD VALUE sobre los enums existentes, no
     // recreandolos: recrear obliga a soltar y rehacer cada columna que los usa.
-    const filas = await db.query<{ tier: string; status: string }>(
+    const foundRows = await db.query<{ tier: string; status: string }>(
       `insert into saas_subscriptions (tenant_id, tier, status, free_until, period_start, next_billing_date)
        values ($1, 'free', 'free', '2026-10-02', '2026-09-02', '2026-10-02')
        on conflict (tenant_id) do update set tier = 'free', status = 'free'
        returning tier, status`,
       [OTHER_TENANT],
     );
-    expect(filas.rows[0]).toEqual({ tier: 'free', status: 'free' });
+    expect(foundRows.rows[0]).toEqual({ tier: 'free', status: 'free' });
   });
 });
 
@@ -715,8 +715,8 @@ describe('clase gratis', () => {
     );
 
     // Quien avisa que no puede el martes tiene que poder venir el jueves.
-    const otra = await reservar(TENANT, '+51900000001', { date: '2026-09-08' });
-    expect(otra.rows).toHaveLength(1);
+    const other = await reservar(TENANT, '+51900000001', { date: '2026-09-08' });
+    expect(other.rows).toHaveLength(1);
   });
 
   it('el mismo celular sí puede probar OTRO gimnasio', async () => {
@@ -784,23 +784,23 @@ describe('clase gratis', () => {
 
   it('la cuenta de Firebase se lee de la variable de sesión', async () => {
     await setTrialAccount('firebase-uid-1');
-    const { rows } = await db.query<{ cuenta: string | null }>(
-      `select app_trial_account() as cuenta`,
+    const { rows } = await db.query<{ account: string | null }>(
+      `select app_trial_account() as account`,
     );
-    expect(rows[0]!.cuenta).toBe('firebase-uid-1');
+    expect(rows[0]!.account).toBe('firebase-uid-1');
 
     await setTrialAccount(null);
-    const vacia = await db.query<{ cuenta: string | null }>(
-      `select app_trial_account() as cuenta`,
+    const blank = await db.query<{ account: string | null }>(
+      `select app_trial_account() as account`,
     );
     // Falla cerrado: sin cuenta, la comparación da NULL y no abre ninguna fila.
-    expect(vacia.rows[0]!.cuenta).toBeNull();
+    expect(blank.rows[0]!.account).toBeNull();
     await setContext(TENANT, USER);
   });
 });
 
 describe('rutinas', () => {
-  async function nuevaRutina(): Promise<string> {
+  async function newRoutine(): Promise<string> {
     const { rows } = await db.query<{ id: string }>(
       `insert into routines (tenant_id, title) values ($1, 'Día de pecho') returning id`,
       [TENANT],
@@ -813,7 +813,7 @@ describe('rutinas', () => {
    * que no se deshace: el enlace ya salió.
    */
   it('nace de alumnos y sin publicar', async () => {
-    const id = await nuevaRutina();
+    const id = await newRoutine();
     const { rows } = await db.query<{ visibility: string; status: string }>(
       `select visibility, status from routines where id = $1`,
       [id],
@@ -852,30 +852,30 @@ describe('rutinas', () => {
    * que quiera Postgres y la lista cambia sola entre dos aperturas.
    */
   it('dos pasos no pueden ocupar la misma posición', async () => {
-    const rutina = await nuevaRutina();
+    const routine = await newRoutine();
     await db.query(
       `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Press banca')`,
-      [TENANT, rutina],
+      [TENANT, routine],
     );
     await expectRejection(
       () =>
         db.query(
           `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Fondos')`,
-          [TENANT, rutina],
+          [TENANT, routine],
         ),
       /routine_items_position_per_routine/,
     );
   });
 
   it('la misma posición en otra rutina sí: el índice es por rutina', async () => {
-    const otra = await nuevaRutina();
+    const other = await newRoutine();
     await db.query(
       `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Uchimata')`,
-      [TENANT, otra],
+      [TENANT, other],
     );
     const { rows } = await db.query<{ total: number }>(
       `select count(*)::int as total from routine_items where routine_id = $1`,
-      [otra],
+      [other],
     );
     expect(rows[0]!.total).toBe(1);
   });
@@ -948,15 +948,15 @@ describe('rutinas', () => {
   });
 
   it('borrar la rutina se lleva sus pasos', async () => {
-    const rutina = await nuevaRutina();
+    const routine = await newRoutine();
     await db.query(
       `insert into routine_items (tenant_id, routine_id, position, title) values ($1, $2, 0, 'Uchimata')`,
-      [TENANT, rutina],
+      [TENANT, routine],
     );
-    await db.query(`delete from routines where id = $1`, [rutina]);
+    await db.query(`delete from routines where id = $1`, [routine]);
     const { rows } = await db.query<{ total: number }>(
       `select count(*)::int as total from routine_items where routine_id = $1`,
-      [rutina],
+      [routine],
     );
     expect(rows[0]!.total).toBe(0);
   });

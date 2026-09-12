@@ -24,12 +24,12 @@ import { ThemeProvider } from '../src/design/theme';
 import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
 import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
-import { restaurarCuentaDeFirebase } from '../src/data/auth';
-import { useBienvenida, useSession } from '../src/data/session-hooks';
-import { marcarBienvenidaVista, restaurarBienvenida } from '../src/data/bienvenida';
+import { restoreFirebaseAccount } from '../src/data/auth';
+import { useWelcomeState, useSession } from '../src/data/session-hooks';
+import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
-import { marcarHidratando, marcarIntentoTerminado } from '../src/data/store';
-import { CargandoSeccion } from '../src/design/loading';
+import { markHydrating, markHydrationDone } from '../src/data/store';
+import { SectionLoader } from '../src/design/loading';
 
 /**
  * El cliente HTTP toma sus credenciales de aqui.
@@ -77,8 +77,8 @@ export default function RootLayout() {
   // sesion que tiene quien todavia no esta vinculado a ninguna ficha, y sin este
   // segundo intento volvia al login en cada arranque.
   useEffect(() => {
-    void restoreSession(restaurarCuentaDeFirebase);
-    void restaurarBienvenida();
+    void restoreSession(restoreFirebaseAccount);
+    void restoreWelcomeState();
   }, []);
 
   if (!fontsLoaded && fontError === null) {
@@ -170,25 +170,25 @@ function DataLoader() {
     if (state.status !== 'signed_in') return;
 
     let cancelado = false;
-    marcarHidratando(true);
+    markHydrating(true);
 
     // Dos cargas distintas porque son dos preguntas distintas: el alumno pide su
     // billetera, el staff pide el padron del gimnasio donde trabaja. Un
     // recepcionista no tiene membresia ahi, asi que pedirle `/me` devolveria una
     // lista vacia y la pantalla quedaria en blanco sin explicar por que.
-    const sesion = state.session;
+    const session = state.session;
     const carga =
-      sesion.role === 'student'
+      session.role === 'student'
         ? hydrate()
         : hydrateStaff({
-            userId: sesion.userId,
-            tenantId: sesion.tenantId,
-            role: sesion.role,
+            userId: session.userId,
+            tenantId: session.tenantId,
+            role: session.role,
           });
 
     void carga
       .then(() => {
-        if (!cancelado) marcarIntentoTerminado();
+        if (!cancelado) markHydrationDone();
       })
       .catch((error: unknown) => {
         // Sin conexion no se borra lo que ya habia: el alumno en la puerta del
@@ -198,7 +198,7 @@ function DataLoader() {
         // tus datos" en vez de "no llegue a la api".
         console.warn('No se pudieron cargar los datos:', error);
         if (!cancelado) {
-          marcarIntentoTerminado(
+          markHydrationDone(
             error instanceof Error ? error.message : 'No se pudo conectar con la api.',
           );
         }
@@ -269,9 +269,9 @@ function DataLoader() {
  * llega desde el directorio. Quien ve que NO lo decide esta lista sino la api,
  * que a quien no le toca le devuelve el titulo y ni un video.
  */
-const RUTAS_COMPARTIDAS = new Set(['settings', 'explore', 'gym-signup', 'routines']);
+const SHARED_ROUTES = new Set(['settings', 'explore', 'gym-signup', 'routines']);
 
-const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
+const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set([
     'charge',
     'result',
@@ -291,7 +291,7 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     'schedules',
     // Donde queda el local. Del staff: recepcion la LEE —se la preguntan por
     // telefono tanto como el precio— y dentro se apaga para que no la escriba.
-    'local',
+    'location',
   ]),
   student: new Set(['pay', 'plan-change']),
 };
@@ -311,7 +311,7 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
  */
 function Portada() {
   const state = useSession();
-  const bienvenida = useBienvenida();
+  const welcome = useWelcomeState();
 
   // Solo mientras se lee el llavero, que son milisegundos. Es corto pero no
   // se puede saltar: hasta que no se sabe el rol no se sabe QUE barra de
@@ -321,43 +321,43 @@ function Portada() {
   // También mientras se resuelve si toca la bienvenida: son dos lecturas del
   // mismo llavero, lanzadas a la vez, y decidir con una sola manda al login a
   // quien iba a ver la bienvenida y lo saca un instante después.
-  if (state.status !== 'loading' && bienvenida !== 'cargando') return null;
+  if (state.status !== 'loading' && welcome !== 'cargando') return null;
 
   return (
     <View style={styles.portada}>
-      <CargandoSeccion texto="" size={52} />
+      <SectionLoader text="" size={52} />
     </View>
   );
 }
 
 function SessionRouter() {
   const state = useSession();
-  const bienvenida = useBienvenida();
+  const welcome = useWelcomeState();
   const router = useRouter();
   // `useSegments` viene tipado como tupla segun las rutas conocidas, y aqui se
   // lee por posicion sin importar cuantos niveles haya.
   const segments = useSegments() as readonly string[];
 
   useEffect(() => {
-    if (state.status === 'loading' || bienvenida === 'cargando') return;
+    if (state.status === 'loading' || welcome === 'cargando') return;
 
-    const primero = segments[0];
-    const enBienvenida = primero === 'bienvenida';
-    const enLogin = primero === 'login' || primero === 'link';
+    const first = segments[0];
+    const onWelcome = first === 'welcome';
+    const enLogin = first === 'login' || first === 'link';
     // El registro del equipo y la apertura de turno se hacen SIN sesion: son
     // justamente lo que produce una.
-    const enTurno = primero === 'shift';
+    const onShift = first === 'shift';
     // La puerta de desarrollo tambien: es de donde sale el modo demostracion.
     // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
     // devolvia a /login en el mismo instante — se veia como que no pasaba nada.
-    const enDev = __DEV__ && primero === 'dev';
+    const enDev = __DEV__ && first === 'dev';
     // La invitacion se abre SIN sesion —es lo que viene a crear— y por eso entra
     // en la lista. Es la misma trampa que ya se pago con /dev: sin esto, el
     // enlace navegaba y este efecto lo devolvia a /login en el mismo instante.
-    const enInvitacion = primero === 'invite';
+    const onInvite = first === 'invite';
     // El directorio se mira sin cuenta: quien busca dojo todavia no tiene una, y
     // exigirsela para ver una lista es perderlo en la primera pantalla.
-    const enDirectorio = primero === 'explore';
+    const enDirectorio = first === 'explore';
     /**
      * El alta de un gimnasio sale del directorio, y quien la abre casi siempre
      * es una cuenta RECIEN creada sin ficha en ningun padron — que es el estado
@@ -365,7 +365,7 @@ function SessionRouter() {
      * de vinculacion. Sin esta excepcion el boton rebotaba a `/explore` sin
      * mostrar nada, y el fallo era mudo: ni error, ni ruta desconocida, nada.
      */
-    const enAltaDeGimnasio = primero === 'gym-signup';
+    const onGymSignUp = first === 'gym-signup';
 
     if (state.status === 'signed_out') {
       /**
@@ -376,9 +376,9 @@ function SessionRouter() {
        * láminas por delante es perderlo en la puerta. Por eso la condición no
        * es «no la ha visto» sino «no la ha visto Y no venía a otra cosa».
        */
-      const enArranque = primero === undefined || primero === 'index' || primero === 'login';
-      if (bienvenida === 'pendiente' && enArranque) {
-        if (!enBienvenida) router.replace('/bienvenida');
+      const enArranque = first === undefined || first === 'index' || first === 'login';
+      if (welcome === 'pendiente' && enArranque) {
+        if (!onWelcome) router.replace('/welcome');
         return;
       }
 
@@ -394,12 +394,12 @@ function SessionRouter() {
        */
       if (
         !enLogin &&
-        !enTurno &&
+        !onShift &&
         !enDev &&
-        !enInvitacion &&
+        !onInvite &&
         !enDirectorio &&
-        !enAltaDeGimnasio &&
-        !enBienvenida
+        !onGymSignUp &&
+        !onWelcome
       ) {
         router.replace('/login');
       }
@@ -422,20 +422,20 @@ function SessionRouter() {
        * ficha llegue a su app — el auto-vinculo por correo solo existe para el
        * dueno (`tryLinkOwnerByEmail`).
        */
-      if (primero !== 'link' && !enDirectorio && !enAltaDeGimnasio) router.replace('/explore');
+      if (first !== 'link' && !enDirectorio && !onGymSignUp) router.replace('/explore');
       return;
     }
 
     if (state.status === 'demo') {
       // Sin sesión real: el rol lo decide el store de demostración, y las dos
       // zonas quedan accesibles para poder recorrer la app entera.
-      if (enLogin || primero === undefined || primero === 'index' || primero === 'dev') {
+      if (enLogin || first === undefined || first === 'index' || first === 'dev') {
         router.replace('/');
       }
       return;
     }
 
-    void marcarBienvenidaVista();
+    void markWelcomeSeen();
 
     // Con sesion: cada rol a su sitio. El staff no entra a las pantallas del
     // alumno con su sesion de turno — para ver su propia billetera existe
@@ -443,16 +443,16 @@ function SessionRouter() {
     const esStaff = state.session.role !== 'student';
     const destino = esStaff ? '/staff' : '/student';
 
-    if (enLogin || enTurno || primero === undefined || primero === 'index') {
+    if (enLogin || onShift || first === undefined || first === 'index') {
       router.replace(destino);
       return;
     }
 
     const zona = esStaff ? 'staff' : 'student';
     const permitida =
-      primero === zona || RUTAS_COMPARTIDAS.has(primero) || RUTAS_DE[zona].has(primero);
+      first === zona || SHARED_ROUTES.has(first) || ROUTES_OF[zona].has(first);
     if (!permitida) router.replace(destino);
-  }, [state, bienvenida, segments, router]);
+  }, [state, welcome, segments, router]);
 
   return null;
 }

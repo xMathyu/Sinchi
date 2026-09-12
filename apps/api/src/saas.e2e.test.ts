@@ -41,12 +41,12 @@ const token = { owner: '', frontDesk: '' };
 
 const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
 
-let nuevoDocumento = 90_000_000;
+let newDocument = 90_000_000;
 /** Un alta distinta por intento: el documento es único en la red. */
-const otroAlumno = () => ({
+const otherStudent = () => ({
   name: 'Alta De Prueba',
-  documentId: String(++nuevoDocumento),
-  phone: `+519${String(nuevoDocumento).slice(0, 8)}`,
+  documentId: String(++newDocument),
+  phone: `+519${String(newDocument).slice(0, 8)}`,
   planId,
 });
 
@@ -65,23 +65,23 @@ const otroAlumno = () => ({
  * probar. Un helper de test que no verifica su efecto es una prueba verde que no
  * prueba nada.
  */
-async function vencerHace(dias: number): Promise<void> {
+async function vencerHace(days: number): Promise<void> {
   const { schema, withoutTenantIsolation } = await import('./db/client');
   const { DATABASE } = await import('./db/db.module');
   const db = app.get(DATABASE);
-  const fecha = formatPlainDate(addDays(plainDateInZone(new Date(), TZ_LIMA), -dias));
+  const date = formatPlainDate(addDays(plainDateInZone(new Date(), TZ_LIMA), -days));
 
   const tocadas = await withoutTenantIsolation(db, (tx) =>
     tx
       .update(schema.saasSubscriptions)
-      .set({ freeUntil: fecha, nextBillingDate: fecha })
+      .set({ freeUntil: date, nextBillingDate: date })
       .where(eq(schema.saasSubscriptions.tenantId, tenantId))
       .returning({ tenantId: schema.saasSubscriptions.tenantId }),
   );
   expect(tocadas, 'el gimnasio no tenía fila de suscripción que vencer').toHaveLength(1);
 }
 
-const suscripcion = async () =>
+const subscription = async () =>
   (await http.get('/v1/staff/subscription').set(auth(token.owner)).expect(200)).body;
 
 beforeAll(async () => {
@@ -135,7 +135,7 @@ beforeAll(async () => {
    */
   const MARGEN = SAAS_FREE_TIER_LIMIT + 4;
   while ((await http.get('/v1/staff/roster').set(auth(token.owner))).body.length < MARGEN) {
-    await http.post('/v1/staff/members').set(auth(token.owner)).send(otroAlumno()).expect(201);
+    await http.post('/v1/staff/members').set(auth(token.owner)).send(otherStudent()).expect(201);
   }
 }, 120_000);
 
@@ -145,7 +145,7 @@ afterAll(async () => {
 
 suite('el mes gratis del gimnasio', () => {
   it('un gimnasio que ya pasó del plan gratis está en su mes gratis', async () => {
-    const body = await suscripcion();
+    const body = await subscription();
 
     expect(body.state.status).toBe('trialing');
     expect(body.state.canWrite).toBe(true);
@@ -161,7 +161,7 @@ suite('el mes gratis del gimnasio', () => {
   });
 
   it('durante el mes gratis se puede operar con normalidad', async () => {
-    await http.post('/v1/staff/members').set(auth(token.owner)).send(otroAlumno()).expect(201);
+    await http.post('/v1/staff/members').set(auth(token.owner)).send(otherStudent()).expect(201);
   });
 
   it('el trabajo diario le materializa la fila, y no la cambia de estado', async () => {
@@ -174,9 +174,9 @@ suite('el mes gratis del gimnasio', () => {
     expect(reporte.started).toBeGreaterThanOrEqual(1);
     // Sigue en su mes gratis: pasó de 10 alumnos, así que su escalón es de pago
     // y el mes gratis del alta le corre igual.
-    const despues = await suscripcion();
-    expect(despues.state.status).toBe('trialing');
-    expect(despues.tier).toBe('up_to_60');
+    const after = await subscription();
+    expect(after.state.status).toBe('trialing');
+    expect(after.tier).toBe('up_to_60');
   });
 });
 
@@ -184,18 +184,18 @@ suite('cuando el mes gratis vence y no se paga', () => {
   it('entra en gracia y todavía deja escribir', async () => {
     await vencerHace(2);
 
-    const body = await suscripcion();
+    const body = await subscription();
     expect(body.state.status).toBe('in_grace');
     expect(body.state.canWrite).toBe(true);
 
-    await http.post('/v1/staff/members').set(auth(token.owner)).send(otroAlumno()).expect(201);
+    await http.post('/v1/staff/members').set(auth(token.owner)).send(otherStudent()).expect(201);
   });
 
   it('pasada la gracia, la cuenta queda en solo lectura', async () => {
     // Ocho días: uno más que los siete de gracia de Sinchi.
     await vencerHace(8);
 
-    const body = await suscripcion();
+    const body = await subscription();
     // Se afirma el escalón antes que el estado: si el gimnasio hubiera caído al
     // plan gratis, todo lo que sigue pasaría por el motivo equivocado y el
     // fallo aparecería tres pruebas más abajo, disfrazado de otra cosa.
@@ -238,7 +238,7 @@ suite('cuando el mes gratis vence y no se paga', () => {
     const { body, status } = await http
       .post('/v1/staff/members')
       .set(auth(token.owner))
-      .send(otroAlumno());
+      .send(otherStudent());
 
     expect(status).toBe(403);
     expect(body.code).toBe('saas_read_only');
@@ -272,15 +272,15 @@ suite('cuando el gimnasio paga', () => {
     const { SaasService } = await import('./modules/saas/saas.service');
     const saas = app.get(SaasService);
 
-    const cobro = await saas.recordPayment({ tenantId, rail: 'bank_transfer', reference: 'OP-1' });
-    expect(cobro.alreadyRecorded).toBe(false);
-    expect(cobro.amountCents).toBe(14_900);
+    const charge = await saas.recordPayment({ tenantId, rail: 'bank_transfer', reference: 'OP-1' });
+    expect(charge.alreadyRecorded).toBe(false);
+    expect(charge.amountCents).toBe(14_900);
 
-    const body = await suscripcion();
+    const body = await subscription();
     expect(body.state.status).toBe('active');
     expect(body.state.canWrite).toBe(true);
 
-    await http.post('/v1/staff/members').set(auth(token.owner)).send(otroAlumno()).expect(201);
+    await http.post('/v1/staff/members').set(auth(token.owner)).send(otherStudent()).expect(201);
   });
 
   it('vuelve al directorio', async () => {
@@ -306,8 +306,8 @@ suite('cuando el gimnasio paga', () => {
     const { SaasService } = await import('./modules/saas/saas.service');
     const saas = app.get(SaasService);
 
-    const siguiente = await saas.recordPayment({ tenantId, rail: 'yape', reference: 'OP-2' });
-    expect(siguiente.alreadyRecorded).toBe(false);
+    const nextValue = await saas.recordPayment({ tenantId, rail: 'yape', reference: 'OP-2' });
+    expect(nextValue.alreadyRecorded).toBe(false);
   });
 });
 

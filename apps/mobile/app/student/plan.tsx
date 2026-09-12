@@ -20,11 +20,11 @@ import {
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
+import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import { useErrorDeCarga, useStore, useToday, useWallet } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
-import { cancelarSuscripcion } from '../../src/data/actions';
+import { cancelSubscription } from '../../src/data/actions';
 import { formatShortDate } from '../../src/lib/format';
 
 export default function PlanScreen() {
@@ -45,15 +45,15 @@ export default function PlanScreen() {
     if (errorDeCarga !== null) {
       return (
         <Screen>
-          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+          <OfflineState error={errorDeCarga} onReintentar={reintentar} />
         </Screen>
       );
     }
     return (
       <Screen>
-        <EstadoVacio
-          titulo="Todavía no tienes un plan"
-          cuerpo="Cuando te inscribas en un gimnasio verás aquí tu plan, tu cupo de la semana y cuándo te toca renovar."
+        <EmptyState
+          title="Todavía no tienes un plan"
+          body="Cuando te inscribas en un gimnasio verás aquí tu plan, tu cupo de la semana y cuándo te toca renovar."
           pie="Si cancelaste y quieres volver, pídelo en el mostrador: tu ficha y tu historial siguen ahí."
         />
       </Screen>
@@ -94,7 +94,7 @@ export default function PlanScreen() {
         </Stack>
       </Card>
 
-      <SemanaYHorario entry={entry} />
+      <WeekAndSchedule entry={entry} />
 
       <Card radius={theme.radii.xl} style={{ marginTop: 18 }}>
         <Stack gap={12}>
@@ -213,7 +213,7 @@ export default function PlanScreen() {
           />
         ) : null}
 
-        <CancelButton membershipId={entry.membership.id} gimnasio={entry.tenant.name} />
+        <CancelButton membershipId={entry.membership.id} gym={entry.tenant.name} />
         <Text variant="micro" color={theme.colors.textFaint} align="center">
           Cancelar no borra tu historial. Volver es un toque, cuando quieras.
         </Text>
@@ -297,17 +297,17 @@ function QuotaBlock({ entry }: { readonly entry: MembershipView }) {
  */
 function CancelButton({
   membershipId,
-  gimnasio,
+  gym,
 }: {
   readonly membershipId: string;
-  readonly gimnasio: string;
+  readonly gym: string;
 }) {
   const theme = useTheme();
   const [cancelando, setCancelando] = useState(false);
 
   const confirmar = () => {
     Alert.alert(
-      `¿Cancelar tu plan en ${gimnasio}?`,
+      `¿Cancelar tu plan en ${gym}?`,
       'Dejarás de renovar y el escáner dejará de validar tu QR al terminar el periodo que ya pagaste. Tu historial se conserva.',
       [
         { text: 'Seguir suscrito', style: 'cancel' },
@@ -316,7 +316,7 @@ function CancelButton({
           style: 'destructive',
           onPress: () => {
             setCancelando(true);
-            void cancelarSuscripcion(membershipId)
+            void cancelSubscription(membershipId)
               .catch((causa: unknown) => {
                 Alert.alert(
                   'No se pudo cancelar',
@@ -360,50 +360,50 @@ function CancelButton({
  * quedaria un 85% vacia, y a 390px cada columna mide cincuenta puntos, donde
  * "Judo Kids (4 a 7 años)" no entra. La rejilla dibuja sobre todo el hueco.
  */
-function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
+function WeekAndSchedule({ entry }: { readonly entry: MembershipView }) {
   const theme = useTheme();
   const hoy = useToday();
-  const todas = useStore((state) => state.schedules);
-  const diaDeHoy = isoWeekday(hoy);
-  const [elegido, setElegido] = useState<IsoWeekday>(diaDeHoy);
+  const all = useStore((state) => state.schedules);
+  const today = isoWeekday(hoy);
+  const [picked, setPicked] = useState<IsoWeekday>(today);
 
   const delLocal = useMemo(
-    () => todas.filter((clase) => clase.tenantId === entry.tenant.id),
-    [todas, entry.tenant.id],
+    () => all.filter((klass) => klass.tenantId === entry.tenant.id),
+    [all, entry.tenant.id],
   );
 
   const permitidos = entry.plan.allowedDays;
-  const permite = (dia: IsoWeekday) => permitidos === null || permitidos.includes(dia);
+  const permite = (day: IsoWeekday) => permitidos === null || permitidos.includes(day);
 
-  const clasesDe = (dia: IsoWeekday) =>
+  const classesOf = (day: IsoWeekday) =>
     delLocal
-      .filter((clase) => clase.weekday === dia)
+      .filter((klass) => klass.weekday === day)
       .slice()
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  const delDia = clasesDe(elegido);
-  const nombre = weekdayName(elegido);
-  const hayHorario = delLocal.length > 0;
+  const ofTheDay = classesOf(picked);
+  const name = weekdayName(picked);
+  const hasSchedule = delLocal.length > 0;
 
   return (
     <Stack gap={10} style={{ marginTop: 18 }}>
-      <Eyebrow>{hayHorario ? 'Tu semana' : 'Días permitidos'}</Eyebrow>
+      <Eyebrow>{hasSchedule ? 'Tu semana' : 'Días permitidos'}</Eyebrow>
 
       <Row gap={6} justify="flex-start">
-        {allWeekdays().map((dia) => {
-          const cubierto = permite(dia);
-          const activo = dia === elegido;
-          const tieneClases = clasesDe(dia).length > 0;
+        {allWeekdays().map((day) => {
+          const cubierto = permite(day);
+          const active = day === picked;
+          const hasClasses = classesOf(day).length > 0;
 
           return (
             <Pressable
-              key={dia}
-              accessibilityRole={hayHorario ? 'button' : 'text'}
-              accessibilityState={{ selected: activo }}
-              accessibilityLabel={`${weekdayName(dia)}${cubierto ? '' : ', fuera de tu plan'}${
-                tieneClases ? '' : ', sin clases'
+              key={day}
+              accessibilityRole={hasSchedule ? 'button' : 'text'}
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${weekdayName(day)}${cubierto ? '' : ', fuera de tu plan'}${
+                hasClasses ? '' : ', sin clases'
               }`}
-              onPress={hayHorario ? () => setElegido(dia) : undefined}
+              onPress={hasSchedule ? () => setPicked(day) : undefined}
               style={{
                 flex: 1,
                 aspectRatio: 1,
@@ -412,9 +412,9 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
                 justifyContent: 'center',
                 gap: 3,
                 backgroundColor: cubierto ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
-                borderWidth: activo && hayHorario ? 1.5 : cubierto ? 0 : 1,
-                borderStyle: activo || cubierto ? 'solid' : 'dashed',
-                borderColor: activo && hayHorario ? theme.semaphore.ok : theme.colors.borderStrong,
+                borderWidth: active && hasSchedule ? 1.5 : cubierto ? 0 : 1,
+                borderStyle: active || cubierto ? 'solid' : 'dashed',
+                borderColor: active && hasSchedule ? theme.semaphore.ok : theme.colors.borderStrong,
               }}
             >
               <Text
@@ -422,7 +422,7 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
                 weight={cubierto ? 'bold' : 'semibold'}
                 color={cubierto ? theme.colors.ink : theme.colors.textDisabled}
               >
-                {weekdayInitial(dia)}
+                {weekdayInitial(day)}
               </Text>
               {/* El punto dice que ese dia hay clase: sin el, un dia vacio y uno
                   lleno se ven igual hasta tocarlos. */}
@@ -431,11 +431,11 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
                   width: 4,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: !hayHorario
+                  backgroundColor: !hasSchedule
                     ? 'transparent'
-                    : !tieneClases
+                    : !hasClasses
                       ? 'transparent'
-                      : dia === diaDeHoy
+                      : day === today
                         ? theme.semaphore.ok
                         : theme.colors.textTertiary,
                 }}
@@ -445,25 +445,25 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
         })}
       </Row>
 
-      {!hayHorario ? null : (
+      {!hasSchedule ? null : (
         <Card padded={false} radius={theme.radii.xl}>
-          <Row style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: delDia.length === 0 ? 13 : 4 }} gap={8} justify="flex-start">
+          <Row style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: ofTheDay.length === 0 ? 13 : 4 }} gap={8} justify="flex-start">
             <Text variant="captionSmall" weight="bold" color={theme.colors.textSecondary}>
-              {`${nombre.charAt(0).toUpperCase()}${nombre.slice(1)}`}
+              {`${name.charAt(0).toUpperCase()}${name.slice(1)}`}
             </Text>
-            {elegido === diaDeHoy ? (
+            {picked === today ? (
               <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
                 HOY
               </Text>
             ) : null}
-            {permite(elegido) ? null : (
+            {permite(picked) ? null : (
               <Text variant="micro" color={theme.colors.textTertiary}>
                 fuera de tu plan
               </Text>
             )}
           </Row>
 
-          {delDia.length === 0 ? (
+          {ofTheDay.length === 0 ? (
             <Text
               variant="bodySmall"
               color={theme.colors.textSecondary}
@@ -473,13 +473,13 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
             </Text>
           ) : (
             <Stack gap={9} style={{ paddingHorizontal: 16, paddingBottom: 14, paddingTop: 6 }}>
-              {delDia.map((clase) => (
-                <Row key={clase.id} gap={12}>
+              {ofTheDay.map((klass) => (
+                <Row key={klass.id} gap={12}>
                   <Text variant="bodySmall" style={{ flex: 1 }}>
-                    {clase.name}
+                    {klass.name}
                   </Text>
                   <Text variant="bodySmall" weight="semibold" color={theme.colors.textStrong}>
-                    {clase.startTime} – {clase.endTime}
+                    {klass.startTime} – {klass.endTime}
                   </Text>
                 </Row>
               ))}
@@ -488,7 +488,7 @@ function SemanaYHorario({ entry }: { readonly entry: MembershipView }) {
         </Card>
       )}
 
-      {!hayHorario ? null : (
+      {!hasSchedule ? null : (
         <Text variant="micro" color={theme.colors.textFaint}>
           El escáner valida solo dentro del horario, con media hora de margen antes y después.
         </Text>

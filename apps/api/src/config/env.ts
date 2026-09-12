@@ -14,8 +14,8 @@ import { z } from 'zod';
  * `URL_DE_LA_TIENDA=""` tumbaria el arranque por «no es una URL» — un fallo
  * absurdo para un dato opcional.
  */
-function vacioEsAusente<T extends z.ZodTypeAny>(esquema: T) {
-  return z.preprocess((valor) => (valor === '' ? undefined : valor), esquema);
+function emptyMeansAbsent<T extends z.ZodTypeAny>(esquema: T) {
+  return z.preprocess((raw) => (raw === '' ? undefined : raw), esquema);
 }
 
 const schema = z.object({
@@ -135,7 +135,7 @@ const schema = z.object({
    * falte, la pagina de la invitacion no ensena un boton roto — dice que la app
    * todavia no esta ahi, que es cierto.
    */
-  IOS_STORE_URL: vacioEsAusente(z.string().url().optional()),
+  IOS_STORE_URL: emptyMeansAbsent(z.string().url().optional()),
 
   /**
    * Ficha en Google Play.
@@ -145,7 +145,7 @@ const schema = z.object({
    * y una URL que se sabe correcta para una ficha que todavia no existe manda a
    * la gente a un «no encontrado». Vacia, la pagina lo dice con palabras.
    */
-  ANDROID_STORE_URL: vacioEsAusente(z.string().url().optional()),
+  ANDROID_STORE_URL: emptyMeansAbsent(z.string().url().optional()),
 
   SCHEDULER_MODE: z.enum(['in_process', 'external']).default('in_process'),
 
@@ -165,7 +165,7 @@ const schema = z.object({
    * desplegar esto sin haber creado el bucket todavia, y lo que hace que un
    * despliegue mal configurado degrade en vez de romper.
    */
-  VIDEO_BUCKET: vacioEsAusente(z.string().min(3).optional()),
+  VIDEO_BUCKET: emptyMeansAbsent(z.string().min(3).optional()),
 
   /**
    * Cuenta de servicio con la que se FIRMAN las URLs de los videos.
@@ -174,7 +174,7 @@ const schema = z.object({
    * URL. Con la clave, la firma es local y cuesta microsegundos — y una ficha de
    * rutina firma un puñado de URLs de golpe.
    */
-  VIDEO_SIGNING_KEY_JSON: vacioEsAusente(z.string().optional()),
+  VIDEO_SIGNING_KEY_JSON: emptyMeansAbsent(z.string().optional()),
 
   /**
    * Conexiones por instancia. Cloud Run escala horizontalmente, asi que el

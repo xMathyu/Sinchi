@@ -96,40 +96,40 @@ const almacenamiento = new AlmacenamientoFalso();
 
 const runId = randomInt(10_000_000, 89_000_000);
 let contador = 0;
-const siguiente = (): string => String(runId + ++contador);
-const celular = (): string => `+519${siguiente().slice(0, 8)}`;
+const nextValue = (): string => String(runId + ++contador);
+const nextPhone = (): string => `+519${nextValue().slice(0, 8)}`;
 
 const RUC = ['20100070970', '20131312955', '20100047218'];
 const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
-const creados: string[] = [];
+const created: string[] = [];
 
 interface Local {
   readonly tenantId: string;
   readonly slug: string;
-  readonly dueno: string;
+  readonly owner: string;
 }
 
-let indiceRuc = 0;
+let taxIdIndex = 0;
 
-async function nuevoGimnasio(): Promise<Local> {
+async function newGym(): Promise<Local> {
   const uid = `dueno-rutinas-${runId}-${++contador}`;
   const { body, status } = await http.post('/v1/gyms/signup').send({
     idToken: declareIdentity(uid),
     gymName: `Dojo Rutinas ${runId} ${contador}`,
-    taxId: RUC[indiceRuc++ % RUC.length]!,
+    taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
     monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
-    documentId: siguiente(),
-    phone: celular(),
+    documentId: nextValue(),
+    phone: nextPhone(),
   });
   if (status !== 201) throw new Error(`No se pudo crear el gimnasio: ${JSON.stringify(body)}`);
-  creados.push(body.tenantId as string);
+  created.push(body.tenantId as string);
   return {
     tenantId: body.tenantId as string,
     slug: body.slug as string,
-    dueno: body.session.accessToken as string,
+    owner: body.session.accessToken as string,
   };
 }
 
@@ -140,9 +140,9 @@ const VIDEO = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
  * gimnasio, dos rutinas, leer planes, inscribir, iniciar sesion y leer— y contra
  * una base remota eso no cabe en los 30s de `vitest.config.ts`.
  */
-const ALUMNO_TIMEOUT = 90_000;
+const STUDENT_TIMEOUT = 90_000;
 
-const rutinaBase = () => ({
+const baseRoutine = () => ({
   title: 'Uchimata paso a paso',
   summary: 'La entrada, el desequilibrio y la caída.',
   videoUrl: VIDEO,
@@ -160,43 +160,43 @@ const rutinaBase = () => ({
   ],
 });
 
-async function crearRutina(local: Local, overrides: Record<string, unknown> = {}) {
+async function createRoutine(local: Local, overrides: Record<string, unknown> = {}) {
   const { body, status } = await http
     .post('/v1/staff/routines')
-    .set(auth(local.dueno))
-    .send({ ...rutinaBase(), ...overrides });
+    .set(auth(local.owner))
+    .send({ ...baseRoutine(), ...overrides });
   if (status !== 201) throw new Error(`No se pudo crear la rutina: ${JSON.stringify(body)}`);
   return body;
 }
 
 /** Un alumno del padrón, con su sesión puesta. */
-async function nuevoAlumno(local: Local) {
-  const { body: planes } = await http.get('/v1/staff/plans').set(auth(local.dueno));
-  const phone = celular();
-  const { body: alumno } = await http
+async function newStudent(local: Local) {
+  const { body: plans } = await http.get('/v1/staff/plans').set(auth(local.owner));
+  const phone = nextPhone();
+  const { body: student } = await http
     .post('/v1/staff/members')
-    .set(auth(local.dueno))
-    .send({ name: `Alumno ${siguiente()}`, documentId: siguiente(), phone, planId: planes[0].id })
+    .set(auth(local.owner))
+    .send({ name: `Alumno ${nextValue()}`, documentId: nextValue(), phone, planId: plans[0].id })
     .expect(201);
 
-  const { body: sesion } = await http.post('/v1/auth/dev-login').send({ phone }).expect(201);
+  const { body: staffSession } = await http.post('/v1/auth/dev-login').send({ phone }).expect(201);
   return {
-    membershipId: alumno.view.membership.id as string,
-    token: sesion.accessToken as string,
+    membershipId: student.view.membership.id as string,
+    token: staffSession.accessToken as string,
   };
 }
 
 /** Una sesión de mostrador en ese gimnasio. */
-async function nuevaRecepcion(local: Local): Promise<string> {
+async function newFrontDesk(local: Local): Promise<string> {
   const { schema, withTenant, withoutTenantIsolation } = await import('./db/client');
   const { DATABASE } = await import('./db/db.module');
   const db = app.get(DATABASE);
-  const phone = celular();
+  const phone = nextPhone();
 
   const userId = await withoutTenantIsolation(db, async (tx) => {
     const [user] = await tx
       .insert(schema.users)
-      .values({ name: 'Recepción', documentId: siguiente(), phone })
+      .values({ name: 'Recepción', documentId: nextValue(), phone })
       .returning({ id: schema.users.id });
     return user!.id;
   });
@@ -239,11 +239,11 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
-  if (app !== undefined && creados.length > 0) {
+  if (app !== undefined && created.length > 0) {
     const { schema, withoutTenantIsolation } = await import('./db/client');
     const { DATABASE } = await import('./db/db.module');
     await withoutTenantIsolation(app.get(DATABASE), (tx) =>
-      tx.delete(schema.tenants).where(inArray(schema.tenants.id, creados)),
+      tx.delete(schema.tenants).where(inArray(schema.tenants.id, created)),
     );
   }
   await app?.close();
@@ -251,14 +251,14 @@ afterAll(async () => {
 
 suite('el dueño escribe la rutina', () => {
   it('la crea con sus pasos y sale en la biblioteca', async () => {
-    const local = await nuevoGimnasio();
-    const creada = await crearRutina(local);
+    const local = await newGym();
+    const created = await createRoutine(local);
 
-    expect(creada.unlocked).toBe(true);
-    expect(creada.card.routine.status).toBe('published');
-    expect(creada.items).toHaveLength(1);
+    expect(created.unlocked).toBe(true);
+    expect(created.card.routine.status).toBe('published');
+    expect(created.items).toHaveLength(1);
 
-    const { body } = await http.get('/v1/staff/routines').set(auth(local.dueno)).expect(200);
+    const { body } = await http.get('/v1/staff/routines').set(auth(local.owner)).expect(200);
     expect(body.routines).toHaveLength(1);
     expect(body.routines[0].itemCount).toBe(1);
   });
@@ -268,30 +268,30 @@ suite('el dueño escribe la rutina', () => {
    * por el que iba. Guardado tal cual, el uchimata empieza por la mitad.
    */
   it('guarda el enlace canónico, no el que pegó', async () => {
-    const local = await nuevoGimnasio();
-    const creada = await crearRutina(local, {
+    const local = await newGym();
+    const created = await createRoutine(local, {
       videoUrl: 'https://youtu.be/dQw4w9WgXcQ?t=42',
     });
-    expect(creada.card.routine.videoUrl).toBe(VIDEO);
+    expect(created.card.routine.videoUrl).toBe(VIDEO);
   });
 
   it('rechaza un enlace que no se entiende, con el motivo del dominio', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { status, body } = await http
       .post('/v1/staff/routines')
-      .set(auth(local.dueno))
-      .send({ ...rutinaBase(), videoUrl: 'mi video' });
+      .set(auth(local.owner))
+      .send({ ...baseRoutine(), videoUrl: 'mi video' });
 
     expect(status).toBe(400);
     expect(String(body.message)).toContain('enlace');
   });
 
   it('rechaza el título suelto: sin video, sin explicación y sin pasos', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { status } = await http
       .post('/v1/staff/routines')
-      .set(auth(local.dueno))
-      .send({ ...rutinaBase(), videoUrl: null, summary: null, items: [] });
+      .set(auth(local.owner))
+      .send({ ...baseRoutine(), videoUrl: null, summary: null, items: [] });
 
     expect(status).toBe(400);
   });
@@ -302,8 +302,8 @@ suite('el dueño escribe la rutina', () => {
    * lo que impide que quede un orden ambiguo.
    */
   it('reescribe los pasos enteros y respeta el orden', async () => {
-    const local = await nuevoGimnasio();
-    const creada = await crearRutina(local, {
+    const local = await newGym();
+    const created = await createRoutine(local, {
       items: [
         { title: 'Uno', instructions: null, videoUrl: null, videoAssetId: null, prescription: null },
         { title: 'Dos', instructions: null, videoUrl: null, videoAssetId: null, prescription: null },
@@ -312,10 +312,10 @@ suite('el dueño escribe la rutina', () => {
     });
 
     const { body } = await http
-      .post(`/v1/staff/routines/${creada.card.routine.id}`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/routines/${created.card.routine.id}`)
+      .set(auth(local.owner))
       .send({
-        ...rutinaBase(),
+        ...baseRoutine(),
         items: [
           { title: 'Tres', instructions: null, videoUrl: null, videoAssetId: null, prescription: null },
           { title: 'Uno', instructions: null, videoUrl: null, videoAssetId: null, prescription: null },
@@ -328,12 +328,12 @@ suite('el dueño escribe la rutina', () => {
   });
 
   it('recepción la lee pero no la escribe', async () => {
-    const local = await nuevoGimnasio();
-    await crearRutina(local);
-    const mostrador = await nuevaRecepcion(local);
+    const local = await newGym();
+    await createRoutine(local);
+    const frontDesk = await newFrontDesk(local);
 
-    await http.get('/v1/staff/routines').set(auth(mostrador)).expect(200);
-    await http.post('/v1/staff/routines').set(auth(mostrador)).send(rutinaBase()).expect(403);
+    await http.get('/v1/staff/routines').set(auth(frontDesk)).expect(200);
+    await http.post('/v1/staff/routines').set(auth(frontDesk)).send(baseRoutine()).expect(403);
   });
 });
 
@@ -344,8 +344,8 @@ suite('quién ve qué', () => {
    * —título, de qué va, cuántos pasos— y ni un video ni una instrucción.
    */
   it('la api no entrega el video de una rutina de alumnos a quien no lo es', async () => {
-    const local = await nuevoGimnasio();
-    const exclusiva = await crearRutina(local, {
+    const local = await newGym();
+    const exclusiva = await createRoutine(local, {
       title: 'Serie completa de kata',
       visibility: 'members',
     });
@@ -364,8 +364,8 @@ suite('quién ve qué', () => {
   });
 
   it('la pública sí se abre entera desde la calle, sin cuenta de nada', async () => {
-    const local = await nuevoGimnasio();
-    const abierta = await crearRutina(local);
+    const local = await newGym();
+    const abierta = await createRoutine(local);
 
     const { body } = await http
       .get(`/v1/gyms/${local.slug}/routines/${abierta.card.routine.id}`)
@@ -381,58 +381,58 @@ suite('quién ve qué', () => {
    * texto, y enseñar los títulos regalaría la mitad del valor.
    */
   it('la ficha del directorio cuenta lo exclusivo sin enseñarlo', async () => {
-    const local = await nuevoGimnasio();
-    await crearRutina(local);
-    await crearRutina(local, { title: 'Kata 1', visibility: 'members' });
-    await crearRutina(local, { title: 'Kata 2', visibility: 'members' });
+    const local = await newGym();
+    await createRoutine(local);
+    await createRoutine(local, { title: 'Kata 1', visibility: 'members' });
+    await createRoutine(local, { title: 'Kata 2', visibility: 'members' });
 
-    const { body: ficha } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
-    expect(ficha.routines).toHaveLength(1);
-    expect(ficha.membersOnlyRoutines).toBe(2);
-    expect(JSON.stringify(ficha.routines)).not.toContain('Kata');
+    const { body: record } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
+    expect(record.routines).toHaveLength(1);
+    expect(record.membersOnlyRoutines).toBe(2);
+    expect(JSON.stringify(record.routines)).not.toContain('Kata');
   });
 
   it('el borrador no existe para nadie de fuera', async () => {
-    const local = await nuevoGimnasio();
-    const oculta = await crearRutina(local, { published: false });
+    const local = await newGym();
+    const oculta = await createRoutine(local, { published: false });
 
-    const { body: ficha } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
-    expect(ficha.routines).toHaveLength(0);
+    const { body: record } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
+    expect(record.routines).toHaveLength(0);
     // Ni siquiera con candado: no hay nada que vender de algo que aún no existe.
     await http.get(`/v1/gyms/${local.slug}/routines/${oculta.card.routine.id}`).expect(404);
   });
 
   it('el alumno del padrón ve lo suyo y lo público', async () => {
-    const local = await nuevoGimnasio();
-    await crearRutina(local);
-    const exclusiva = await crearRutina(local, { title: 'Kata', visibility: 'members' });
-    const alumno = await nuevoAlumno(local);
+    const local = await newGym();
+    await createRoutine(local);
+    const exclusiva = await createRoutine(local, { title: 'Kata', visibility: 'members' });
+    const student = await newStudent(local);
 
     const { body } = await http
-      .get(`/v1/me/memberships/${alumno.membershipId}/routines`)
-      .set(auth(alumno.token))
+      .get(`/v1/me/memberships/${student.membershipId}/routines`)
+      .set(auth(student.token))
       .expect(200);
 
     expect(body.routines).toHaveLength(2);
     // Para quien ya las tiene, el gancho no dice nada.
     expect(body.membersOnly).toBe(0);
 
-    const { body: ficha } = await http
-      .get(`/v1/me/memberships/${alumno.membershipId}/routines/${exclusiva.card.routine.id}`)
-      .set(auth(alumno.token))
+    const { body: record } = await http
+      .get(`/v1/me/memberships/${student.membershipId}/routines/${exclusiva.card.routine.id}`)
+      .set(auth(student.token))
       .expect(200);
-    expect(ficha.unlocked).toBe(true);
-    expect(ficha.card.routine.videoUrl).toBe(VIDEO);
-  }, ALUMNO_TIMEOUT);
+    expect(record.unlocked).toBe(true);
+    expect(record.card.routine.videoUrl).toBe(VIDEO);
+  }, STUDENT_TIMEOUT);
 
   /**
    * La decisión de producto, comprobada: al moroso ya se le cierra la puerta
    * —esa es la palanca que cobra— y quitarle además el video no recupera un sol.
    */
   it('el alumno que debe sigue viendo lo de alumnos', async () => {
-    const local = await nuevoGimnasio();
-    const exclusiva = await crearRutina(local, { visibility: 'members' });
-    const alumno = await nuevoAlumno(local);
+    const local = await newGym();
+    const exclusiva = await createRoutine(local, { visibility: 'members' });
+    const student = await newStudent(local);
 
     const { schema, withTenant } = await import('./db/client');
     const { DATABASE } = await import('./db/db.module');
@@ -441,40 +441,40 @@ suite('quién ve qué', () => {
       tx
         .update(schema.subscriptions)
         .set({ status: 'suspended' })
-        .where(eq(schema.subscriptions.membershipId, alumno.membershipId)),
+        .where(eq(schema.subscriptions.membershipId, student.membershipId)),
     );
 
     const { body } = await http
-      .get(`/v1/me/memberships/${alumno.membershipId}/routines/${exclusiva.card.routine.id}`)
-      .set(auth(alumno.token))
+      .get(`/v1/me/memberships/${student.membershipId}/routines/${exclusiva.card.routine.id}`)
+      .set(auth(student.token))
       .expect(200);
     expect(body.unlocked).toBe(true);
-  }, ALUMNO_TIMEOUT);
+  }, STUDENT_TIMEOUT);
 
   /** La baja sí: quien se fue dejó de ser alumno. */
   it('el que se dio de baja se queda con lo público', async () => {
-    const local = await nuevoGimnasio();
-    await crearRutina(local);
-    const exclusiva = await crearRutina(local, { title: 'Kata', visibility: 'members' });
-    const alumno = await nuevoAlumno(local);
+    const local = await newGym();
+    await createRoutine(local);
+    const exclusiva = await createRoutine(local, { title: 'Kata', visibility: 'members' });
+    const student = await newStudent(local);
 
     await http
-      .post(`/v1/me/memberships/${alumno.membershipId}/cancel`)
-      .set(auth(alumno.token))
+      .post(`/v1/me/memberships/${student.membershipId}/cancel`)
+      .set(auth(student.token))
       .expect(201);
 
     const { body } = await http
-      .get(`/v1/me/memberships/${alumno.membershipId}/routines`)
-      .set(auth(alumno.token))
+      .get(`/v1/me/memberships/${student.membershipId}/routines`)
+      .set(auth(student.token))
       .expect(200);
     expect(body.routines).toHaveLength(1);
 
-    const { body: ficha } = await http
-      .get(`/v1/me/memberships/${alumno.membershipId}/routines/${exclusiva.card.routine.id}`)
-      .set(auth(alumno.token))
+    const { body: record } = await http
+      .get(`/v1/me/memberships/${student.membershipId}/routines/${exclusiva.card.routine.id}`)
+      .set(auth(student.token))
       .expect(200);
-    expect(ficha.unlocked).toBe(false);
-  }, ALUMNO_TIMEOUT);
+    expect(record.unlocked).toBe(false);
+  }, STUDENT_TIMEOUT);
 
   /**
    * RLS de verdad. No se puede probar con PGlite —ahí se corre como
@@ -482,35 +482,35 @@ suite('quién ve qué', () => {
    * se comprueba que la biblioteca de un gimnasio no se ve desde otro.
    */
   it('la biblioteca de un gimnasio no se ve desde otro', async () => {
-    const uno = await nuevoGimnasio();
-    const otro = await nuevoGimnasio();
-    const rutina = await crearRutina(uno);
+    const uno = await newGym();
+    const other = await newGym();
+    const routine = await createRoutine(uno);
 
     await http
-      .get(`/v1/staff/routines/${rutina.card.routine.id}`)
-      .set(auth(otro.dueno))
+      .get(`/v1/staff/routines/${routine.card.routine.id}`)
+      .set(auth(other.owner))
       .expect(404);
 
-    const { body } = await http.get('/v1/staff/routines').set(auth(otro.dueno)).expect(200);
+    const { body } = await http.get('/v1/staff/routines').set(auth(other.owner)).expect(200);
     expect(body.routines).toHaveLength(0);
   });
 });
 
 suite('publicar, cambiar de público y borrar', () => {
   it('cambia el público con un toque, sin abrir el editor', async () => {
-    const local = await nuevoGimnasio();
-    const rutina = await crearRutina(local);
+    const local = await newGym();
+    const routine = await createRoutine(local);
 
     const { body } = await http
-      .post(`/v1/staff/routines/${rutina.card.routine.id}/visibility`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/routines/${routine.card.routine.id}/visibility`)
+      .set(auth(local.owner))
       .send({ visibility: 'members' })
       .expect(201);
 
     expect(body.visibility).toBe('members');
-    const { body: ficha } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
-    expect(ficha.routines).toHaveLength(0);
-    expect(ficha.membersOnlyRoutines).toBe(1);
+    const { body: record } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
+    expect(record.routines).toHaveLength(0);
+    expect(record.membersOnlyRoutines).toBe(1);
   });
 
   /**
@@ -519,29 +519,29 @@ suite('publicar, cambiar de público y borrar', () => {
    * vendidas, pero sí quien la tenga abierta esta tarde.
    */
   it('no se borra una publicada; despublicada sí', async () => {
-    const local = await nuevoGimnasio();
-    const rutina = await crearRutina(local);
-    const id = rutina.card.routine.id as string;
+    const local = await newGym();
+    const routine = await createRoutine(local);
+    const id = routine.card.routine.id as string;
 
-    await http.delete(`/v1/staff/routines/${id}`).set(auth(local.dueno)).expect(409);
+    await http.delete(`/v1/staff/routines/${id}`).set(auth(local.owner)).expect(409);
 
     await http
       .post(`/v1/staff/routines/${id}/status`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ status: 'draft' })
       .expect(201);
 
-    await http.delete(`/v1/staff/routines/${id}`).set(auth(local.dueno)).expect(200);
-    await http.get(`/v1/staff/routines/${id}`).set(auth(local.dueno)).expect(404);
+    await http.delete(`/v1/staff/routines/${id}`).set(auth(local.owner)).expect(200);
+    await http.get(`/v1/staff/routines/${id}`).set(auth(local.owner)).expect(404);
   });
 });
 
 suite('subir el video', () => {
   /** Sube «el archivo» al bucket falso, como haría el teléfono. */
-  async function subir(local: Local, bytes = 12_345) {
+  async function upload(local: Local, bytes = 12_345) {
     const { body } = await http
       .post('/v1/staff/routines/videos')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ contentType: 'video/mp4', sizeBytes: bytes, originalName: 'uchimata.mp4' })
       .expect(201);
 
@@ -555,12 +555,12 @@ suite('subir el video', () => {
   }
 
   it('firma la subida y confirma contra el almacenamiento', async () => {
-    const local = await nuevoGimnasio();
-    const assetId = await subir(local, 9_000_000);
+    const local = await newGym();
+    const assetId = await upload(local, 9_000_000);
 
     const { body } = await http
       .post(`/v1/staff/routines/videos/${assetId}/ready`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(201);
 
     // El tamaño lo dice el almacenamiento, no el cliente.
@@ -573,40 +573,40 @@ suite('subir el video', () => {
    * descubre por un alumno.
    */
   it('no se cree al cliente: sin archivo en el bucket, no hay confirmación', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body } = await http
       .post('/v1/staff/routines/videos')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ contentType: 'video/mp4' })
       .expect(201);
 
     await http
       .post(`/v1/staff/routines/videos/${body.assetId}/ready`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(409);
   });
 
   it('rechaza lo que no es un video, y lo que no cabe', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     await http
       .post('/v1/staff/routines/videos')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ contentType: 'application/pdf' })
       .expect(400);
 
     await http
       .post('/v1/staff/routines/videos')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ contentType: 'video/mp4', sizeBytes: 400 * 1024 * 1024 })
       .expect(400);
   });
 
   it('recepción no sube: es material de la escuela', async () => {
-    const local = await nuevoGimnasio();
-    const mostrador = await nuevaRecepcion(local);
+    const local = await newGym();
+    const frontDesk = await newFrontDesk(local);
     await http
       .post('/v1/staff/routines/videos')
-      .set(auth(mostrador))
+      .set(auth(frontDesk))
       .send({ contentType: 'video/mp4' })
       .expect(403);
   });
@@ -617,14 +617,14 @@ suite('subir el video', () => {
    * quien pasa `checkRoutineAccess`. Un YouTube oculto no podía dar esto.
    */
   it('el video subido solo se firma para quien tiene acceso', async () => {
-    const local = await nuevoGimnasio();
-    const assetId = await subir(local);
+    const local = await newGym();
+    const assetId = await upload(local);
     await http
       .post(`/v1/staff/routines/videos/${assetId}/ready`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(201);
 
-    const exclusiva = await crearRutina(local, {
+    const exclusiva = await createRoutine(local, {
       title: 'Kata en video propio',
       visibility: 'members',
       videoUrl: null,
@@ -634,11 +634,11 @@ suite('subir el video', () => {
     const routineId = exclusiva.card.routine.id as string;
 
     // El dueño la abre: URL firmada.
-    const { body: delDueno } = await http
+    const { body: ownerToken } = await http
       .get(`/v1/staff/routines/${routineId}`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
-    expect(delDueno.card.routine.videoUrl).toContain('firma=lectura');
+    expect(ownerToken.card.routine.videoUrl).toContain('firma=lectura');
 
     // Desde la calle: ni la URL firmada ni la ruta del objeto.
     const { body: deLaCalle } = await http
@@ -654,33 +654,33 @@ suite('subir el video', () => {
    * URL daría un reproductor en negro en vez de una rutina sin video.
    */
   it('un video sin confirmar no se sirve', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: pendiente } = await http
       .post('/v1/staff/routines/videos')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ contentType: 'video/mp4' })
       .expect(201);
 
-    const rutina = await crearRutina(local, {
+    const routine = await createRoutine(local, {
       videoUrl: null,
       videoAssetId: pendiente.assetId,
       items: [],
     });
 
     const { body } = await http
-      .get(`/v1/staff/routines/${rutina.card.routine.id}`)
-      .set(auth(local.dueno))
+      .get(`/v1/staff/routines/${routine.card.routine.id}`)
+      .set(auth(local.owner))
       .expect(200);
     expect(body.card.routine.videoUrl).toBeNull();
   });
 
   it('rechaza tener archivo y enlace a la vez, con el motivo del dominio', async () => {
-    const local = await nuevoGimnasio();
-    const assetId = await subir(local);
+    const local = await newGym();
+    const assetId = await upload(local);
     const { status, body } = await http
       .post('/v1/staff/routines')
-      .set(auth(local.dueno))
-      .send({ ...rutinaBase(), videoAssetId: assetId });
+      .set(auth(local.owner))
+      .send({ ...baseRoutine(), videoAssetId: assetId });
 
     expect(status).toBe(400);
     expect(String(body.message)).toContain('uno de los dos');
@@ -691,22 +691,22 @@ suite('subir el video', () => {
    * pagándose para siempre en un bucket que nadie mira.
    */
   it('al quitar un video de la rutina, el archivo se borra del bucket', async () => {
-    const local = await nuevoGimnasio();
-    const assetId = await subir(local);
+    const local = await newGym();
+    const assetId = await upload(local);
     await http
       .post(`/v1/staff/routines/videos/${assetId}/ready`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(201);
 
     const ruta = `gyms/${local.tenantId}/routines/${assetId}.mp4`;
-    const rutina = await crearRutina(local, { videoUrl: null, videoAssetId: assetId, items: [] });
+    const routine = await createRoutine(local, { videoUrl: null, videoAssetId: assetId, items: [] });
     expect(almacenamiento.objetos.has(ruta)).toBe(true);
 
     // Se reemplaza por un enlace: el archivo ya no lo usa nadie.
     await http
-      .post(`/v1/staff/routines/${rutina.card.routine.id}`)
-      .set(auth(local.dueno))
-      .send({ ...rutinaBase(), items: [] })
+      .post(`/v1/staff/routines/${routine.card.routine.id}`)
+      .set(auth(local.owner))
+      .send({ ...baseRoutine(), items: [] })
       .expect(201);
 
     expect(almacenamiento.objetos.has(ruta)).toBe(false);

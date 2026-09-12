@@ -32,11 +32,11 @@ import type { LucideIcon } from 'lucide-react-native';
 import { TZ_LIMA, isSameDay, plainDateInZone } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Avatar, Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { EstadoVacio } from '../../src/design/empty';
+import { EmptyState } from '../../src/design/empty';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import {
-  useClasesGratisDelGimnasio,
+  useGymTrialClasses,
   useRecentCheckIns,
   useRefresco,
   useRoster,
@@ -58,7 +58,7 @@ export default function DoorScreen() {
   const today = useToday();
   const roster = useRoster();
   const recent = useRecentCheckIns();
-  const { datos: pruebas } = useClasesGratisDelGimnasio();
+  const { details: pruebas } = useGymTrialClasses();
   // Al volver a la puerta se relee el padrón: puede haber cambiado fuera.
   useRefresco();
 
@@ -74,7 +74,7 @@ export default function DoorScreen() {
    * día. Se filtra aquí para que la cifra diga lo que promete el «Hoy».
    */
   const marcadosHoy = useMemo(
-    () => recent.filter((marcado) => isSameDay(plainDateInZone(marcado.at, TZ_LIMA), today)).length,
+    () => recent.filter((marked) => isSameDay(plainDateInZone(marked.at, TZ_LIMA), today)).length,
     [recent, today],
   );
 
@@ -83,7 +83,7 @@ export default function DoorScreen() {
     [pruebas, today],
   );
 
-  const conDeuda = roster.filter((e) => e.view.receivable.amountCents > 0).length;
+  const inDebt = roster.filter((e) => e.view.receivable.amountCents > 0).length;
 
   return (
     <Screen background={theme.colors.screenScanner}>
@@ -147,20 +147,20 @@ export default function DoorScreen() {
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Hoy</Eyebrow>
         <Row gap={8} align="stretch">
-          <Cifra valor={String(marcadosHoy)} etiqueta="marcados" color={theme.colors.ink} />
-          <Cifra
-            valor={String(pruebasHoy)}
-            etiqueta="a probar"
+          <Stat value={String(marcadosHoy)} caption="marcados" color={theme.colors.ink} />
+          <Stat
+            value={String(pruebasHoy)}
+            caption="a probar"
             color={theme.colors.ink}
             onPress={() => switchTab('trials', {})}
             accessibilityLabel={`${pruebasHoy} vienen a probar hoy. Abre la lista.`}
           />
-          <Cifra
-            valor={String(conDeuda)}
-            etiqueta="con deuda"
-            color={conDeuda > 0 ? theme.semaphore.warn : theme.colors.ink}
-            onPress={() => switchTab('padron', {})}
-            accessibilityLabel={`${conDeuda} alumnos con deuda. Abre el padrón.`}
+          <Stat
+            value={String(inDebt)}
+            caption="con deuda"
+            color={inDebt > 0 ? theme.semaphore.warn : theme.colors.ink}
+            onPress={() => switchTab('roster', {})}
+            accessibilityLabel={`${inDebt} alumnos con deuda. Abre el padrón.`}
           />
         </Row>
       </Stack>
@@ -170,7 +170,7 @@ export default function DoorScreen() {
         <Row gap={10} align="stretch">
           {/* El QR pesa más porque es el 90% del trabajo de la puerta. Sigue a un
               toque: lo que cambió es que la cámara ya no está esperando puesta. */}
-          <Opcion
+          <Option
             icon={QrCode}
             label="Escanear QR"
             destacada
@@ -179,7 +179,7 @@ export default function DoorScreen() {
           {/* El padrón ya es una pestaña, así que aquí solo queda el atajo que
               de verdad pertenece a la puerta: el alumno sin celular que está
               esperando delante. */}
-          <Opcion
+          <Option
             icon={UserRoundCheck}
             label="Marcar manual"
             onPress={() => router.push('/manual')}
@@ -193,9 +193,9 @@ export default function DoorScreen() {
           `EstadoVacio` existe para evitar. Y es el estado de CADA mañana. */}
       <View style={{ marginTop: 22, flex: 1 }}>
         {recent.length === 0 ? (
-          <EstadoVacio
-            titulo="Nadie ha marcado todavía"
-            cuerpo="Aquí van apareciendo los alumnos conforme entran, con su hora y si se les marcó a mano."
+          <EmptyState
+            title="Nadie ha marcado todavía"
+            body="Aquí van apareciendo los alumnos conforme entran, con su hora y si se les marcó a mano."
           />
         ) : (
           <Stack gap={9} style={styles.flexOne}>
@@ -207,9 +207,9 @@ export default function DoorScreen() {
               // una baja no se llega a la última fila.
               style={styles.flexOne}
             >
-              {recent.slice(0, MAX_MARCADOS).map((marcado) => (
+              {recent.slice(0, MAX_MARCADOS).map((marked) => (
                 <Row
-                  key={marcado.id}
+                  key={marked.id}
                   gap={11}
                   justify="flex-start"
                   style={{
@@ -221,8 +221,8 @@ export default function DoorScreen() {
                 >
                   <Dot color={theme.semaphore.ok} size={8} />
                   <Text variant="bodySmall" weight="semibold" style={styles.flexOne}>
-                    {marcado.name}
-                    {marcado.manual ? (
+                    {marked.name}
+                    {marked.manual ? (
                       <Text variant="bodySmall" color={theme.colors.textTertiary}>
                         {' '}
                         · manual
@@ -230,7 +230,7 @@ export default function DoorScreen() {
                     ) : null}
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                    {formatClock(marcado.at)}
+                    {formatClock(marked.at)}
                   </Text>
                 </Row>
               ))}
@@ -243,30 +243,30 @@ export default function DoorScreen() {
 }
 
 /** Una cifra del día. Con `onPress` lleva a la pestaña que la explica. */
-function Cifra({
-  valor,
-  etiqueta,
+function Stat({
+  value,
+  caption,
   color,
   onPress,
   accessibilityLabel,
 }: {
-  readonly valor: string;
-  readonly etiqueta: string;
+  readonly value: string;
+  readonly caption: string;
   readonly color: string;
   readonly onPress?: () => void;
   readonly accessibilityLabel?: string;
 }) {
   const theme = useTheme();
 
-  const cuerpo = (
+  const body = (
     <Card radius={theme.radii.xl} padded={false} style={styles.flexOne}>
-      <Stack gap={2} style={styles.cifra}>
+      <Stack gap={2} style={styles.stat}>
         <Text variant="displaySmall" weight="extrabold" color={color}>
-          {valor}
+          {value}
         </Text>
         <Row gap={4} justify="flex-start">
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {etiqueta}
+            {caption}
           </Text>
           {onPress === undefined ? null : (
             <ChevronRight size={12} color={theme.colors.textTertiary} strokeWidth={2.4} />
@@ -276,7 +276,7 @@ function Cifra({
     </Card>
   );
 
-  if (onPress === undefined) return cuerpo;
+  if (onPress === undefined) return body;
 
   return (
     <Pressable
@@ -285,13 +285,13 @@ function Cifra({
       onPress={onPress}
       style={({ pressed }) => [styles.flexOne, { opacity: pressed ? 0.78 : 1 }]}
     >
-      {cuerpo}
+      {body}
     </Pressable>
   );
 }
 
 /** Una de las dos formas de marcar. Opción, no botón a lo ancho. */
-function Opcion({
+function Option({
   icon: Icon,
   label,
   destacada = false,
@@ -330,6 +330,6 @@ function Opcion({
 
 const styles = StyleSheet.create({
   flexOne: { flex: 1 },
-  cifra: { paddingVertical: 14, paddingHorizontal: 13 },
+  stat: { paddingVertical: 14, paddingHorizontal: 13 },
   marcados: { gap: 9, paddingBottom: 4 },
 });

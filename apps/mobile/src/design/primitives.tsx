@@ -488,7 +488,7 @@ export function SegmentedControl<T extends string>({
 export interface FieldProps {
   readonly label: string;
   readonly value: string;
-  readonly onChangeText: (texto: string) => void;
+  readonly onChangeText: (text: string) => void;
   readonly placeholder: string;
   /** Explicacion bajo el campo. La sustituye `error` cuando lo hay. */
   readonly hint?: string | undefined;
@@ -557,7 +557,7 @@ export function Field({
   onBlur,
 }: FieldProps) {
   const theme = useTheme();
-  const conError = error !== undefined && error.length > 0;
+  const hasError = error !== undefined && error.length > 0;
 
   return (
     <Stack gap={6}>
@@ -591,7 +591,7 @@ export function Field({
           backgroundColor: optional ? theme.colors.screen : theme.colors.surfaceSunken,
           borderWidth: 1,
           borderStyle: optional ? 'dashed' : 'solid',
-          borderColor: conError
+          borderColor: hasError
             ? withAlpha(theme.semaphore.bad, 0.6)
             : optional
               ? theme.colors.borderDashed
@@ -602,7 +602,7 @@ export function Field({
           opacity: editable ? 1 : 0.5,
         }}
       />
-      {conError ? (
+      {hasError ? (
         <Text variant="micro" color={theme.semaphore.bad}>
           {error}
         </Text>

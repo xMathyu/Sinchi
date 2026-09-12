@@ -8,7 +8,7 @@
  *   npm run db:seed:fa-meng-chuen -w @sinchi/api
  */
 import 'dotenv/config';
-import { DOM, SAB, seedGym, type GimnasioSpec } from './seed-gym';
+import { DOM, SAB, seedGym, type GymSpec } from './seed-gym';
 
 /**
  * Vende de las dos formas, y en el modelo son tres cosas distintas:
@@ -22,7 +22,7 @@ import { DOM, SAB, seedGym, type GimnasioSpec } from './seed-gym';
  *    desde la app aunque no sea gratis. Se reserva el sitio y se paga al llegar:
  *    el gimnasio se entera de quien viene, que es de lo que se trata.
  */
-const FA_MENG_CHUEN: GimnasioSpec = {
+const FA_MENG_CHUEN: GymSpec = {
   slug: 'fa-meng-chuen',
   name: 'Fa Meng Chuen',
   // PENDIENTE: el RUC real lo tiene que dar el club. Se marca en vez de
@@ -36,14 +36,14 @@ const FA_MENG_CHUEN: GimnasioSpec = {
   // esto estaba apagado porque la reserva solo sabia ser gratis, y encenderla
   // habria sido regalarles su propio producto.
   trialSoles: 40,
-  planes: [
+  gymPlans: [
     { name: 'Sanda', type: 'unlimited', sessionsPerWeek: null, soles: 240 },
     { name: 'Tai Chi', type: 'unlimited', sessionsPerWeek: null, soles: 220 },
   ],
   // Lo unico que el flyer publica: fin de semana. Si abren entre semana, se
   // agrega — un horario inventado hace que el escaner rechace a alumnos reales
   // por "fuera de horario".
-  horarios: [
+  schedules: [
     { name: 'Tai Chi', weekday: SAB, startTime: '07:00', endTime: '08:00' },
     { name: 'Sanda', weekday: SAB, startTime: '08:15', endTime: '09:30' },
     { name: 'Tai Chi', weekday: DOM, startTime: '07:00', endTime: '08:00' },

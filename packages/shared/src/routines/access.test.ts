@@ -11,21 +11,21 @@ import type { Routine } from '../domain/types.js';
 
 type Visible = Pick<Routine, 'status' | 'visibility'>;
 
-const publica: Visible = { status: 'published', visibility: 'public' };
-const deAlumnos: Visible = { status: 'published', visibility: 'members' };
-const borrador: Visible = { status: 'draft', visibility: 'public' };
+const isPublic: Visible = { status: 'published', visibility: 'public' };
+const forStudents: Visible = { status: 'published', visibility: 'members' };
+const draft: Visible = { status: 'draft', visibility: 'public' };
 
 describe('quien ve que', () => {
   it('la publica la ve cualquiera, incluida la persona sin cuenta', () => {
     for (const viewer of ['visitor', 'member', 'staff'] as RoutineViewer[]) {
-      expect(checkRoutineAccess(publica, viewer)).toBeNull();
+      expect(checkRoutineAccess(isPublic, viewer)).toBeNull();
     }
   });
 
   it('la de alumnos la ve el alumno y el local, no la calle', () => {
-    expect(checkRoutineAccess(deAlumnos, 'visitor')).toEqual({ code: 'members_only' });
-    expect(checkRoutineAccess(deAlumnos, 'member')).toBeNull();
-    expect(checkRoutineAccess(deAlumnos, 'staff')).toBeNull();
+    expect(checkRoutineAccess(forStudents, 'visitor')).toEqual({ code: 'members_only' });
+    expect(checkRoutineAccess(forStudents, 'member')).toBeNull();
+    expect(checkRoutineAccess(forStudents, 'staff')).toBeNull();
   });
 
   /**
@@ -33,9 +33,9 @@ describe('quien ve que', () => {
    * exactamente la decision de que ya se puede leer.
    */
   it('el borrador es solo del local', () => {
-    expect(checkRoutineAccess(borrador, 'visitor')).toEqual({ code: 'not_published' });
-    expect(checkRoutineAccess(borrador, 'member')).toEqual({ code: 'not_published' });
-    expect(checkRoutineAccess(borrador, 'staff')).toBeNull();
+    expect(checkRoutineAccess(draft, 'visitor')).toEqual({ code: 'not_published' });
+    expect(checkRoutineAccess(draft, 'member')).toEqual({ code: 'not_published' });
+    expect(checkRoutineAccess(draft, 'staff')).toBeNull();
   });
 
   /**
@@ -51,16 +51,16 @@ describe('quien ve que', () => {
 });
 
 describe('la biblioteca entera', () => {
-  const todas = [publica, deAlumnos, borrador];
+  const all = [isPublic, forStudents, draft];
 
   it('filtra igual que la ficha, que es lo que evita el titulo que al tocarlo dice que no', () => {
-    expect(visibleRoutines(todas, 'visitor')).toEqual([publica]);
-    expect(visibleRoutines(todas, 'member')).toEqual([publica, deAlumnos]);
-    expect(visibleRoutines(todas, 'staff')).toEqual(todas);
+    expect(visibleRoutines(all, 'visitor')).toEqual([isPublic]);
+    expect(visibleRoutines(all, 'member')).toEqual([isPublic, forStudents]);
+    expect(visibleRoutines(all, 'staff')).toEqual(all);
   });
 
   it('cuenta lo que se pierde quien no es alumno, sin ensenar los titulos', () => {
-    expect(membersOnlyCount(todas)).toBe(1);
+    expect(membersOnlyCount(all)).toBe(1);
     // El borrador no cuenta: prometeria contenido que el gimnasio no tiene.
     expect(membersOnlyCount([{ status: 'draft', visibility: 'members' }])).toBe(0);
   });
@@ -68,15 +68,15 @@ describe('la biblioteca entera', () => {
 
 describe('el motivo dicho en voz alta', () => {
   it('el de alumnos es el argumento de venta, no un error', () => {
-    const mensaje = routineAccessMessage({ code: 'members_only' });
-    expect(mensaje.title).toContain('alumnos');
-    expect(mensaje.detail).toContain('Prueba una clase');
+    const message = routineAccessMessage({ code: 'members_only' });
+    expect(message.title).toContain('alumnos');
+    expect(message.detail).toContain('Prueba una clase');
   });
 
   it('canSeeRoutine y checkRoutineAccess no pueden discrepar', () => {
-    for (const rutina of [publica, deAlumnos, borrador]) {
+    for (const routine of [isPublic, forStudents, draft]) {
       for (const viewer of ['visitor', 'member', 'staff'] as RoutineViewer[]) {
-        expect(canSeeRoutine(rutina, viewer)).toBe(checkRoutineAccess(rutina, viewer) === null);
+        expect(canSeeRoutine(routine, viewer)).toBe(checkRoutineAccess(routine, viewer) === null);
       }
     }
   });

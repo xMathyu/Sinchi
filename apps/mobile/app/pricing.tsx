@@ -20,72 +20,72 @@ import { router } from 'expo-router';
 import { Button, Card, Divider, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { usePreciosDelLocal } from '../src/data/hooks';
+import { useGymPricing } from '../src/data/hooks';
 import { useRole } from '../src/data/session-hooks';
-import { guardarPreciosDelLocal } from '../src/data/actions';
+import { saveGymPricing } from '../src/data/actions';
 
 /** Soles escritos a mano → céntimos enteros. Vacío es `null`, que es "no se ofrece". */
-function aCentimos(texto: string): number | null {
-  const limpio = texto.trim().replace(',', '.');
-  if (limpio.length === 0) return null;
-  const valor = Number(limpio);
-  if (!Number.isFinite(valor) || valor < 0) return null;
-  return Math.round(valor * 100);
+function aCentimos(text: string): number | null {
+  const trimmed = text.trim().replace(',', '.');
+  if (trimmed.length === 0) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
 }
 
 const enSoles = (centimos: number | null): string =>
   centimos === null ? '' : String(centimos / 100);
 
-export default function PreciosScreen() {
+export default function PricingScreen() {
   const theme = useTheme();
   // De la sesión: el del store llega con el padrón, y estas pantallas se
   // abren solas desde un enlace.
-  const esDueno = useRole() === 'owner';
-  const { precios, recargar } = usePreciosDelLocal();
+  const isOwner = useRole() === 'owner';
+  const { pricing, reload } = useGymPricing();
 
-  const [matricula, setMatricula] = useState('');
-  const [claseSuelta, setClaseSuelta] = useState('');
-  const [dejaPasar, setDejaPasar] = useState(false);
+  const [enrollmentFee, setEnrollmentFee] = useState('');
+  const [dropInPrice, setDropInPrice] = useState('');
+  const [allowOverflow, setAllowOverflow] = useState(false);
   const [pruebaActiva, setPruebaActiva] = useState(true);
-  const [precioPrueba, setPrecioPrueba] = useState('');
-  const [guardando, setGuardando] = useState(false);
+  const [trialPrice, setTrialPrice] = useState('');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (precios === null) return;
-    setMatricula(enSoles(precios.enrollmentFeeCents));
-    setClaseSuelta(enSoles(precios.dropInPriceCents));
-    setDejaPasar(precios.quotaOverflowPolicy === 'offer_drop_in');
-    setPruebaActiva(precios.trialClassEnabled);
-    setPrecioPrueba(enSoles(precios.trialClassPriceCents));
-  }, [precios]);
+    if (pricing === null) return;
+    setEnrollmentFee(enSoles(pricing.enrollmentFeeCents));
+    setDropInPrice(enSoles(pricing.dropInPriceCents));
+    setAllowOverflow(pricing.quotaOverflowPolicy === 'offer_drop_in');
+    setPruebaActiva(pricing.trialClassEnabled);
+    setTrialPrice(enSoles(pricing.trialClassPriceCents));
+  }, [pricing]);
 
-  const centimosClaseSuelta = aCentimos(claseSuelta);
+  const dropInCents = aCentimos(dropInPrice);
 
   /**
    * Dejar pasar sin precio es el defecto que el QA visual encuentra siempre: la
    * puerta le diría al mostrador "cobrar clase suelta" sin cantidad, con el
    * alumno delante. Se apaga aquí y la api lo rechaza igual.
    */
-  const faltaPrecio = dejaPasar && centimosClaseSuelta === null;
+  const priceMissing = allowOverflow && dropInCents === null;
 
-  async function guardar(): Promise<void> {
-    setGuardando(true);
+  async function save(): Promise<void> {
+    setSaving(true);
     setError(null);
     try {
-      await guardarPreciosDelLocal({
-        enrollmentFeeCents: aCentimos(matricula) ?? 0,
-        dropInPriceCents: centimosClaseSuelta,
-        quotaOverflowPolicy: dejaPasar ? 'offer_drop_in' : 'block',
+      await saveGymPricing({
+        enrollmentFeeCents: aCentimos(enrollmentFee) ?? 0,
+        dropInPriceCents: dropInCents,
+        quotaOverflowPolicy: allowOverflow ? 'offer_drop_in' : 'block',
         trialClassEnabled: pruebaActiva,
-        trialClassPriceCents: aCentimos(precioPrueba) ?? 0,
+        trialClassPriceCents: aCentimos(trialPrice) ?? 0,
       });
-      recargar();
+      reload();
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   }
 
@@ -102,7 +102,7 @@ export default function PreciosScreen() {
         </Pressable>
       </Row>
 
-      {!esDueno ? (
+      {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Estos precios los decide el dueño. Aquí puedes verlos, que es lo que hace falta para
@@ -116,11 +116,11 @@ export default function PreciosScreen() {
         <Card radius={theme.radii.xl}>
           <Field
             label="Matrícula en soles"
-            value={matricula}
-            onChangeText={setMatricula}
+            value={enrollmentFee}
+            onChangeText={setEnrollmentFee}
             placeholder="0"
             keyboardType="decimal-pad"
-            editable={esDueno}
+            editable={isOwner}
             hint="Se cobra una sola vez, al dar de alta al alumno. Déjalo en 0 si no cobras."
           />
         </Card>
@@ -141,9 +141,9 @@ export default function PreciosScreen() {
                 </Text>
               </Stack>
               <Switch
-                value={dejaPasar}
-                onValueChange={setDejaPasar}
-                disabled={!esDueno}
+                value={allowOverflow}
+                onValueChange={setAllowOverflow}
+                disabled={!isOwner}
                 accessibilityLabel="Dejar entrar pagando clase suelta"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
                 thumbColor={theme.colors.ink}
@@ -154,13 +154,13 @@ export default function PreciosScreen() {
 
             <Field
               label="Precio de esa clase, en soles"
-              value={claseSuelta}
-              onChangeText={setClaseSuelta}
+              value={dropInPrice}
+              onChangeText={setDropInPrice}
               placeholder="25"
               keyboardType="decimal-pad"
-              editable={esDueno}
-              optional={!dejaPasar}
-              error={faltaPrecio ? 'Ponle precio: la puerta se lo va a pedir al mostrador.' : undefined}
+              editable={isOwner}
+              optional={!allowOverflow}
+              error={priceMissing ? 'Ponle precio: la puerta se lo va a pedir al mostrador.' : undefined}
               hint="No es lo mismo que un plan de clase suelta. Ese es para quien no tiene mensualidad, y su precio va en el plan."
             />
           </Stack>
@@ -184,7 +184,7 @@ export default function PreciosScreen() {
               <Switch
                 value={pruebaActiva}
                 onValueChange={setPruebaActiva}
-                disabled={!esDueno}
+                disabled={!isOwner}
                 accessibilityLabel="Ofrecer clase de prueba"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
                 thumbColor={theme.colors.ink}
@@ -195,11 +195,11 @@ export default function PreciosScreen() {
 
             <Field
               label="Precio de la primera clase, en soles"
-              value={precioPrueba}
-              onChangeText={setPrecioPrueba}
+              value={trialPrice}
+              onChangeText={setTrialPrice}
               placeholder="0"
               keyboardType="decimal-pad"
-              editable={esDueno && pruebaActiva}
+              editable={isOwner && pruebaActiva}
               optional
               hint="0 es gratis, que es lo normal: regalar la primera y cobrar las siguientes."
             />
@@ -215,12 +215,12 @@ export default function PreciosScreen() {
         </Card>
       )}
 
-      {esDueno && (
+      {isOwner && (
         <Button
-          label={guardando ? 'Guardando…' : 'Guardar'}
-          disabled={guardando || faltaPrecio}
+          label={saving ? 'Guardando…' : 'Guardar'}
+          disabled={saving || priceMissing}
           style={{ marginTop: 20 }}
-          onPress={() => void guardar()}
+          onPress={() => void save()}
         />
       )}
 

@@ -12,8 +12,8 @@ describe('SecretBox', () => {
   });
 
   it('cifra y descifra texto', () => {
-    const clave = 'sk_test_culqi_1234567890';
-    expect(box.decryptText(box.encryptText(clave))).toBe(clave);
+    const password = 'sk_test_culqi_1234567890';
+    expect(box.decryptText(box.encryptText(password))).toBe(password);
   });
 
   it('dos cifrados del mismo secreto dan sobres distintos', () => {

@@ -200,7 +200,7 @@ export class TrialsService {
    * mantener los agregados en `tenants` — no abrir un hueco en el aislamiento.
    */
   async directory(): Promise<readonly GymCard[]> {
-    const LIMITE = 60;
+    const LIMIT = 60;
 
     /**
      * Un gimnasio que no le paga a Sinchi deja de recibir interesados POR
@@ -224,7 +224,7 @@ export class TrialsService {
         .from(schema.tenants)
         .where(eq(schema.tenants.status, 'active'))
         .orderBy(schema.tenants.name)
-        .limit(LIMITE);
+        .limit(LIMIT);
 
       const cards: GymCard[] = [];
       for (const gym of gyms) {
@@ -564,7 +564,7 @@ export class TrialsService {
      * acaba de dar al crear su cuenta. El cuerpo de la peticion manda por si
      * quiere corregirlo, y el nombre de Google queda de ultimo recurso.
      */
-    const registro = await this.accountLink.datosDeRegistro(input.account.uid);
+    const registro = await this.accountLink.signUpDetails(input.account.uid);
 
     const fullName = (
       input.fullName ??
@@ -599,7 +599,7 @@ export class TrialsService {
   private async notify(
     gym: { readonly id: string; readonly name: string; readonly timezone: string },
     booking: TrialBookingView,
-    cambioDeHora = false,
+    rescheduled = false,
   ): Promise<void> {
     try {
       const destinatarios = await withTenant(this.db, gym.id, async (tx) =>
@@ -610,19 +610,19 @@ export class TrialsService {
           .orderBy(schema.staff.role),
       );
 
-      const para = destinatarios.find((row) => row.email !== null)?.email;
-      if (para === undefined || para === null || !this.mail.disponible) return;
+      const recipient = destinatarios.find((row) => row.email !== null)?.email;
+      if (recipient === undefined || recipient === null || !this.mail.disponible) return;
 
-      const enviado = await this.mail.avisarClaseDePrueba({
-        para,
-        gimnasio: gym.name,
-        nombre: booking.fullName,
+      const enviado = await this.mail.notifyTrialBooking({
+        recipient,
+        gym: gym.name,
+        personName: booking.fullName,
         telefono: booking.phone,
-        clase: booking.className,
-        cuando: describeDate(booking.date),
-        hora: booking.startTime,
-        precioCents: booking.priceCents,
-        cambioDeHora,
+        klass: booking.className,
+        when: describeDate(booking.date),
+        time: booking.startTime,
+        priceCents: booking.priceCents,
+        rescheduled,
       });
 
       if (enviado.enviado) {
@@ -794,7 +794,7 @@ export class TrialsService {
   async rescheduleOwn(
     account: TrialAccount,
     bookingId: string,
-    nuevo: { readonly classScheduleId: string; readonly date: string },
+    target: { readonly classScheduleId: string; readonly date: string },
   ): Promise<BookOutcome> {
     const uid =
       account.kind === 'user' ? await this.firebaseUidOf(account.userId) : account.uid;
@@ -814,7 +814,7 @@ export class TrialsService {
      * despues por su id. Se lee fuera de la transaccion de escritura porque
      * `stateFor` y `findGym` no pueden correr con el gimnasio ya adoptado.
      */
-    const [reserva] = await withContext(
+    const [current] = await withContext(
       this.db,
       account.kind === 'user'
         ? uid === null
@@ -840,9 +840,9 @@ export class TrialsService {
           .limit(1),
     );
 
-    if (reserva === undefined) throw new NotFoundException('Esa reserva no existe.');
+    if (current === undefined) throw new NotFoundException('Esa reserva no existe.');
 
-    const gym = await this.findGymById(reserva.tenantId);
+    const gym = await this.findGymById(current.tenantId);
     if (gym === null) throw new NotFoundException('Ese gimnasio no existe.');
     const listed = (await this.saas.stateFor(gym.id)).listed;
 
@@ -857,8 +857,8 @@ export class TrialsService {
       const verdict = validateTrialReschedule({
         gymActive: gym.status === 'active' && listed,
         slots: this.slotsFor(schedules, gym.timezone),
-        scheduleId: nuevo.classScheduleId,
-        date: parsePlainDate(nuevo.date),
+        scheduleId: target.classScheduleId,
+        date: parsePlainDate(target.date),
       });
 
       if (!verdict.allowed) {
@@ -878,7 +878,7 @@ export class TrialsService {
           // no, la columna afirmaria que el gimnasio sabe algo que no sabe.
           notifiedAt: null,
         })
-        .where(eq(schema.trialBookings.id, reserva.id))
+        .where(eq(schema.trialBookings.id, current.id))
         .returning();
 
       return {

@@ -31,58 +31,58 @@ import {
   fetchStaffMember,
   fetchRoster,
   fetchStaffPlans,
-  fetchPlanesDelDueno,
-  fetchPrecios,
-  crearPlan,
-  editarPlan,
-  archivarPlan,
-  borrarPlan,
-  fetchHorariosDelDueno,
-  crearHorario,
-  fetchUbicacion,
-  guardarUbicacion,
-  editarHorario,
-  archivarHorario,
-  borrarHorario,
-  guardarPrecios,
-  fetchEventos,
-  fetchEvento,
-  fetchRutinas,
-  fetchRutina,
-  fetchRutinasDeMiGimnasio,
-  fetchRutinaDeMiGimnasio,
-  fetchRutinaPublica,
-  crearRutina,
-  editarRutina,
-  cambiarEstadoRutina,
-  cambiarPublicoRutina,
-  borrarRutina,
-  pedirSubidaDeVideo,
+  fetchOwnerPlans,
+  fetchPricing,
+  createPlan,
+  editPlan,
+  archivePlan,
+  deletePlan,
+  fetchOwnerSchedules,
+  createSchedule,
+  fetchLocation,
+  saveLocation,
+  editSchedule,
+  archiveSchedule,
+  deleteSchedule,
+  savePricing,
+  fetchEvents,
+  fetchEvent,
+  fetchRoutines,
+  fetchRoutine,
+  fetchMyGymRoutines,
+  fetchMyGymRoutine,
+  fetchPublicRoutine,
+  createRoutine,
+  editRoutine,
+  setRoutineStatus,
+  setRoutineVisibility,
+  deleteRoutine,
+  requestVideoUpload,
   confirmarSubidaDeVideo,
-  subirArchivoDeVideo,
-  crearEvento,
-  editarEvento,
-  cambiarEstadoEvento,
-  borrarEvento,
+  uploadVideoFile,
+  createEvent,
+  editEvent,
+  setEventStatus,
+  deleteEvent,
   fetchPlazas,
-  inscribirEnEvento,
-  cambiarEstadoPlaza,
+  enrollInEvent,
+  setSeatStatus,
   cobrarPlaza,
-  type EventoConCupo,
-  type EventoDto,
-  type EventoEscrito,
+  type EventWithSeats,
+  type EventDto,
+  type EventInput,
   type BibliotecaDto,
-  type RutinaDto,
-  type RutinaDetalleDto,
-  type RutinaEscrita,
+  type RoutineDto,
+  type RoutineDetailDto,
+  type RoutineInput,
   type PlazaDto,
-  type PlanConUso,
-  type PlanEscrito,
-  type HorarioConUso,
-  type HorarioEscrito,
-  type HorarioNuevo,
-  type UbicacionDelLocal,
-  type PreciosDelLocal,
+  type PlanWithUsage,
+  type PlanInput,
+  type ScheduleWithUsage,
+  type ScheduleInput,
+  type NewScheduleInput,
+  type GymLocation,
+  type GymPricing,
   markManual,
   recordPayment,
   resubscribe,
@@ -124,8 +124,8 @@ import { hydrate, hydrateStaff } from './hydrate';
  * versión y variante en su sitio) para que pase la validación sin mentir sobre
  * su origen: no es aleatorio, es una función del contenido.
  */
-function llaveIdempotente(texto: string): string {
-  const h = sha256(new TextEncoder().encode(texto));
+function idempotencyKey(text: string): string {
+  const h = sha256(new TextEncoder().encode(text));
   const b = Array.from(h.slice(0, 16));
   b[6] = (b[6]! & 0x0f) | 0x40;
   b[8] = (b[8]! & 0x3f) | 0x80;
@@ -144,22 +144,22 @@ const hoyISO = (): string => new Date().toISOString().slice(0, 10);
  * Cambiar de plan y cancelar son del alumno, y usar aquel guardia las mandaba al
  * store —a memoria— con sesión real.
  */
-const haySesion = (): boolean => getSessionState().status === 'signed_in';
+const hasSession = (): boolean => getSessionState().status === 'signed_in';
 
 /** `true` cuando hay una sesión de staff de verdad detrás. */
-function conServidor(): { readonly userId: string; readonly tenantId: string | null } | null {
-  const estado = getSessionState();
-  if (estado.status !== 'signed_in') return null;
-  if (estado.session.role === 'student') return null;
-  return { userId: estado.session.userId, tenantId: estado.session.tenantId };
+function withServer(): { readonly userId: string; readonly tenantId: string | null } | null {
+  const state = getSessionState();
+  if (state.status !== 'signed_in') return null;
+  if (state.session.role === 'student') return null;
+  return { userId: state.session.userId, tenantId: state.session.tenantId };
 }
 
-export interface ResultadoAsistencia {
+export interface AttendanceResult {
   readonly registrada: boolean;
   /** Ya estaba marcada hoy. No es un error: la puerta se toca dos veces. */
   readonly repetida: boolean;
-  readonly titulo: string;
-  readonly detalle: string;
+  readonly title: string;
+  readonly detail: string;
 }
 
 /**
@@ -169,14 +169,14 @@ export interface ResultadoAsistencia {
  * mismo aparato. Sin ella, tocar el botón dos veces mientras la red va lenta
  * dejaría dos asistencias y consumiría dos veces del cupo semanal.
  */
-export async function marcarAsistencia(input: {
+export async function markAttendance(input: {
   readonly membershipId: string;
   readonly method: CheckInMethod;
   readonly overrideDenial?: boolean;
-}): Promise<ResultadoAsistencia> {
-  const sesion = conServidor();
+}): Promise<AttendanceResult> {
+  const session = withServer();
 
-  if (sesion === null) {
+  if (session === null) {
     // Modo demostración: se escribe en memoria y se responde con lo mismo que
     // habría dicho el servidor, para que la pantalla no tenga dos caminos.
     markAttendanceLocal({
@@ -184,31 +184,31 @@ export async function marcarAsistencia(input: {
       method: input.method,
       overrideDenial: input.overrideDenial === true,
     });
-    return { registrada: true, repetida: false, titulo: 'Asistencia marcada', detalle: '' };
+    return { registrada: true, repetida: false, title: 'Asistencia marcada', detail: '' };
   }
 
-  const salida: CheckInOutcomeDto = await markManual({
+  const outcome: CheckInOutcomeDto = await markManual({
     membershipId: input.membershipId,
     overrideDenial: input.overrideDenial === true,
-    clientId: llaveIdempotente(`manual:${input.membershipId}:${hoyISO()}`),
+    clientId: idempotencyKey(`manual:${input.membershipId}:${hoyISO()}`),
   });
 
   // El padrón cambió —el cupo baja, el semáforo puede cambiar— así que se
   // recarga. No se parchea a mano el estado local: el servidor acaba de
   // recalcularlo todo y copiar esa lógica aquí sería tener dos verdades.
-  await refrescarPadron(sesion);
+  await refreshRoster(session);
 
   return {
-    registrada: salida.registered,
-    repetida: salida.alreadyRegistered === true,
-    titulo: salida.message.title,
-    detalle: salida.message.detail ?? '',
+    registrada: outcome.registered,
+    repetida: outcome.alreadyRegistered === true,
+    title: outcome.message.title,
+    detail: outcome.message.detail ?? '',
   };
 }
 
-export interface ResultadoPago {
+export interface PaymentResult {
   readonly repetido: boolean;
-  readonly montoCents: number;
+  readonly amountCents: number;
 }
 
 /**
@@ -218,23 +218,23 @@ export interface ResultadoPago {
  * alguien pagó. Por eso `rail` es obligatorio — efectivo, Yape o transferencia—
  * y no tiene valor por defecto: adivinarlo falsearía la conciliación de caja.
  */
-export async function registrarPago(input: {
+export async function registerPayment(input: {
   readonly membershipId: string;
   readonly type: 'renewal' | 'enrollment' | 'drop_in';
   readonly rail: PaymentRail;
   readonly periods?: number;
   readonly amountCents?: number;
-}): Promise<ResultadoPago> {
-  const sesion = conServidor();
+}): Promise<PaymentResult> {
+  const session = withServer();
 
-  if (sesion === null) {
+  if (session === null) {
     recordPaymentLocal({
       membershipId: input.membershipId,
       type: input.type,
       rail: input.rail,
       periods: input.periods ?? 1,
     });
-    return { repetido: false, montoCents: input.amountCents ?? 0 };
+    return { repetido: false, amountCents: input.amountCents ?? 0 };
   }
 
   if (input.rail === 'card') {
@@ -243,27 +243,27 @@ export async function registrarPago(input: {
     throw new Error('El pago con tarjeta todavía no está disponible.');
   }
 
-  const salida = await recordPayment({
+  const outcome = await recordPayment({
     membershipId: input.membershipId,
     type: input.type,
     rail: input.rail,
     periods: input.periods ?? 1,
     ...(input.amountCents === undefined ? {} : { amountCents: input.amountCents }),
-    clientId: llaveIdempotente(`pago:${input.membershipId}:${input.type}:${hoyISO()}`),
+    clientId: idempotencyKey(`pago:${input.membershipId}:${input.type}:${hoyISO()}`),
   });
 
-  await refrescarPadron(sesion);
+  await refreshRoster(session);
 
-  return { repetido: salida.alreadyRecorded, montoCents: salida.charge.amountCents };
+  return { repetido: outcome.alreadyRecorded, amountCents: outcome.charge.amountCents };
 }
 
 // ---------------------------------------------------------------------------
 // Puerta
 // ---------------------------------------------------------------------------
 
-export type ResultadoEscaneo =
+export type ScanOutcome =
   | { readonly ok: true; readonly membershipId: string }
-  | { readonly ok: false; readonly titulo: string; readonly detalle: string };
+  | { readonly ok: false; readonly title: string; readonly detail: string };
 
 /**
  * Valida un QR leido en la puerta.
@@ -280,23 +280,23 @@ export type ResultadoEscaneo =
  * pierde es exactamente la firma, y por eso el veredicto local se marca como tal
  * en vez de presentarse como si el servidor lo hubiera confirmado.
  */
-export async function evaluarQr(payload: string): Promise<ResultadoEscaneo> {
-  const sesion = conServidor();
+export async function evaluarQr(payload: string): Promise<ScanOutcome> {
+  const session = withServer();
 
-  if (sesion !== null) {
+  if (session !== null) {
     try {
       // `record: true`: el servidor verifica la firma y registra en la misma
       // llamada. Separarlo en dos pasos no es posible — el codigo rota cada 30
       // segundos y ya habria vencido cuando el recepcionista confirme.
-      const salida = await scanQr(payload, { record: true });
+      const outcome = await scanQr(payload, { record: true });
       setScanVerdict({
-        membershipId: salida.view.membership.id,
-        result: salida.result,
-        message: salida.message,
-        registered: salida.registered,
+        membershipId: outcome.view.membership.id,
+        result: outcome.result,
+        message: outcome.message,
+        registered: outcome.registered,
       });
-      await refrescarPadron(sesion);
-      return { ok: true, membershipId: salida.view.membership.id };
+      await refreshRoster(session);
+      return { ok: true, membershipId: outcome.view.membership.id };
     } catch (causa) {
       if (!(causa instanceof ApiError) || !causa.isOffline) {
         // La api responde en espanol y con el motivo concreto ("el codigo ya
@@ -304,8 +304,8 @@ export async function evaluarQr(payload: string): Promise<ResultadoEscaneo> {
         // empeoraria.
         return {
           ok: false,
-          titulo: 'No se pudo validar',
-          detalle: causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+          title: 'No se pudo validar',
+          detail: causa instanceof Error ? causa.message : 'Intenta de nuevo.',
         };
       }
       // Sin red se sigue, contra la cache.
@@ -318,8 +318,8 @@ export async function evaluarQr(payload: string): Promise<ResultadoEscaneo> {
 
   return {
     ok: false,
-    titulo: 'Código no reconocido',
-    detalle:
+    title: 'Código no reconocido',
+    detail:
       local.reason === 'not_sinchi'
         ? 'Ese QR no es de Sinchi.'
         : local.reason === 'unknown_user'
@@ -339,8 +339,8 @@ export async function evaluarQr(payload: string): Promise<ResultadoEscaneo> {
  * pedirlos de cada alumno serian sesenta peticiones para pintar una lista. El
  * historial se pide al abrir a UNA persona, que es cuando de verdad se necesita.
  */
-export async function cargarDetalleAlumno(membershipId: string): Promise<MembershipView> {
-  if (conServidor() === null) return viewMembership(membershipId);
+export async function loadStudentDetail(membershipId: string): Promise<MembershipView> {
+  if (withServer() === null) return viewMembership(membershipId);
   return await fetchStaffMember(membershipId);
 }
 
@@ -352,13 +352,13 @@ export async function cargarDetalleAlumno(membershipId: string): Promise<Members
  * siguiente carga, y eso no justifica presentarle un error a quien acaba de
  * cobrar bien.
  */
-async function refrescarPadron(sesion: {
+async function refreshRoster(session: {
   readonly userId: string;
   readonly tenantId: string | null;
 }): Promise<void> {
   await hydrateStaff({
-    userId: sesion.userId,
-    tenantId: sesion.tenantId,
+    userId: session.userId,
+    tenantId: session.tenantId,
     role: 'front_desk',
   }).catch(() => {});
 }
@@ -372,8 +372,8 @@ async function refrescarPadron(sesion: {
  *
  * Sin sesión salen del store, que en la demostración los tiene todos.
  */
-export async function planesPara(membershipId: string): Promise<readonly Plan[]> {
-  if (!haySesion()) {
+export async function plansFor(membershipId: string): Promise<readonly Plan[]> {
+  if (!hasSession()) {
     const vista = viewMembership(membershipId);
     return getState().plans.filter((plan) => plan.tenantId === vista.tenant.id && plan.active);
   }
@@ -392,8 +392,8 @@ export async function planesPara(membershipId: string): Promise<readonly Plan[]>
  * prorrateado hoy, bajar espera a la renovación— y eso lo calcula el servidor con
  * las mismas funciones de `@sinchi/shared`. Aquí solo se manda la intención.
  */
-export async function cambiarPlan(membershipId: string, planId: string): Promise<void> {
-  if (!haySesion()) {
+export async function changePlan(membershipId: string, planId: string): Promise<void> {
+  if (!hasSession()) {
     changePlanLocal(membershipId, planId);
     return;
   }
@@ -402,8 +402,8 @@ export async function cambiarPlan(membershipId: string, planId: string): Promise
 }
 
 /** Cancela la suscripción. Misma historia que `cambiarPlan`: escribía en memoria. */
-export async function cancelarSuscripcion(membershipId: string): Promise<void> {
-  if (!haySesion()) {
+export async function cancelSubscription(membershipId: string): Promise<void> {
+  if (!hasSession()) {
     cancelSubscriptionLocal(membershipId);
     return;
   }
@@ -415,7 +415,7 @@ export async function cancelarSuscripcion(membershipId: string): Promise<void> {
 // Vinculación de cuentas
 // ---------------------------------------------------------------------------
 
-export interface Vinculacion {
+export interface AccountClaim {
   readonly id: string;
   readonly code: string;
   readonly email: string | null;
@@ -433,15 +433,15 @@ export interface Vinculacion {
  * pantalla los llamara, así que un alumno recién instalado se quedaba en
  * `unlinked` indefinidamente, mirando un código que nadie podía canjear.
  */
-export async function vinculacionesPendientes(): Promise<readonly Vinculacion[]> {
-  if (conServidor() === null) return [];
-  const filas = await fetchClaims();
-  return filas.map((fila) => ({
-    id: fila.id,
-    code: fila.code,
-    email: fila.email,
-    displayName: fila.displayName,
-    expiresAt: new Date(fila.expiresAt),
+export async function pendingClaims(): Promise<readonly AccountClaim[]> {
+  if (withServer() === null) return [];
+  const rows = await fetchClaims();
+  return rows.map((row) => ({
+    id: row.id,
+    code: row.code,
+    email: row.email,
+    displayName: row.displayName,
+    expiresAt: new Date(row.expiresAt),
   }));
 }
 
@@ -453,11 +453,11 @@ export async function vinculacionesPendientes(): Promise<readonly Vinculacion[]>
  * Aquí no se replica ninguna de esas dos reglas — replicarlas sería tener dos
  * verdades sobre quién puede vincular a quién.
  */
-export async function vincularCuenta(code: string, membershipId: string): Promise<void> {
-  const sesion = conServidor();
-  if (sesion === null) throw new Error('Vincular cuentas necesita una sesión de turno abierta.');
+export async function linkAccount(code: string, membershipId: string): Promise<void> {
+  const session = withServer();
+  if (session === null) throw new Error('Vincular cuentas necesita una sesión de turno abierta.');
   await confirmClaim(code, membershipId);
-  await refrescarPadron(sesion);
+  await refreshRoster(session);
 }
 
 /**
@@ -469,9 +469,9 @@ export async function vincularCuenta(code: string, membershipId: string): Promis
  * pantalla no tenga que decidirlo por su cuenta — la api responde 403 y eso ya
  * sería un error visible por algo que es simplemente "no te toca".
  */
-export async function resumenDelGimnasio(): Promise<SummaryDto | null> {
-  const estado = getSessionState();
-  if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
+export async function gymSummary(): Promise<SummaryDto | null> {
+  const state = getSessionState();
+  if (state.status !== 'signed_in' || state.session.role !== 'owner') return null;
   return await fetchSummary();
 }
 
@@ -481,14 +481,14 @@ export async function resumenDelGimnasio(): Promise<SummaryDto | null> {
  * `null` cuando quien mira no es el dueño, por la misma razón que el resumen: no
  * es un error, es que no le toca.
  */
-export async function suscripcionSinchi(): Promise<SaasSubscriptionDto | null> {
-  const estado = getSessionState();
-  if (estado.status !== 'signed_in' || estado.session.role !== 'owner') return null;
+export async function sinchiSubscription(): Promise<SaasSubscriptionDto | null> {
+  const state = getSessionState();
+  if (state.status !== 'signed_in' || state.session.role !== 'owner') return null;
   return await fetchSaasSubscription();
 }
 
 /** Canjea un código de promoción. El rechazo viene en el resultado, no como error. */
-export const canjearCodigo = (code: string): Promise<RedeemPromoDto> => redeemPromoCode(code);
+export const redeemCode = (code: string): Promise<RedeemPromoDto> => redeemPromoCode(code);
 
 /**
  * Da de alta un gimnasio y deja la sesión de dueño puesta.
@@ -496,7 +496,7 @@ export const canjearCodigo = (code: string): Promise<RedeemPromoDto> => redeemPr
  * Guardar la sesión aquí y no en la pantalla es lo que hace que el alta termine
  * DENTRO del modo staff: el layout raíz enruta en cuanto ve la sesión.
  */
-export async function registrarGimnasio(
+export async function registerGym(
   input: Omit<SignUpGymInput, 'idToken'>,
 ): Promise<SignUpGymDto> {
   const idToken = currentFirebaseToken();
@@ -504,15 +504,15 @@ export async function registrarGimnasio(
     throw new ApiError(401, 'Entra con Google antes de registrar tu gimnasio.');
   }
 
-  const alta = await signUpGym({ ...input, idToken });
+  const signUp = await signUpGym({ ...input, idToken });
   await saveSession({
-    accessToken: alta.session.accessToken,
-    expiresInSeconds: alta.session.expiresInSeconds,
-    role: alta.session.role,
-    userId: alta.session.userId,
-    tenantId: alta.session.tenantId,
+    accessToken: signUp.session.accessToken,
+    expiresInSeconds: signUp.session.expiresInSeconds,
+    role: signUp.session.role,
+    userId: signUp.session.userId,
+    tenantId: signUp.session.tenantId,
   });
-  return alta;
+  return signUp;
 }
 
 /**
@@ -529,7 +529,7 @@ export async function registrarGimnasio(
  * propio.
  */
 export async function fijarMiPin(pin: string): Promise<void> {
-  if (conServidor() === null) throw new Error('Fijar el PIN necesita una sesión de turno.');
+  if (withServer() === null) throw new Error('Fijar el PIN necesita una sesión de turno.');
   await setOwnPin(pin);
 }
 
@@ -549,11 +549,11 @@ export async function fijarMiPin(pin: string): Promise<void> {
  * agujero: todo lo que hacía el mostrador se veía al instante, y solo lo que
  * pasaba fuera se quedaba viejo.
  */
-export async function refrescarDatos(): Promise<void> {
-  const estado = getSessionState();
-  if (estado.status !== 'signed_in') return;
+export async function refreshDetails(): Promise<void> {
+  const state = getSessionState();
+  if (state.status !== 'signed_in') return;
 
-  const { role, userId, tenantId } = estado.session;
+  const { role, userId, tenantId } = state.session;
   if (role === 'student') {
     await hydrate();
     return;
@@ -574,19 +574,19 @@ export async function refrescarDatos(): Promise<void> {
  * aparte. Volver a registrar a la persona le crearía una segunda identidad en el
  * mismo local.
  */
-export async function reactivarSuscripcion(
+export async function reactivateSubscription(
   membershipId: string,
   planId: string,
 ): Promise<void> {
-  const sesion = conServidor();
-  if (sesion === null) throw new Error('Reactivar necesita una sesión de turno abierta.');
+  const session = withServer();
+  if (session === null) throw new Error('Reactivar necesita una sesión de turno abierta.');
   await resubscribe(membershipId, planId);
-  await refrescarPadron(sesion);
+  await refreshRoster(session);
 }
 
 /** Planes activos del local. Para el mostrador, no para la billetera del alumno. */
-export async function planesDelGimnasio(): Promise<readonly Plan[]> {
-  if (conServidor() === null) return getState().plans.filter((plan) => plan.active);
+export async function gymPlans(): Promise<readonly Plan[]> {
+  if (withServer() === null) return getState().plans.filter((plan) => plan.active);
   return (await fetchStaffPlans()).filter((plan) => plan.active);
 }
 
@@ -603,85 +603,85 @@ export async function planesDelGimnasio(): Promise<readonly Plan[]> {
  * puede leer sin red porque nadie lo escribe desde dos sitios a la vez; una
  * tarifa, sí.
  */
-function exigeServidor(que: string): void {
-  if (conServidor() === null) {
-    throw new Error(`${que} necesita conexión: es una decisión del local, no de este equipo.`);
+function exigeServidor(which: string): void {
+  if (withServer() === null) {
+    throw new Error(`${which} necesita conexión: es una decisión del local, no de este equipo.`);
   }
 }
 
-export async function planesDelDueno(): Promise<readonly PlanConUso[]> {
+export async function ownerPlans(): Promise<readonly PlanWithUsage[]> {
   exigeServidor('Ver tus planes');
-  return await fetchPlanesDelDueno();
+  return await fetchOwnerPlans();
 }
 
-export async function guardarPlan(
+export async function savePlan(
   planId: string | null,
-  plan: PlanEscrito,
+  plan: PlanInput,
 ): Promise<Plan> {
   exigeServidor('Guardar un plan');
-  return planId === null ? await crearPlan(plan) : await editarPlan(planId, plan);
+  return planId === null ? await createPlan(plan) : await editPlan(planId, plan);
 }
 
-export async function archivarOReactivarPlan(planId: string, activo: boolean): Promise<Plan> {
+export async function setPlanActive(planId: string, active: boolean): Promise<Plan> {
   exigeServidor('Archivar un plan');
-  return await archivarPlan(planId, activo);
+  return await archivePlan(planId, active);
 }
 
-export async function eliminarPlan(planId: string): Promise<void> {
+export async function removePlan(planId: string): Promise<void> {
   exigeServidor('Borrar un plan');
-  await borrarPlan(planId);
+  await deletePlan(planId);
 }
 
-export async function horariosDelDueno(): Promise<readonly HorarioConUso[]> {
+export async function ownerSchedules(): Promise<readonly ScheduleWithUsage[]> {
   exigeServidor('Ver tus horarios');
-  return await fetchHorariosDelDueno();
+  return await fetchOwnerSchedules();
 }
 
 /** Publica la misma clase en los días marcados. Uno o siete, una sola petición. */
-export async function crearHorarios(
-  horario: HorarioNuevo,
+export async function createSchedules(
+  schedule: NewScheduleInput,
 ): Promise<readonly ClassSchedule[]> {
   exigeServidor('Guardar un horario');
-  return await crearHorario(horario);
+  return await createSchedule(schedule);
 }
 
-export async function guardarHorario(
+export async function saveSchedule(
   scheduleId: string,
-  horario: HorarioEscrito,
+  schedule: ScheduleInput,
 ): Promise<ClassSchedule> {
   exigeServidor('Guardar un horario');
-  return await editarHorario(scheduleId, horario);
+  return await editSchedule(scheduleId, schedule);
 }
 
-export async function archivarOReactivarHorario(
+export async function setScheduleActive(
   scheduleId: string,
-  activo: boolean,
+  active: boolean,
 ): Promise<ClassSchedule> {
   exigeServidor('Archivar un horario');
-  return await archivarHorario(scheduleId, activo);
+  return await archiveSchedule(scheduleId, active);
 }
 
-export async function eliminarHorario(scheduleId: string): Promise<void> {
+export async function removeSchedule(scheduleId: string): Promise<void> {
   exigeServidor('Borrar un horario');
-  await borrarHorario(scheduleId);
+  await deleteSchedule(scheduleId);
 }
 
 /** Dónde queda el local. Lo lee todo el staff; escribirlo es del dueño. */
-export async function ubicacionDelLocal(): Promise<UbicacionDelLocal> {
+export async function gymLocation(): Promise<GymLocation> {
   exigeServidor('Ver dónde queda tu local');
-  return await fetchUbicacion();
+  return await fetchLocation();
 }
 
-export async function guardarUbicacionDelLocal(
-  ubicacion: UbicacionDelLocal,
-): Promise<UbicacionDelLocal> {
+export async function saveGymLocation(
+  location: GymLocation,
+): Promise<GymLocation> {
   exigeServidor('Guardar la dirección');
-  return await guardarUbicacion(ubicacion);
+  return await saveLocation(location);
 }
 
-export async function preciosDelLocal(): Promise<PreciosDelLocal> {
+export async function gymPricing(): Promise<GymPricing> {
   exigeServidor('Ver lo que cobras');
-  return await fetchPrecios();
+  return await fetchPricing();
 }
 
 // ---------------------------------------------------------------------------
@@ -697,58 +697,58 @@ export async function preciosDelLocal(): Promise<PreciosDelLocal> {
  * silla. El cupo lo cuenta el servidor con la fila del evento bloqueada, y esa
  * garantía no se puede replicar sin conexión.
  */
-export async function eventosDelGimnasio(
-  opciones: { readonly past?: boolean; readonly drafts?: boolean } = {},
-): Promise<readonly EventoConCupo[]> {
+export async function gymEvents(
+  options: { readonly past?: boolean; readonly drafts?: boolean } = {},
+): Promise<readonly EventWithSeats[]> {
   exigeServidor('Ver los eventos');
-  return await fetchEventos(opciones);
+  return await fetchEvents(options);
 }
 
-export async function eventoDelGimnasio(eventId: string): Promise<EventoConCupo> {
+export async function gymEvent(eventId: string): Promise<EventWithSeats> {
   exigeServidor('Ver un evento');
-  return await fetchEvento(eventId);
+  return await fetchEvent(eventId);
 }
 
-export async function guardarEvento(
+export async function saveEvent(
   eventId: string | null,
-  evento: EventoEscrito,
-): Promise<EventoDto> {
+  event: EventInput,
+): Promise<EventDto> {
   exigeServidor('Guardar un evento');
-  return eventId === null ? await crearEvento(evento) : await editarEvento(eventId, evento);
+  return eventId === null ? await createEvent(event) : await editEvent(eventId, event);
 }
 
-export async function publicarEvento(
+export async function publishEvent(
   eventId: string,
   status: 'draft' | 'published' | 'canceled',
-): Promise<EventoDto> {
+): Promise<EventDto> {
   exigeServidor('Cambiar un evento');
-  return await cambiarEstadoEvento(eventId, status);
+  return await setEventStatus(eventId, status);
 }
 
-export async function eliminarEvento(eventId: string): Promise<void> {
+export async function removeEvent(eventId: string): Promise<void> {
   exigeServidor('Borrar un evento');
-  await borrarEvento(eventId);
+  await deleteEvent(eventId);
 }
 
-export async function plazasDelEvento(eventId: string): Promise<readonly PlazaDto[]> {
+export async function eventSeats(eventId: string): Promise<readonly PlazaDto[]> {
   exigeServidor('Ver los inscritos');
   return await fetchPlazas(eventId);
 }
 
-export async function inscribirAlumnoEnEvento(eventId: string, membershipId: string) {
+export async function enrollStudentInEvent(eventId: string, membershipId: string) {
   exigeServidor('Inscribir en un evento');
-  return await inscribirEnEvento(eventId, membershipId);
+  return await enrollInEvent(eventId, membershipId);
 }
 
-export async function marcarPlaza(
+export async function markSeat(
   registrationId: string,
   status: 'booked' | 'attended' | 'no_show' | 'canceled',
 ): Promise<PlazaDto> {
   exigeServidor('Marcar una plaza');
-  return await cambiarEstadoPlaza(registrationId, status);
+  return await setSeatStatus(registrationId, status);
 }
 
-export async function cobrarPlazaDeEvento(
+export async function chargeEventSeat(
   registrationId: string,
   rail: 'cash' | 'yape' | 'bank_transfer',
 ): Promise<PlazaDto> {
@@ -778,35 +778,35 @@ export async function cobrarPlazaDeEvento(
  * alumno con «necesita conexión» teniendo sesión y wifi, y lo encontró el
  * simulador, no la lectura del código.
  */
-export async function bibliotecaDelGimnasio(): Promise<BibliotecaDto> {
+export async function gymLibrary(): Promise<BibliotecaDto> {
   exigeServidor('Ver las rutinas');
-  return await fetchRutinas();
+  return await fetchRoutines();
 }
 
-export async function rutinaDelGimnasio(routineId: string): Promise<RutinaDetalleDto> {
+export async function gymRoutine(routineId: string): Promise<RoutineDetailDto> {
   exigeServidor('Ver una rutina');
-  return await fetchRutina(routineId);
+  return await fetchRoutine(routineId);
 }
 
 /** Sesión de la persona, del rol que sea: la del alumno también vale. */
-function exigeSesion(que: string): void {
-  if (!haySesion()) {
-    throw new Error(`${que} necesita que hayas entrado con tu cuenta.`);
+function requireSession(which: string): void {
+  if (!hasSession()) {
+    throw new Error(`${which} necesita que hayas entrado con tu cuenta.`);
   }
 }
 
 /** La del alumno, por su membresía en ese local. */
-export async function bibliotecaDeMiGimnasio(membershipId: string): Promise<BibliotecaDto> {
-  exigeSesion('Ver las rutinas de tu gimnasio');
-  return await fetchRutinasDeMiGimnasio(membershipId);
+export async function myGymLibrary(membershipId: string): Promise<BibliotecaDto> {
+  requireSession('Ver las rutinas de tu gimnasio');
+  return await fetchMyGymRoutines(membershipId);
 }
 
-export async function rutinaDeMiGimnasio(
+export async function myGymRoutine(
   membershipId: string,
   routineId: string,
-): Promise<RutinaDetalleDto> {
-  exigeSesion('Ver una rutina');
-  return await fetchRutinaDeMiGimnasio(membershipId, routineId);
+): Promise<RoutineDetailDto> {
+  requireSession('Ver una rutina');
+  return await fetchMyGymRoutine(membershipId, routineId);
 }
 
 /**
@@ -817,35 +817,35 @@ export async function rutinaDeMiGimnasio(
  * exigirle sesión para ver el video que el gimnasio publicó para atraerlo sería
  * cerrarle la puerta con la que se le estaba invitando a entrar.
  */
-export async function rutinaPublica(
+export async function publicRoutine(
   slug: string,
   routineId: string,
-): Promise<RutinaDetalleDto> {
-  return await fetchRutinaPublica(slug, routineId);
+): Promise<RoutineDetailDto> {
+  return await fetchPublicRoutine(slug, routineId);
 }
 
-export async function guardarRutina(
+export async function saveRoutine(
   routineId: string | null,
-  rutina: RutinaEscrita,
-): Promise<RutinaDetalleDto> {
+  routine: RoutineInput,
+): Promise<RoutineDetailDto> {
   exigeServidor('Guardar una rutina');
-  return routineId === null ? await crearRutina(rutina) : await editarRutina(routineId, rutina);
+  return routineId === null ? await createRoutine(routine) : await editRoutine(routineId, routine);
 }
 
-export async function publicarRutina(
+export async function publishRoutine(
   routineId: string,
   status: 'draft' | 'published',
-): Promise<RutinaDto> {
+): Promise<RoutineDto> {
   exigeServidor('Publicar una rutina');
-  return await cambiarEstadoRutina(routineId, status);
+  return await setRoutineStatus(routineId, status);
 }
 
-export async function cambiarPublicoDeRutina(
+export async function setRoutineAudience(
   routineId: string,
   visibility: 'public' | 'members',
-): Promise<RutinaDto> {
+): Promise<RoutineDto> {
   exigeServidor('Cambiar quién ve la rutina');
-  return await cambiarPublicoRutina(routineId, visibility);
+  return await setRoutineVisibility(routineId, visibility);
 }
 
 /**
@@ -862,7 +862,7 @@ export async function cambiarPublicoDeRutina(
  * Si el paso 2 o el 3 fallan queda una fila `pending` sin archivo, y eso es
  * exactamente lo que `pending` existe para representar: la rutina no la sirve.
  */
-export async function subirVideoDeRutina(input: {
+export async function uploadRoutineVideo(input: {
   readonly fileUri: string;
   readonly contentType: string;
   readonly sizeBytes?: number;
@@ -871,32 +871,32 @@ export async function subirVideoDeRutina(input: {
 }): Promise<string> {
   exigeServidor('Subir un video');
 
-  const permiso = await pedirSubidaDeVideo({
+  const permit = await requestVideoUpload({
     contentType: input.contentType,
     ...(input.sizeBytes === undefined ? {} : { sizeBytes: input.sizeBytes }),
     ...(input.originalName === undefined ? {} : { originalName: input.originalName }),
   });
 
-  await subirArchivoDeVideo({
-    permiso,
+  await uploadVideoFile({
+    permit,
     fileUri: input.fileUri,
     ...(input.onProgreso === undefined ? {} : { onProgreso: input.onProgreso }),
   });
 
-  await confirmarSubidaDeVideo(permiso.assetId);
-  return permiso.assetId;
+  await confirmarSubidaDeVideo(permit.assetId);
+  return permit.assetId;
 }
 
-export async function eliminarRutina(routineId: string): Promise<void> {
+export async function removeRoutine(routineId: string): Promise<void> {
   exigeServidor('Borrar una rutina');
-  await borrarRutina(routineId);
+  await deleteRoutine(routineId);
 }
 
-export async function guardarPreciosDelLocal(
-  precios: PreciosDelLocal,
-): Promise<PreciosDelLocal> {
+export async function saveGymPricing(
+  pricing: GymPricing,
+): Promise<GymPricing> {
   exigeServidor('Guardar lo que cobras');
-  return await guardarPrecios(precios);
+  return await savePricing(pricing);
 }
 
 /**
@@ -906,12 +906,12 @@ export async function guardarPreciosDelLocal(
  * hasta ahora no habia forma de llegar a ellas: cancelar las sacaba del padron y
  * su `membershipId` dejaba de aparecer en ninguna respuesta.
  */
-export async function bajasDelGimnasio(): Promise<readonly RosterEntry[]> {
-  if (conServidor() === null) return [];
-  const todos = await fetchRoster(true);
-  return todos
-    .filter((entrada) => entrada.subscription.status === 'canceled')
-    .map((entrada) => ({ user: entrada.user, view: { ...entrada, attendances: [], charges: [] } }));
+export async function gymDeletions(): Promise<readonly RosterEntry[]> {
+  if (withServer() === null) return [];
+  const all = await fetchRoster(true);
+  return all
+    .filter((entry) => entry.subscription.status === 'canceled')
+    .map((entry) => ({ user: entry.user, view: { ...entry, attendances: [], charges: [] } }));
 }
 
 /**
@@ -934,7 +934,7 @@ export async function bajasDelGimnasio(): Promise<readonly RosterEntry[]> {
  * cancelo y vuelve. Sin el id, el mostrador lee "ya existe" y se queda sin saber
  * a donde ir.
  */
-export class YaEnElPadron extends Error {
+export class AlreadyInRoster extends Error {
   constructor(
     message: string,
     readonly membershipId: string | null,
@@ -944,31 +944,31 @@ export class YaEnElPadron extends Error {
   }
 }
 
-export async function inscribirAlumno(input: {
+export async function enrollStudent(input: {
   readonly name?: string;
   readonly documentId: string;
   readonly phone?: string;
   readonly email?: string;
   readonly planId: string;
 }): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
-  const sesion = conServidor();
-  if (sesion === null) throw new Error('Inscribir necesita una sesión de turno abierta.');
+  const session = withServer();
+  if (session === null) throw new Error('Inscribir necesita una sesión de turno abierta.');
 
-  let salida;
+  let outcome;
   try {
-    salida = await enrollMember(input);
+    outcome = await enrollMember(input);
   } catch (causa) {
     if (causa instanceof ApiError && causa.status === 409) {
-      const cuerpo = causa.body as { readonly membershipId?: unknown } | null;
-      const id = typeof cuerpo?.membershipId === 'string' ? cuerpo.membershipId : null;
-      throw new YaEnElPadron(causa.message, id);
+      const body = causa.body as { readonly membershipId?: unknown } | null;
+      const id = typeof body?.membershipId === 'string' ? body.membershipId : null;
+      throw new AlreadyInRoster(causa.message, id);
     }
     throw causa;
   }
-  await refrescarPadron(sesion);
+  await refreshRoster(session);
   return {
-    membershipId: salida.view.membership.id,
-    identidadReutilizada: salida.reusedIdentity,
+    membershipId: outcome.view.membership.id,
+    identidadReutilizada: outcome.reusedIdentity,
   };
 }
 
@@ -980,6 +980,6 @@ export async function inscribirAlumno(input: {
  * los datos de alguien que entrena en otro.
  */
 export async function existeIdentidad(email: string): Promise<boolean> {
-  if (conServidor() === null) return false;
+  if (withServer() === null) return false;
   return (await identityExists(email)).existe;
 }

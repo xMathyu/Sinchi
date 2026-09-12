@@ -20,11 +20,11 @@ import { Card, Divider, Dot, Eyebrow, Logo, Row, Stack, Text } from '../src/desi
 import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
-import { cambiarDeLocal, cambiarDeModo, signOut } from '../src/data/auth';
+import { switchGym, switchMode, signOut } from '../src/data/auth';
 import { fijarMiPin } from '../src/data/actions';
 import { fetchModes, type AvailableModesDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
-import { cargarDemostracion, resetState, setRole } from '../src/data/store';
+import { loadDemo, resetState, setRole } from '../src/data/store';
 
 const ROLES: readonly { readonly value: AppRole; readonly label: string; readonly hint: string }[] =
   [
@@ -46,8 +46,8 @@ export default function SettingsScreen() {
   // alumno y un recepcionista no tiene membresia donde trabaja. `state.user`
   // sigue siendo el de demostracion, asi que mostrarlo aqui le ponia a la
   // recepcionista el nombre de Mathyu Quispe.
-  const esTurno = session.status === 'signed_in' && session.session.role !== 'student';
-  const enTurno = tenants.find((t) => t.id === staff.tenantId);
+  const isStaffSession = session.status === 'signed_in' && session.session.role !== 'student';
+  const onShift = tenants.find((t) => t.id === staff.tenantId);
 
   /**
    * Los dos lados de esta persona.
@@ -60,9 +60,9 @@ export default function SettingsScreen() {
    * visita poco, y el dato caduca —el dueno puede inscribirse hoy— asi que
    * guardarlo costaria mas que volver a pedirlo.
    */
-  const [modos, setModos] = useState<AvailableModesDto | null>(null);
-  const [cambiando, setCambiando] = useState(false);
-  const [errorDeModo, setErrorDeModo] = useState<string | null>(null);
+  const [modes, setModes] = useState<AvailableModesDto | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (session.status !== 'signed_in') return;
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
     let vivo = true;
     void fetchModes().then(
       (m) => {
-        if (vivo) setModos(m);
+        if (vivo) setModes(m);
       },
       () => {
         // Sin respuesta no se ensena nada. Un boton que lleva a una ruta que no
@@ -100,11 +100,11 @@ export default function SettingsScreen() {
    * rechaza a quien no trabaja en ningún gimnasio, así que ofrecérselo sería
    * ofrecer un botón que la api contesta que no.
    */
-  const otroModo: 'student' | 'staff' | null =
-    modos === null ? null : esTurno ? 'student' : modos.staff.length > 0 ? 'staff' : null;
+  const otherMode: 'student' | 'staff' | null =
+    modes === null ? null : isStaffSession ? 'student' : modes.staff.length > 0 ? 'staff' : null;
 
   /** El puesto al que lleva «volver»: el de siempre, como hace la api. */
-  const puestoPorDefecto = modos?.staff[0] ?? null;
+  const defaultPost = modes?.staff[0] ?? null;
 
   /**
    * Los OTROS locales de esta persona.
@@ -114,10 +114,10 @@ export default function SettingsScreen() {
    * hacerle tomar dos decisiones para volver de una.
    */
   const tenantActual = session.status === 'signed_in' ? session.session.tenantId : null;
-  const otrosLocales =
-    modos === null || !esTurno
+  const otherGyms =
+    modes === null || !isStaffSession
       ? []
-      : modos.staff.filter((puesto) => puesto.tenantId !== tenantActual);
+      : modes.staff.filter((post) => post.tenantId !== tenantActual);
 
   return (
     <Screen scroll>
@@ -137,18 +137,18 @@ export default function SettingsScreen() {
           <Logo size={28} />
           <Stack gap={1} style={{ flex: 1 }}>
             <Text variant="heading" weight="semibold">
-              {esTurno ? staff.displayName : user.name}
+              {isStaffSession ? staff.displayName : user.name}
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {esTurno
-                ? `${staff.role === 'owner' ? 'Dueño' : 'Recepción'}${enTurno === undefined ? '' : ` · ${enTurno.name}`}`
+              {isStaffSession
+                ? `${staff.role === 'owner' ? 'Dueño' : 'Recepción'}${onShift === undefined ? '' : ` · ${onShift.name}`}`
                 : `${user.phone} · identidad Sinchi`}
             </Text>
           </Stack>
         </Row>
       </Card>
 
-      {esTurno && <PinDeTurno />}
+      {isStaffSession && <ShiftPin />}
 
       {/* Las dos caras de la misma persona, a un toque.
           La api sabía hacerlo desde el principio —`switch-to-student`— pero
@@ -156,26 +156,26 @@ export default function SettingsScreen() {
           tiene fila en `staff`: quien la tenía no veía nunca su propia
           billetera. Ver `otroModo` para por qué la ida no pide condiciones y
           la vuelta sí. */}
-      {otroModo !== null && (
+      {otherMode !== null && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>Modo</Eyebrow>
           <Pressable
             accessibilityRole="button"
-            disabled={cambiando}
+            disabled={switching}
             onPress={() => {
-              setCambiando(true);
-              setErrorDeModo(null);
-              void cambiarDeModo(otroModo).then(
+              setSwitching(true);
+              setModeError(null);
+              void switchMode(otherMode).then(
                 () => {
                   // Sin `replace` explícito: `SessionRouter` reacciona al cambio
                   // de sesión y lleva a la zona que toca. Cerrar ajustes deja
                   // atrás una pantalla que ya no es de este rol.
-                  setCambiando(false);
+                  setSwitching(false);
                   router.back();
                 },
                 (error: unknown) => {
-                  setCambiando(false);
-                  setErrorDeModo(
+                  setSwitching(false);
+                  setModeError(
                     error instanceof Error ? error.message : 'No se pudo cambiar de modo.',
                   );
                 },
@@ -186,23 +186,23 @@ export default function SettingsScreen() {
               <Row gap={12}>
                 <Stack gap={2} style={{ flex: 1 }}>
                   <Text variant="bodySmall" weight="semibold">
-                    {otroModo === 'student'
+                    {otherMode === 'student'
                       ? 'Ver como alumno'
-                      : `Volver a ${puestoPorDefecto?.tenantName ?? 'tu gimnasio'}`}
+                      : `Volver a ${defaultPost?.tenantName ?? 'tu gimnasio'}`}
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {otroModo === 'student'
+                    {otherMode === 'student'
                       ? // Sin ficha la billetera está vacía, y decir «tu plan y
                         // tu QR» prometería algo que esa pantalla no tiene.
-                        (modos?.student ?? false)
+                        (modes?.student ?? false)
                         ? 'Tu plan, tu QR y tu historial en este gimnasio'
                         : 'Tu billetera y el directorio de gimnasios de la red'
-                      : puestoPorDefecto?.role === 'owner'
+                      : defaultPost?.role === 'owner'
                         ? 'El padrón, los planes y los reportes del local'
                         : 'Escanear, marcar manual y cobrar'}
                   </Text>
                 </Stack>
-                {cambiando ? (
+                {switching ? (
                   <ActivityIndicator color={theme.colors.textSecondary} />
                 ) : (
                   <Text variant="body" color={theme.colors.textSecondary}>
@@ -212,9 +212,9 @@ export default function SettingsScreen() {
               </Row>
             </Card>
           </Pressable>
-          {errorDeModo !== null && (
+          {modeError !== null && (
             <Text variant="captionSmall" color={theme.semaphore.bad}>
-              {errorDeModo}
+              {modeError}
             </Text>
           )}
           <Text variant="micro" color={theme.colors.textFaint}>
@@ -230,26 +230,26 @@ export default function SettingsScreen() {
           solo sabía llevarlo a uno: el `tenantId` va firmado en el token, así
           que cambiar de local es pedir un token nuevo. Solo aparece si de
           verdad tiene otro. */}
-      {otrosLocales.length > 0 && (
+      {otherGyms.length > 0 && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>Tus locales</Eyebrow>
-          {otrosLocales.map((local) => (
+          {otherGyms.map((local) => (
             <Pressable
               key={local.tenantId}
               accessibilityRole="button"
               accessibilityLabel={`Cambiar a ${local.tenantName ?? 'el otro local'}`}
-              disabled={cambiando}
+              disabled={switching}
               onPress={() => {
-                setCambiando(true);
-                setErrorDeModo(null);
-                void cambiarDeLocal(local.tenantId).then(
+                setSwitching(true);
+                setModeError(null);
+                void switchGym(local.tenantId).then(
                   () => {
-                    setCambiando(false);
+                    setSwitching(false);
                     router.back();
                   },
                   (error: unknown) => {
-                    setCambiando(false);
-                    setErrorDeModo(
+                    setSwitching(false);
+                    setModeError(
                       error instanceof Error ? error.message : 'No se pudo cambiar de local.',
                     );
                   },
@@ -266,7 +266,7 @@ export default function SettingsScreen() {
                       {local.role === 'owner' ? 'Dueño' : 'Recepción'}
                     </Text>
                   </Stack>
-                  {cambiando ? (
+                  {switching ? (
                     <ActivityIndicator color={theme.colors.textSecondary} />
                   ) : (
                     <Text variant="body" color={theme.colors.textSecondary}>
@@ -413,9 +413,9 @@ export default function SettingsScreen() {
         {session.status === 'signed_in' && (
           <Stack gap={10} style={{ marginTop: 24 }}>
             <Eyebrow>Sesión</Eyebrow>
-            {esTurno && (
+            {isStaffSession && (
               <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                El equipo sigue registrado en {enTurno?.name ?? 'este gimnasio'}: al cerrar,
+                El equipo sigue registrado en {onShift?.name ?? 'este gimnasio'}: al cerrar,
                 la siguiente persona abre su turno con su PIN, sin volver a pegar el
                 token del dueño.
               </Text>
@@ -428,7 +428,7 @@ export default function SettingsScreen() {
                 // cerrar turno no hay ninguno que olvidar —el equipo del
                 // mostrador no genera QR— y borrarlo tocaria el del dueño de
                 // este telefono, que no es lo que se pidió.
-                void signOut({ forgetTotpSecret: !esTurno }).then(() => {
+                void signOut({ forgetTotpSecret: !isStaffSession }).then(() => {
                   resetState();
                   router.replace('/login');
                 });
@@ -436,7 +436,7 @@ export default function SettingsScreen() {
             >
               <Card radius={theme.radii.lg}>
                 <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
-                  {esTurno ? 'Cerrar turno' : 'Cerrar sesión'}
+                  {isStaffSession ? 'Cerrar turno' : 'Cerrar sesión'}
                 </Text>
               </Card>
             </Pressable>
@@ -448,7 +448,7 @@ export default function SettingsScreen() {
                 baja a quien solo venía a cambiar el tema. */}
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push('/eliminar-cuenta')}
+              onPress={() => router.push('/delete-account')}
               hitSlop={8}
               style={{ paddingVertical: 6, alignSelf: 'flex-start' }}
             >
@@ -469,7 +469,7 @@ export default function SettingsScreen() {
             onPress={() => {
               // Recarga la demostracion, no vacia el store: quien toca esto
               // esta DENTRO del modo demostracion y quiere empezarlo de nuevo.
-              cargarDemostracion();
+              loadDemo();
               router.replace('/');
             }}
           >
@@ -524,12 +524,12 @@ function PaletteSample({
  * único sitio donde se marca y se cobra. `shift.tsx` remitía a una pantalla del
  * dueño que nunca se escribió.
  */
-function PinDeTurno() {
+function ShiftPin() {
   const theme = useTheme();
   const [pin, setPin] = useState('');
   const [repetido, setRepetido] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const coincide = pin.length >= 4 && pin === repetido;
 
@@ -544,7 +544,7 @@ function PinDeTurno() {
           </Text>
           <TextInput
             value={pin}
-            onChangeText={(valor) => setPin(valor.replace(/\D/g, '').slice(0, 6))}
+            onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))}
             placeholder="PIN nuevo"
             placeholderTextColor={theme.colors.textPlaceholder}
             keyboardType="number-pad"
@@ -561,7 +561,7 @@ function PinDeTurno() {
           />
           <TextInput
             value={repetido}
-            onChangeText={(valor) => setRepetido(valor.replace(/\D/g, '').slice(0, 6))}
+            onChangeText={(value) => setRepetido(value.replace(/\D/g, '').slice(0, 6))}
             placeholder="Repítelo"
             placeholderTextColor={theme.colors.textPlaceholder}
             keyboardType="number-pad"
@@ -578,31 +578,31 @@ function PinDeTurno() {
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !coincide || guardando }}
+            accessibilityState={{ disabled: !coincide || saving }}
             onPress={() => {
-              if (!coincide || guardando) return;
-              setGuardando(true);
-              setAviso(null);
+              if (!coincide || saving) return;
+              setSaving(true);
+              setNotice(null);
               void fijarMiPin(pin)
                 .then(() => {
-                  setAviso('PIN guardado. Ya puedes abrir turno con él.');
+                  setNotice('PIN guardado. Ya puedes abrir turno con él.');
                   setPin('');
                   setRepetido('');
                 })
                 .catch((causa: unknown) => {
-                  setAviso(causa instanceof Error ? causa.message : 'No se pudo guardar el PIN.');
+                  setNotice(causa instanceof Error ? causa.message : 'No se pudo guardar el PIN.');
                 })
-                .finally(() => setGuardando(false));
+                .finally(() => setSaving(false));
             }}
-            style={{ opacity: coincide && !guardando ? 1 : 0.4 }}
+            style={{ opacity: coincide && !saving ? 1 : 0.4 }}
           >
             <Text variant="bodySmall" weight="semibold" color={theme.semaphore.ok}>
-              {guardando ? 'Guardando…' : 'Guardar PIN'}
+              {saving ? 'Guardando…' : 'Guardar PIN'}
             </Text>
           </Pressable>
-          {aviso === null ? null : (
+          {notice === null ? null : (
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {aviso}
+              {notice}
             </Text>
           )}
           {pin.length > 0 && repetido.length > 0 && !coincide ? (

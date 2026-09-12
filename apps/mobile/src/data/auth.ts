@@ -60,10 +60,10 @@ export type SignInOutcome =
  */
 export async function completeGoogleSignIn(
   googleIdToken: string,
-  datos: DatosDeRegistro = {},
+  details: SignUpDetails = {},
 ): Promise<SignInOutcome> {
   try {
-    return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken), datos);
+    return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken), details);
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }
@@ -76,7 +76,7 @@ export async function completeGoogleSignIn(
  * pendiente. Es lo que evita la pregunta absurda: pedirle otra vez, al reservar
  * una clase gratis, el nombre y el celular que acaba de dar.
  */
-export interface DatosDeRegistro {
+export interface SignUpDetails {
   readonly fullName?: string;
   readonly phone?: string;
 }
@@ -93,10 +93,10 @@ export async function completeEmailSignIn(
   email: string,
   password: string,
   mode: 'signIn' | 'signUp',
-  datos: DatosDeRegistro = {},
+  details: SignUpDetails = {},
 ): Promise<SignInOutcome> {
   try {
-    return await exchangeForSinchiSession(await signInWithEmail(email, password, mode), datos);
+    return await exchangeForSinchiSession(await signInWithEmail(email, password, mode), details);
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }
@@ -111,7 +111,7 @@ export async function completeEmailSignIn(
  */
 async function exchangeForSinchiSession(
   firebase: FirebaseSignIn,
-  datos: DatosDeRegistro = {},
+  details: SignUpDetails = {},
 ): Promise<SignInOutcome> {
   const firebaseIdToken = firebase.idToken;
 
@@ -137,25 +137,25 @@ async function exchangeForSinchiSession(
    * ese fallo dejaba la app colgada en el splash. Un dato a medias no vale menos:
    * vale CERO, y hay que tratarlo como ausente.
    */
-  const util = (valor: string | null | undefined, minimo: number): string | undefined => {
-    const limpio = (valor ?? '').trim();
-    return limpio.length >= minimo ? limpio : undefined;
+  const util = (value: string | null | undefined, minimo: number): string | undefined => {
+    const trimmed = (value ?? '').trim();
+    return trimmed.length >= minimo ? trimmed : undefined;
   };
 
-  const conDatos: DatosDeRegistro = {
-    fullName: util(datos.fullName, 2) ?? util(guardado.fullName, 2),
-    phone: util(datos.phone, 6) ?? util(guardado.phone, 6),
+  const withDetails: SignUpDetails = {
+    fullName: util(details.fullName, 2) ?? util(guardado.fullName, 2),
+    phone: util(details.phone, 6) ?? util(guardado.phone, 6),
   };
 
-  const result = await signInWithGoogle(firebaseIdToken, conDatos);
+  const result = await signInWithGoogle(firebaseIdToken, withDetails);
 
   if (!result.linked) {
     // El token de Firebase se conserva: es la unica credencial de quien todavia
     // no tiene ficha, y con ella puede reservar una clase gratis mientras
     // recepcion confirma el codigo. Con el viajan sus datos, para no volver a
     // preguntarselos al reservar.
-    const fullName = result.claim.displayName ?? conDatos.fullName ?? null;
-    const phone = result.claim.phone ?? conDatos.phone ?? null;
+    const fullName = result.claim.displayName ?? withDetails.fullName ?? null;
+    const phone = result.claim.phone ?? withDetails.phone ?? null;
     await saveAccountDetails({ fullName, phone });
 
     setUnlinked({
@@ -190,7 +190,7 @@ async function exchangeForSinchiSession(
  * Devuelve `false` cuando no hay credencial, cuando ya no vale, o cuando no se
  * llegó a la api: en los tres casos lo correcto es mostrar el login.
  */
-export async function restaurarCuentaDeFirebase(): Promise<boolean> {
+export async function restoreFirebaseAccount(): Promise<boolean> {
   // NADA de aqui puede lanzar. Esto corre en el arranque, antes de que exista
   // una pantalla: una excepcion deja la sesion en `loading` y la app colgada en
   // el splash para siempre. Pasó — con un 400 por mandar un celular a medias.
@@ -322,10 +322,10 @@ export async function signOut(options: { readonly forgetTotpSecret: boolean }): 
  * El secreto del QR NO se olvida: sigue siendo la misma persona en el mismo
  * teléfono, y borrarlo obligaría a resembrarlo al volver a alumno.
  */
-export async function cambiarDeModo(destino: 'student' | 'staff'): Promise<void> {
-  const sesion = destino === 'student' ? await switchToStudent() : await switchToStaff();
+export async function switchMode(destino: 'student' | 'staff'): Promise<void> {
+  const session = destino === 'student' ? await switchToStudent() : await switchToStaff();
   resetState();
-  await saveSession(sesion);
+  await saveSession(session);
 }
 
 /**
@@ -338,10 +338,10 @@ export async function cambiarDeModo(destino: 'student' | 'staff'): Promise<void>
  * las cifras del local equivocado y creyendo que son las del que acaba de
  * elegir.
  */
-export async function cambiarDeLocal(tenantId: string): Promise<void> {
-  const sesion = await switchToStaff(tenantId);
+export async function switchGym(tenantId: string): Promise<void> {
+  const session = await switchToStaff(tenantId);
   resetState();
-  await saveSession(sesion);
+  await saveSession(session);
 }
 
 // ---------------------------------------------------------------------------
@@ -390,8 +390,8 @@ export async function ensureAccessCodeSecret(userId: string): Promise<boolean> {
     const [secreto, esSuyo] = await Promise.all([loadSecret(), totpSecretBelongsTo(userId)]);
     if (secreto !== null && esSuyo) return true;
 
-    const enlace = await linkDevice();
-    await adoptTotpSecret(enlace.secret, enlace.userId);
+    const href = await linkDevice();
+    await adoptTotpSecret(href.secret, href.userId);
     return true;
   } catch {
     // Sin red no se puede sembrar, y no es fatal: quien ya está vinculado sigue

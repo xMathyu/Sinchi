@@ -58,7 +58,7 @@ export interface PendingClaim {
  * —quien controla ese buzon— y esto es lo que la persona dice de si misma. No
  * autentica nada; solo evita volver a preguntarselo al reservar.
  */
-export interface DatosDeRegistro {
+export interface SignUpDetails {
   readonly fullName?: string | undefined;
   readonly phone?: string | undefined;
 }
@@ -175,10 +175,10 @@ export class AccountLinkService {
    */
   async issueClaim(
     identity: VerifiedIdentity,
-    datos: DatosDeRegistro = {},
+    details: SignUpDetails = {},
   ): Promise<PendingClaim> {
-    const nombre = datos.fullName?.trim();
-    const celular = datos.phone?.trim();
+    const writtenName = details.fullName?.trim();
+    const writtenPhone = details.phone?.trim();
 
     return withoutTenantIsolation(this.db, async (tx) => {
       await this.purgeExpired(tx);
@@ -204,8 +204,8 @@ export class AccountLinkService {
         // Si esta vez llegan datos y la fila no los tenia, se completan: quien
         // entro con Google y luego escribio su celular no deberia tener que
         // repetirlo al reservar.
-        const displayName = nombre !== undefined && nombre.length > 0 ? nombre : existing.displayName;
-        const phone = celular !== undefined && celular.length > 0 ? celular : existing.phone;
+        const displayName = writtenName !== undefined && writtenName.length > 0 ? writtenName : existing.displayName;
+        const phone = writtenPhone !== undefined && writtenPhone.length > 0 ? writtenPhone : existing.phone;
 
         if (displayName !== existing.displayName || phone !== existing.phone) {
           await tx
@@ -238,8 +238,8 @@ export class AccountLinkService {
             email: identity.email,
             // El nombre que escribio manda sobre el de Google: es como quiere
             // que lo llamen, y con correo y contrasena Google no da ninguno.
-            displayName: nombre !== undefined && nombre.length > 0 ? nombre : identity.displayName,
-            phone: celular !== undefined && celular.length > 0 ? celular : null,
+            displayName: writtenName !== undefined && writtenName.length > 0 ? writtenName : identity.displayName,
+            phone: writtenPhone !== undefined && writtenPhone.length > 0 ? writtenPhone : null,
             code,
             expiresAt,
           })
@@ -252,8 +252,8 @@ export class AccountLinkService {
             expiresAt,
             email: identity.email,
             displayName:
-              nombre !== undefined && nombre.length > 0 ? nombre : identity.displayName,
-            phone: celular ?? null,
+              writtenName !== undefined && writtenName.length > 0 ? writtenName : identity.displayName,
+            phone: writtenPhone ?? null,
           };
         }
       }
@@ -272,7 +272,7 @@ export class AccountLinkService {
    * cuenta sin ficha no pertenece a ningun gimnasio— y la busqueda es por el uid
    * que Firebase ya verifico.
    */
-  async datosDeRegistro(
+  async signUpDetails(
     firebaseUid: string,
   ): Promise<{ readonly fullName: string | null; readonly phone: string | null } | null> {
     return withoutTenantIsolation(this.db, async (tx) => {

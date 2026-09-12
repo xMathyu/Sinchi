@@ -15,7 +15,7 @@ import { semaphoreStyle } from '@sinchi/ui';
 import { Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
 import { Screen, TintedScreen } from '../../src/design/screen';
-import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
+import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import {
   useAccessCode,
@@ -55,15 +55,15 @@ export default function QrScreen() {
     if (errorDeCarga !== null) {
       return (
         <Screen>
-          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+          <OfflineState error={errorDeCarga} onReintentar={reintentar} />
         </Screen>
       );
     }
     return (
       <Screen>
-        <EstadoVacio
-          titulo="Todavía no tienes un código"
-          cuerpo="Tu código aparece aquí en cuanto un gimnasio te agregue a su padrón. Es lo que el recepcionista escanea en la puerta."
+        <EmptyState
+          title="Todavía no tienes un código"
+          body="Tu código aparece aquí en cuanto un gimnasio te agregue a su padrón. Es lo que el recepcionista escanea en la puerta."
           pie="Acércate al mostrador con tu DNI: te dan de alta en un minuto."
         />
       </Screen>

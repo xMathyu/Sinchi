@@ -71,16 +71,16 @@ export default function InviteScreen() {
         // Se intenta crear la cuenta y, si el correo ya tiene una, se entra con
         // ella. Preguntarle a alguien "¿es tu primera vez?" cuando el servidor
         // puede averiguarlo solo es una decision que no le corresponde tomar.
-        let entrada: Awaited<ReturnType<typeof signInWithEmail>>;
+        let entry: Awaited<ReturnType<typeof signInWithEmail>>;
         try {
-          entrada = await signInWithEmail(email, password, 'signUp');
+          entry = await signInWithEmail(email, password, 'signUp');
         } catch (cause) {
           const code = (cause as { code?: string } | null)?.code ?? '';
           if (!code.startsWith('EMAIL_EXISTS')) throw cause;
-          entrada = await signInWithEmail(email, password, 'signIn');
+          entry = await signInWithEmail(email, password, 'signIn');
         }
 
-        const outcome = await acceptInvite(token, entrada.idToken);
+        const outcome = await acceptInvite(token, entry.idToken);
         if (outcome.kind === 'error') {
           setError(outcome.message);
           return;

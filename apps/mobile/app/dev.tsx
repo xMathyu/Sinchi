@@ -23,7 +23,7 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitive
 import { useTheme } from '../src/design/theme';
 import { getApiBase, setApiBase } from '../src/data/api';
 import { enterDemoMode, saveSession } from '../src/data/session';
-import { cargarDemostracion } from '../src/data/store';
+import { loadDemo } from '../src/data/store';
 
 /**
  * Atajos a las cuentas que siembra `npm run db:seed`.
@@ -33,7 +33,7 @@ import { cargarDemostracion } from '../src/data/store';
  * con un 404 que parece un problema de la api. Por eso arriba hay un campo para
  * escribir cualquier telefono del padron.
  */
-const CUENTAS = [
+const ACCOUNTS = [
   { phone: '+51987654321', label: 'Mathyu Quispe', detail: 'alumno · 3 gimnasios' },
   { phone: '+51987000111', label: 'Ana Ríos', detail: 'recepción · Dojo Shotokan' },
   { phone: '+51987000222', label: 'Carlos Vega', detail: 'recepción · Nova BJJ' },
@@ -136,7 +136,7 @@ export default function DevScreen() {
               onPress={() => {
                 // El store arranca vacio: los datos falsos se cargan aqui, que
                 // es el unico sitio donde alguien los pide a proposito.
-                cargarDemostracion();
+                loadDemo();
                 enterDemoMode();
                 router.replace('/');
               }}
@@ -214,24 +214,24 @@ export default function DevScreen() {
               O usa una de las cuentas de la semilla, si la base las tiene:
             </Text>
 
-            {CUENTAS.map((cuenta) => (
+            {ACCOUNTS.map((account) => (
               <Pressable
-                key={cuenta.phone}
-                onPress={() => void devLogin(cuenta.phone)}
+                key={account.phone}
+                onPress={() => void devLogin(account.phone)}
                 disabled={working !== null}
               >
                 <Card
                   borderColor={theme.colors.hairline}
-                  style={{ opacity: working !== null && working !== cuenta.phone ? 0.4 : 1 }}
+                  style={{ opacity: working !== null && working !== account.phone ? 0.4 : 1 }}
                 >
                   <Row justify="space-between" align="center">
                     <Stack gap={2}>
-                      <Text variant="heading">{cuenta.label}</Text>
+                      <Text variant="heading">{account.label}</Text>
                       <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                        {cuenta.detail}
+                        {account.detail}
                       </Text>
                     </Stack>
-                    {working === cuenta.phone && <ActivityIndicator color={theme.colors.ink} />}
+                    {working === account.phone && <ActivityIndicator color={theme.colors.ink} />}
                   </Row>
                 </Card>
               </Pressable>

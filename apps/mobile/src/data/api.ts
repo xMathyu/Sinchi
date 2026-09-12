@@ -244,11 +244,11 @@ export interface UnlinkedAccountDto {
  */
 export const signInWithGoogle = (
   idToken: string,
-  datos: { readonly fullName?: string; readonly phone?: string } = {},
+  details: { readonly fullName?: string; readonly phone?: string } = {},
 ): Promise<IssuedSessionDto | UnlinkedAccountDto> =>
   request('/auth/google', {
     method: 'POST',
-    body: { idToken, ...datos },
+    body: { idToken, ...details },
     anonymous: true,
   });
 
@@ -322,9 +322,9 @@ export interface GymDetailDto extends GymCardDto {
   /** Las clases concretas que se pueden reservar, ya con fecha. */
   readonly slots: readonly TrialSlot[];
   /** Seminarios y talleres publicados que todavía no han pasado. */
-  readonly events: readonly EventoConCupo[];
+  readonly events: readonly EventWithSeats[];
   /** Las rutinas PÚBLICAS: el escaparate. */
-  readonly routines: readonly RutinaEnLista[];
+  readonly routines: readonly RoutineListItem[];
   /** Cuántas hay solo para alumnos. El número vende; los títulos no se dan. */
   readonly membersOnlyRoutines: number;
 }
@@ -349,7 +349,7 @@ export type BookTrialDto =
       readonly message: { readonly title: string; readonly detail: string };
     };
 
-const reviveTrial = <T extends TrialBooking>(b: T): T => ({ ...b, createdAt: fecha(b.createdAt) });
+const reviveTrial = <T extends TrialBooking>(b: T): T => ({ ...b, createdAt: date(b.createdAt) });
 
 const reviveBooking = (out: BookTrialDto): BookTrialDto =>
   out.booked ? { ...out, booking: reviveTrial(out.booking) } : out;
@@ -358,19 +358,19 @@ export const fetchGyms = (): Promise<readonly GymCardDto[]> =>
   request('/gyms', { anonymous: true });
 
 export const fetchGym = async (slug: string): Promise<GymDetailDto> => {
-  const ficha = await request<GymDetailDto>(`/gyms/${encodeURIComponent(slug)}`, {
+  const record = await request<GymDetailDto>(`/gyms/${encodeURIComponent(slug)}`, {
     anonymous: true,
   });
   // Misma revivida que en la lista del staff: `date` llega como cadena y el tipo
   // promete `PlainDate`.
   return {
-    ...ficha,
-    events: (ficha.events ?? []).map((fila) => ({ ...fila, event: reviveEvento(fila.event) })),
+    ...record,
+    events: (record.events ?? []).map((row) => ({ ...row, event: reviveEvent(row.event) })),
     // `?? []` porque la app se actualiza sola y la api no: contra un despliegue
     // viejo estos campos no vienen, y una lista que no existe rompe la ficha
     // entera del gimnasio.
-    routines: ficha.routines ?? [],
-    membersOnlyRoutines: ficha.membersOnlyRoutines ?? 0,
+    routines: record.routines ?? [],
+    membersOnlyRoutines: record.membersOnlyRoutines ?? 0,
   };
 };
 
@@ -402,11 +402,11 @@ export const bookEvent = (input: {
  * motivo para decir si esperar al siguiente o si ya tenía la suya.
  */
 export type BookEventDto =
-  | { readonly booked: true; readonly registration: PlazaDto; readonly event: EventoDto }
+  | { readonly booked: true; readonly registration: PlazaDto; readonly event: EventDto }
   | {
       readonly booked: false;
       readonly reason: { readonly code: string; readonly paid?: boolean; readonly capacity?: number };
-      readonly event: EventoDto;
+      readonly event: EventDto;
     };
 
 /**
@@ -623,23 +623,23 @@ export interface MeDto {
  * sobrevive al viaje intacto. Esa fue exactamente la razón de elegirlo sobre
  * `Date` para las fechas civiles.
  */
-const fecha = (valor: unknown): Date => new Date(valor as string);
-const fechaOpcional = (valor: unknown): Date | null =>
-  valor === null || valor === undefined ? null : new Date(valor as string);
+const date = (value: unknown): Date => new Date(value as string);
+const optionalDate = (value: unknown): Date | null =>
+  value === null || value === undefined ? null : new Date(value as string);
 
-const reviveUser = (u: User): User => ({ ...u, createdAt: fecha(u.createdAt) });
+const reviveUser = (u: User): User => ({ ...u, createdAt: date(u.createdAt) });
 
 const reviveSubscription = (s: Subscription): Subscription => ({
   ...s,
-  canceledAt: fechaOpcional(s.canceledAt),
+  canceledAt: optionalDate(s.canceledAt),
 });
 
-const reviveCharge = (c: Charge): Charge => ({ ...c, createdAt: fecha(c.createdAt) });
+const reviveCharge = (c: Charge): Charge => ({ ...c, createdAt: date(c.createdAt) });
 
 const reviveAttendance = (a: Attendance): Attendance => ({
   ...a,
-  checkedInAt: fecha(a.checkedInAt),
-  syncedAt: fechaOpcional(a.syncedAt),
+  checkedInAt: date(a.checkedInAt),
+  syncedAt: optionalDate(a.syncedAt),
 });
 
 const reviveView = <T extends MembershipViewDto>(v: T): T => ({
@@ -795,7 +795,7 @@ export const fetchStaffPlans = (): Promise<readonly Plan[]> => request('/staff/p
  * `activeMembers` no es adorno: es la diferencia entre «esto se puede borrar» y
  * «esto lo están pagando catorce personas».
  */
-export interface PlanConUso {
+export interface PlanWithUsage {
   readonly plan: Plan;
   readonly activeMembers: number;
   /** `false` cuando alguien lo tiene: entonces solo se puede archivar. */
@@ -803,7 +803,7 @@ export interface PlanConUso {
 }
 
 /** Lo que se manda al crear o editar. `id` no va: la ruta ya lo dice. */
-export interface PlanEscrito {
+export interface PlanInput {
   readonly name: string;
   readonly type: Plan['type'];
   readonly sessionsPerWeek: number | null;
@@ -813,21 +813,21 @@ export interface PlanEscrito {
 }
 
 /** La lista del dueño: también los archivados, y con cuánta gente tiene cada uno. */
-export const fetchPlanesDelDueno = (): Promise<readonly PlanConUso[]> =>
+export const fetchOwnerPlans = (): Promise<readonly PlanWithUsage[]> =>
   request('/staff/plans/all');
 
-export const crearPlan = (plan: PlanEscrito): Promise<Plan> =>
+export const createPlan = (plan: PlanInput): Promise<Plan> =>
   request('/staff/plans', { method: 'POST', body: plan });
 
-export const editarPlan = (planId: string, plan: PlanEscrito): Promise<Plan> =>
+export const editPlan = (planId: string, plan: PlanInput): Promise<Plan> =>
   request(`/staff/plans/${planId}`, { method: 'POST', body: plan });
 
 /** Archiva o revive. Quien ya lo tiene lo conserva; deja de ofrecerse. */
-export const archivarPlan = (planId: string, active: boolean): Promise<Plan> =>
+export const archivePlan = (planId: string, active: boolean): Promise<Plan> =>
   request(`/staff/plans/${planId}/active`, { method: 'POST', body: { active } });
 
 /** Solo el que nunca se usó. Con un alumno detrás, la api responde 409. */
-export const borrarPlan = (planId: string): Promise<unknown> =>
+export const deletePlan = (planId: string): Promise<unknown> =>
   request(`/staff/plans/${planId}`, { method: 'DELETE' });
 
 /**
@@ -839,7 +839,7 @@ export const borrarPlan = (planId: string): Promise<unknown> =>
  * siempre es un error —dos tatamis, dos clases a la misma hora— y por eso avisa
  * en vez de impedir.
  */
-export interface HorarioConUso {
+export interface ScheduleWithUsage {
   readonly schedule: ClassSchedule;
   readonly active: boolean;
   readonly upcomingTrials: number;
@@ -847,7 +847,7 @@ export interface HorarioConUso {
 }
 
 /** Lo que se manda al crear o editar. `id` no va: la ruta ya lo dice. */
-export interface HorarioEscrito {
+export interface ScheduleInput {
   readonly name: string;
   readonly weekday: number;
   readonly startTime: string;
@@ -858,7 +858,7 @@ export interface HorarioEscrito {
 }
 
 /** La lista del dueño: también los archivados, con sus avisos. */
-export const fetchHorariosDelDueno = (): Promise<readonly HorarioConUso[]> =>
+export const fetchOwnerSchedules = (): Promise<readonly ScheduleWithUsage[]> =>
   request('/staff/schedules/all');
 
 /**
@@ -868,22 +868,22 @@ export const fetchHorariosDelDueno = (): Promise<readonly HorarioConUso[]> =>
  * —así se le cambia la hora al jueves sin tocar la del martes— y «marca tres
  * días» al editar no tiene un significado único.
  */
-export interface HorarioNuevo extends Omit<HorarioEscrito, 'weekday'> {
+export interface NewScheduleInput extends Omit<ScheduleInput, 'weekday'> {
   readonly weekdays: readonly number[];
 }
 
 /** Devuelve TODOS los bloques creados: uno por día marcado, en una transacción. */
-export const crearHorario = (horario: HorarioNuevo): Promise<readonly ClassSchedule[]> =>
-  request('/staff/schedules', { method: 'POST', body: horario });
+export const createSchedule = (schedule: NewScheduleInput): Promise<readonly ClassSchedule[]> =>
+  request('/staff/schedules', { method: 'POST', body: schedule });
 
-export const editarHorario = (
+export const editSchedule = (
   scheduleId: string,
-  horario: HorarioEscrito,
+  schedule: ScheduleInput,
 ): Promise<ClassSchedule> =>
-  request(`/staff/schedules/${scheduleId}`, { method: 'POST', body: horario });
+  request(`/staff/schedules/${scheduleId}`, { method: 'POST', body: schedule });
 
 /** Lo saca del horario publicado sin perderlo: el bloque de temporada vuelve. */
-export const archivarHorario = (
+export const archiveSchedule = (
   scheduleId: string,
   active: boolean,
 ): Promise<ClassSchedule> =>
@@ -895,7 +895,7 @@ export const archivarHorario = (
  * Al revés que un plan: lo que apunta al bloque —asistencias y reservas— lleva
  * copiada la clase y la hora, así que borrarlo no deja historial sin explicar.
  */
-export const borrarHorario = (scheduleId: string): Promise<unknown> =>
+export const deleteSchedule = (scheduleId: string): Promise<unknown> =>
   request(`/staff/schedules/${scheduleId}`, { method: 'DELETE' });
 
 /**
@@ -905,7 +905,7 @@ export const borrarHorario = (scheduleId: string): Promise<unknown> =>
  * el alumno CON PLAN que agota su cupo semanal. La de quien nunca tuvo cupo es
  * un plan de tipo `drop_in`, con su precio en `plans`.
  */
-export interface PreciosDelLocal {
+export interface GymPricing {
   readonly enrollmentFeeCents: number;
   readonly dropInPriceCents: number | null;
   readonly quotaOverflowPolicy: 'block' | 'offer_drop_in';
@@ -913,13 +913,13 @@ export interface PreciosDelLocal {
   readonly trialClassPriceCents: number;
 }
 
-export const fetchPrecios = (): Promise<PreciosDelLocal> => request('/staff/pricing');
+export const fetchPricing = (): Promise<GymPricing> => request('/staff/pricing');
 
 // ---------------------------------------------------------------------------
 // Eventos con fecha: seminarios, talleres, la clase del invitado
 // ---------------------------------------------------------------------------
 
-export interface EventoDto {
+export interface EventDto {
   readonly id: string;
   readonly tenantId: string;
   readonly name: string;
@@ -937,8 +937,8 @@ export interface EventoDto {
 }
 
 /** Un evento con lo que hace falta para decidir sobre él. */
-export interface EventoConCupo {
-  readonly event: EventoDto;
+export interface EventWithSeats {
+  readonly event: EventDto;
   /** Plazas vivas: reservadas, pagadas o no. */
   readonly seatsTaken: number;
   /** `null` cuando el evento no limita el cupo. */
@@ -965,7 +965,7 @@ export interface PlazaDto {
 }
 
 /** Lo que se manda al crear o editar un evento. */
-export interface EventoEscrito {
+export interface EventInput {
   readonly name: string;
   readonly description: string | null;
   readonly instructor: string | null;
@@ -985,48 +985,48 @@ export interface EventoEscrito {
  * Las dos listas son disjuntas: ver el mismo seminario en «lo que viene» y en
  * «lo que pasó» no es más información, es una duda.
  */
-export const fetchEventos = async (
-  opciones: { readonly past?: boolean; readonly drafts?: boolean } = {},
-): Promise<readonly EventoConCupo[]> => {
+export const fetchEvents = async (
+  options: { readonly past?: boolean; readonly drafts?: boolean } = {},
+): Promise<readonly EventWithSeats[]> => {
   const query = [
-    opciones.past === true ? 'past=true' : '',
-    opciones.drafts === true ? 'drafts=true' : '',
+    options.past === true ? 'past=true' : '',
+    options.drafts === true ? 'drafts=true' : '',
   ]
     .filter((p) => p.length > 0)
     .join('&');
-  const eventos = await request<readonly EventoConCupo[]>(
+  const events = await request<readonly EventWithSeats[]>(
     query.length === 0 ? '/staff/events' : `/staff/events?${query}`,
   );
-  return eventos.map((fila) => ({ ...fila, event: reviveEvento(fila.event) }));
+  return events.map((row) => ({ ...row, event: reviveEvent(row.event) }));
 };
 
-export const fetchEvento = async (eventId: string): Promise<EventoConCupo> => {
-  const fila = await request<EventoConCupo>(`/staff/events/${eventId}`);
-  return { ...fila, event: reviveEvento(fila.event) };
+export const fetchEvent = async (eventId: string): Promise<EventWithSeats> => {
+  const row = await request<EventWithSeats>(`/staff/events/${eventId}`);
+  return { ...row, event: reviveEvent(row.event) };
 };
 
-export const crearEvento = (evento: EventoEscrito): Promise<EventoDto> =>
-  request('/staff/events', { method: 'POST', body: evento });
+export const createEvent = (event: EventInput): Promise<EventDto> =>
+  request('/staff/events', { method: 'POST', body: event });
 
-export const editarEvento = (eventId: string, evento: EventoEscrito): Promise<EventoDto> =>
-  request(`/staff/events/${eventId}`, { method: 'POST', body: evento });
+export const editEvent = (eventId: string, event: EventInput): Promise<EventDto> =>
+  request(`/staff/events/${eventId}`, { method: 'POST', body: event });
 
 /** Publicar, volver a borrador o cancelar. Cancelar NO borra a los inscritos. */
-export const cambiarEstadoEvento = (
+export const setEventStatus = (
   eventId: string,
   status: 'draft' | 'published' | 'canceled',
-): Promise<EventoDto> =>
+): Promise<EventDto> =>
   request(`/staff/events/${eventId}/status`, { method: 'POST', body: { status } });
 
 /** Solo el que nadie reservó. Con una plaza vendida, la api responde 409. */
-export const borrarEvento = (eventId: string): Promise<unknown> =>
+export const deleteEvent = (eventId: string): Promise<unknown> =>
   request(`/staff/events/${eventId}`, { method: 'DELETE' });
 
 export const fetchPlazas = (eventId: string): Promise<readonly PlazaDto[]> =>
   request(`/staff/events/${eventId}/registrations`);
 
 /** El mostrador mete a un alumno del padrón. Un rechazo vuelve con 200. */
-export const inscribirEnEvento = (
+export const enrollInEvent = (
   eventId: string,
   membershipId: string,
 ): Promise<
@@ -1038,7 +1038,7 @@ export const inscribirEnEvento = (
     body: { membershipId },
   });
 
-export const cambiarEstadoPlaza = (
+export const setSeatStatus = (
   registrationId: string,
   status: 'booked' | 'attended' | 'no_show' | 'canceled',
 ): Promise<PlazaDto> =>
@@ -1064,10 +1064,10 @@ export const cobrarPlaza = (
  * origen: quien compara la fecha del evento con la de hoy recibe una cadena
  * donde espera `{ year, month, day }`.
  */
-function reviveEvento(raw: EventoDto): EventoDto {
-  const fecha = raw.date as unknown;
-  if (typeof fecha !== 'string') return raw;
-  const [year, month, day] = fecha.split('-').map(Number);
+function reviveEvent(raw: EventDto): EventDto {
+  const date = raw.date as unknown;
+  if (typeof date !== 'string') return raw;
+  const [year, month, day] = date.split('-').map(Number);
   return { ...raw, date: { year: year!, month: month!, day: day! } as PlainDate };
 }
 
@@ -1076,7 +1076,7 @@ function reviveEvento(raw: EventoDto): EventoDto {
 // Rutinas: lo que el gimnasio ensena en video
 // ---------------------------------------------------------------------------
 
-export interface RutinaDto {
+export interface RoutineDto {
   readonly id: string;
   readonly tenantId: string;
   readonly title: string;
@@ -1096,7 +1096,7 @@ export interface RutinaDto {
   readonly updatedAt: string;
 }
 
-export interface PasoDto {
+export interface StepDto {
   readonly id: string;
   readonly routineId: string;
   readonly position: number;
@@ -1109,8 +1109,8 @@ export interface PasoDto {
 }
 
 /** Una rutina en la lista. Sin los pasos: la ficha del gimnasio se abre con datos. */
-export interface RutinaEnLista {
-  readonly routine: RutinaDto;
+export interface RoutineListItem {
+  readonly routine: RoutineDto;
   readonly itemCount: number;
   /**
    * El video que representa a la rutina, elegido por la api: el suyo o el del
@@ -1129,7 +1129,7 @@ export interface RutinaEnLista {
 }
 
 export interface BibliotecaDto {
-  readonly routines: readonly RutinaEnLista[];
+  readonly routines: readonly RoutineListItem[];
   /**
    * Cuantas se pierde quien no es alumno.
    *
@@ -1147,8 +1147,8 @@ export interface BibliotecaDto {
  * los videos ni las instrucciones —eso lo garantiza la api, no la pantalla— y
  * si el titulo y de que va, que es lo que hace querer entrar.
  */
-export type RutinaDetalleDto =
-  | { readonly unlocked: true; readonly card: RutinaEnLista; readonly items: readonly PasoDto[] }
+export type RoutineDetailDto =
+  | { readonly unlocked: true; readonly card: RoutineListItem; readonly items: readonly StepDto[] }
   | {
       readonly unlocked: false;
       readonly reason: { readonly code: 'not_published' | 'members_only' };
@@ -1162,7 +1162,7 @@ export type RutinaDetalleDto =
     };
 
 /** Lo que se manda al crear o editar. */
-export interface PasoEscrito {
+export interface StepInput {
   readonly title: string;
   readonly instructions: string | null;
   readonly videoUrl: string | null;
@@ -1170,7 +1170,7 @@ export interface PasoEscrito {
   readonly prescription: string | null;
 }
 
-export interface RutinaEscrita {
+export interface RoutineInput {
   readonly title: string;
   readonly summary: string | null;
   readonly videoUrl: string | null;
@@ -1178,44 +1178,44 @@ export interface RutinaEscrita {
   readonly level: 'beginner' | 'intermediate' | 'advanced' | null;
   readonly visibility: 'public' | 'members';
   readonly published: boolean;
-  readonly items: readonly PasoEscrito[];
+  readonly items: readonly StepInput[];
 }
 
 // -- Del gimnasio (mostrador y dueno) ---------------------------------------
 
-export const fetchRutinas = (): Promise<BibliotecaDto> => request('/staff/routines');
+export const fetchRoutines = (): Promise<BibliotecaDto> => request('/staff/routines');
 
-export const fetchRutina = (routineId: string): Promise<RutinaDetalleDto> =>
+export const fetchRoutine = (routineId: string): Promise<RoutineDetailDto> =>
   request(`/staff/routines/${routineId}`);
 
-export const crearRutina = (rutina: RutinaEscrita): Promise<RutinaDetalleDto> =>
-  request('/staff/routines', { method: 'POST', body: rutina });
+export const createRoutine = (routine: RoutineInput): Promise<RoutineDetailDto> =>
+  request('/staff/routines', { method: 'POST', body: routine });
 
-export const editarRutina = (
+export const editRoutine = (
   routineId: string,
-  rutina: RutinaEscrita,
-): Promise<RutinaDetalleDto> =>
-  request(`/staff/routines/${routineId}`, { method: 'POST', body: rutina });
+  routine: RoutineInput,
+): Promise<RoutineDetailDto> =>
+  request(`/staff/routines/${routineId}`, { method: 'POST', body: routine });
 
-export const cambiarEstadoRutina = (
+export const setRoutineStatus = (
   routineId: string,
   status: 'draft' | 'published',
-): Promise<RutinaDto> =>
+): Promise<RoutineDto> =>
   request(`/staff/routines/${routineId}/status`, { method: 'POST', body: { status } });
 
 /** De escaparate a contenido de alumnos, y al reves, sin abrir el editor. */
-export const cambiarPublicoRutina = (
+export const setRoutineVisibility = (
   routineId: string,
   visibility: 'public' | 'members',
-): Promise<RutinaDto> =>
+): Promise<RoutineDto> =>
   request(`/staff/routines/${routineId}/visibility`, { method: 'POST', body: { visibility } });
 
 /** Solo si esta sin publicar: la api responde 409 si no. */
-export const borrarRutina = (routineId: string): Promise<unknown> =>
+export const deleteRoutine = (routineId: string): Promise<unknown> =>
   request(`/staff/routines/${routineId}`, { method: 'DELETE' });
 
 /** Lo que hace falta para subir UN archivo, firmado por la api. */
-export interface PermisoDeSubida {
+export interface UploadPermit {
   readonly assetId: string;
   readonly uploadUrl: string;
   /** Van tal cual: estan firmadas, no son una sugerencia. */
@@ -1223,11 +1223,11 @@ export interface PermisoDeSubida {
   readonly expiresInSeconds: number;
 }
 
-export const pedirSubidaDeVideo = (input: {
+export const requestVideoUpload = (input: {
   readonly contentType: string;
   readonly sizeBytes?: number;
   readonly originalName?: string;
-}): Promise<PermisoDeSubida> =>
+}): Promise<UploadPermit> =>
   request('/staff/routines/videos', { method: 'POST', body: input });
 
 export const confirmarSubidaDeVideo = (
@@ -1246,20 +1246,20 @@ export const confirmarSubidaDeVideo = (
  * Tampoco lleva la sesion de Sinchi: la autorizacion ya viaja DENTRO de la URL
  * firmada, y mandar el token a un tercero seria regalarlo.
  */
-export function subirArchivoDeVideo(input: {
-  readonly permiso: PermisoDeSubida;
+export function uploadVideoFile(input: {
+  readonly permit: UploadPermit;
   readonly fileUri: string;
   readonly onProgreso?: (fraccion: number) => void;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', input.permiso.uploadUrl);
-    for (const [nombre, valor] of Object.entries(input.permiso.headers)) {
-      xhr.setRequestHeader(nombre, valor);
+    xhr.open('PUT', input.permit.uploadUrl);
+    for (const [name, value] of Object.entries(input.permit.headers)) {
+      xhr.setRequestHeader(name, value);
     }
-    xhr.upload.onprogress = (evento) => {
-      if (evento.lengthComputable && input.onProgreso !== undefined) {
-        input.onProgreso(evento.loaded / evento.total);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && input.onProgreso !== undefined) {
+        input.onProgreso(event.loaded / event.total);
       }
     };
     xhr.onload = () => {
@@ -1274,7 +1274,7 @@ export function subirArchivoDeVideo(input: {
      * archivo del disco y lo sube en trozos. Leerlo a memoria antes seria
      * cargar 300 MB en el proceso de la app para volver a escribirlos.
      */
-    xhr.send({ uri: input.fileUri, type: input.permiso.headers['Content-Type'] } as unknown as Blob);
+    xhr.send({ uri: input.fileUri, type: input.permit.headers['Content-Type'] } as unknown as Blob);
   });
 }
 
@@ -1286,26 +1286,26 @@ export function subirArchivoDeVideo(input: {
  * Por membresia y no suelta porque la biblioteca es del LOCAL: un alumno con
  * tres gimnasios tiene tres.
  */
-export const fetchRutinasDeMiGimnasio = (membershipId: string): Promise<BibliotecaDto> =>
+export const fetchMyGymRoutines = (membershipId: string): Promise<BibliotecaDto> =>
   request(`/me/memberships/${membershipId}/routines`);
 
-export const fetchRutinaDeMiGimnasio = (
+export const fetchMyGymRoutine = (
   membershipId: string,
   routineId: string,
-): Promise<RutinaDetalleDto> =>
+): Promise<RoutineDetailDto> =>
   request(`/me/memberships/${membershipId}/routines/${routineId}`);
 
 // -- De la calle -------------------------------------------------------------
 
 /** Anonima: es la unica ruta que entrega contenido a quien no tiene cuenta. */
-export const fetchRutinaPublica = (
+export const fetchPublicRoutine = (
   slug: string,
   routineId: string,
-): Promise<RutinaDetalleDto> =>
+): Promise<RoutineDetailDto> =>
   request(`/gyms/${encodeURIComponent(slug)}/routines/${routineId}`, { anonymous: true });
 
-export const guardarPrecios = (precios: PreciosDelLocal): Promise<PreciosDelLocal> =>
-  request('/staff/pricing', { method: 'POST', body: precios });
+export const savePricing = (pricing: GymPricing): Promise<GymPricing> =>
+  request('/staff/pricing', { method: 'POST', body: pricing });
 
 /**
  * Vuelve a suscribir a alguien que canceló, sin volver a registrarlo.
@@ -1493,10 +1493,10 @@ export const setOwnPin = (pin: string): Promise<unknown> =>
  * no para leer el historial. `soloPasadas` pide la otra mitad, y son mitades de
  * verdad: ninguna reserva sale en las dos.
  */
-export const fetchTrials = async (soloPasadas = false): Promise<readonly TrialBooking[]> =>
+export const fetchTrials = async (pastOnly = false): Promise<readonly TrialBooking[]> =>
   (
     await request<readonly TrialBooking[]>(
-      soloPasadas ? '/staff/trials?onlyPast=true' : '/staff/trials',
+      pastOnly ? '/staff/trials?onlyPast=true' : '/staff/trials',
     )
   ).map(reviveTrial);
 
@@ -1513,15 +1513,15 @@ export const fetchTrials = async (soloPasadas = false): Promise<readonly TrialBo
  * juntarlas obligaría a mandar los cuatro precios cada vez que se corrige una
  * coma de la dirección.
  */
-export interface UbicacionDelLocal {
+export interface GymLocation {
   readonly address: string | null;
   readonly latitude: number | null;
   readonly longitude: number | null;
 }
 
-export const fetchUbicacion = (): Promise<UbicacionDelLocal> => request('/staff/location');
+export const fetchLocation = (): Promise<GymLocation> => request('/staff/location');
 
-export const guardarUbicacion = (input: UbicacionDelLocal): Promise<UbicacionDelLocal> =>
+export const saveLocation = (input: GymLocation): Promise<GymLocation> =>
   request('/staff/location', { method: 'POST', body: input });
 
 export const fetchTrialSettings = (): Promise<{ readonly trialClassEnabled: boolean }> =>
@@ -1596,15 +1596,15 @@ export interface DeletionRequestDto {
  * sus cobros son asientos contables suyos. El compromiso —y el plazo de 30
  * dias de la politica— empieza a correr al crearla.
  */
-export const pedirBajaDeCuenta = (reason?: string): Promise<{ request: DeletionRequestDto }> =>
+export const requestAccountDeletion = (reason?: string): Promise<{ request: DeletionRequestDto }> =>
   request('/me/account/deletion-request', {
     method: 'POST',
     body: reason === undefined || reason.trim() === '' ? {} : { reason: reason.trim() },
   });
 
 /** La pendiente, si la hay. La pantalla la pide al abrir. */
-export const consultarBajaDeCuenta = (): Promise<{ request: DeletionRequestDto | null }> =>
+export const fetchAccountDeletion = (): Promise<{ request: DeletionRequestDto | null }> =>
   request('/me/account/deletion-request');
 
-export const cancelarBajaDeCuenta = (): Promise<{ canceled: boolean }> =>
+export const cancelAccountDeletion = (): Promise<{ canceled: boolean }> =>
   request('/me/account/deletion-request', { method: 'DELETE' });

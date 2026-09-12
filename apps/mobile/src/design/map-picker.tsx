@@ -16,7 +16,7 @@ import { View } from 'react-native';
 import { Card, Text } from './primitives';
 import { useTheme } from './theme';
 
-export interface Punto {
+export interface MapPoint {
   readonly lat: number;
   readonly lng: number;
 }
@@ -27,19 +27,19 @@ const LIMA = { latitude: -12.0464, longitude: -77.0428, latitudeDelta: 0.25, lon
 /** Cerca: lo que se ve al volver a abrir un pin ya puesto. */
 const CERCA = { latitudeDelta: 0.004, longitudeDelta: 0.004 };
 
-export function MapaParaElegir({
+export function MapPicker({
   pin,
-  onElegir,
+  onPick,
 }: {
-  readonly pin: Punto | null;
-  readonly onElegir: (punto: Punto) => void;
+  readonly pin: MapPoint | null;
+  readonly onPick: (point: MapPoint) => void;
 }) {
   const theme = useTheme();
-  const [falloElMapa, setFalloElMapa] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
 
-  const mapa = falloElMapa ? null : cargarMapa();
+  const maps = mapFailed ? null : loadMaps();
 
-  if (mapa === null) {
+  if (maps === null) {
     return (
       <Card tone="sunken" radius={theme.radii.md}>
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
@@ -51,7 +51,7 @@ export function MapaParaElegir({
     );
   }
 
-  const { MapView, Marker } = mapa;
+  const { MapView, Marker } = maps;
 
   return (
     <View
@@ -68,13 +68,13 @@ export function MapaParaElegir({
         initialRegion={
           pin === null ? LIMA : { latitude: pin.lat, longitude: pin.lng, ...CERCA }
         }
-        onPress={(evento: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) =>
-          onElegir({
-            lat: evento.nativeEvent.coordinate.latitude,
-            lng: evento.nativeEvent.coordinate.longitude,
+        onPress={(event: { nativeEvent: { coordinate: { latitude: number; longitude: number } } }) =>
+          onPick({
+            lat: event.nativeEvent.coordinate.latitude,
+            lng: event.nativeEvent.coordinate.longitude,
           })
         }
-        onError={() => setFalloElMapa(true)}
+        onError={() => setMapFailed(true)}
       >
         {pin === null ? null : (
           <Marker
@@ -83,12 +83,12 @@ export function MapaParaElegir({
             // más natural que volver a tocar, y tocar encima del propio pin no
             // siempre dispara el `onPress` del mapa.
             draggable
-            onDragEnd={(evento: {
+            onDragEnd={(event: {
               nativeEvent: { coordinate: { latitude: number; longitude: number } };
             }) =>
-              onElegir({
-                lat: evento.nativeEvent.coordinate.latitude,
-                lng: evento.nativeEvent.coordinate.longitude,
+              onPick({
+                lat: event.nativeEvent.coordinate.latitude,
+                lng: event.nativeEvent.coordinate.longitude,
               })
             }
           />
@@ -98,24 +98,24 @@ export function MapaParaElegir({
   );
 }
 
-type ModuloDeMapa = {
+type MapsModule = {
   readonly MapView: React.ComponentType<Record<string, unknown>>;
   readonly Marker: React.ComponentType<Record<string, unknown>>;
 };
 
-let moduloDeMapa: ModuloDeMapa | null | undefined;
+let mapsModule: MapsModule | null | undefined;
 
-function cargarMapa(): ModuloDeMapa | null {
-  if (moduloDeMapa !== undefined) return moduloDeMapa;
+function loadMaps(): MapsModule | null {
+  if (mapsModule !== undefined) return mapsModule;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m = require('react-native-maps') as {
       default: React.ComponentType<Record<string, unknown>>;
       Marker: React.ComponentType<Record<string, unknown>>;
     };
-    moduloDeMapa = { MapView: m.default, Marker: m.Marker };
+    mapsModule = { MapView: m.default, Marker: m.Marker };
   } catch {
-    moduloDeMapa = null;
+    mapsModule = null;
   }
-  return moduloDeMapa;
+  return mapsModule;
 }

@@ -26,96 +26,96 @@ import {
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../../../src/design/primitives';
 import { Screen } from '../../../src/design/screen';
 import { useTheme } from '../../../src/design/theme';
-import { useEventos, useToday } from '../../../src/data/hooks';
-import { eliminarEvento, guardarEvento, publicarEvento } from '../../../src/data/actions';
+import { useEvents, useToday } from '../../../src/data/hooks';
+import { removeEvent, saveEvent, publishEvent } from '../../../src/data/actions';
 
 /** Soles escritos a mano → céntimos enteros. */
-function aCentimos(texto: string): number | null {
-  const limpio = texto.trim().replace(',', '.');
-  if (limpio.length === 0) return null;
-  const valor = Number(limpio);
-  if (!Number.isFinite(valor) || valor < 0) return null;
-  return Math.round(valor * 100);
+function aCentimos(text: string): number | null {
+  const trimmed = text.trim().replace(',', '.');
+  if (trimmed.length === 0) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
 }
 
-const FECHA = /^\d{4}-\d{2}-\d{2}$/;
-const HORA = /^\d{2}:\d{2}$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME = /^\d{2}:\d{2}$/;
 
-export default function EditorDeEventoScreen() {
+export default function EventEditorScreen() {
   const theme = useTheme();
   const hoy = useToday();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
-  const esNuevo = eventId === 'nuevo';
+  const isNew = eventId === 'nuevo';
 
   // Se busca en las dos listas: un evento que ya pasó también se edita —corregir
   // el nombre del invitado después del seminario es legítimo—.
-  const { eventos: proximos, recargar: recargarProximos } = useEventos({ drafts: true });
-  const { eventos: pasados } = useEventos({ past: true });
+  const { events: upcoming, reload: reloadUpcoming } = useEvents({ drafts: true });
+  const { events: past } = useEvents({ past: true });
 
   const existente = useMemo(() => {
-    if (esNuevo) return null;
+    if (isNew) return null;
     return (
-      [...(proximos ?? []), ...(pasados ?? [])].find((f) => f.event.id === eventId) ?? null
+      [...(upcoming ?? []), ...(past ?? [])].find((f) => f.event.id === eventId) ?? null
     );
-  }, [proximos, pasados, eventId, esNuevo]);
+  }, [upcoming, past, eventId, isNew]);
 
-  const [nombre, setNombre] = useState('');
+  const [name, setName] = useState('');
   const [invitado, setInvitado] = useState('');
   const [descripcion, setDescripcion] = useState('');
-  const [fecha, setFecha] = useState(formatPlainDate(hoy));
-  const [inicio, setInicio] = useState('10:00');
-  const [fin, setFin] = useState('13:00');
-  const [cupo, setCupo] = useState('');
-  const [precioAlumno, setPrecioAlumno] = useState('');
-  const [precioFuera, setPrecioFuera] = useState('');
-  const [publicado, setPublicado] = useState(false);
-  const [guardando, setGuardando] = useState(false);
+  const [date, setDate] = useState(formatPlainDate(hoy));
+  const [startTime, setStartTime] = useState('10:00');
+  const [endTime, setEndTime] = useState('13:00');
+  const [quota, setQuota] = useState('');
+  const [memberPrice, setMemberPrice] = useState('');
+  const [guestPrice, setGuestPrice] = useState('');
+  const [published, setPublished] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (existente === null) return;
     const { event } = existente;
-    setNombre(event.name);
+    setName(event.name);
     setInvitado(event.instructor ?? '');
     setDescripcion(event.description ?? '');
-    setFecha(formatPlainDate(event.date));
-    setInicio(event.startTime);
-    setFin(event.endTime);
-    setCupo(event.capacity === null ? '' : String(event.capacity));
-    setPrecioAlumno(String(event.memberPriceCents / 100));
-    setPrecioFuera(String(event.guestPriceCents / 100));
-    setPublicado(event.status === 'published');
+    setDate(formatPlainDate(event.date));
+    setStartTime(event.startTime);
+    setEndTime(event.endTime);
+    setQuota(event.capacity === null ? '' : String(event.capacity));
+    setMemberPrice(String(event.memberPriceCents / 100));
+    setGuestPrice(String(event.guestPriceCents / 100));
+    setPublished(event.status === 'published');
   }, [existente]);
 
-  const centimosAlumno = aCentimos(precioAlumno);
-  const centimosFuera = aCentimos(precioFuera);
-  const cupoNumero = cupo.trim().length === 0 ? null : Number(cupo.trim());
-  const formatoOk = FECHA.test(fecha) && HORA.test(inicio) && HORA.test(fin);
+  const studentCents = aCentimos(memberPrice);
+  const centimosFuera = aCentimos(guestPrice);
+  const quotaNumber = quota.trim().length === 0 ? null : Number(quota.trim());
+  const formatoOk = DATE.test(date) && TIME.test(startTime) && TIME.test(endTime);
 
-  const motivo = useMemo(() => {
+  const denial = useMemo(() => {
     if (!formatoOk) return null;
-    if (centimosAlumno === null || centimosFuera === null) return 'price_negative' as const;
+    if (studentCents === null || centimosFuera === null) return 'price_negative' as const;
     return checkEventDraft(
       {
-        name: nombre,
+        name: name,
         description: descripcion.trim().length === 0 ? null : descripcion,
         instructor: invitado.trim().length === 0 ? null : invitado,
-        date: parsePlainDate(fecha),
-        startTime: inicio as LocalTime,
-        endTime: fin as LocalTime,
-        capacity: cupoNumero,
-        memberPriceCents: centimosAlumno,
+        date: parsePlainDate(date),
+        startTime: startTime as LocalTime,
+        endTime: endTime as LocalTime,
+        capacity: quotaNumber,
+        memberPriceCents: studentCents,
         guestPriceCents: centimosFuera,
       },
       // Solo al crear: editar algo pasado es legítimo.
-      esNuevo ? hoy : undefined,
+      isNew ? hoy : undefined,
     );
   }, [
-    formatoOk, nombre, descripcion, invitado, fecha, inicio, fin,
-    cupoNumero, centimosAlumno, centimosFuera, esNuevo, hoy,
+    formatoOk, name, descripcion, invitado, date, startTime, endTime,
+    quotaNumber, studentCents, centimosFuera, isNew, hoy,
   ]);
 
-  const listo = formatoOk && motivo === null && !guardando;
+  const ready = formatoOk && denial === null && !saving;
 
   /**
    * Si ya intento guardar.
@@ -125,32 +125,32 @@ export default function EditorDeEventoScreen() {
    * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
    * enciende, que es justo cuando hace falta.
    */
-  const [intentado, setIntentado] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
 
-  async function guardar(): Promise<void> {
-    if (!listo || centimosAlumno === null || centimosFuera === null) return;
-    setGuardando(true);
+  async function save(): Promise<void> {
+    if (!ready || studentCents === null || centimosFuera === null) return;
+    setSaving(true);
     setError(null);
     try {
-      await guardarEvento(esNuevo ? null : eventId, {
-        name: nombre.trim(),
+      await saveEvent(isNew ? null : eventId, {
+        name: name.trim(),
         description: descripcion.trim().length === 0 ? null : descripcion.trim(),
         instructor: invitado.trim().length === 0 ? null : invitado.trim(),
-        date: fecha,
-        startTime: inicio,
-        endTime: fin,
-        capacity: cupoNumero,
-        memberPriceCents: centimosAlumno,
+        date: date,
+        startTime: startTime,
+        endTime: endTime,
+        capacity: quotaNumber,
+        memberPriceCents: studentCents,
         guestPriceCents: centimosFuera,
-        published: publicado,
+        published: published,
       });
-      recargarProximos();
+      reloadUpcoming();
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el evento.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   }
 
@@ -158,7 +158,7 @@ export default function EditorDeEventoScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
-          {esNuevo ? 'Nuevo evento' : 'Editar evento'}
+          {isNew ? 'Nuevo evento' : 'Editar evento'}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
@@ -173,8 +173,8 @@ export default function EditorDeEventoScreen() {
           <Stack gap={16}>
             <Field
               label="Nombre"
-              value={nombre}
-              onChangeText={setNombre}
+              value={name}
+              onChangeText={setName}
               placeholder="Seminario de boxeo"
               hint="Es el titular que va a leer la gente en el directorio."
             />
@@ -203,31 +203,31 @@ export default function EditorDeEventoScreen() {
           <Stack gap={16}>
             <Field
               label="Fecha"
-              value={fecha}
-              onChangeText={setFecha}
+              value={date}
+              onChangeText={setDate}
               placeholder="2026-09-20"
               keyboardType="numbers-and-punctuation"
-              error={FECHA.test(fecha) ? undefined : 'La fecha va como 2026-09-20.'}
+              error={DATE.test(date) ? undefined : 'La fecha va como 2026-09-20.'}
             />
             <Row gap={12} align="stretch">
               <View style={{ flex: 1 }}>
                 <Field
                   label="Empieza"
-                  value={inicio}
-                  onChangeText={setInicio}
+                  value={startTime}
+                  onChangeText={setStartTime}
                   placeholder="10:00"
                   keyboardType="numbers-and-punctuation"
-                  error={HORA.test(inicio) ? undefined : 'Como 10:00.'}
+                  error={TIME.test(startTime) ? undefined : 'Como 10:00.'}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <Field
                   label="Termina"
-                  value={fin}
-                  onChangeText={setFin}
+                  value={endTime}
+                  onChangeText={setEndTime}
                   placeholder="13:00"
                   keyboardType="numbers-and-punctuation"
-                  error={HORA.test(fin) ? undefined : 'Como 13:00.'}
+                  error={TIME.test(endTime) ? undefined : 'Como 13:00.'}
                 />
               </View>
             </Row>
@@ -243,8 +243,8 @@ export default function EditorDeEventoScreen() {
               <View style={{ flex: 1 }}>
                 <Field
                   label="Tus alumnos"
-                  value={precioAlumno}
-                  onChangeText={setPrecioAlumno}
+                  value={memberPrice}
+                  onChangeText={setMemberPrice}
                   placeholder="80"
                   keyboardType="decimal-pad"
                 />
@@ -252,8 +252,8 @@ export default function EditorDeEventoScreen() {
               <View style={{ flex: 1 }}>
                 <Field
                   label="Los de fuera"
-                  value={precioFuera}
-                  onChangeText={setPrecioFuera}
+                  value={guestPrice}
+                  onChangeText={setGuestPrice}
                   placeholder="120"
                   keyboardType="decimal-pad"
                 />
@@ -265,8 +265,8 @@ export default function EditorDeEventoScreen() {
             </Text>
             <Field
               label="Cupo"
-              value={cupo}
-              onChangeText={setCupo}
+              value={quota}
+              onChangeText={setQuota}
               placeholder="30"
               keyboardType="number-pad"
               optional
@@ -289,8 +289,8 @@ export default function EditorDeEventoScreen() {
               </Text>
             </Stack>
             <Switch
-              value={publicado}
-              onValueChange={setPublicado}
+              value={published}
+              onValueChange={setPublished}
               accessibilityLabel="Publicar el evento"
               trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
               thumbColor={theme.colors.ink}
@@ -299,20 +299,20 @@ export default function EditorDeEventoScreen() {
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && intentado)) && (
+      {(error !== null || (denial !== null && attempted)) && (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 16 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
-            {error ?? (motivo === null ? '' : eventDenialMessage(motivo))}
+            {error ?? (denial === null ? '' : eventDenialMessage(denial))}
           </Text>
         </Card>
       )}
 
       <Button
-        label={guardando ? 'Guardando…' : esNuevo ? 'Crear evento' : 'Guardar cambios'}
-        disabled={!listo}
+        label={saving ? 'Guardando…' : isNew ? 'Crear evento' : 'Guardar cambios'}
+        disabled={!ready}
         style={{ marginTop: 20 }}
-        onPress={() => void guardar()}
-        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+        onPress={() => void save()}
+        onBlockedPress={saving ? undefined : () => setAttempted(true)}
       />
 
       {existente !== null && (
@@ -340,9 +340,9 @@ export default function EditorDeEventoScreen() {
                       text: 'Cancelar evento',
                       style: 'destructive',
                       onPress: () => {
-                        void publicarEvento(eventId, 'canceled')
+                        void publishEvent(eventId, 'canceled')
                           .then(() => {
-                            recargarProximos();
+                            reloadUpcoming();
                             router.back();
                           })
                           .catch((e: unknown) =>
@@ -361,9 +361,9 @@ export default function EditorDeEventoScreen() {
               label="Borrar"
               variant="ghost"
               onPress={() => {
-                void eliminarEvento(eventId)
+                void removeEvent(eventId)
                   .then(() => {
-                    recargarProximos();
+                    reloadUpcoming();
                     router.back();
                   })
                   .catch((e: unknown) =>

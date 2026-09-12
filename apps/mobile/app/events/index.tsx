@@ -22,11 +22,11 @@ import { Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { formatEventDate } from '../../src/lib/format';
-import { useEventos } from '../../src/data/hooks';
+import { useEvents } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import type { EventoConCupo } from '../../src/data/api';
+import type { EventWithSeats } from '../../src/data/api';
 
-export default function EventosScreen() {
+export default function EventsScreen() {
   const theme = useTheme();
   /**
    * El rol sale de la SESIÓN y no del store, y no es un detalle de estilo.
@@ -36,11 +36,11 @@ export default function EventosScreen() {
    * se encontraba el vacío diciéndole que creara un evento y sin el botón para
    * hacerlo. La sesión ya trae el rol firmado desde el primer render.
    */
-  const esDueno = useRole() === 'owner';
-  const [viendoPasados, setViendoPasados] = useState(false);
-  const { eventos, error, cargando } = useEventos({
-    past: viendoPasados,
-    drafts: esDueno && !viendoPasados,
+  const isOwner = useRole() === 'owner';
+  const [showingPast, setShowingPast] = useState(false);
+  const { events, error, loading } = useEvents({
+    past: showingPast,
+    drafts: isOwner && !showingPast,
   });
 
   return (
@@ -62,8 +62,8 @@ export default function EventosScreen() {
       </Text>
 
       <Row gap={8} justify="flex-start" style={{ marginTop: 18 }}>
-        <Chip label="Lo que viene" selected={!viendoPasados} onPress={() => setViendoPasados(false)} />
-        <Chip label="Ya pasaron" selected={viendoPasados} onPress={() => setViendoPasados(true)} />
+        <Chip label="Lo que viene" selected={!showingPast} onPress={() => setShowingPast(false)} />
+        <Chip label="Ya pasaron" selected={showingPast} onPress={() => setShowingPast(true)} />
       </Row>
 
       {error !== null && (
@@ -75,29 +75,29 @@ export default function EventosScreen() {
       )}
 
       <Stack gap={10} style={{ marginTop: 18 }}>
-        {cargando ? (
+        {loading ? (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Trayendo los eventos…
           </Text>
-        ) : (eventos?.length ?? 0) === 0 ? (
+        ) : (events?.length ?? 0) === 0 ? (
           <Card tone="sunken">
             <Stack gap={14}>
               <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-                {viendoPasados
+                {showingPast
                   ? 'Todavía no has hecho ningún evento.'
                   : 'No tienes nada programado. Un seminario con alguien conocido es la forma más rápida de que entre gente nueva al local.'}
               </Text>
-              {!viendoPasados && esDueno && (
+              {!showingPast && isOwner && (
                 <Button label="Crear el primero" onPress={() => router.push('/events/edit/nuevo')} />
               )}
             </Stack>
           </Card>
         ) : (
-          eventos?.map((fila) => <FilaDeEvento key={fila.event.id} fila={fila} />)
+          events?.map((row) => <EventRow key={row.event.id} row={row} />)
         )}
       </Stack>
 
-      {esDueno && !viendoPasados && (eventos?.length ?? 0) > 0 && (
+      {isOwner && !showingPast && (events?.length ?? 0) > 0 && (
         <Button
           label="+ Nuevo evento"
           variant="secondary"
@@ -111,19 +111,19 @@ export default function EventosScreen() {
   );
 }
 
-function FilaDeEvento({ fila }: { readonly fila: EventoConCupo }) {
+function EventRow({ row }: { readonly row: EventWithSeats }) {
   const theme = useTheme();
-  const { event, seatsTaken, seatsLeft, paidSeats } = fila;
+  const { event, seatsTaken, seatsLeft, paidSeats } = row;
 
   const cancelado = event.status === 'canceled';
-  const borrador = event.status === 'draft';
-  const lleno = seatsLeft !== null && seatsLeft === 0;
+  const draft = event.status === 'draft';
+  const full = seatsLeft !== null && seatsLeft === 0;
 
   const color = cancelado
     ? theme.semaphore.bad
-    : borrador
+    : draft
       ? theme.colors.textFaint
-      : lleno
+      : full
         ? theme.semaphore.warn
         : theme.semaphore.ok;
 
@@ -135,7 +135,7 @@ function FilaDeEvento({ fila }: { readonly fila: EventoConCupo }) {
     >
       <Card
         radius={theme.radii.lg}
-        style={{ opacity: cancelado || borrador ? 0.6 : 1 }}
+        style={{ opacity: cancelado || draft ? 0.6 : 1 }}
         borderColor={cancelado ? withAlpha(theme.semaphore.bad, 0.4) : theme.colors.hairline}
       >
         <Row align="flex-start">
@@ -153,14 +153,14 @@ function FilaDeEvento({ fila }: { readonly fila: EventoConCupo }) {
             <Text variant="micro" color={color}>
               {cancelado
                 ? 'Cancelado'
-                : borrador
+                : draft
                   ? 'Sin publicar'
                   : seatsLeft === null
                     ? `${seatsTaken} ${seatsTaken === 1 ? 'inscrito' : 'inscritos'} · sin límite`
-                    : lleno
+                    : full
                       ? `Lleno · ${seatsTaken} de ${seatsTaken}`
                       : `${seatsTaken} de ${seatsTaken + seatsLeft} plazas`}
-              {cancelado || borrador ? '' : ` · ${paidSeats} ${paidSeats === 1 ? 'pagada' : 'pagadas'}`}
+              {cancelado || draft ? '' : ` · ${paidSeats} ${paidSeats === 1 ? 'pagada' : 'pagadas'}`}
             </Text>
           </Stack>
 

@@ -11,11 +11,11 @@ import {
 } from './dunning.js';
 import { plainDate } from '../time/plain-date.js';
 
-const PRIMER_FALLO = plainDate(2026, 8, 16);
+const FIRST_FAILURE = plainDate(2026, 8, 16);
 
 describe('calendario de reintentos', () => {
   it('reintenta en dia 0, +3 y +7 desde el primer fallo', () => {
-    expect(retrySchedule(PRIMER_FALLO)).toEqual([
+    expect(retrySchedule(FIRST_FAILURE)).toEqual([
       plainDate(2026, 8, 16),
       plainDate(2026, 8, 19),
       plainDate(2026, 8, 23),
@@ -28,19 +28,19 @@ describe('calendario de reintentos', () => {
 
   it('se ancla al primer fallo, no al ultimo', () => {
     // Da igual cuando corra el cron: la ventana total sigue siendo 7 dias.
-    const segundo = planRetry({
-      firstFailureOn: PRIMER_FALLO,
+    const second = planRetry({
+      firstFailureOn: FIRST_FAILURE,
       attemptsMade: 1,
       lastErrorCode: 'insufficient_funds',
     });
-    expect(segundo).toEqual({
+    expect(second).toEqual({
       action: 'retry',
       date: plainDate(2026, 8, 19),
       attempt: 2,
     });
 
     const tercero = planRetry({
-      firstFailureOn: PRIMER_FALLO,
+      firstFailureOn: FIRST_FAILURE,
       attemptsMade: 2,
       lastErrorCode: 'insufficient_funds',
     });
@@ -54,7 +54,7 @@ describe('calendario de reintentos', () => {
   it('se agota tras el tercer intento', () => {
     expect(
       planRetry({
-        firstFailureOn: PRIMER_FALLO,
+        firstFailureOn: FIRST_FAILURE,
         attemptsMade: 3,
         lastErrorCode: 'insufficient_funds',
       }),
@@ -71,14 +71,14 @@ describe('politica por codigo de error', () => {
   it('tarjeta vencida pide tarjeta nueva sin reintentar', () => {
     expect(classifyPaymentError('expired_card')).toBe('needs_new_card');
     expect(
-      planRetry({ firstFailureOn: PRIMER_FALLO, attemptsMade: 1, lastErrorCode: 'expired_card' }),
+      planRetry({ firstFailureOn: FIRST_FAILURE, attemptsMade: 1, lastErrorCode: 'expired_card' }),
     ).toEqual({ action: 'request_new_card', deactivatePaymentMethod: false });
   });
 
   it('tarjeta bloqueada desactiva el metodo de pago', () => {
     expect(classifyPaymentError('blocked_card')).toBe('terminal');
     expect(
-      planRetry({ firstFailureOn: PRIMER_FALLO, attemptsMade: 1, lastErrorCode: 'stolen_card' }),
+      planRetry({ firstFailureOn: FIRST_FAILURE, attemptsMade: 1, lastErrorCode: 'stolen_card' }),
     ).toEqual({ action: 'request_new_card', deactivatePaymentMethod: true });
   });
 
@@ -133,12 +133,12 @@ describe('evaluateDelinquency', () => {
   });
 
   it('respeta la gracia configurada por el gimnasio', () => {
-    const sinGracia = evaluateDelinquency({
+    const withoutGrace = evaluateDelinquency({
       ...base,
       graceDays: 0,
       today: plainDate(2026, 8, 13),
     });
-    expect(sinGracia.status).toBe('suspended');
+    expect(withoutGrace.status).toBe('suspended');
 
     const graciaLarga = evaluateDelinquency({
       ...base,

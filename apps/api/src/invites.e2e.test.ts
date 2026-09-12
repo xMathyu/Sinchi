@@ -199,8 +199,8 @@ suite('invitaciones', () => {
   });
 
   it('un enlace caducado o inventado explica que paso, no da un 404 en blanco', async () => {
-    const respuesta = await http.get('/v1/invites/no-existe-este-token/abrir').expect(200);
-    expect(respuesta.text).toContain('ya no vale');
+    const response = await http.get('/v1/invites/no-existe-este-token/abrir').expect(200);
+    expect(response.text).toContain('ya no vale');
   });
 
   it('aceptarla deja a la persona dentro, con plan y cargos pendientes', async () => {
@@ -369,12 +369,12 @@ suite('invitaciones', () => {
       .get('/v1/staff/invites')
       .set(auth(frontDesk))
       .expect(200);
-    const fila = (pendientes as { id: string; fullName: string }[]).find(
+    const found = (pendientes as { id: string; fullName: string }[]).find(
       (row) => row.fullName === 'Se Revoca',
     );
-    expect(fila).toBeDefined();
+    expect(found).toBeDefined();
 
-    await http.delete(`/v1/staff/invites/${fila!.id}`).set(auth(frontDesk)).expect(200);
+    await http.delete(`/v1/staff/invites/${found!.id}`).set(auth(frontDesk)).expect(200);
 
     await http.get(`/v1/invites/${invite.token}`).expect(404);
     await http
@@ -387,15 +387,15 @@ suite('invitaciones', () => {
     await createInvite(frontDesk, { fullName: 'Sin Token Visible' });
 
     const { body } = await http.get('/v1/staff/invites').set(auth(frontDesk)).expect(200);
-    const fila = (body as Record<string, unknown>[]).find(
+    const found = (body as Record<string, unknown>[]).find(
       (row) => row.fullName === 'Sin Token Visible',
     );
 
     // Si la lista lo devolviera, la base seria una copia de todos los enlaces
     // vivos y perder el acceso al panel valdria por perderlos todos.
-    expect(fila).toBeDefined();
-    expect(Object.keys(fila!)).not.toContain('token');
-    expect(Object.keys(fila!)).not.toContain('tokenHash');
+    expect(found).toBeDefined();
+    expect(Object.keys(found!)).not.toContain('token');
+    expect(Object.keys(found!)).not.toContain('tokenHash');
   });
 
   it('no se puede revocar una invitacion de otro gimnasio', async () => {
@@ -404,11 +404,11 @@ suite('invitaciones', () => {
       .get('/v1/staff/invites')
       .set(auth(frontDesk))
       .expect(200);
-    const fila = (pendientes as { id: string; fullName: string }[]).find(
+    const found = (pendientes as { id: string; fullName: string }[]).find(
       (row) => row.fullName === 'Ajena',
     )!;
 
-    await http.delete(`/v1/staff/invites/${fila.id}`).set(auth(otherGym)).expect(404);
+    await http.delete(`/v1/staff/invites/${found.id}`).set(auth(otherGym)).expect(404);
     // Y sigue sirviendo: el intento fallido no puede tener efectos.
     await http.get(`/v1/invites/${invite.token}`).expect(200);
   });
@@ -488,10 +488,10 @@ suite('invitaciones', () => {
       .get('/v1/staff/invites')
       .set(auth(frontDesk))
       .expect(200);
-    const fila = (pendientes as { id: string; fullName: string }[]).find(
+    const found = (pendientes as { id: string; fullName: string }[]).find(
       (row) => row.fullName === 'Correo Revocado',
     )!;
-    await http.delete(`/v1/staff/invites/${fila.id}`).set(auth(frontDesk)).expect(200);
+    await http.delete(`/v1/staff/invites/${found.id}`).set(auth(frontDesk)).expect(200);
 
     const uid = `uid-revocado-correo-${runId}`;
     const token = asToken(uid);
@@ -511,7 +511,7 @@ suite('invitaciones', () => {
     const correo = `dosgimnasios.${runId}@ejemplo.pe`;
 
     // El otro gimnasio invita al mismo correo con su propio plan.
-    const { body: otrosPlanes } = await http
+    const { body: otherPlans } = await http
       .get('/v1/staff/plans')
       .set(auth(otherGym))
       .expect(200);
@@ -525,7 +525,7 @@ suite('invitaciones', () => {
         email: correo,
         documentId: nextDni(),
         phone: nextPhone(),
-        planId: (otrosPlanes as PlanRow[])[0]!.id,
+        planId: (otherPlans as PlanRow[])[0]!.id,
       })
       .expect(201);
 

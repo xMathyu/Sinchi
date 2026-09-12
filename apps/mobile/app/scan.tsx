@@ -67,14 +67,14 @@ export default function ScanScreen() {
     // La firma TOTP la verifica el servidor, no este aparato: `evaluarQr`
     // decide a quién preguntar y cae a la caché si no hay red.
     void evaluarQr(data)
-      .then((salida) => {
-        if (!salida.ok) {
-          Alert.alert(salida.titulo, salida.detalle, [
+      .then((outcome) => {
+        if (!outcome.ok) {
+          Alert.alert(outcome.title, outcome.detail, [
             { text: 'Entendido', onPress: () => (locked.current = false) },
           ]);
           return;
         }
-        router.push(`/result/${salida.membershipId}`);
+        router.push(`/result/${outcome.membershipId}`);
       })
       .finally(() => setValidando(false));
   }, []);

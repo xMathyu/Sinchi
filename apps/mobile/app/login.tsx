@@ -54,8 +54,8 @@ export default function LoginScreen() {
   // Solo al crear la cuenta. Es la ÚNICA vez que se piden: de aquí salen el
   // nombre y el celular con los que se reserva una clase gratis, y por eso esa
   // pantalla ya no vuelve a preguntarlos.
-  const [nombre, setNombre] = useState('');
-  const [celular, setCelular] = useState('+51');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('+51');
   // "Entrar" o "crear cuenta": son dos vistas y no dos rutas. Los campos y los
   // handlers son los mismos, y separarlas en rutas obligaría a subir todo este
   // estado a un contexto para que sobreviviera al salto.
@@ -93,7 +93,7 @@ export default function LoginScreen() {
     }
 
     let cancelled = false;
-    void completeGoogleSignIn(idToken, { phone: celular.trim() }).then((outcome) => {
+    void completeGoogleSignIn(idToken, { phone: phone.trim() }).then((outcome) => {
       if (cancelled) return;
       setWorking(false);
 
@@ -119,7 +119,7 @@ export default function LoginScreen() {
       email,
       password,
       creating ? 'signUp' : 'signIn',
-      creating ? { fullName: nombre.trim(), phone: celular.trim() } : {},
+      creating ? { fullName: name.trim(), phone: phone.trim() } : {},
     ).then((outcome) => {
       setWorking(false);
       if (outcome.kind === 'error') {
@@ -135,11 +135,11 @@ export default function LoginScreen() {
   const emailReady = firebaseConfigured();
   // Seis es el minimo que exige Firebase; comprobarlo aqui evita un viaje de red
   // para que el servidor conteste lo mismo.
-  const datosCompletos = nombre.trim().length >= 2 && celular.trim().length >= 8;
+  const completeDetails = name.trim().length >= 2 && phone.trim().length >= 8;
   const canSubmit =
-    email.trim().length > 3 && password.length >= 6 && (!creating || datosCompletos) && !working;
+    email.trim().length > 3 && password.length >= 6 && (!creating || completeDetails) && !working;
 
-  const avisoDeError =
+  const errorNotice =
     error === null ? null : (
       <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
         <Text variant="bodySmall">{error}</Text>
@@ -165,7 +165,7 @@ export default function LoginScreen() {
     </Row>
   );
 
-  const botonDeGoogle = (
+  const googleButton = (
     <Button
       label="Entrar con Google"
       variant="secondary"
@@ -208,15 +208,15 @@ export default function LoginScreen() {
             primera clase gratis.
           </Text>
 
-          {avisoDeError === null ? null : <View style={{ marginTop: 20 }}>{avisoDeError}</View>}
+          {errorNotice === null ? null : <View style={{ marginTop: 20 }}>{errorNotice}</View>}
 
           {emailReady ? (
             <>
               <Stack gap={14} style={{ marginTop: 24 }}>
                 <Field
                   label="Tu nombre"
-                  value={nombre}
-                  onChangeText={setNombre}
+                  value={name}
+                  onChangeText={setName}
                   placeholder="Nombre y apellido"
                   autoCapitalize="words"
                   autoComplete="name"
@@ -244,8 +244,8 @@ export default function LoginScreen() {
                 />
                 <Field
                   label="Tu celular"
-                  value={celular}
-                  onChangeText={setCelular}
+                  value={phone}
+                  onChangeText={setPhone}
                   placeholder="+51987654321"
                   keyboardType="phone-pad"
                   autoComplete="tel"
@@ -273,7 +273,7 @@ export default function LoginScreen() {
           {googleReady && (
             <Stack gap={14} style={{ marginTop: 18 }}>
               {separador}
-              {botonDeGoogle}
+              {googleButton}
             </Stack>
           )}
 
@@ -313,17 +313,17 @@ export default function LoginScreen() {
           <Text variant="micro" color={theme.colors.textFaint}>
             Cobro automático
           </Text>
-          <Punto />
+          <MapPoint />
           <Text variant="micro" color={theme.colors.textFaint}>
             Puerta con QR
           </Text>
-          <Punto />
+          <MapPoint />
           <Text variant="micro" color={theme.colors.textFaint}>
             Padrón al día
           </Text>
         </Row>
 
-        {avisoDeError === null ? null : <View style={{ marginTop: 20 }}>{avisoDeError}</View>}
+        {errorNotice === null ? null : <View style={{ marginTop: 20 }}>{errorNotice}</View>}
 
         {emailReady ? (
           <>
@@ -383,7 +383,7 @@ export default function LoginScreen() {
         {googleReady && (
           <Stack gap={14} style={{ marginTop: 6 }}>
             {separador}
-            {botonDeGoogle}
+            {googleButton}
           </Stack>
         )}
 
@@ -443,7 +443,7 @@ export default function LoginScreen() {
 }
 
 /** Separador entre las tres promesas de la cabecera. */
-function Punto() {
+function MapPoint() {
   const theme = useTheme();
   return (
     <View

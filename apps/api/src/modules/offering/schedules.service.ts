@@ -114,7 +114,7 @@ export class SchedulesService {
         );
 
       const trials = await this.countUpcomingTrials(tx, tenantId);
-      const activos = rows.filter((row) => row.active);
+      const activeOnes = rows.filter((row) => row.active);
 
       return rows.map((row) => ({
         schedule: toClassSchedule(row),
@@ -123,7 +123,7 @@ export class SchedulesService {
         // Solo entre publicados: un bloque archivado no le pisa la hora a nadie.
         overlaps:
           row.active &&
-          activos.some((otro) => otro.id !== row.id && schedulesOverlap(row, otro)),
+          activeOnes.some((other) => other.id !== row.id && schedulesOverlap(row, other)),
       }));
     });
   }
@@ -151,20 +151,20 @@ export class SchedulesService {
     tenantId: string,
     input: ScheduleCreateInput,
   ): Promise<readonly ClassSchedule[]> {
-    const dias = [...new Set(input.weekdays)];
-    if (dias.length === 0) {
+    const uniqueWeekdays = [...new Set(input.weekdays)];
+    if (uniqueWeekdays.length === 0) {
       throw new BadRequestException('Elige al menos un día de la semana.');
     }
 
     // Cada dia se comprueba por separado porque `weekday_invalid` es un motivo
     // por dia: con un 8 en la lista, decir «elige un dia de lunes a domingo» sin
     // mas deja al dueno buscando cual de los cinco que marco esta mal.
-    for (const weekday of dias) this.assertValid({ ...input, weekday });
+    for (const weekday of uniqueWeekdays) this.assertValid({ ...input, weekday });
 
     return withTenant(this.db, tenantId, async (tx) => {
       const rows = await tx
         .insert(schema.classSchedules)
-        .values(dias.map((weekday) => this.toColumns(tenantId, { ...input, weekday })))
+        .values(uniqueWeekdays.map((weekday) => this.toColumns(tenantId, { ...input, weekday })))
         .returning();
       return rows.map(toClassSchedule);
     });
@@ -257,7 +257,7 @@ export class SchedulesService {
       .where(eq(schema.tenants.id, tenantId))
       .limit(1);
 
-    const desde = formatPlainDate(this.clock.today(tenant?.timezone ?? TZ_LIMA));
+    const since = formatPlainDate(this.clock.today(tenant?.timezone ?? TZ_LIMA));
 
     const rows = await tx
       .select({
@@ -269,7 +269,7 @@ export class SchedulesService {
       // puso el contexto. Repetirlo aqui solo invita a creer que hace falta.
       .where(
         and(
-          gte(schema.trialBookings.localDate, desde),
+          gte(schema.trialBookings.localDate, since),
           ne(schema.trialBookings.status, 'canceled'),
         ),
       )

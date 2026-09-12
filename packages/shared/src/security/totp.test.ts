@@ -37,8 +37,8 @@ describe('vectores del RFC 6238 (SHA-1, 8 digitos, ventana de 30 s)', () => {
 describe('ventana de 30 segundos', () => {
   it('el codigo cambia al cruzar la ventana', () => {
     const dentro = generateTotp(RFC_SECRET, new Date(1_111_111_109 * 1000), hmacSha1);
-    const siguiente = generateTotp(RFC_SECRET, new Date(1_111_111_140 * 1000), hmacSha1);
-    expect(dentro).not.toBe(siguiente);
+    const nextValue = generateTotp(RFC_SECRET, new Date(1_111_111_140 * 1000), hmacSha1);
+    expect(dentro).not.toBe(nextValue);
   });
 
   it('el codigo no cambia dentro de la misma ventana', () => {
@@ -78,8 +78,8 @@ describe('verifyTotp', () => {
   });
 
   it('rechaza un codigo de otro secreto: un QR reenviado por WhatsApp no sirve', () => {
-    const otro = new TextEncoder().encode('98765432109876543210');
-    const code = generateTotp(otro, instante, hmacSha1);
+    const other = new TextEncoder().encode('98765432109876543210');
+    const code = generateTotp(other, instante, hmacSha1);
     expect(verifyTotp({ secret: RFC_SECRET, code, instant: instante, hmac: hmacSha1 })).toBe(false);
   });
 

@@ -60,17 +60,17 @@ export abstract class VideoStorage {
 export class DisabledVideoStorage extends VideoStorage {
   readonly enabled = false;
 
-  private no(): never {
+  private denied(): never {
     throw new ServiceUnavailableException(
       'Subir videos no está configurado en este servidor. Pega el enlace de YouTube o Vimeo mientras tanto.',
     );
   }
 
   signUpload(): Promise<SignedUpload> {
-    this.no();
+    this.denied();
   }
   signPlayback(): Promise<string> {
-    this.no();
+    this.denied();
   }
   async sizeOf(): Promise<number | null> {
     return null;
@@ -100,7 +100,7 @@ export class GcsVideoStorage extends VideoStorage {
    * memoria del proceso a proposito: son URLs efimeras y publicas-por-un-rato,
    * no hay nada que valga la pena guardar entre despliegues.
    */
-  private readonly cache = new Map<string, { readonly url: string; readonly hasta: number }>();
+  private readonly cache = new Map<string, { readonly url: string; readonly expiresAt: number }>();
 
   constructor(bucketName: string, signingKeyJson?: string) {
     super();
@@ -146,7 +146,7 @@ export class GcsVideoStorage extends VideoStorage {
 
   async signPlayback(objectPath: string): Promise<string> {
     const enCache = this.cache.get(objectPath);
-    if (enCache !== undefined && enCache.hasta > Date.now()) return enCache.url;
+    if (enCache !== undefined && enCache.expiresAt > Date.now()) return enCache.url;
 
     const [url] = await this.bucket.file(objectPath).getSignedUrl({
       version: 'v4',
@@ -156,7 +156,7 @@ export class GcsVideoStorage extends VideoStorage {
 
     // Se guarda con un margen: una URL entregada justo antes de caducar deja al
     // alumno con el reproductor en negro a mitad de la tecnica.
-    this.cache.set(objectPath, { url, hasta: Date.now() + (PLAYBACK_TTL_SECONDS - 600) * 1000 });
+    this.cache.set(objectPath, { url, expiresAt: Date.now() + (PLAYBACK_TTL_SECONDS - 600) * 1000 });
     return url;
   }
 

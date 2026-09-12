@@ -70,7 +70,7 @@ describe('multiplyByFraction', () => {
     // Un mes de 31 dias repartido dia por dia no puede inventar centimos.
     const total = fromSoles(150);
     let acumulado = 0;
-    for (let dia = 0; dia < 31; dia += 1) {
+    for (let day = 0; day < 31; day += 1) {
       acumulado += multiplyByFraction(total, 1, 31, 'floor');
     }
     expect(acumulado).toBeLessThanOrEqual(total);

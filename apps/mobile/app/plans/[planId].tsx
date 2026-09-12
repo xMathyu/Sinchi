@@ -30,11 +30,11 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { usePlanesDelDueno } from '../../src/data/hooks';
-import { archivarOReactivarPlan, eliminarPlan, guardarPlan } from '../../src/data/actions';
+import { useOwnerPlans } from '../../src/data/hooks';
+import { setPlanActive, removePlan, savePlan } from '../../src/data/actions';
 import { aCentimos } from '../../src/lib/format';
 
-const TIPOS: readonly { readonly value: PlanType; readonly label: string; readonly hint: string }[] =
+const TYPES: readonly { readonly value: PlanType; readonly label: string; readonly hint: string }[] =
   [
     {
       value: 'sessions_per_week',
@@ -61,20 +61,20 @@ const TIPOS: readonly { readonly value: PlanType; readonly label: string; readon
 export default function EditorDePlanScreen() {
   const theme = useTheme();
   const { planId } = useLocalSearchParams<{ planId: string }>();
-  const esNuevo = planId === 'nuevo';
-  const { planes, recargar } = usePlanesDelDueno();
+  const isNew = planId === 'nuevo';
+  const { plans, reload } = useOwnerPlans();
 
   const existente = useMemo(
-    () => (esNuevo ? null : (planes?.find((p) => p.plan.id === planId) ?? null)),
-    [planes, planId, esNuevo],
+    () => (isNew ? null : (plans?.find((p) => p.plan.id === planId) ?? null)),
+    [plans, planId, isNew],
   );
 
-  const [nombre, setNombre] = useState('');
-  const [tipo, setTipo] = useState<PlanType>('sessions_per_week');
-  const [sesiones, setSesiones] = useState('3');
-  const [dias, setDias] = useState<readonly IsoWeekday[] | null>(null);
-  const [precio, setPrecio] = useState('');
-  const [guardando, setGuardando] = useState(false);
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<PlanType>('sessions_per_week');
+  const [sessions, setSessions] = useState('3');
+  const [days, setDays] = useState<readonly IsoWeekday[] | null>(null);
+  const [price, setPrice] = useState('');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // El formulario se llena cuando llega el plan, no antes: la lista es remota y
@@ -82,26 +82,26 @@ export default function EditorDePlanScreen() {
   useEffect(() => {
     if (existente === null) return;
     const { plan } = existente;
-    setNombre(plan.name);
-    setTipo(plan.type);
-    setSesiones(plan.sessionsPerWeek === null ? '3' : String(plan.sessionsPerWeek));
-    setDias(plan.allowedDays);
-    setPrecio(String(plan.priceCents / 100));
+    setName(plan.name);
+    setKind(plan.type);
+    setSessions(plan.sessionsPerWeek === null ? '3' : String(plan.sessionsPerWeek));
+    setDays(plan.allowedDays);
+    setPrice(String(plan.priceCents / 100));
   }, [existente]);
 
-  const centimos = aCentimos(precio);
-  const llevaSesiones = tipo === 'sessions_per_week';
-  const exigeDias = tipo === 'fixed_days';
+  const centimos = aCentimos(price);
+  const usesSessionQuota = kind === 'sessions_per_week';
+  const needsDays = kind === 'fixed_days';
 
-  const borrador = {
-    name: nombre,
-    type: tipo,
-    sessionsPerWeek: llevaSesiones ? Number(sesiones) : null,
-    allowedDays: dias,
+  const draft = {
+    name: name,
+    type: kind,
+    sessionsPerWeek: usesSessionQuota ? Number(sessions) : null,
+    allowedDays: days,
     priceCents: centimos ?? -1,
   };
-  const motivo = centimos === null ? 'price_negative' : checkPlanDraft(borrador);
-  const listo = motivo === null && !guardando;
+  const denial = centimos === null ? 'price_negative' : checkPlanDraft(draft);
+  const ready = denial === null && !saving;
 
   /**
    * Si ya intento guardar.
@@ -111,57 +111,57 @@ export default function EditorDePlanScreen() {
    * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
    * enciende, que es justo cuando hace falta.
    */
-  const [intentado, setIntentado] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   /** El motivo, puesto en el campo del que habla. */
-  const fallaDe = (campo: 'nombre' | 'precio'): string | undefined => {
-    if (!intentado || motivo === null) return undefined;
+  const denialFor = (field: 'name' | 'price'): string | undefined => {
+    if (!attempted || denial === null) return undefined;
     // Los motivos de `sessions_*` y `days_*` no salen aqui: los eligen dos
     // selectores, no campos de texto, y un selector no tiene donde pintarse en
     // rojo. Para esos sigue hablando el aviso de abajo, con el mismo mensaje.
-    const suyo: Record<typeof campo, boolean> = {
-      nombre: motivo === 'name_too_short' || motivo === 'name_too_long',
-      precio:
-        motivo === 'price_negative' ||
-        motivo === 'price_not_integer' ||
-        motivo === 'price_too_high',
+    const suyo: Record<typeof field, boolean> = {
+      name: denial === 'name_too_short' || denial === 'name_too_long',
+      price:
+        denial === 'price_negative' ||
+        denial === 'price_not_integer' ||
+        denial === 'price_too_high',
     };
-    return suyo[campo] ? planDenialMessage(motivo) : undefined;
+    return suyo[field] ? planDenialMessage(denial) : undefined;
   };
 
 
-  async function guardar(): Promise<void> {
-    if (!listo || centimos === null) return;
-    setGuardando(true);
+  async function save(): Promise<void> {
+    if (!ready || centimos === null) return;
+    setSaving(true);
     setError(null);
     try {
-      await guardarPlan(esNuevo ? null : planId, {
-        name: nombre.trim(),
-        type: tipo,
-        sessionsPerWeek: llevaSesiones ? Number(sesiones) : null,
-        allowedDays: dias,
+      await savePlan(isNew ? null : planId, {
+        name: name.trim(),
+        type: kind,
+        sessionsPerWeek: usesSessionQuota ? Number(sessions) : null,
+        allowedDays: days,
         priceCents: centimos,
         active: existente?.plan.active ?? true,
       });
-      recargar();
+      reload();
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar el plan.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   }
 
-  function alternarDia(dia: IsoWeekday): void {
-    setDias((actuales) => {
+  function toggleDay(day: IsoWeekday): void {
+    setDays((actuales) => {
       const base = actuales ?? [];
-      const siguiente = base.includes(dia)
-        ? base.filter((d) => d !== dia)
-        : [...base, dia].sort((a, b) => a - b);
+      const nextValue = base.includes(day)
+        ? base.filter((d) => d !== day)
+        : [...base, day].sort((a, b) => a - b);
       // Ningún día seleccionado se guarda como `null` («cualquier día»), que es
       // lo que significa la columna vacía. Un arreglo vacío dejaría al alumno
       // sin ningún día permitido y la puerta lo rechazaría siempre.
-      return siguiente.length === 0 ? null : siguiente;
+      return nextValue.length === 0 ? null : nextValue;
     });
   }
 
@@ -169,7 +169,7 @@ export default function EditorDePlanScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
-          {esNuevo ? 'Nuevo plan' : 'Editar plan'}
+          {isNew ? 'Nuevo plan' : 'Editar plan'}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
@@ -183,11 +183,11 @@ export default function EditorDePlanScreen() {
         <Card radius={theme.radii.xl}>
           <Field
             label="Nombre"
-            value={nombre}
-            onChangeText={setNombre}
+            value={name}
+            onChangeText={setName}
             placeholder="3 veces por semana"
             hint="Es lo que ve el alumno en su plan y lo que lee recepción al inscribirlo."
-            error={fallaDe('nombre')}
+            error={denialFor('name')}
           />
         </Card>
       </Stack>
@@ -195,75 +195,75 @@ export default function EditorDePlanScreen() {
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Cómo se cobra</Eyebrow>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {TIPOS.map((opcion) => {
-            const activo = opcion.value === tipo;
+          {TYPES.map((option) => {
+            const active = option.value === kind;
             return (
               <Pressable
-                key={opcion.value}
+                key={option.value}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: activo }}
+                accessibilityState={{ selected: active }}
                 onPress={() => {
-                  setTipo(opcion.value);
+                  setKind(option.value);
                   // Cambiar a días fijos sin días deja un plan que no valida.
                   // Se proponen los de lunes a viernes, que es lo normal.
-                  if (opcion.value === 'fixed_days' && dias === null) setDias([1, 3, 5]);
+                  if (option.value === 'fixed_days' && days === null) setDays([1, 3, 5]);
                 }}
                 style={{
                   paddingHorizontal: 14,
                   paddingVertical: 9,
                   borderRadius: theme.radii.pill,
-                  backgroundColor: activo
+                  backgroundColor: active
                     ? withAlpha(theme.semaphore.ok, 0.16)
                     : theme.colors.surfaceRaised,
                   borderWidth: 1,
-                  borderColor: activo ? theme.semaphore.ok : theme.colors.border,
+                  borderColor: active ? theme.semaphore.ok : theme.colors.border,
                 }}
               >
                 <Text
                   variant="caption"
                   weight="semibold"
-                  color={activo ? theme.semaphore.ok : theme.colors.textStrong}
+                  color={active ? theme.semaphore.ok : theme.colors.textStrong}
                 >
-                  {opcion.label}
+                  {option.label}
                 </Text>
               </Pressable>
             );
           })}
         </View>
         <Text variant="micro" color={theme.colors.textFaint}>
-          {TIPOS.find((t) => t.value === tipo)?.hint}
+          {TYPES.find((t) => t.value === kind)?.hint}
         </Text>
       </Stack>
 
-      {llevaSesiones && (
+      {usesSessionQuota && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>Cuántas veces por semana</Eyebrow>
           <Row gap={8} justify="flex-start">
             {[1, 2, 3, 4, 5, 6, 7].map((n) => {
-              const activo = String(n) === sesiones;
+              const active = String(n) === sessions;
               return (
                 <Pressable
                   key={n}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: activo }}
-                  onPress={() => setSesiones(String(n))}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setSessions(String(n))}
                   style={{
                     width: 38,
                     height: 38,
                     borderRadius: 19,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: activo
+                    backgroundColor: active
                       ? withAlpha(theme.semaphore.ok, 0.16)
                       : theme.colors.surfaceRaised,
                     borderWidth: 1,
-                    borderColor: activo ? theme.semaphore.ok : theme.colors.border,
+                    borderColor: active ? theme.semaphore.ok : theme.colors.border,
                   }}
                 >
                   <Text
                     variant="bodySmall"
                     weight="semibold"
-                    color={activo ? theme.semaphore.ok : theme.colors.textStrong}
+                    color={active ? theme.semaphore.ok : theme.colors.textStrong}
                   >
                     {n}
                   </Text>
@@ -275,47 +275,47 @@ export default function EditorDePlanScreen() {
       )}
 
       <Stack gap={10} style={{ marginTop: 20 }}>
-        <Eyebrow>{exigeDias ? 'Qué días' : 'Días permitidos'}</Eyebrow>
+        <Eyebrow>{needsDays ? 'Qué días' : 'Días permitidos'}</Eyebrow>
         <Row gap={8} justify="flex-start">
-          {allWeekdays().map((dia) => {
-            const activo = dias?.includes(dia) ?? false;
+          {allWeekdays().map((day) => {
+            const active = days?.includes(day) ?? false;
             return (
               <Pressable
-                key={dia}
+                key={day}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: activo }}
-                accessibilityLabel={`Día ${dia}`}
-                onPress={() => alternarDia(dia)}
+                accessibilityState={{ checked: active }}
+                accessibilityLabel={`Día ${day}`}
+                onPress={() => toggleDay(day)}
                 style={{
                   width: 38,
                   height: 38,
                   borderRadius: 19,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: activo
+                  backgroundColor: active
                     ? withAlpha(theme.semaphore.ok, 0.16)
                     : theme.colors.surfaceRaised,
                   borderWidth: 1,
-                  borderColor: activo ? theme.semaphore.ok : theme.colors.border,
+                  borderColor: active ? theme.semaphore.ok : theme.colors.border,
                 }}
               >
                 <Text
                   variant="bodySmall"
                   weight="semibold"
-                  color={activo ? theme.semaphore.ok : theme.colors.textStrong}
+                  color={active ? theme.semaphore.ok : theme.colors.textStrong}
                 >
-                  {weekdayInitial(dia)}
+                  {weekdayInitial(day)}
                 </Text>
               </Pressable>
             );
           })}
         </Row>
         <Text variant="micro" color={theme.colors.textFaint}>
-          {dias === null
-            ? exigeDias
+          {days === null
+            ? needsDays
               ? 'Un plan de días fijos necesita al menos un día.'
               : 'Sin marcar ninguno, entrena cualquier día.'
-            : exigeDias
+            : needsDays
               ? 'Esos días son su cupo: no puede entrenar más veces por semana.'
               : 'Solo esos días, además del límite de sesiones.'}
         </Text>
@@ -325,39 +325,39 @@ export default function EditorDePlanScreen() {
         <Eyebrow>Cuánto cuesta</Eyebrow>
         <Card radius={theme.radii.xl}>
           <Field
-            label={`Precio en soles, ${planPriceUnit(tipo)}`}
-            value={precio}
-            onChangeText={setPrecio}
+            label={`Precio en soles, ${planPriceUnit(kind)}`}
+            value={price}
+            onChangeText={setPrice}
             placeholder="150"
             keyboardType="decimal-pad"
             hint={
-              tipo === 'drop_in'
+              kind === 'drop_in'
                 ? 'Lo que cuesta UNA clase. No es una mensualidad: la puerta se lo pide cada día que viene.'
                 : 'Lo que se le cobra cada periodo.'
             }
-            error={fallaDe('precio')}
+            error={denialFor('price')}
           />
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && intentado)) && (
+      {(error !== null || (denial !== null && attempted)) && (
         <Card
           tone="sunken"
           borderColor={theme.semaphore.bad}
           style={{ marginTop: 16 }}
         >
           <Text variant="bodySmall" color={theme.semaphore.bad}>
-            {error ?? (motivo === null ? '' : planDenialMessage(motivo))}
+            {error ?? (denial === null ? '' : planDenialMessage(denial))}
           </Text>
         </Card>
       )}
 
       <Button
-        label={guardando ? 'Guardando…' : esNuevo ? 'Crear plan' : 'Guardar cambios'}
-        disabled={!listo}
+        label={saving ? 'Guardando…' : isNew ? 'Crear plan' : 'Guardar cambios'}
+        disabled={!ready}
         style={{ marginTop: 20 }}
-        onPress={() => void guardar()}
-        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+        onPress={() => void save()}
+        onBlockedPress={saving ? undefined : () => setAttempted(true)}
       />
 
       {existente !== null && (
@@ -375,9 +375,9 @@ export default function EditorDePlanScreen() {
             label={existente.plan.active ? 'Archivar' : 'Volver a ofrecer'}
             variant="secondary"
             onPress={() => {
-              void archivarOReactivarPlan(planId, !existente.plan.active)
+              void setPlanActive(planId, !existente.plan.active)
                 .then(() => {
-                  recargar();
+                  reload();
                   router.back();
                 })
                 .catch((e: unknown) =>
@@ -400,9 +400,9 @@ export default function EditorDePlanScreen() {
                       text: 'Borrar',
                       style: 'destructive',
                       onPress: () => {
-                        void eliminarPlan(planId)
+                        void removePlan(planId)
                           .then(() => {
-                            recargar();
+                            reload();
                             router.back();
                           })
                           .catch((e: unknown) =>

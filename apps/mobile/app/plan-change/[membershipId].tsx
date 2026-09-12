@@ -23,7 +23,7 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primit
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useMembership, usePlansFor, useToday } from '../../src/data/hooks';
-import { cambiarPlan } from '../../src/data/actions';
+import { changePlan } from '../../src/data/actions';
 
 export default function PlanChangeScreen() {
   const theme = useTheme();
@@ -32,7 +32,7 @@ export default function PlanChangeScreen() {
   const entry = useMembership(membershipId);
   // Los planes se piden a la api. `state.plans` solo tiene el plan actual del
   // alumno, asi que filtrarlo dejaba la lista vacia y no habia a que cambiarse.
-  const { plans, cargando, error: errorPlanes } = usePlansFor(membershipId);
+  const { plans, loading, error: plansError } = usePlansFor(membershipId);
 
   const options = plans.filter(
     (plan) => plan.tenantId === entry.tenant.id && plan.active && plan.id !== entry.plan.id,
@@ -40,7 +40,7 @@ export default function PlanChangeScreen() {
   const [targetId, setTargetId] = useState<string | null>(null);
   const target = options.find((plan) => plan.id === targetId) ?? null;
 
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const decision =
@@ -83,14 +83,14 @@ export default function PlanChangeScreen() {
 
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Cambiar a</Eyebrow>
-        {cargando && options.length === 0 ? (
+        {loading && options.length === 0 ? (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Cargando los planes del gimnasio…
           </Text>
         ) : options.length === 0 ? (
           <Card radius={theme.radii.lg}>
             <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-              {errorPlanes ?? 'Este gimnasio no tiene otros planes activos ahora mismo.'}
+              {plansError ?? 'Este gimnasio no tiene otros planes activos ahora mismo.'}
             </Text>
           </Card>
         ) : (
@@ -147,26 +147,26 @@ export default function PlanChangeScreen() {
         <Button
           label={
             decision?.kind === 'upgrade'
-              ? guardando
+              ? saving
                 ? 'Cambiando…'
                 : `Subir de plan y pagar ${formatPENShort(decision.chargeTodayCents)} en mostrador`
               : decision?.kind === 'downgrade'
                 ? 'Programar el cambio'
                 : 'Confirmar cambio'
           }
-          disabled={target === null || decision?.kind === 'no_change' || guardando}
+          disabled={target === null || decision?.kind === 'no_change' || saving}
           onPress={() => {
-            if (target === null || guardando) return;
-            setGuardando(true);
+            if (target === null || saving) return;
+            setSaving(true);
             setError(null);
-            void cambiarPlan(entry.membership.id, target.id)
+            void changePlan(entry.membership.id, target.id)
               .then(() => router.back())
               .catch((causa: unknown) => {
                 setError(
                   causa instanceof Error ? causa.message : 'No se pudo cambiar el plan.',
                 );
               })
-              .finally(() => setGuardando(false));
+              .finally(() => setSaving(false));
           }}
         />
         {error === null ? null : (

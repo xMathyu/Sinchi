@@ -25,38 +25,38 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { usePlanesDelGimnasio } from '../src/data/hooks';
-import { existeIdentidad, inscribirAlumno, YaEnElPadron } from '../src/data/actions';
+import { useGymPlans } from '../src/data/hooks';
+import { existeIdentidad, enrollStudent, AlreadyInRoster } from '../src/data/actions';
 
 export default function EnrollScreen() {
   const theme = useTheme();
-  const planes = usePlanesDelGimnasio();
+  const plans = useGymPlans();
 
   const [correo, setCorreo] = useState('');
   // `null` = todavia no se ha comprobado el correo.
-  const [yaExiste, setYaExiste] = useState<boolean | null>(null);
+  const [alreadyExists, setAlreadyExists] = useState<boolean | null>(null);
   const [comprobando, setComprobando] = useState(false);
 
-  const [nombre, setNombre] = useState('');
-  const [documento, setDocumento] = useState('');
-  const [celular, setCelular] = useState('+51');
+  const [name, setName] = useState('');
+  const [documentId, setDocumentId] = useState('');
+  const [phone, setPhone] = useState('+51');
   const [planId, setPlanId] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cuando la persona ya está en el padrón, la api dice cuál es su ficha. Es el
   // caso normal —alguien que canceló y vuelve— y no tiene sentido dejar al
   // mostrador leyendo "ya existe" sin un camino.
-  const [fichaExistente, setFichaExistente] = useState<string | null>(null);
+  const [existingRecord, setExistingRecord] = useState<string | null>(null);
 
-  const plan = planes.find((p) => p.id === planId) ?? null;
+  const plan = plans.find((p) => p.id === planId) ?? null;
   const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim());
 
   // Reutilizando identidad no hacen falta ni el nombre ni el celular: la api ya
   // los tiene, y pedirlos otra vez es teclear para confirmar lo que ya sabe.
-  const listo =
+  const ready =
     plan !== null &&
-    documento.trim().length >= 6 &&
-    (yaExiste === true || (nombre.trim().length >= 2 && celular.trim().length >= 7));
+    documentId.trim().length >= 6 &&
+    (alreadyExists === true || (name.trim().length >= 2 && phone.trim().length >= 7));
 
   return (
     <Screen scroll>
@@ -75,12 +75,12 @@ export default function EnrollScreen() {
         <Eyebrow>Su correo</Eyebrow>
         <Card radius={theme.radii.xl}>
           <Stack gap={14}>
-            <Campo
-              etiqueta="Correo"
-              valor={correo}
-              onChange={(texto) => {
-                setCorreo(texto);
-                setYaExiste(null);
+            <LabeledInput
+              label="Correo"
+              value={correo}
+              onChange={(text) => {
+                setCorreo(text);
+                setAlreadyExists(null);
               }}
               placeholder="alumno@correo.com"
               keyboardType="email-address"
@@ -88,7 +88,7 @@ export default function EnrollScreen() {
               pie="Con él, su cuenta se activa sola al entrar con Google."
             />
 
-            {yaExiste === null ? (
+            {alreadyExists === null ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !correoValido || comprobando }}
@@ -97,8 +97,8 @@ export default function EnrollScreen() {
                   setComprobando(true);
                   setError(null);
                   void existeIdentidad(correo.trim())
-                    .then(setYaExiste)
-                    .catch(() => setYaExiste(false))
+                    .then(setAlreadyExists)
+                    .catch(() => setAlreadyExists(false))
                     .finally(() => setComprobando(false));
                 }}
                 style={{ opacity: correoValido && !comprobando ? 1 : 0.4 }}
@@ -110,14 +110,14 @@ export default function EnrollScreen() {
             ) : (
               <Row>
                 <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ flex: 1 }}>
-                  {yaExiste
+                  {alreadyExists
                     ? 'Ya hay una identidad Sinchi con ese correo. Confirma su documento y se le suma este gimnasio.'
                     : 'No hay ninguna identidad con ese correo. Hacen falta su nombre y su celular.'}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
                   hitSlop={10}
-                  onPress={() => setYaExiste(null)}
+                  onPress={() => setAlreadyExists(null)}
                 >
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
                     Cambiar
@@ -129,37 +129,37 @@ export default function EnrollScreen() {
         </Card>
       </Stack>
 
-      {yaExiste === null ? null : (
+      {alreadyExists === null ? null : (
         <Stack gap={10} style={{ marginTop: 20 }}>
-          <Eyebrow>{yaExiste ? 'Confirma quién es' : 'Quién es'}</Eyebrow>
+          <Eyebrow>{alreadyExists ? 'Confirma quién es' : 'Quién es'}</Eyebrow>
           <Card radius={theme.radii.xl}>
             <Stack gap={16}>
-              {yaExiste ? null : (
-                <Campo
-                  etiqueta="Nombre completo"
-                  valor={nombre}
-                  onChange={setNombre}
+              {alreadyExists ? null : (
+                <LabeledInput
+                  label="Nombre completo"
+                  value={name}
+                  onChange={setName}
                   placeholder="Como figura en su documento"
                   autoCapitalize="words"
                 />
               )}
-              <Campo
-                etiqueta="DNI o carné de extranjería"
-                valor={documento}
-                onChange={(texto) => setDocumento(texto.replace(/\s/g, ''))}
+              <LabeledInput
+                label="DNI o carné de extranjería"
+                value={documentId}
+                onChange={(text) => setDocumentId(text.replace(/\s/g, ''))}
                 placeholder="71448902"
                 keyboardType="number-pad"
                 pie={
-                  yaExiste
+                  alreadyExists
                     ? 'Compáralo con su carné: es lo que decide a qué identidad se suma este gimnasio.'
                     : undefined
                 }
               />
-              {yaExiste ? null : (
-                <Campo
-                  etiqueta="Celular"
-                  valor={celular}
-                  onChange={setCelular}
+              {alreadyExists ? null : (
+                <LabeledInput
+                  label="Celular"
+                  value={phone}
+                  onChange={setPhone}
                   placeholder="+51 987 654 321"
                   keyboardType="phone-pad"
                   pie="Es su llave única en toda la red: con este número entra a su app."
@@ -170,33 +170,33 @@ export default function EnrollScreen() {
         </Stack>
       )}
 
-      {yaExiste === null ? null : (
+      {alreadyExists === null ? null : (
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Con qué plan empieza</Eyebrow>
-        {planes.length === 0 ? (
+        {plans.length === 0 ? (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Trayendo los planes del gimnasio…
           </Text>
         ) : (
-          planes.map((opcion) => {
-            const activo = opcion.id === planId;
+          plans.map((option) => {
+            const active = option.id === planId;
             return (
               <Pressable
-                key={opcion.id}
+                key={option.id}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: activo }}
-                onPress={() => setPlanId(opcion.id)}
+                accessibilityState={{ selected: active }}
+                onPress={() => setPlanId(option.id)}
               >
                 <Card
                   radius={theme.radii.lg}
-                  borderColor={activo ? theme.semaphore.ok : theme.colors.hairline}
+                  borderColor={active ? theme.semaphore.ok : theme.colors.hairline}
                 >
                   <Row>
                     <Text variant="heading" weight="semibold">
-                      {opcion.name}
+                      {option.name}
                     </Text>
                     <Text variant="heading" weight="semibold">
-                      {formatPEN(opcion.priceCents)}
+                      {formatPEN(option.priceCents)}
                     </Text>
                   </Row>
                 </Card>
@@ -225,25 +225,25 @@ export default function EnrollScreen() {
 
       <Stack gap={8} style={{ marginTop: 20 }}>
         <Button
-          label={guardando ? 'Inscribiendo…' : 'Inscribir'}
-          disabled={!listo || guardando}
+          label={saving ? 'Inscribiendo…' : 'Inscribir'}
+          disabled={!ready || saving}
           onPress={() => {
-            if (!listo || plan === null || guardando) return;
-            setGuardando(true);
+            if (!ready || plan === null || saving) return;
+            setSaving(true);
             setError(null);
 
-            void inscribirAlumno({
-              documentId: documento.trim(),
-              ...(yaExiste ? {} : { name: nombre.trim(), phone: celular.trim() }),
+            void enrollStudent({
+              documentId: documentId.trim(),
+              ...(alreadyExists ? {} : { name: name.trim(), phone: phone.trim() }),
               ...(correo.trim().length > 0 ? { email: correo.trim() } : {}),
               planId: plan.id,
             })
-              .then((salida) => {
+              .then((outcome) => {
                 // A la ficha recién creada: es donde se cobra la matrícula, que
                 // es lo siguiente que pasa en el mostrador.
                 router.replace({
                   pathname: '/member/[membershipId]',
-                  params: { membershipId: salida.membershipId },
+                  params: { membershipId: outcome.membershipId },
                 });
               })
               .catch((causa: unknown) => {
@@ -251,9 +251,9 @@ export default function EnrollScreen() {
                 // alguien con ese celular o ese documento"—. Reescribirlo aquí
                 // solo lo empeoraría.
                 setError(causa instanceof Error ? causa.message : 'No se pudo inscribir.');
-                setFichaExistente(causa instanceof YaEnElPadron ? causa.membershipId : null);
+                setExistingRecord(causa instanceof AlreadyInRoster ? causa.membershipId : null);
               })
-              .finally(() => setGuardando(false));
+              .finally(() => setSaving(false));
           }}
         />
         {error === null ? null : (
@@ -261,14 +261,14 @@ export default function EnrollScreen() {
             {error}
           </Text>
         )}
-        {fichaExistente === null ? null : (
+        {existingRecord === null ? null : (
           <Button
             label="Abrir su ficha"
             variant="secondary"
             onPress={() =>
               router.replace({
                 pathname: '/member/[membershipId]',
-                params: { membershipId: fichaExistente },
+                params: { membershipId: existingRecord },
               })
             }
           />
@@ -278,18 +278,18 @@ export default function EnrollScreen() {
   );
 }
 
-function Campo({
-  etiqueta,
-  valor,
+function LabeledInput({
+  label,
+  value,
   onChange,
   placeholder,
   pie,
   keyboardType,
   autoCapitalize = 'sentences',
 }: {
-  readonly etiqueta: string;
-  readonly valor: string;
-  readonly onChange: (texto: string) => void;
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (text: string) => void;
   readonly placeholder: string;
   readonly pie?: string;
   readonly keyboardType?: 'number-pad' | 'phone-pad' | 'email-address';
@@ -299,17 +299,17 @@ function Campo({
   return (
     <Stack gap={4}>
       <Text variant="captionSmall" color={theme.colors.textSecondary}>
-        {etiqueta}
+        {label}
       </Text>
       <TextInput
-        value={valor}
+        value={value}
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        accessibilityLabel={etiqueta}
+        accessibilityLabel={label}
         style={{
           color: theme.colors.ink,
           fontSize: 16,

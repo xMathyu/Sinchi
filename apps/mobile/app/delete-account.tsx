@@ -21,9 +21,9 @@ import { Button, Card, Divider, Row, Stack, Text } from '../src/design/primitive
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import {
-  cancelarBajaDeCuenta,
-  consultarBajaDeCuenta,
-  pedirBajaDeCuenta,
+  cancelAccountDeletion,
+  fetchAccountDeletion,
+  requestAccountDeletion,
   type DeletionRequestDto,
 } from '../src/data/api';
 
@@ -34,49 +34,49 @@ const SE_BORRA = [
   'Tus reservas de clase de prueba y tus inscripciones a eventos.',
 ] as const;
 
-export default function EliminarCuentaScreen() {
+export default function DeleteAccountScreen() {
   const theme = useTheme();
   const [pendiente, setPendiente] = useState<DeletionRequestDto | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [confirmando, setConfirmando] = useState(false);
-  const [motivo, setMotivo] = useState('');
+  const [denial, setDenial] = useState('');
   const [trabajando, setTrabajando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refrescar = useCallback(() => {
-    setCargando(true);
-    consultarBajaDeCuenta()
+    setLoading(true);
+    fetchAccountDeletion()
       .then(({ request }) => setPendiente(request))
       .catch((causa: unknown) =>
-        setAviso(causa instanceof Error ? causa.message : 'No se pudo consultar el estado.'),
+        setNotice(causa instanceof Error ? causa.message : 'No se pudo consultar el estado.'),
       )
-      .finally(() => setCargando(false));
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(refrescar, [refrescar]);
 
-  const pedir = () => {
+  const askForDeletion = () => {
     setTrabajando(true);
-    setAviso(null);
-    pedirBajaDeCuenta(motivo)
+    setNotice(null);
+    requestAccountDeletion(denial)
       .then(({ request }) => {
         setPendiente(request);
         setConfirmando(false);
-        setMotivo('');
+        setDenial('');
       })
       .catch((causa: unknown) =>
-        setAviso(causa instanceof Error ? causa.message : 'No se pudo registrar la solicitud.'),
+        setNotice(causa instanceof Error ? causa.message : 'No se pudo registrar la solicitud.'),
       )
       .finally(() => setTrabajando(false));
   };
 
   const cancelar = () => {
     setTrabajando(true);
-    setAviso(null);
-    cancelarBajaDeCuenta()
+    setNotice(null);
+    cancelAccountDeletion()
       .then(() => setPendiente(null))
       .catch((causa: unknown) =>
-        setAviso(causa instanceof Error ? causa.message : 'No se pudo cancelar.'),
+        setNotice(causa instanceof Error ? causa.message : 'No se pudo cancelar.'),
       )
       .finally(() => setTrabajando(false));
   };
@@ -95,7 +95,7 @@ export default function EliminarCuentaScreen() {
       </Row>
 
       <Stack gap={16} style={{ paddingTop: 18 }}>
-        {cargando ? (
+        {loading ? (
           <Text variant="body" color={theme.colors.textSecondary}>
             Consultando…
           </Text>
@@ -110,7 +110,7 @@ export default function EliminarCuentaScreen() {
                 Tu baja está en curso
               </Text>
               <Text variant="body" color={theme.colors.textSecondary}>
-                La pediste el {formatearFecha(pendiente.requestedAt)}. La completamos dentro de los
+                La pediste el {formatDate(pendiente.requestedAt)}. La completamos dentro de los
                 30 días siguientes.
               </Text>
               <Divider />
@@ -139,8 +139,8 @@ export default function EliminarCuentaScreen() {
                 gimnasio. Si vuelves a entrenar, van a tener que inscribirte otra vez desde cero.
               </Text>
               <TextInput
-                value={motivo}
-                onChangeText={(v) => setMotivo(v.slice(0, 500))}
+                value={denial}
+                onChangeText={(v) => setDenial(v.slice(0, 500))}
                 placeholder="¿Por qué te vas? (opcional)"
                 placeholderTextColor={theme.colors.textPlaceholder}
                 multiline
@@ -160,7 +160,7 @@ export default function EliminarCuentaScreen() {
                 accentColor={theme.semaphore.bad}
                 accentInk={theme.semaphoreInk.bad}
                 disabled={trabajando}
-                onPress={pedir}
+                onPress={askForDeletion}
               />
               <Button
                 label="Mejor no"
@@ -168,7 +168,7 @@ export default function EliminarCuentaScreen() {
                 disabled={trabajando}
                 onPress={() => {
                   setConfirmando(false);
-                  setMotivo('');
+                  setDenial('');
                 }}
               />
             </Stack>
@@ -229,9 +229,9 @@ export default function EliminarCuentaScreen() {
           </>
         )}
 
-        {aviso === null ? null : (
+        {notice === null ? null : (
           <Text variant="captionSmall" color={theme.semaphore.alert}>
-            {aviso}
+            {notice}
           </Text>
         )}
       </Stack>
@@ -240,8 +240,8 @@ export default function EliminarCuentaScreen() {
 }
 
 /** «4 de septiembre», sin año: la baja es reciente por definición. */
-function formatearFecha(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return 'hace poco';
-  return fecha.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'hace poco';
+  return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
 }

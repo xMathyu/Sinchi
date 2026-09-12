@@ -154,8 +154,8 @@ export class RoutinesService {
         // titulo esconde justo lo que hace volver al alumno.
         .orderBy(desc(schema.routines.updatedAt));
 
-      const todas = rows.map(toRoutine);
-      const visibles = visibleRoutines(todas, viewer);
+      const every = rows.map(toRoutine);
+      const visibles = visibleRoutines(every, viewer);
 
       return {
         routines: await this.withCovers(tx, visibles),
@@ -166,7 +166,7 @@ export class RoutinesService {
          * texto, y ensenar los TITULOS de lo que no puede ver regalaria la mitad
          * del valor. Para el alumno y el staff es 0: ya las tienen.
          */
-        membersOnly: viewer === 'visitor' ? membersOnlyCount(todas) : 0,
+        membersOnly: viewer === 'visitor' ? membersOnlyCount(every) : 0,
       };
     });
   }
@@ -214,8 +214,8 @@ export class RoutinesService {
       const [card] = await this.withCovers(tx, [routine], items);
       return {
         unlocked: true,
-        card: { ...card!, routine: (await this.conVideosFirmados(tx, [routine]))[0]! },
-        items: await this.conVideosFirmadosEnPasos(tx, items),
+        card: { ...card!, routine: (await this.withSignedVideos(tx, [routine]))[0]! },
+        items: await this.withSignedStepVideos(tx, items),
       };
     });
   }
@@ -249,7 +249,7 @@ export class RoutinesService {
 
     return withTenant(this.db, tenantId, async (tx) => {
       const actual = await this.findInTx(tx, routineId);
-      const pasosAntes = await this.itemsFor(tx, [routineId]);
+      const stepsBefore = await this.itemsFor(tx, [routineId]);
 
       await tx
         .update(schema.routines)
@@ -258,9 +258,9 @@ export class RoutinesService {
 
       await this.replaceItems(tx, tenantId, routineId, input.items);
 
-      await this.borrarHuerfanos(
+      await this.deleteOrphans(
         tx,
-        [actual.videoAssetId, ...pasosAntes.map((paso) => paso.videoAssetId)],
+        [actual.videoAssetId, ...stepsBefore.map((step) => step.videoAssetId)],
         [input.videoAssetId, ...input.items.map((item) => item.videoAssetId)],
       );
 
@@ -331,11 +331,11 @@ export class RoutinesService {
       }
 
       // Los archivos se van con ella: nadie mas los referencia.
-      const pasos = await this.itemsFor(tx, [routineId]);
+      const steps = await this.itemsFor(tx, [routineId]);
       await tx.delete(schema.routines).where(eq(schema.routines.id, routineId));
-      await this.borrarHuerfanos(
+      await this.deleteOrphans(
         tx,
-        [routine.videoAssetId, ...pasos.map((paso) => paso.videoAssetId)],
+        [routine.videoAssetId, ...steps.map((step) => step.videoAssetId)],
         [],
       );
       return { deleted: true as const };
@@ -479,13 +479,13 @@ export class RoutinesService {
    * la rutina tenia ANTES, asi que un archivo de otra rutina no entra nunca en
    * el conjunto.
    */
-  private async borrarHuerfanos(
+  private async deleteOrphans(
     tx: Tx,
-    antes: readonly (string | null)[],
-    despues: readonly (string | null)[],
+    before: readonly (string | null)[],
+    after: readonly (string | null)[],
   ): Promise<void> {
-    const vivos = new Set(despues.filter((id): id is string => id !== null));
-    const sobran = [...new Set(antes.filter((id): id is string => id !== null))].filter(
+    const vivos = new Set(after.filter((id): id is string => id !== null));
+    const sobran = [...new Set(before.filter((id): id is string => id !== null))].filter(
       (id) => !vivos.has(id),
     );
     if (sobran.length === 0) return;
@@ -513,8 +513,8 @@ export class RoutinesService {
     const [card] = await this.withCovers(tx, [routine], items);
     return {
       unlocked: true,
-      card: { ...card!, routine: (await this.conVideosFirmados(tx, [routine]))[0]! },
-      items: await this.conVideosFirmadosEnPasos(tx, items),
+      card: { ...card!, routine: (await this.withSignedVideos(tx, [routine]))[0]! },
+      items: await this.withSignedStepVideos(tx, items),
     };
   }
 
@@ -530,7 +530,7 @@ export class RoutinesService {
    * hasta cuarenta pasos, y encadenar cuarenta llamadas es lo que convierte una
    * ficha en cinco segundos de espera.
    */
-  private async conVideosFirmados(tx: Tx, routines: readonly Routine[]): Promise<Routine[]> {
+  private async withSignedVideos(tx: Tx, routines: readonly Routine[]): Promise<Routine[]> {
     const rutas = await this.objectPaths(
       tx,
       routines.map((r) => r.videoAssetId),
@@ -544,7 +544,7 @@ export class RoutinesService {
     );
   }
 
-  private async conVideosFirmadosEnPasos(
+  private async withSignedStepVideos(
     tx: Tx,
     items: readonly RoutineItem[],
   ): Promise<RoutineItem[]> {
@@ -636,15 +636,15 @@ export class RoutinesService {
         routines.map((r) => r.id),
       ));
 
-    const porRutina = new Map<string, RoutineItem[]>();
+    const byRoutine = new Map<string, RoutineItem[]>();
     for (const item of items) {
-      const lista = porRutina.get(item.routineId) ?? [];
-      lista.push(item);
-      porRutina.set(item.routineId, lista);
+      const listed = byRoutine.get(item.routineId) ?? [];
+      listed.push(item);
+      byRoutine.set(item.routineId, listed);
     }
 
     return routines.map((routine) => {
-      const suyos = porRutina.get(routine.id) ?? [];
+      const suyos = byRoutine.get(routine.id) ?? [];
       return {
         routine,
         itemCount: suyos.length,
@@ -674,10 +674,10 @@ export class RoutinesService {
         routineId,
         position,
         title: item.title.trim(),
-        instructions: this.limpio(item.instructions),
-        videoUrl: this.videoLimpio(item.videoUrl),
+        instructions: this.trimmed(item.instructions),
+        videoUrl: this.trimmedVideo(item.videoUrl),
         videoAssetId: item.videoAssetId,
-        prescription: this.limpio(item.prescription),
+        prescription: this.trimmed(item.prescription),
       })),
     );
   }
@@ -705,8 +705,8 @@ export class RoutinesService {
   private toColumns(input: RoutineInput) {
     return {
       title: input.title.trim(),
-      summary: this.limpio(input.summary),
-      videoUrl: this.videoLimpio(input.videoUrl),
+      summary: this.trimmed(input.summary),
+      videoUrl: this.trimmedVideo(input.videoUrl),
       videoAssetId: input.videoAssetId,
       level: input.level,
       visibility: input.visibility,
@@ -715,10 +715,10 @@ export class RoutinesService {
     };
   }
 
-  private limpio(texto: string | null): string | null {
-    if (texto === null) return null;
-    const limpio = texto.trim();
-    return limpio.length === 0 ? null : limpio;
+  private trimmed(text: string | null): string | null {
+    if (text === null) return null;
+    const trimmed = text.trim();
+    return trimmed.length === 0 ? null : trimmed;
   }
 
   /**
@@ -730,8 +730,8 @@ export class RoutinesService {
    * `?t=42` arranca la tecnica por la mitad. `checkRoutineDraft` ya rechazo lo
    * que no se entiende, asi que aqui no queda nada que decidir.
    */
-  private videoLimpio(raw: string | null): string | null {
-    const limpio = this.limpio(raw);
-    return limpio === null ? null : canonicalVideoUrl(limpio);
+  private trimmedVideo(raw: string | null): string | null {
+    const trimmed = this.trimmed(raw);
+    return trimmed === null ? null : canonicalVideoUrl(trimmed);
   }
 }

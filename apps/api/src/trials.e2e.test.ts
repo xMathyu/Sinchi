@@ -245,13 +245,13 @@ suite('reservar la clase gratis', () => {
     await reservar('nova-bjj', { token, slot: nova.slots[0]!, phone });
 
     const { body: iron } = await http.get('/v1/gyms/iron-muay-thai').expect(200);
-    const otra = await reservar('iron-muay-thai', {
+    const other = await reservar('iron-muay-thai', {
       token,
       slot: (iron as GymDetail).slots[0]!,
       phone,
     });
 
-    expect(otra.body.booked).toBe(true);
+    expect(other.body.booked).toBe(true);
   });
 
   /**
@@ -326,15 +326,15 @@ suite('reservar la clase gratis', () => {
     const token = declareIdentity(`prospecto-${runId}-19`);
     const phone = nextPhone();
 
-    const cuenta = await http
+    const account = await http
       .post('/v1/auth/google')
       .send({ idToken: token, fullName: 'Registrada Condatos', phone })
       .expect(201);
 
     // La app los recibe de vuelta: es como sabe que ya no tiene que preguntarlos.
-    expect(cuenta.body.linked).toBe(false);
-    expect(cuenta.body.claim.displayName).toBe('Registrada Condatos');
-    expect(cuenta.body.claim.phone).toBe(phone);
+    expect(account.body.linked).toBe(false);
+    expect(account.body.claim.displayName).toBe('Registrada Condatos');
+    expect(account.body.claim.phone).toBe(phone);
 
     const { body } = await http.post('/v1/gyms/nova-bjj/trial').send({
       idToken: token,
@@ -374,14 +374,14 @@ suite('reservar la clase gratis', () => {
   it('quien ya entrena ahi no reserva una clase de prueba', async () => {
     // Mathyu tiene membresia en Nova: la clase gratis es para conocer un local
     // nuevo, no un descuento para el alumno de la casa.
-    const { body: sesion } = await http
+    const { body: session } = await http
       .post('/v1/auth/dev-login')
       .send({ phone: '+51987654321' })
       .expect(201);
 
     const { body } = await http
       .post('/v1/me/trials')
-      .set(auth(sesion.accessToken))
+      .set(auth(session.accessToken))
       .send({
         slug: 'nova-bjj',
         classScheduleId: nova.slots[0]!.scheduleId,
@@ -397,28 +397,28 @@ suite('lo que ve el gimnasio', () => {
   it('la reserva sale en la lista del mostrador con dia y hora', async () => {
     const token = declareIdentity(`prospecto-${runId}-8`);
     const slot = nova.slots[0]!;
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token,
       slot,
       fullName: 'Visible Enlalista',
     });
-    expect(reserva.booked).toBe(true);
+    expect(trialRow.booked).toBe(true);
 
     const { body } = await http.get('/v1/staff/trials').set(auth(novaFrontDesk)).expect(200);
-    const fila = (body as { id: string; fullName: string; startTime: string; phone: string }[]).find(
-      (row) => row.id === reserva.booking.id,
+    const found = (body as { id: string; fullName: string; startTime: string; phone: string }[]).find(
+      (row) => row.id === trialRow.booking.id,
     );
 
-    expect(fila).toBeDefined();
-    expect(fila!.fullName).toBe('Visible Enlalista');
-    expect(fila!.startTime).toBe(slot.startTime);
+    expect(found).toBeDefined();
+    expect(found!.fullName).toBe('Visible Enlalista');
+    expect(found!.startTime).toBe(slot.startTime);
     // El celular es lo que convierte la lista en algo accionable.
-    expect(fila!.phone.length).toBeGreaterThan(6);
+    expect(found!.phone.length).toBeGreaterThan(6);
   });
 
   /** El control que sostiene todo lo demas: un local no ve los leads del otro. */
   it('el gimnasio de al lado no ve esos interesados', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-9`),
       slot: nova.slots[0]!,
     });
@@ -426,17 +426,17 @@ suite('lo que ve el gimnasio', () => {
     const { body } = await http.get('/v1/staff/trials').set(auth(shotokanFrontDesk)).expect(200);
     const ids = (body as { id: string }[]).map((row) => row.id);
 
-    expect(ids).not.toContain(reserva.booking.id);
+    expect(ids).not.toContain(trialRow.booking.id);
   });
 
   it('el mostrador marca quien vino', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-10`),
       slot: nova.slots[0]!,
     });
 
     const { body } = await http
-      .post(`/v1/staff/trials/${reserva.booking.id}/status`)
+      .post(`/v1/staff/trials/${trialRow.booking.id}/status`)
       .set(auth(novaFrontDesk))
       .send({ status: 'attended' })
       .expect(201);
@@ -445,13 +445,13 @@ suite('lo que ve el gimnasio', () => {
   });
 
   it('un mostrador ajeno no puede tocar una reserva que no es suya', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-11`),
       slot: nova.slots[0]!,
     });
 
     await http
-      .post(`/v1/staff/trials/${reserva.booking.id}/status`)
+      .post(`/v1/staff/trials/${trialRow.booking.id}/status`)
       .set(auth(shotokanFrontDesk))
       .send({ status: 'no_show' })
       .expect(404);
@@ -466,13 +466,13 @@ suite('lo que ve el gimnasio', () => {
    * quien todavia no ha venido no cuenta nada.
    */
   it('el historial no trae lo que todavia no ha pasado', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-12`),
       slot: nova.slots[0]!,
     });
-    expect(reserva.booked).toBe(true);
+    expect(trialRow.booked).toBe(true);
 
-    const { body: porVenir } = await http
+    const { body: upcoming } = await http
       .get('/v1/staff/trials')
       .set(auth(novaFrontDesk))
       .expect(200);
@@ -481,15 +481,15 @@ suite('lo que ve el gimnasio', () => {
       .set(auth(novaFrontDesk))
       .expect(200);
 
-    const ids = (filas: { id: string }[]): string[] => filas.map((row) => row.id);
+    const ids = (rows: { id: string }[]): string[] => rows.map((row) => row.id);
 
     // Los slots que ofrece la app son de hoy en adelante, asi que toda reserva
     // recien hecha pertenece a «por venir» y a ninguna otra parte.
-    expect(ids(porVenir)).toContain(reserva.booking.id);
-    expect(ids(historial)).not.toContain(reserva.booking.id);
+    expect(ids(upcoming)).toContain(trialRow.booking.id);
+    expect(ids(historial)).not.toContain(trialRow.booking.id);
 
     // Y ninguna reserva sale en las dos listas, sea de quien sea.
-    const enAmbas = ids(porVenir).filter((id) => ids(historial).includes(id));
+    const enAmbas = ids(upcoming).filter((id) => ids(historial).includes(id));
     expect(enAmbas).toEqual([]);
   });
 
@@ -501,19 +501,19 @@ suite('lo que ve el gimnasio', () => {
 suite('lo que ve quien reservo', () => {
   it('vuelve a encontrar su reserva con la misma cuenta', async () => {
     const token = declareIdentity(`prospecto-${runId}-12`);
-    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+    const { body: trialRow } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
 
     const { body } = await http.post('/v1/gyms/trials/mine').send({ idToken: token }).expect(201);
     const mias = body as { id: string; gymName: string }[];
 
-    expect(mias.map((row) => row.id)).toContain(reserva.booking.id);
+    expect(mias.map((row) => row.id)).toContain(trialRow.booking.id);
     // El nombre del gimnasio viaja con la reserva: quien la mira puede tenerlas
     // en tres locales distintos y no tiene contexto de ninguno.
     expect(mias[0]!.gymName).toBeTruthy();
   });
 
   it('otra cuenta no ve las reservas ajenas', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-13`),
       slot: nova.slots[0]!,
     });
@@ -523,7 +523,7 @@ suite('lo que ve quien reservo', () => {
       .send({ idToken: declareIdentity(`prospecto-${runId}-14`) })
       .expect(201);
 
-    expect((body as { id: string }[]).map((row) => row.id)).not.toContain(reserva.booking.id);
+    expect((body as { id: string }[]).map((row) => row.id)).not.toContain(trialRow.booking.id);
   });
 
   it('cancelar libera el cupo del gimnasio', async () => {
@@ -546,13 +546,13 @@ suite('lo que ve quien reservo', () => {
   });
 
   it('nadie cancela la reserva de otro', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`prospecto-${runId}-16`),
       slot: nova.slots[0]!,
     });
 
     await http
-      .post(`/v1/gyms/trials/${reserva.booking.id}/cancel`)
+      .post(`/v1/gyms/trials/${trialRow.booking.id}/cancel`)
       .send({ idToken: declareIdentity(`prospecto-${runId}-17`) })
       .expect(404);
   });
@@ -567,9 +567,9 @@ suite('lo que ve quien reservo', () => {
  * cancelación, que es justo lo que no quiere.
  */
 suite('mover la clase de prueba a otra hora', () => {
-  const otroSlot = () => nova.slots[nova.slots.length - 1]!;
+  const otherSlot = () => nova.slots[nova.slots.length - 1]!;
 
-  const mover = (bookingId: string, token: string, slot: Slot): request.Test =>
+  const move = (bookingId: string, token: string, slot: Slot): request.Test =>
     http.post(`/v1/gyms/trials/${bookingId}/reschedule`).send({
       idToken: token,
       classScheduleId: slot.scheduleId,
@@ -578,16 +578,16 @@ suite('mover la clase de prueba a otra hora', () => {
 
   it('la misma reserva queda con la hora nueva', async () => {
     const token = declareIdentity(`cambio-${runId}-18`);
-    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+    const { body: trialRow } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
 
-    const { body, status } = await mover(reserva.booking.id, token, otroSlot());
+    const { body, status } = await move(trialRow.booking.id, token, otherSlot());
 
     expect(status).toBe(201);
     expect(body.booked).toBe(true);
     // Es LA MISMA fila, no una nueva: así el índice único de «una por gimnasio»
     // nunca ve dos vivas, y el mostrador ve una persona esperada y no dos.
-    expect(body.booking.id).toBe(reserva.booking.id);
-    expect(body.booking.startTime).toBe(otroSlot().startTime);
+    expect(body.booking.id).toBe(trialRow.booking.id);
+    expect(body.booking.startTime).toBe(otherSlot().startTime);
     expect(body.booking.status).toBe('booked');
 
     const { body: mias } = await http
@@ -595,10 +595,10 @@ suite('mover la clase de prueba a otra hora', () => {
       .send({ idToken: token })
       .expect(201);
     const suya = (mias as { id: string; startTime: string }[]).filter(
-      (row) => row.id === reserva.booking.id,
+      (row) => row.id === trialRow.booking.id,
     );
     expect(suya).toHaveLength(1);
-    expect(suya[0]!.startTime).toBe(otroSlot().startTime);
+    expect(suya[0]!.startTime).toBe(otherSlot().startTime);
   });
 
   it('mover no la convierte en una segunda reserva', async () => {
@@ -606,13 +606,13 @@ suite('mover la clase de prueba a otra hora', () => {
     // deja dos filas y el padrón del gimnasio cuenta dos personas esperadas.
     const token = declareIdentity(`cambio-${runId}-19`);
     const phone = nextPhone();
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token,
       slot: nova.slots[0]!,
       phone,
     });
 
-    await mover(reserva.booking.id, token, otroSlot()).expect(201);
+    await move(trialRow.booking.id, token, otherSlot()).expect(201);
 
     const { body: mias } = await http
       .post('/v1/gyms/trials/mine')
@@ -623,9 +623,9 @@ suite('mover la clase de prueba a otra hora', () => {
 
   it('no acepta una hora que el gimnasio no dicta', async () => {
     const token = declareIdentity(`cambio-${runId}-20`);
-    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+    const { body: trialRow } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
 
-    const { body } = await mover(reserva.booking.id, token, {
+    const { body } = await move(trialRow.booking.id, token, {
       ...nova.slots[0]!,
       // Un año por delante: fuera de la ventana de dos semanas, seguro.
       date: { ...nova.slots[0]!.date, year: nova.slots[0]!.date.year + 1 },
@@ -636,28 +636,28 @@ suite('mover la clase de prueba a otra hora', () => {
   });
 
   it('nadie mueve la reserva de otro', async () => {
-    const { body: reserva } = await reservar('nova-bjj', {
+    const { body: trialRow } = await reservar('nova-bjj', {
       token: declareIdentity(`cambio-${runId}-21`),
       slot: nova.slots[0]!,
     });
 
-    await mover(
-      reserva.booking.id,
+    await move(
+      trialRow.booking.id,
       declareIdentity(`cambio-${runId}-22`),
-      otroSlot(),
+      otherSlot(),
     ).expect(404);
   });
 
   it('una reserva cancelada ya no se mueve: se vuelve a reservar', async () => {
     const token = declareIdentity(`cambio-${runId}-23`);
-    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+    const { body: trialRow } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
 
     await http
-      .post(`/v1/gyms/trials/${reserva.booking.id}/cancel`)
+      .post(`/v1/gyms/trials/${trialRow.booking.id}/cancel`)
       .send({ idToken: token })
       .expect(201);
 
-    await mover(reserva.booking.id, token, otroSlot()).expect(404);
+    await move(trialRow.booking.id, token, otherSlot()).expect(404);
   });
 });
 
@@ -672,22 +672,22 @@ suite('activar y desactivar la clase gratis', () => {
   const iron = async (): Promise<GymDetail> =>
     (await http.get('/v1/gyms/iron-muay-thai').expect(200)).body as GymDetail;
 
-  const cambiar = (token: string, enabled: boolean) =>
+  const change = (token: string, enabled: boolean) =>
     http.post('/v1/staff/trials/settings').set(auth(token)).send({ enabled });
 
   it('el dueño la apaga y el gimnasio deja de ofrecer horas', async () => {
-    const antes = await iron();
-    expect(antes.trialClassEnabled).toBe(true);
-    expect(antes.slots.length).toBeGreaterThan(0);
+    const before = await iron();
+    expect(before.trialClassEnabled).toBe(true);
+    expect(before.slots.length).toBeGreaterThan(0);
 
-    const { body } = await cambiar(ironOwner, false).expect(201);
+    const { body } = await change(ironOwner, false).expect(201);
     expect(body.trialClassEnabled).toBe(false);
 
-    const despues = await iron();
-    expect(despues.trialClassEnabled).toBe(false);
+    const after = await iron();
+    expect(after.trialClassEnabled).toBe(false);
     // Sin horas que ofrecer: una lista de horarios reservables en un local que
     // no da clase gratis promete algo que la reserva rechazaría.
-    expect(despues.slots).toEqual([]);
+    expect(after.slots).toEqual([]);
   });
 
   it('apagada, una reserva nueva vuelve con el motivo', async () => {
@@ -716,7 +716,7 @@ suite('activar y desactivar la clase gratis', () => {
   it('recepción puede leerlo pero no cambiarlo', async () => {
     // Es una decisión comercial, del mismo orden que el precio de los planes.
     await http.get('/v1/staff/trials/settings').set(auth(novaFrontDesk)).expect(200);
-    await cambiar(novaFrontDesk, false).expect(403);
+    await change(novaFrontDesk, false).expect(403);
   });
 
   it('sin sesión de staff no se toca', async () => {
@@ -724,11 +724,11 @@ suite('activar y desactivar la clase gratis', () => {
   });
 
   it('el dueño la vuelve a encender y el gimnasio reaparece con horas', async () => {
-    const { body } = await cambiar(ironOwner, true).expect(201);
+    const { body } = await change(ironOwner, true).expect(201);
     expect(body.trialClassEnabled).toBe(true);
 
-    const despues = await iron();
-    expect(despues.trialClassEnabled).toBe(true);
-    expect(despues.slots.length).toBeGreaterThan(0);
+    const after = await iron();
+    expect(after.trialClassEnabled).toBe(true);
+    expect(after.slots.length).toBeGreaterThan(0);
   });
 });

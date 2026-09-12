@@ -66,9 +66,9 @@ describe('suscripcion al dia', () => {
     if (r.allowed) return;
     expect(r.reason).toMatchObject({ code: 'delinquent', daysPastDue: 12 });
 
-    const mensaje = accessMessage(r);
-    expect(mensaje.title).toBe('Mora de 12 días');
-    expect(mensaje.action).toBe('Cobrar S/ 120 en mostrador');
+    const message = accessMessage(r);
+    expect(message.title).toBe('Mora de 12 días');
+    expect(message.action).toBe('Cobrar S/ 120 en mostrador');
   });
 
   it('en gracia SI puede entrenar, con aviso', () => {
@@ -139,9 +139,9 @@ describe('cupo semanal', () => {
 
   it('las sesiones de la semana anterior no cuentan', () => {
     // Semana pasada: el cupo NO se acumula ni se arrastra.
-    const semanaPasada = plainDate(2026, 8, 13);
+    const lastWeek = plainDate(2026, 8, 13);
     const r = validateCheckIn(
-      contexto({ plan: makeWeeklyPlan(2), attendances: makeAttendances(semanaPasada, 2) }),
+      contexto({ plan: makeWeeklyPlan(2), attendances: makeAttendances(lastWeek, 2) }),
     );
     expect(r.allowed).toBe(true);
   });
@@ -171,30 +171,30 @@ describe('cupo semanal', () => {
 
   it('el plan de dias fijos deriva su limite de la cantidad de dias', () => {
     expect(weeklyLimit(makeFixedDaysPlan([2, 4]))).toBe(2);
-    const cupo = computeQuota(makeFixedDaysPlan([2, 4]), makeAttendances(JUEVES, 2), JUEVES);
-    expect(cupo.exhausted).toBe(true);
+    const weeklyQuota = computeQuota(makeFixedDaysPlan([2, 4]), makeAttendances(JUEVES, 2), JUEVES);
+    expect(weeklyQuota.exhausted).toBe(true);
   });
 });
 
 describe('horario de clase', () => {
-  const horarios = [makeSchedule(4, '19:00', '20:30'), makeSchedule(4, '07:00', '08:30')];
+  const weekSchedules = [makeSchedule(4, '19:00', '20:30'), makeSchedule(4, '07:00', '08:30')];
 
   it('deja pasar dentro de la clase', () => {
-    const r = validateCheckIn(contexto({ schedules: horarios, time: '19:15' }));
+    const r = validateCheckIn(contexto({ schedules: weekSchedules, time: '19:15' }));
     expect(r.allowed).toBe(true);
     if (!r.allowed) return;
-    expect(r.classScheduleId).toBe(horarios[0]?.id);
+    expect(r.classScheduleId).toBe(weekSchedules[0]?.id);
   });
 
   it('acepta llegar dentro de la tolerancia', () => {
     const r = validateCheckIn(
-      contexto({ schedules: horarios, time: '18:40', toleranceMinutes: 30 }),
+      contexto({ schedules: weekSchedules, time: '18:40', toleranceMinutes: 30 }),
     );
     expect(r.allowed).toBe(true);
   });
 
   it('rechaza fuera de horario e informa la proxima clase', () => {
-    const r = validateCheckIn(contexto({ schedules: horarios, time: '15:00' }));
+    const r = validateCheckIn(contexto({ schedules: weekSchedules, time: '15:00' }));
     expect(r.allowed).toBe(false);
     if (r.allowed) return;
     expect(r.reason).toMatchObject({ code: 'outside_schedule' });
@@ -252,7 +252,7 @@ describe('orden de validacion', () => {
 
 describe('mensajes de acceso', () => {
   it('todo resultado tiene titulo y motivo legibles', () => {
-    const casos = [
+    const scenarios = [
       contexto(),
       contexto({ subscription: makeSubscription({ status: 'suspended' }) }),
       contexto({ plan: makeFixedDaysPlan([1, 3]) }),
@@ -261,11 +261,11 @@ describe('mensajes de acceso', () => {
       contexto({ subscription: null, plan: null }),
     ];
 
-    for (const caso of casos) {
-      const mensaje = accessMessage(validateCheckIn(caso));
-      expect(mensaje.title.length).toBeGreaterThan(0);
-      expect(mensaje.reason.length).toBeGreaterThan(0);
-      expect(['ok', 'warn', 'alert', 'blocked']).toContain(mensaje.level);
+    for (const scenario of scenarios) {
+      const message = accessMessage(validateCheckIn(scenario));
+      expect(message.title.length).toBeGreaterThan(0);
+      expect(message.reason.length).toBeGreaterThan(0);
+      expect(['ok', 'warn', 'alert', 'blocked']).toContain(message.level);
     }
   });
 });
@@ -307,7 +307,7 @@ describe('las dos voces del mismo veredicto', () => {
   // El punto de que las dos vivan aqui: si cada pantalla escribiera la suya, el
   // alumno leeria una cosa y el recepcionista otra del MISMO check-in, y el que
   // discute en la puerta es el recepcionista.
-  const conCupoAgotado = (): CheckInResult => ({
+  const outOfQuota = (): CheckInResult => ({
     allowed: false,
     level: 'alert',
     reason: {
@@ -322,15 +322,15 @@ describe('las dos voces del mismo veredicto', () => {
   });
 
   it('describe al alumno para el staff y le habla a el en su app', () => {
-    const paraElStaff = accessMessage(conCupoAgotado());
-    const paraElAlumno = accessMessage(conCupoAgotado(), 'student');
+    const forStaff = accessMessage(outOfQuota());
+    const forStudent = accessMessage(outOfQuota(), 'student');
 
     // El hecho es el mismo: mismo nivel, mismo titular.
-    expect(paraElAlumno.level).toBe(paraElStaff.level);
-    expect(paraElAlumno.title).toBe(paraElStaff.title);
+    expect(forStudent.level).toBe(forStaff.level);
+    expect(forStudent.title).toBe(forStaff.title);
 
-    expect(paraElStaff.detail).toContain('no le quedan sesiones');
-    expect(paraElAlumno.detail).toContain('no te quedan sesiones');
+    expect(forStaff.detail).toContain('no le quedan sesiones');
+    expect(forStudent.detail).toContain('no te quedan sesiones');
   });
 
   it('no le ofrece al alumno acciones que solo hace el mostrador', () => {
@@ -397,8 +397,8 @@ describe('clase suelta', () => {
   });
 
   it('el dia no permitido gana al pago: primero se le dice que hoy no abre para el', () => {
-    const soloFinde = makeDropInPlan({ allowedDays: [6, 7] });
-    const r = validateCheckIn(contexto({ plan: soloFinde, dropInPaidToday: false }));
+    const weekendOnly = makeDropInPlan({ allowedDays: [6, 7] });
+    const r = validateCheckIn(contexto({ plan: weekendOnly, dropInPaidToday: false }));
     if (r.allowed) throw new Error('debia rechazar');
     expect(r.reason.code).toBe('day_not_allowed');
   });

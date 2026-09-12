@@ -51,8 +51,8 @@ function declareIdentity(uid: string): string {
 /** Documentos y celulares distintos por corrida: son unicos en la red. */
 const runId = randomInt(10_000_000, 89_000_000);
 let contador = 0;
-const siguiente = (): string => String(runId + ++contador);
-const celular = (): string => `+519${siguiente().slice(0, 8)}`;
+const nextValue = (): string => String(runId + ++contador);
+const nextPhone = (): string => `+519${nextValue().slice(0, 8)}`;
 
 /** RUC reales: el alta comprueba el digito verificador. */
 const RUC = ['20100070970', '20131312955', '20100047218'];
@@ -60,31 +60,31 @@ const RUC = ['20100070970', '20131312955', '20100047218'];
 const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
 
 /** Los gimnasios que esta prueba crea son PERMANENTES: se borran al terminar. */
-const creados: string[] = [];
+const created: string[] = [];
 
 interface Local {
   readonly tenantId: string;
-  readonly dueno: string;
+  readonly owner: string;
 }
 
-let indiceRuc = 0;
+let taxIdIndex = 0;
 
-async function nuevoGimnasio(): Promise<Local> {
+async function newGym(): Promise<Local> {
   const uid = `dueno-planes-${runId}-${++contador}`;
   const { body, status } = await http.post('/v1/gyms/signup').send({
     idToken: declareIdentity(uid),
     gymName: `Dojo Planes ${runId} ${contador}`,
-    taxId: RUC[indiceRuc++ % RUC.length]!,
+    taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
     monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
-    documentId: siguiente(),
-    phone: celular(),
+    documentId: nextValue(),
+    phone: nextPhone(),
   });
   if (status !== 201) throw new Error(`No se pudo crear el gimnasio: ${JSON.stringify(body)}`);
-  creados.push(body.tenantId as string);
-  return { tenantId: body.tenantId as string, dueno: body.session.accessToken as string };
+  created.push(body.tenantId as string);
+  return { tenantId: body.tenantId as string, owner: body.session.accessToken as string };
 }
 
 /**
@@ -94,11 +94,11 @@ async function nuevoGimnasio(): Promise<Local> {
  * de comprobar lo que mas importa de estas rutas: que recepcion LEA los planes y
  * no pueda tocar los precios.
  */
-async function recepcion(tenantId: string): Promise<string> {
+async function frontDeskToken(tenantId: string): Promise<string> {
   const { schema, withTenant, withoutTenantIsolation } = await import('./db/client');
   const { DATABASE } = await import('./db/db.module');
   const db = app.get(DATABASE);
-  const phone = celular();
+  const phone = nextPhone();
 
   // `users` vive FUERA del tenant y `staff` dentro, asi que son dos contextos
   // distintos: insertar la fila de staff sin adoptar el gimnasio la rechaza el
@@ -106,7 +106,7 @@ async function recepcion(tenantId: string): Promise<string> {
   const userId = await withoutTenantIsolation(db, async (tx) => {
     const [user] = await tx
       .insert(schema.users)
-      .values({ name: `Recepción ${runId}`, documentId: siguiente(), phone })
+      .values({ name: `Recepción ${runId}`, documentId: nextValue(), phone })
       .returning({ id: schema.users.id });
     return user!.id;
   });
@@ -157,11 +157,11 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
-  if (app !== undefined && creados.length > 0) {
+  if (app !== undefined && created.length > 0) {
     const { schema, withoutTenantIsolation } = await import('./db/client');
     const { DATABASE } = await import('./db/db.module');
     await withoutTenantIsolation(app.get(DATABASE), (tx) =>
-      tx.delete(schema.tenants).where(inArray(schema.tenants.id, creados)),
+      tx.delete(schema.tenants).where(inArray(schema.tenants.id, created)),
     );
   }
   await app?.close();
@@ -178,8 +178,8 @@ suite('un gimnasio nuevo nace con SU tarifa', () => {
    * nadie el dia que se registra.
    */
   it('trae exactamente la mensualidad del alta, sin inventar ninguna otra', async () => {
-    const local = await nuevoGimnasio();
-    const { body } = await http.get('/v1/staff/plans').set(auth(local.dueno)).expect(200);
+    const local = await newGym();
+    const { body } = await http.get('/v1/staff/plans').set(auth(local.owner)).expect(200);
 
     expect(body).toHaveLength(1);
     expect(body[0].type).toBe('unlimited');
@@ -188,17 +188,17 @@ suite('un gimnasio nuevo nace con SU tarifa', () => {
   });
 
   it('y se puede inscribir a alguien el mismo dia, sin que nadie siembre nada', async () => {
-    const local = await nuevoGimnasio();
-    const { body: planes } = await http.get('/v1/staff/plans').set(auth(local.dueno));
+    const local = await newGym();
+    const { body: plans } = await http.get('/v1/staff/plans').set(auth(local.owner));
 
     const { status } = await http
       .post('/v1/staff/members')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Alumna del primer día',
-        documentId: siguiente(),
-        phone: celular(),
-        planId: planes[0].id,
+        documentId: nextValue(),
+        phone: nextPhone(),
+        planId: plans[0].id,
       });
 
     expect(status).toBe(201);
@@ -207,24 +207,24 @@ suite('un gimnasio nuevo nace con SU tarifa', () => {
 
 suite('el dueño escribe sus planes', () => {
   it('crea uno y aparece en la lista del mostrador', async () => {
-    const local = await nuevoGimnasio();
-    const { body: creado, status } = await http
+    const local = await newGym();
+    const { body: created, status } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
     expect(status).toBe(201);
-    expect(creado.priceCents).toBe(13_000);
+    expect(created.priceCents).toBe(13_000);
 
-    const { body: lista } = await http.get('/v1/staff/plans').set(auth(local.dueno));
-    expect(lista.some((p: { id: string }) => p.id === creado.id)).toBe(true);
+    const { body: list } = await http.get('/v1/staff/plans').set(auth(local.owner));
+    expect(list.some((p: { id: string }) => p.id === created.id)).toBe(true);
   });
 
   it('rechaza el plan por sesiones sin sesiones, con el motivo del dominio', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body, status } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ ...planBase, sessionsPerWeek: null });
 
     expect(status).toBe(400);
@@ -232,12 +232,12 @@ suite('el dueño escribe sus planes', () => {
   });
 
   it('no deja dos planes activos con el mismo nombre', async () => {
-    const local = await nuevoGimnasio();
-    await http.post('/v1/staff/plans').set(auth(local.dueno)).send(planBase).expect(201);
+    const local = await newGym();
+    await http.post('/v1/staff/plans').set(auth(local.owner)).send(planBase).expect(201);
 
     const { status, body } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       // Distinto precio, mismo nombre en otra caja: sigue siendo la misma tarifa
       // leida dos veces, y el mostrador elegiria una al azar en el alta.
       .send({ ...planBase, name: '  mañanas  ', priceCents: 20_000 });
@@ -247,178 +247,178 @@ suite('el dueño escribe sus planes', () => {
   });
 
   it('cambiar el precio no toca lo ya cobrado, solo lo de adelante', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
-    const { body: alumno } = await http
+    const { body: student } = await http
       .post('/v1/staff/members')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Alumno con plan',
-        documentId: siguiente(),
-        phone: celular(),
+        documentId: nextValue(),
+        phone: nextPhone(),
         planId: plan.id,
       })
       .expect(201);
 
-    const membershipId = alumno.view.membership.id as string;
+    const membershipId = student.view.membership.id as string;
     await http
       .post('/v1/staff/payments')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ membershipId, type: 'renewal', rail: 'cash' })
       .expect(201);
 
     await http
       .post(`/v1/staff/plans/${plan.id}`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ ...planBase, priceCents: 20_000 })
       .expect(201);
 
-    const { body: ficha } = await http
+    const { body: record } = await http
       .get(`/v1/staff/members/${membershipId}`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
 
     // El cargo del ledger conserva lo que se cobró; el plan ya vale otra cosa.
-    const cobrado = ficha.charges.find((c: { type: string }) => c.type === 'renewal');
+    const cobrado = record.charges.find((c: { type: string }) => c.type === 'renewal');
     expect(cobrado.amountCents).toBe(13_000);
-    expect(ficha.plan.priceCents).toBe(20_000);
+    expect(record.plan.priceCents).toBe(20_000);
   });
 });
 
 suite('archivar y borrar', () => {
   it('archivar lo saca del mostrador pero no de la lista del dueño', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
     await http
       .post(`/v1/staff/plans/${plan.id}/active`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ active: false })
       .expect(201);
 
-    const { body: mostrador } = await http.get('/v1/staff/plans').set(auth(local.dueno));
-    expect(mostrador.some((p: { id: string }) => p.id === plan.id)).toBe(false);
+    const { body: frontDesk } = await http.get('/v1/staff/plans').set(auth(local.owner));
+    expect(frontDesk.some((p: { id: string }) => p.id === plan.id)).toBe(false);
 
-    const { body: todos } = await http.get('/v1/staff/plans/all').set(auth(local.dueno));
-    const archivado = todos.find((row: { plan: { id: string } }) => row.plan.id === plan.id);
+    const { body: all } = await http.get('/v1/staff/plans/all').set(auth(local.owner));
+    const archivado = all.find((row: { plan: { id: string } }) => row.plan.id === plan.id);
     expect(archivado.plan.active).toBe(false);
   });
 
   it('archivar deja libre el nombre para el plan que lo reemplaza', async () => {
-    const local = await nuevoGimnasio();
-    const { body: viejo } = await http
+    const local = await newGym();
+    const { body: previous } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
     await http
-      .post(`/v1/staff/plans/${viejo.id}/active`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/plans/${previous.id}/active`)
+      .set(auth(local.owner))
       .send({ active: false })
       .expect(201);
 
     // Subir precios es exactamente esto: archivar el viejo y escribir el nuevo.
     await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ ...planBase, priceCents: 16_000 })
       .expect(201);
   });
 
   it('borra el plan que nadie usa: el tipeo de hace dos minutos', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ ...planBase, name: 'Mañnas' });
 
-    await http.delete(`/v1/staff/plans/${plan.id}`).set(auth(local.dueno)).expect(200);
+    await http.delete(`/v1/staff/plans/${plan.id}`).set(auth(local.owner)).expect(200);
 
-    const { body: todos } = await http.get('/v1/staff/plans/all').set(auth(local.dueno));
-    expect(todos.some((row: { plan: { id: string } }) => row.plan.id === plan.id)).toBe(false);
+    const { body: all } = await http.get('/v1/staff/plans/all').set(auth(local.owner));
+    expect(all.some((row: { plan: { id: string } }) => row.plan.id === plan.id)).toBe(false);
   });
 
   it('no borra el plan que alguien paga, y dice que lo archive', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
     await http
       .post('/v1/staff/members')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Alumna fiel',
-        documentId: siguiente(),
-        phone: celular(),
+        documentId: nextValue(),
+        phone: nextPhone(),
         planId: plan.id,
       })
       .expect(201);
 
-    const { status, body } = await http.delete(`/v1/staff/plans/${plan.id}`).set(auth(local.dueno));
+    const { status, body } = await http.delete(`/v1/staff/plans/${plan.id}`).set(auth(local.owner));
     expect(status).toBe(409);
     expect(String(body.message)).toContain('Archívalo');
 
     // La salida que sí existe.
     await http
       .post(`/v1/staff/plans/${plan.id}/active`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ active: false })
       .expect(201);
   });
 
   it('la lista del dueño dice cuánta gente tiene cada plan', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send(planBase);
 
     await http
       .post('/v1/staff/members')
-      .set(auth(local.dueno))
-      .send({ name: 'Uno', documentId: siguiente(), phone: celular(), planId: plan.id })
+      .set(auth(local.owner))
+      .send({ name: 'Uno', documentId: nextValue(), phone: nextPhone(), planId: plan.id })
       .expect(201);
 
-    const { body: todos } = await http.get('/v1/staff/plans/all').set(auth(local.dueno));
-    const fila = todos.find((row: { plan: { id: string } }) => row.plan.id === plan.id);
-    expect(fila.activeMembers).toBe(1);
-    expect(fila.deletable).toBe(false);
+    const { body: all } = await http.get('/v1/staff/plans/all').set(auth(local.owner));
+    const found = all.find((row: { plan: { id: string } }) => row.plan.id === plan.id);
+    expect(found.activeMembers).toBe(1);
+    expect(found.deletable).toBe(false);
   });
 });
 
 suite('quién puede tocar los precios', () => {
   it('recepción lee los planes pero no los escribe', async () => {
-    const local = await nuevoGimnasio();
-    const mostrador = await recepcion(local.tenantId);
+    const local = await newGym();
+    const frontDesk = await frontDeskToken(local.tenantId);
 
-    await http.get('/v1/staff/plans').set(auth(mostrador)).expect(200);
-    await http.post('/v1/staff/plans').set(auth(mostrador)).send(planBase).expect(403);
-    await http.get('/v1/staff/plans/all').set(auth(mostrador)).expect(403);
+    await http.get('/v1/staff/plans').set(auth(frontDesk)).expect(200);
+    await http.post('/v1/staff/plans').set(auth(frontDesk)).send(planBase).expect(403);
+    await http.get('/v1/staff/plans/all').set(auth(frontDesk)).expect(403);
   });
 
   it('recepción lee lo que cobra el local, porque es quien lo cobra', async () => {
-    const local = await nuevoGimnasio();
-    const mostrador = await recepcion(local.tenantId);
+    const local = await newGym();
+    const frontDesk = await frontDeskToken(local.tenantId);
 
-    const { body } = await http.get('/v1/staff/pricing').set(auth(mostrador)).expect(200);
+    const { body } = await http.get('/v1/staff/pricing').set(auth(frontDesk)).expect(200);
     expect(body).toHaveProperty('enrollmentFeeCents');
 
-    await http.post('/v1/staff/pricing').set(auth(mostrador)).send(body).expect(403);
+    await http.post('/v1/staff/pricing').set(auth(frontDesk)).send(body).expect(403);
   });
 });
 
 suite('lo que el local cobra aparte', () => {
   it('el dueño lo cambia y se lee de vuelta', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const pricing = {
       enrollmentFeeCents: 5_000,
       dropInPriceCents: 3_000,
@@ -427,17 +427,17 @@ suite('lo que el local cobra aparte', () => {
       trialClassPriceCents: 0,
     };
 
-    await http.post('/v1/staff/pricing').set(auth(local.dueno)).send(pricing).expect(201);
+    await http.post('/v1/staff/pricing').set(auth(local.owner)).send(pricing).expect(201);
 
-    const { body } = await http.get('/v1/staff/pricing').set(auth(local.dueno)).expect(200);
+    const { body } = await http.get('/v1/staff/pricing').set(auth(local.owner)).expect(200);
     expect(body).toMatchObject(pricing);
   });
 
   it('no deja ofrecer clase suelta sin precio: el mostrador tendría que inventarlo', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { status, body } = await http
       .post('/v1/staff/pricing')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         enrollmentFeeCents: 0,
         dropInPriceCents: null,
@@ -451,10 +451,10 @@ suite('lo que el local cobra aparte', () => {
   });
 
   it('caza el precio escrito en céntimos por error', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { status } = await http
       .post('/v1/staff/pricing')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         enrollmentFeeCents: 99_999_999,
         dropInPriceCents: null,
@@ -475,10 +475,10 @@ suite('la clase suelta en la puerta', () => {
    * `drop_in` es lo que haría el dueño desde su pantalla de planes al aparecer
    * el primero que quiere entrenar un sábado sin amarrarse a un mes.
    */
-  async function alumnoDeClaseSuelta(local: Local) {
+  async function dropInStudent(local: Local) {
     const { body: plan } = await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Clase suelta',
         type: 'drop_in',
@@ -490,11 +490,11 @@ suite('la clase suelta en la puerta', () => {
 
     const { body } = await http
       .post('/v1/staff/members')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Visita del sábado',
-        documentId: siguiente(),
-        phone: celular(),
+        documentId: nextValue(),
+        phone: nextPhone(),
         planId: plan.id,
       })
       .expect(201);
@@ -503,12 +503,12 @@ suite('la clase suelta en la puerta', () => {
   }
 
   it('no debe nada aunque no haya pagado: no es un moroso', async () => {
-    const local = await nuevoGimnasio();
-    const { membershipId } = await alumnoDeClaseSuelta(local);
+    const local = await newGym();
+    const { membershipId } = await dropInStudent(local);
 
     const { body } = await http
       .get(`/v1/staff/members/${membershipId}`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
 
     expect(body.receivable.amountCents).toBe(0);
@@ -516,12 +516,12 @@ suite('la clase suelta en la puerta', () => {
   });
 
   it('la puerta lo para hasta que pague la clase de hoy', async () => {
-    const local = await nuevoGimnasio();
-    const { membershipId, plan } = await alumnoDeClaseSuelta(local);
+    const local = await newGym();
+    const { membershipId, plan } = await dropInStudent(local);
 
     const { body } = await http
       .post('/v1/staff/checkin/manual')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ membershipId })
       .expect(201);
 
@@ -533,14 +533,14 @@ suite('la clase suelta en la puerta', () => {
   });
 
   it('pagada la clase, entra — y se le cobra el precio de SU plan', async () => {
-    const local = await nuevoGimnasio();
-    const { membershipId, plan } = await alumnoDeClaseSuelta(local);
+    const local = await newGym();
+    const { membershipId, plan } = await dropInStudent(local);
 
     // El precio de clase suelta DEL LOCAL es otro y no debe ganarle al del plan:
     // es el que paga el alumno con mensualidad que agota su cupo.
     await http
       .post('/v1/staff/pricing')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         enrollmentFeeCents: 0,
         dropInPriceCents: 9_900,
@@ -550,17 +550,17 @@ suite('la clase suelta en la puerta', () => {
       })
       .expect(201);
 
-    const { body: cobro } = await http
+    const { body: chargeRow } = await http
       .post('/v1/staff/payments')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ membershipId, type: 'drop_in', rail: 'cash' })
       .expect(201);
 
-    expect(cobro.charge.amountCents).toBe(plan.priceCents);
+    expect(chargeRow.charge.amountCents).toBe(plan.priceCents);
 
     const { body } = await http
       .post('/v1/staff/checkin/manual')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({ membershipId })
       .expect(201);
 
@@ -569,12 +569,12 @@ suite('la clase suelta en la puerta', () => {
   });
 
   it('no tiene cupo semanal: el semáforo no lo agota', async () => {
-    const local = await nuevoGimnasio();
-    const { membershipId } = await alumnoDeClaseSuelta(local);
+    const local = await newGym();
+    const { membershipId } = await dropInStudent(local);
 
     const { body } = await http
       .get(`/v1/staff/members/${membershipId}`)
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
 
     expect(body.quota.limit).toBeNull();

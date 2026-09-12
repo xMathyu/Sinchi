@@ -47,7 +47,7 @@ function declareIdentity(uid: string): string {
 /** Documentos y celulares distintos por corrida: son unicos en la red. */
 const runId = randomInt(10_000_000, 89_000_000);
 let contador = 0;
-const siguiente = (): string => String(runId + ++contador);
+const nextValue = (): string => String(runId + ++contador);
 
 /**
  * RUC reales y validos. El alta comprueba el digito verificador, asi que aqui no
@@ -62,7 +62,7 @@ const RUC = ['20100070970', '20131312955', '20100047218', '20100128056'];
  * corridas seguidas contra la misma base chocaban por slug y la segunda recibia
  * «dojo-nuevo-lince-3». El identificador de corrida los separa.
  */
-const NOMBRE = `Dojo Nuevo Lince ${runId}`;
+const NAME = `Dojo Nuevo Lince ${runId}`;
 const SLUG = `dojo-nuevo-lince-${runId}`;
 
 const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
@@ -75,10 +75,10 @@ const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
  * afirman. Sin esto, cada corrida deja gimnasios que rompen las pruebas del
  * directorio de al lado, y el fallo aparece lejos de su causa.
  */
-const creados: string[] = [];
-const codigos: string[] = [];
+const created: string[] = [];
+const codes: string[] = [];
 
-interface AltaInput {
+interface SignUpInput {
   readonly uid: string;
   readonly gymName: string;
   readonly taxId: string;
@@ -90,7 +90,7 @@ interface AltaInput {
   readonly address?: string | null;
 }
 
-const alta = async (input: AltaInput) => {
+const signUp = async (input: SignUpInput) => {
   const res = await http.post('/v1/gyms/signup').send({
     idToken: declareIdentity(input.uid),
     gymName: input.gymName,
@@ -103,22 +103,22 @@ const alta = async (input: AltaInput) => {
       ? {}
       : { address: input.address ?? 'Av. Primavera 120, Surco' }),
     ownerName: `Dueño ${input.uid}`,
-    documentId: siguiente(),
-    phone: `+519${siguiente().slice(0, 8)}`,
+    documentId: nextValue(),
+    phone: `+519${nextValue().slice(0, 8)}`,
     ...(input.promoCode === undefined ? {} : { promoCode: input.promoCode }),
   });
-  if (typeof res.body?.tenantId === 'string') creados.push(res.body.tenantId as string);
+  if (typeof res.body?.tenantId === 'string') created.push(res.body.tenantId as string);
   return res;
 };
 
-async function crearCodigo(
+async function createCode(
   code: string,
   freeMonths: number,
   maxRedemptions: number | null,
 ): Promise<void> {
   const { schema, withoutTenantIsolation } = await import('./db/client');
   const { DATABASE } = await import('./db/db.module');
-  codigos.push(code);
+  codes.push(code);
   await withoutTenantIsolation(app.get(DATABASE), (tx) =>
     tx
       .insert(schema.saasPromoCodes)
@@ -166,16 +166,16 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
-  if (app !== undefined && creados.length > 0) {
+  if (app !== undefined && created.length > 0) {
     const { schema, withoutTenantIsolation } = await import('./db/client');
     const { DATABASE } = await import('./db/db.module');
     const db = app.get(DATABASE);
     // Las filas de `saas_subscriptions`, `staff` y `saas_redemptions` se van en
     // cascada con el tenant; los codigos hay que borrarlos aparte.
     await withoutTenantIsolation(db, async (tx) => {
-      await tx.delete(schema.tenants).where(inArray(schema.tenants.id, creados));
-      if (codigos.length > 0) {
-        await tx.delete(schema.saasPromoCodes).where(inArray(schema.saasPromoCodes.code, codigos));
+      await tx.delete(schema.tenants).where(inArray(schema.tenants.id, created));
+      if (codes.length > 0) {
+        await tx.delete(schema.saasPromoCodes).where(inArray(schema.saasPromoCodes.code, codes));
       }
     });
   }
@@ -184,9 +184,9 @@ afterAll(async () => {
 
 suite('dar de alta un gimnasio desde la app', () => {
   it('crea el gimnasio, deja al dueño dentro y arranca su mes gratis', async () => {
-    const { body, status } = await alta({
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-1`,
-      gymName: NOMBRE,
+      gymName: NAME,
       taxId: RUC[0]!,
     });
 
@@ -197,12 +197,12 @@ suite('dar de alta un gimnasio desde la app', () => {
     expect(body.session.role).toBe('owner');
     expect(body.session.tenantId).toBe(body.tenantId);
 
-    const suscripcion = await http
+    const subscription = await http
       .get('/v1/staff/subscription')
       .set(auth(body.session.accessToken))
       .expect(200);
-    expect(suscripcion.body.state.status).toBe('trialing');
-    expect(suscripcion.body.state.freeDaysLeft).toBeGreaterThanOrEqual(27);
+    expect(subscription.body.state.status).toBe('trialing');
+    expect(subscription.body.state.freeDaysLeft).toBeGreaterThanOrEqual(27);
   });
 
   it('sale en el directorio público en el acto', async () => {
@@ -213,7 +213,7 @@ suite('dar de alta un gimnasio desde la app', () => {
   it('un RUC inventado no entra', async () => {
     // Once dígitos y prefijo válido, pero el verificador no cuadra: es el caso
     // que una comprobación de longitud deja pasar y ensucia la tabla para siempre.
-    const { body, status } = await alta({
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-malo`,
       gymName: `Dojo Del RUC Falso ${runId}`,
       taxId: '20100070971',
@@ -224,9 +224,9 @@ suite('dar de alta un gimnasio desde la app', () => {
   });
 
   it('dos gimnasios con el mismo nombre no comparten dirección', async () => {
-    const { body, status } = await alta({
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-2`,
-      gymName: NOMBRE,
+      gymName: NAME,
       taxId: RUC[1]!,
     });
 
@@ -248,7 +248,7 @@ suite('dar de alta un gimnasio desde la app', () => {
    * semilla de la siguiente corrida no sabe quitar.
    */
   it('la misma persona abre su segundo local', async () => {
-    const { status, body } = await alta({
+    const { status, body } = await signUp({
       uid: `dueno-${runId}-1`,
       gymName: `Su Segundo Local ${runId}`,
       taxId: RUC[2]!,
@@ -257,19 +257,19 @@ suite('dar de alta un gimnasio desde la app', () => {
     expect(status).toBe(201);
 
     // Local NUEVO, no el de antes con otro nombre: cada uno lleva su padrón.
-    const { body: modos } = await http
+    const { body: modes } = await http
       .get('/v1/auth/modes')
       .set(auth(body.session.accessToken))
       .expect(200);
-    expect(modos.staff).toHaveLength(2);
-    expect(new Set((modos.staff as { tenantId: string }[]).map((p) => p.tenantId)).size).toBe(2);
+    expect(modes.staff).toHaveLength(2);
+    expect(new Set((modes.staff as { tenantId: string }[]).map((p) => p.tenantId)).size).toBe(2);
   });
 
   it('pero no puede llenar la red de gimnasios', async () => {
     // Cinco es el tope. Ya lleva dos, así que los tres siguientes entran y el
     // sexto choca — que es lo que cierra la puerta a granjear meses gratis.
     for (const n of [3, 4, 5]) {
-      const { status } = await alta({
+      const { status } = await signUp({
         uid: `dueno-${runId}-1`,
         gymName: `Local ${n} de ${runId}`,
         taxId: RUC[0]!,
@@ -277,7 +277,7 @@ suite('dar de alta un gimnasio desde la app', () => {
       expect(status, `el local ${n} debería entrar`).toBe(201);
     }
 
-    const { status, body } = await alta({
+    const { status, body } = await signUp({
       uid: `dueno-${runId}-1`,
       gymName: `Local 6 de ${runId}`,
       taxId: RUC[0]!,
@@ -299,7 +299,7 @@ suite('dar de alta un gimnasio desde la app', () => {
  */
 suite('el precio del directorio es el que escribió el dueño', () => {
   it('la tarjeta dice exactamente la mensualidad del alta, y es la única tarifa', async () => {
-    const { body, status } = await alta({
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-precio`,
       gymName: `Dojo Del Precio Suyo ${runId}`,
       taxId: RUC[2]!,
@@ -307,23 +307,23 @@ suite('el precio del directorio es el que escribió el dueño', () => {
     });
     expect(status).toBe(201);
 
-    const { body: planes } = await http
+    const { body: plans } = await http
       .get('/v1/staff/plans')
       .set(auth(body.session.accessToken))
       .expect(200);
-    expect(planes).toHaveLength(1);
-    expect(planes[0].priceCents).toBe(8_000);
-    expect(planes[0].type).toBe('unlimited');
+    expect(plans).toHaveLength(1);
+    expect(plans[0].priceCents).toBe(8_000);
+    expect(plans[0].type).toBe('unlimited');
 
     const { body: directorio } = await http.get('/v1/gyms').expect(200);
-    const tarjeta = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
-    expect(tarjeta.fromPriceCents).toBe(8_000);
+    const card = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
+    expect(card.fromPriceCents).toBe(8_000);
   });
 
   it('sin mensualidad no hay alta', async () => {
     // Que no se pueda omitir es el punto: `plans` vacía deja el local sin poder
     // inscribir a nadie, y rellenarla por él es lo que causó el fallo.
-    const { status } = await alta({
+    const { status } = await signUp({
       uid: `dueno-${runId}-sin-precio`,
       gymName: `Dojo Sin Precio ${runId}`,
       taxId: RUC[3]!,
@@ -341,28 +341,28 @@ suite('el precio del directorio es el que escribió el dueño', () => {
  */
 suite('el gimnasio dice dónde queda', () => {
   it('la dirección sale en el directorio y en la ficha', async () => {
-    const direccion = 'Jr. Los Cedros 455, Lince';
-    const { body, status } = await alta({
+    const streetAddress = 'Jr. Los Cedros 455, Lince';
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-direccion`,
       gymName: `Dojo Con Dirección ${runId}`,
       taxId: RUC[0]!,
-      address: direccion,
+      address: streetAddress,
     });
     expect(status).toBe(201);
 
     const { body: directorio } = await http.get('/v1/gyms').expect(200);
-    const tarjeta = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
-    expect(tarjeta.address).toBe(direccion);
+    const card = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
+    expect(card.address).toBe(streetAddress);
 
-    const { body: ficha } = await http.get(`/v1/gyms/${body.slug}`).expect(200);
-    expect(ficha.address).toBe(direccion);
+    const { body: record } = await http.get(`/v1/gyms/${body.slug}`).expect(200);
+    expect(record.address).toBe(streetAddress);
     // El pin es aparte y opcional: el alta no lo pide, lo pone el dueño después.
-    expect(ficha.latitude).toBeNull();
-    expect(ficha.longitude).toBeNull();
+    expect(record.latitude).toBeNull();
+    expect(record.longitude).toBeNull();
   });
 
   it('sin dirección no hay alta', async () => {
-    const { status } = await alta({
+    const { status } = await signUp({
       uid: `dueno-${runId}-sin-direccion`,
       gymName: `Dojo Sin Dirección ${runId}`,
       taxId: RUC[1]!,
@@ -374,7 +374,7 @@ suite('el gimnasio dice dónde queda', () => {
   it('«Lima» a secas no es una dirección', async () => {
     // No se comprueba que exista —eso no se puede saber desde aquí— sino que
     // alguien escribió algo que lleva a una puerta.
-    const { body, status } = await alta({
+    const { body, status } = await signUp({
       uid: `dueno-${runId}-direccion-corta`,
       gymName: `Dojo Vago ${runId}`,
       taxId: RUC[2]!,
@@ -385,16 +385,16 @@ suite('el gimnasio dice dónde queda', () => {
   });
 
   it('el dueño la corrige, y puede poner su punto en el mapa', async () => {
-    const { body: local } = await alta({
+    const { body: local } = await signUp({
       uid: `dueno-${runId}-mapa`,
       gymName: `Dojo Del Mapa ${runId}`,
       taxId: RUC[3]!,
     });
-    const dueno = { Authorization: `Bearer ${local.session.accessToken}` };
+    const owner = { Authorization: `Bearer ${local.session.accessToken}` };
 
-    const { body: guardada } = await http
+    const { body: saved } = await http
       .post('/v1/staff/location')
-      .set(dueno)
+      .set(owner)
       .send({
         address: 'Av. Arequipa 3000, San Isidro',
         latitude: -12.0931,
@@ -402,16 +402,16 @@ suite('el gimnasio dice dónde queda', () => {
       })
       .expect(201);
 
-    expect(guardada.address).toBe('Av. Arequipa 3000, San Isidro');
-    expect(guardada.latitude).toBeCloseTo(-12.0931, 4);
+    expect(saved.address).toBe('Av. Arequipa 3000, San Isidro');
+    expect(saved.latitude).toBeCloseTo(-12.0931, 4);
 
-    const { body: ficha } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
-    expect(ficha.latitude).toBeCloseTo(-12.0931, 4);
-    expect(ficha.longitude).toBeCloseTo(-77.0349, 4);
+    const { body: record } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
+    expect(record.latitude).toBeCloseTo(-12.0931, 4);
+    expect(record.longitude).toBeCloseTo(-77.0349, 4);
   });
 
   it('media coordenada no se guarda: es un punto en el ecuador', async () => {
-    const { body: local } = await alta({
+    const { body: local } = await signUp({
       uid: `dueno-${runId}-media-coordenada`,
       gymName: `Dojo Media Coordenada ${runId}`,
       taxId: RUC[0]!,
@@ -427,7 +427,7 @@ suite('el gimnasio dice dónde queda', () => {
 
   it('un punto que no está en el mapa tampoco', async () => {
     // Teclear «-77.0» sin el punto da 770, y el mapa lo dibujaría sin dudar.
-    const { body: local } = await alta({
+    const { body: local } = await signUp({
       uid: `dueno-${runId}-punto-imposible`,
       gymName: `Dojo Imposible ${runId}`,
       taxId: RUC[1]!,
@@ -444,21 +444,21 @@ suite('el gimnasio dice dónde queda', () => {
 
 suite('el plan gratis', () => {
   it('un gimnasio de hasta 10 alumnos no paga nada', async () => {
-    const { body } = await alta({
+    const { body } = await signUp({
       uid: `pequeno-${runId}`,
       gymName: `Dojo Pequeño ${runId}`,
       taxId: RUC[3]!,
       saasTier: 'free',
     });
 
-    const { body: suscripcion } = await http
+    const { body: subscription } = await http
       .get('/v1/staff/subscription')
       .set(auth(body.session.accessToken))
       .expect(200);
 
-    expect(suscripcion.state.status).toBe('free');
-    expect(suscripcion.priceCents).toBe(0);
-    expect(suscripcion.notice.title).toBe('Plan gratis');
+    expect(subscription.state.status).toBe('free');
+    expect(subscription.priceCents).toBe(0);
+    expect(subscription.notice.title).toBe('Plan gratis');
   });
 
   /**
@@ -466,7 +466,7 @@ suite('el plan gratis', () => {
    * alumnos amanece en solo lectura por una deuda de cero soles.
    */
   it('NO SE CORTA aunque su fecha esté vencida hace tres meses', async () => {
-    const { body } = await alta({
+    const { body } = await signUp({
       uid: `pequeno-vencido-${runId}`,
       gymName: `Dojo Pequeño Vencido ${runId}`,
       taxId: RUC[0]!,
@@ -476,49 +476,49 @@ suite('el plan gratis', () => {
       return res;
     });
 
-    const { body: suscripcion } = await http
+    const { body: subscription } = await http
       .get('/v1/staff/subscription')
       .set(auth(body.session.accessToken))
       .expect(200);
 
-    expect(suscripcion.state.status).toBe('free');
-    expect(suscripcion.state.canWrite).toBe(true);
+    expect(subscription.state.status).toBe('free');
+    expect(subscription.state.canWrite).toBe(true);
   });
 });
 
 suite('códigos de promoción', () => {
-  let tokenDueno = '';
+  let ownerToken = '';
   let tenantId = '';
 
   it('un código suma un mes al mes gratis', async () => {
-    await crearCodigo(`LANZA${runId}`, 1, 2);
+    await createCode(`LANZA${runId}`, 1, 2);
 
-    const { body } = await alta({
+    const { body } = await signUp({
       uid: `promo-${runId}`,
       gymName: `Dojo Con Código ${runId}`,
       taxId: RUC[1]!,
     });
-    tokenDueno = body.session.accessToken;
+    ownerToken = body.session.accessToken;
     tenantId = body.tenantId;
 
-    const antes = await http.get('/v1/staff/subscription').set(auth(tokenDueno)).expect(200);
-    const canje = await http
+    const before = await http.get('/v1/staff/subscription').set(auth(ownerToken)).expect(200);
+    const redemption = await http
       .post('/v1/staff/promo')
-      .set(auth(tokenDueno))
+      .set(auth(ownerToken))
       .send({ code: `lanza-${runId}` }) // escrito distinto a propósito
       .expect(201);
 
-    expect(canje.body.redeemed).toBe(true);
-    expect(canje.body.freeMonths).toBe(1);
+    expect(redemption.body.redeemed).toBe(true);
+    expect(redemption.body.freeMonths).toBe(1);
 
-    const despues = await http.get('/v1/staff/subscription').set(auth(tokenDueno)).expect(200);
-    expect(despues.body.state.freeDaysLeft).toBeGreaterThan(antes.body.state.freeDaysLeft);
+    const after = await http.get('/v1/staff/subscription').set(auth(ownerToken)).expect(200);
+    expect(after.body.state.freeDaysLeft).toBeGreaterThan(before.body.state.freeDaysLeft);
   });
 
   it('el mismo gimnasio no lo canjea dos veces', async () => {
     const { body } = await http
       .post('/v1/staff/promo')
-      .set(auth(tokenDueno))
+      .set(auth(ownerToken))
       .send({ code: `LANZA${runId}` })
       .expect(201);
 
@@ -531,7 +531,7 @@ suite('códigos de promoción', () => {
     // persona necesita entender para saber si insistir sirve de algo.
     const { body } = await http
       .post('/v1/staff/promo')
-      .set(auth(tokenDueno))
+      .set(auth(ownerToken))
       .send({ code: 'NOEXISTE9999' })
       .expect(201);
 
@@ -540,17 +540,17 @@ suite('códigos de promoción', () => {
   });
 
   it('el tope de usos se cumple', async () => {
-    await crearCodigo(`UNICO${runId}`, 1, 1);
+    await createCode(`UNICO${runId}`, 1, 1);
 
-    const primero = await alta({
+    const first = await signUp({
       uid: `promo-tope-a-${runId}`,
       gymName: `Dojo Tope Uno ${runId}`,
       taxId: RUC[2]!,
       promoCode: `UNICO${runId}`,
     });
-    expect(primero.body.promo).toEqual({ applied: true, freeMonths: 1 });
+    expect(first.body.promo).toEqual({ applied: true, freeMonths: 1 });
 
-    const segundo = await alta({
+    const second = await signUp({
       uid: `promo-tope-b-${runId}`,
       gymName: `Dojo Tope Dos ${runId}`,
       taxId: RUC[3]!,
@@ -559,26 +559,26 @@ suite('códigos de promoción', () => {
 
     // El segundo gimnasio SE CREA igual: perder un alta por un código agotado
     // sería cambiar un cliente por una promoción.
-    expect(segundo.status).toBe(201);
-    expect(segundo.body.promo).toEqual({ applied: false, reason: 'exhausted' });
+    expect(second.status).toBe(201);
+    expect(second.body.promo).toEqual({ applied: false, reason: 'exhausted' });
   });
 
   it('canjear levanta el corte de un gimnasio ya cortado', async () => {
     // Es el caso que justifica que la ruta siga abierta en solo lectura: si el
     // corte bloqueara la forma de levantarlo, sería una trampa.
     await vencer(tenantId);
-    const cortado = await http.get('/v1/staff/subscription').set(auth(tokenDueno)).expect(200);
+    const cortado = await http.get('/v1/staff/subscription').set(auth(ownerToken)).expect(200);
     expect(cortado.body.state.canWrite).toBe(false);
 
-    await crearCodigo(`RESCATE${runId}`, 1, 5);
-    const canje = await http
+    await createCode(`RESCATE${runId}`, 1, 5);
+    const redemption = await http
       .post('/v1/staff/promo')
-      .set(auth(tokenDueno))
+      .set(auth(ownerToken))
       .send({ code: `RESCATE${runId}` })
       .expect(201);
 
-    expect(canje.body.redeemed).toBe(true);
-    const vivo = await http.get('/v1/staff/subscription').set(auth(tokenDueno)).expect(200);
+    expect(redemption.body.redeemed).toBe(true);
+    const vivo = await http.get('/v1/staff/subscription').set(auth(ownerToken)).expect(200);
     expect(vivo.body.state.canWrite).toBe(true);
     // Y el mes cuenta desde HOY, no desde la fecha que ya pasó.
     expect(vivo.body.state.freeDaysLeft).toBeGreaterThanOrEqual(27);

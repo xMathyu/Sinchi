@@ -57,7 +57,7 @@ import { SaasService } from '../saas/saas.service';
  * Es un tope de ABUSO, no un escalon comercial: lo que se cobra sigue saliendo
  * del padron de cada local, uno por uno.
  */
-const MAX_LOCALES_POR_PERSONA = 5;
+const MAX_GYMS_PER_PERSON = 5;
 
 /**
  * Como se llama la tarifa con la que nace el gimnasio.
@@ -67,7 +67,7 @@ const MAX_LOCALES_POR_PERSONA = 5;
  * toque desde su pantalla de planes. Pedirselo en el alta seria un campo mas
  * para escribir la palabra que ya estaba puesta.
  */
-const PRIMERA_TARIFA = 'Mensualidad';
+const FIRST_RATE_NAME = 'Mensualidad';
 
 /**
  * Lo minimo que se acepta como direccion: diez caracteres.
@@ -75,7 +75,7 @@ const PRIMERA_TARIFA = 'Mensualidad';
  * No comprueba que exista —eso no se puede saber desde aqui— sino que alguien
  * escribio algo. «Lima» son cuatro y no lleva a nadie a ninguna puerta.
  */
-const DIRECCION_MINIMA = 10;
+const ADDRESS_MIN = 10;
 
 export interface SignUpGymInput {
   readonly firebaseUid: string;
@@ -142,7 +142,7 @@ const normalizePhone = (raw: string): string => raw.replace(/[^\d+]/g, '');
  * Un solo texto para las dos puertas —la comprobacion previa y la carrera— para
  * que el mismo problema no se lea de dos maneras.
  */
-const CELULAR_OCUPADO =
+const PHONE_TAKEN =
   'Ese celular ya está registrado en Sinchi con otro documento. Si es tuyo, revisa el documento que escribiste; si lo compartes con alguien, usa otro número.';
 
 /**
@@ -191,8 +191,8 @@ export class OnboardingService {
 
   async signUpGym(input: SignUpGymInput): Promise<SignUpGymResult> {
     const taxId = normalizeRuc(input.taxId);
-    const rucFalla = checkRuc(taxId);
-    if (rucFalla !== null) throw new BadRequestException(rucDenialMessage(rucFalla));
+    const taxIdDenial = checkRuc(taxId);
+    if (taxIdDenial !== null) throw new BadRequestException(rucDenialMessage(taxIdDenial));
 
     const gymName = input.gymName.trim();
     if (gymName.length < 3) {
@@ -206,17 +206,17 @@ export class OnboardingService {
 
     // La misma funcion que corre el formulario, para que el boton se apague por
     // el motivo exacto por el que este POST responderia 400.
-    const tarifaFalla = checkPlanDraft({
-      name: PRIMERA_TARIFA,
+    const rateDenial = checkPlanDraft({
+      name: FIRST_RATE_NAME,
       type: 'unlimited',
       sessionsPerWeek: null,
       allowedDays: null,
       priceCents: input.monthlyPriceCents,
     });
-    if (tarifaFalla !== null) throw new BadRequestException(planDenialMessage(tarifaFalla));
+    if (rateDenial !== null) throw new BadRequestException(planDenialMessage(rateDenial));
 
     const address = input.address.trim();
-    if (address.length < DIRECCION_MINIMA) {
+    if (address.length < ADDRESS_MIN) {
       throw new BadRequestException(
         'Escribe dónde queda tu gimnasio: calle, número y distrito. Es lo primero que mira quien busca dónde entrenar.',
       );
@@ -224,7 +224,7 @@ export class OnboardingService {
 
     const persona = await this.resolveOwner(input);
 
-    await this.assertLocalesDisponibles(persona.userId);
+    await this.assertGymsAvailable(persona.userId);
 
     const { tenantId, slug } = await withoutTenantIsolation(this.db, async (tx) => {
       const slug = await this.freeSlug(tx, base);
@@ -252,8 +252,8 @@ export class OnboardingService {
       });
 
       // El mes gratis empieza HOY, que es cuando el gimnasio empieza a existir.
-      const alta = plainDateInZone(this.clock.now(), TZ_LIMA);
-      const freeUntil = freeUntilFrom(alta);
+      const signUp = plainDateInZone(this.clock.now(), TZ_LIMA);
+      const freeUntil = freeUntilFrom(signUp);
       await tx.insert(schema.saasSubscriptions).values({
         tenantId,
         // El escalon que DECLARO. El trabajo diario lo corrige contra el padron
@@ -261,7 +261,7 @@ export class OnboardingService {
         // plan gratis, no pagando de mas.
         tier: input.saasTier,
         freeUntil: formatPlainDate(freeUntil),
-        periodStart: formatPlainDate(alta),
+        periodStart: formatPlainDate(signUp),
         nextBillingDate: formatPlainDate(freeUntil),
       });
 
@@ -276,7 +276,7 @@ export class OnboardingService {
        */
       await tx.insert(schema.plans).values({
         tenantId,
-        name: PRIMERA_TARIFA,
+        name: FIRST_RATE_NAME,
         type: 'unlimited',
         sessionsPerWeek: null,
         allowedDays: null,
@@ -293,20 +293,20 @@ export class OnboardingService {
      */
     let promo: SignUpGymResult['promo'] = null;
     if (input.promoCode !== undefined && input.promoCode.trim().length > 0) {
-      const canje = await this.saas.redeemPromo(tenantId, input.promoCode);
-      promo = canje.redeemed
-        ? { applied: true, freeMonths: canje.freeMonths }
-        : { applied: false, reason: canje.reason };
+      const redemption = await this.saas.redeemPromo(tenantId, input.promoCode);
+      promo = redemption.redeemed
+        ? { applied: true, freeMonths: redemption.freeMonths }
+        : { applied: false, reason: redemption.reason };
     }
 
-    const resumen = await this.saas.summaryFor(tenantId);
-    this.logger.log(`Gimnasio nuevo: ${gymName} (${slug}), gratis hasta ${formatPlainDate(resumen.freeUntil)}`);
+    const summary = await this.saas.summaryFor(tenantId);
+    this.logger.log(`Gimnasio nuevo: ${gymName} (${slug}), gratis hasta ${formatPlainDate(summary.freeUntil)}`);
 
     return {
       tenantId,
       slug,
       name: gymName,
-      freeUntil: formatPlainDate(resumen.freeUntil),
+      freeUntil: formatPlainDate(summary.freeUntil),
       promo,
       session: await this.auth.issueForUser(persona.userId),
     };
@@ -327,31 +327,31 @@ export class OnboardingService {
       throw new BadRequestException('Falta tu documento: es lo que te identifica en la red.');
     }
 
-    const registro = await this.accountLink.datosDeRegistro(input.firebaseUid);
+    const registro = await this.accountLink.signUpDetails(input.firebaseUid);
     const fullName = (input.ownerName ?? registro?.fullName ?? input.displayName ?? '').trim();
     const phone = normalizePhone(input.phone ?? registro?.phone ?? '');
 
     return withoutTenantIsolation(this.db, async (tx) => {
-      const [porCuenta] = await tx
+      const [byAccount] = await tx
         .select({ id: schema.users.id, name: schema.users.name })
         .from(schema.users)
         .where(eq(schema.users.firebaseUid, input.firebaseUid))
         .limit(1);
-      if (porCuenta !== undefined) return { userId: porCuenta.id, fullName: porCuenta.name };
+      if (byAccount !== undefined) return { userId: byAccount.id, fullName: byAccount.name };
 
-      const [porDocumento] = await tx
+      const [byDocument] = await tx
         .select({ id: schema.users.id, name: schema.users.name })
         .from(schema.users)
         .where(eq(schema.users.documentId, documentId))
         .limit(1);
-      if (porDocumento !== undefined) {
+      if (byDocument !== undefined) {
         // Ya tenia ficha en algun gimnasio y ahora abre el suyo: se le engancha
         // la cuenta de Google a la identidad que ya existe, no se duplica.
         await tx
           .update(schema.users)
           .set({ firebaseUid: input.firebaseUid })
-          .where(eq(schema.users.id, porDocumento.id));
-        return { userId: porDocumento.id, fullName: porDocumento.name };
+          .where(eq(schema.users.id, byDocument.id));
+        return { userId: byDocument.id, fullName: byDocument.name };
       }
 
       if (fullName.length < 2 || phone.length < 6) {
@@ -371,16 +371,16 @@ export class OnboardingService {
        * que estamos perdiendo es un alta. El documento no necesita el mismo
        * cuidado porque su choque ya se resuelve arriba adoptando la identidad.
        */
-      const [conEseCelular] = await tx
+      const [withThatPhone] = await tx
         .select({ id: schema.users.id })
         .from(schema.users)
         .where(eq(schema.users.phone, phone))
         .limit(1);
-      if (conEseCelular !== undefined) {
-        throw new ConflictException(CELULAR_OCUPADO);
+      if (withThatPhone !== undefined) {
+        throw new ConflictException(PHONE_TAKEN);
       }
 
-      const [creada] = await tx
+      const [created] = await tx
         .insert(schema.users)
         .values({
           name: fullName,
@@ -395,12 +395,12 @@ export class OnboardingService {
         // el 500 que acabamos de quitar.
         .catch((causa: unknown) => {
           if (isUniqueViolation(causa)) {
-            throw new ConflictException(CELULAR_OCUPADO);
+            throw new ConflictException(PHONE_TAKEN);
           }
           throw causa;
         });
 
-      return { userId: creada!.id, fullName };
+      return { userId: created!.id, fullName };
     });
   }
 
@@ -423,7 +423,7 @@ export class OnboardingService {
    * mes gratis. Cinco es holgado para cualquier escuela de verdad y cierra la
    * puerta a granjear meses abriendo locales de mentira.
    */
-  private async assertLocalesDisponibles(userId: string): Promise<void> {
+  private async assertGymsAvailable(userId: string): Promise<void> {
     /**
      * Va con CONTEXTO DE USUARIO y no sin contexto: `staff` esta bajo RLS
      * forzado y su politica es `tenant_id = app_current_tenant() OR user_id =
@@ -440,9 +440,9 @@ export class OnboardingService {
         .where(eq(schema.staff.userId, userId)),
     );
 
-    if (suyos.length >= MAX_LOCALES_POR_PERSONA) {
+    if (suyos.length >= MAX_GYMS_PER_PERSON) {
       throw new ConflictException(
-        `Ya llevas ${MAX_LOCALES_POR_PERSONA} locales en Sinchi, que es el máximo por cuenta. ` +
+        `Ya llevas ${MAX_GYMS_PER_PERSON} locales en Sinchi, que es el máximo por cuenta. ` +
           'Si necesitas más, escríbenos.',
       );
     }
@@ -450,8 +450,8 @@ export class OnboardingService {
 
   /** Dos «Dojo Kaizen» en la red no pueden compartir dirección. */
   private async freeSlug(tx: Tx, base: string): Promise<string> {
-    for (let intento = 0; intento < 50; intento += 1) {
-      const slug = intento === 0 ? base : `${base}-${intento + 1}`;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
       const [tomado] = await tx
         .select({ id: schema.tenants.id })
         .from(schema.tenants)

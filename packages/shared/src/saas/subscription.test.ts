@@ -11,8 +11,8 @@ import {
 } from './subscription.js';
 import { addDays, plainDate } from '../time/plain-date.js';
 
-const ALTA = plainDate(2026, 9, 2);
-const FIN_DEL_MES_GRATIS = plainDate(2026, 10, 2);
+const SIGNUP = plainDate(2026, 9, 2);
+const FREE_MONTH_ENDS = plainDate(2026, 10, 2);
 
 /**
  * Un gimnasio recien dado de alta: dentro de su mes gratis y sin pagar nada.
@@ -20,12 +20,12 @@ const FIN_DEL_MES_GRATIS = plainDate(2026, 10, 2);
  * Con escalon de pago, que es donde todas estas reglas aplican. El plan gratis
  * las esquiva enteras y tiene su propio bloque.
  */
-function enMesGratis(overrides: Partial<SaasInput> = {}): SaasInput {
+function inFreeMonth(overrides: Partial<SaasInput> = {}): SaasInput {
   return {
     tier: 'up_to_60',
-    freeUntil: FIN_DEL_MES_GRATIS,
-    nextBillingDate: FIN_DEL_MES_GRATIS,
-    today: ALTA,
+    freeUntil: FREE_MONTH_ENDS,
+    nextBillingDate: FREE_MONTH_ENDS,
+    today: SIGNUP,
     periodPaid: false,
     ...overrides,
   };
@@ -33,7 +33,7 @@ function enMesGratis(overrides: Partial<SaasInput> = {}): SaasInput {
 
 describe('freeUntilFrom', () => {
   it('regala un mes desde el alta', () => {
-    expect(freeUntilFrom(ALTA)).toEqual(FIN_DEL_MES_GRATIS);
+    expect(freeUntilFrom(SIGNUP)).toEqual(FREE_MONTH_ENDS);
   });
 
   it('recorta el dia en meses cortos, como el cobro del alumno', () => {
@@ -70,16 +70,16 @@ describe('tierForMembers', () => {
 
 describe('evaluateSaas durante el mes gratis', () => {
   it('el dia del alta escribe y sale en el directorio', () => {
-    const estado = evaluateSaas(enMesGratis());
+    const state = evaluateSaas(inFreeMonth());
 
-    expect(estado.status).toBe('trialing');
-    expect(estado.canWrite).toBe(true);
-    expect(estado.listed).toBe(true);
-    expect(estado.freeDaysLeft).toBe(30);
+    expect(state.status).toBe('trialing');
+    expect(state.canWrite).toBe(true);
+    expect(state.listed).toBe(true);
+    expect(state.freeDaysLeft).toBe(30);
   });
 
   it('descuenta los dias que quedan', () => {
-    expect(evaluateSaas(enMesGratis({ today: plainDate(2026, 9, 27) })).freeDaysLeft).toBe(5);
+    expect(evaluateSaas(inFreeMonth({ today: plainDate(2026, 9, 27) })).freeDaysLeft).toBe(5);
   });
 
   /**
@@ -88,66 +88,66 @@ describe('evaluateSaas durante el mes gratis', () => {
    * "suscripcion al dia" justo el dia que tenia que pagar.
    */
   it('el ultimo dia dice que termina hoy, no que esta al dia', () => {
-    const estado = evaluateSaas(enMesGratis({ today: FIN_DEL_MES_GRATIS }));
+    const state = evaluateSaas(inFreeMonth({ today: FREE_MONTH_ENDS }));
 
-    expect(estado.status).toBe('trialing');
-    expect(estado.freeDaysLeft).toBe(0);
-    expect(saasNotice(estado, saasPrice('up_to_60')).title).toBe('Tu mes gratis termina hoy');
+    expect(state.status).toBe('trialing');
+    expect(state.freeDaysLeft).toBe(0);
+    expect(saasNotice(state, saasPrice('up_to_60')).title).toBe('Tu mes gratis termina hoy');
   });
 
   it('pagar durante el mes gratis lo pasa a al dia', () => {
-    const estado = evaluateSaas(enMesGratis({ periodPaid: true }));
+    const state = evaluateSaas(inFreeMonth({ periodPaid: true }));
 
-    expect(estado.status).toBe('active');
-    expect(estado.canWrite).toBe(true);
+    expect(state.status).toBe('active');
+    expect(state.canWrite).toBe(true);
   });
 });
 
 describe('evaluateSaas cuando el mes gratis vencio', () => {
-  const vencido = (dias: number, overrides: Partial<SaasInput> = {}): SaasInput =>
-    enMesGratis({ today: addDays(FIN_DEL_MES_GRATIS, dias), ...overrides });
+  const overdue = (days: number, overrides: Partial<SaasInput> = {}): SaasInput =>
+    inFreeMonth({ today: addDays(FREE_MONTH_ENDS, days), ...overrides });
 
   it('entra en gracia al dia siguiente y sigue escribiendo', () => {
-    const estado = evaluateSaas(vencido(1));
+    const state = evaluateSaas(overdue(1));
 
-    expect(estado.status).toBe('in_grace');
-    expect(estado.daysPastDue).toBe(1);
-    expect(estado.canWrite).toBe(true);
-    expect(estado.listed).toBe(true);
+    expect(state.status).toBe('in_grace');
+    expect(state.daysPastDue).toBe(1);
+    expect(state.canWrite).toBe(true);
+    expect(state.listed).toBe(true);
   });
 
   it('el ultimo dia de gracia todavia escribe', () => {
-    const estado = evaluateSaas(vencido(SAAS_GRACE_DAYS));
+    const state = evaluateSaas(overdue(SAAS_GRACE_DAYS));
 
-    expect(estado.status).toBe('in_grace');
-    expect(estado.canWrite).toBe(true);
+    expect(state.status).toBe('in_grace');
+    expect(state.canWrite).toBe(true);
   });
 
   it('pasada la gracia cae a solo lectura y sale del directorio', () => {
-    const estado = evaluateSaas(vencido(SAAS_GRACE_DAYS + 1));
+    const state = evaluateSaas(overdue(SAAS_GRACE_DAYS + 1));
 
-    expect(estado.status).toBe('read_only');
-    expect(estado.canWrite).toBe(false);
-    expect(estado.listed).toBe(false);
-    expect(estado.readOnlyOn).toEqual(plainDate(2026, 10, 9));
+    expect(state.status).toBe('read_only');
+    expect(state.canWrite).toBe(false);
+    expect(state.listed).toBe(false);
+    expect(state.readOnlyOn).toEqual(plainDate(2026, 10, 9));
   });
 
   it('pagar despues del corte lo devuelve a escribir', () => {
     // Es el caso que decide si el cliente vuelve o se va: el corte tiene que
     // levantarse solo con registrar el pago, sin tocar nada a mano.
-    const estado = evaluateSaas(vencido(30, { periodPaid: true }));
+    const state = evaluateSaas(overdue(30, { periodPaid: true }));
 
-    expect(estado.status).toBe('active');
-    expect(estado.canWrite).toBe(true);
-    expect(estado.listed).toBe(true);
+    expect(state.status).toBe('active');
+    expect(state.canWrite).toBe(true);
+    expect(state.listed).toBe(true);
   });
 
   it('la gracia del gimnasio no es la que el gimnasio le da a sus alumnos', () => {
     // `graceDays` entra por parametro y por defecto son los 7 de Sinchi, no los
     // 5 de `tenants.grace_days`: si saliera de ahi, el cliente se regalaria su
     // propia gracia subiendola en su configuracion.
-    expect(evaluateSaas(vencido(6, { graceDays: 5 })).status).toBe('read_only');
-    expect(evaluateSaas(vencido(6)).status).toBe('in_grace');
+    expect(evaluateSaas(overdue(6, { graceDays: 5 })).status).toBe('read_only');
+    expect(evaluateSaas(overdue(6)).status).toBe('in_grace');
   });
 });
 
@@ -157,77 +157,77 @@ describe('el plan gratis', () => {
    * por tanto no hay corte que aplicarle por mucho que su fecha haya pasado.
    */
   it('no se corta nunca, aunque su mes gratis venciera hace medio ano', () => {
-    const estado = evaluateSaas(
-      enMesGratis({ tier: 'free', today: plainDate(2027, 4, 2) }),
+    const state = evaluateSaas(
+      inFreeMonth({ tier: 'free', today: plainDate(2027, 4, 2) }),
     );
 
-    expect(estado.status).toBe('free');
-    expect(estado.canWrite).toBe(true);
-    expect(estado.listed).toBe(true);
-    expect(estado.daysPastDue).toBe(0);
+    expect(state.status).toBe('free');
+    expect(state.canWrite).toBe(true);
+    expect(state.listed).toBe(true);
+    expect(state.daysPastDue).toBe(0);
   });
 
   it('el mismo gimnasio en escalon de pago si se corta', () => {
     // Es la comparacion que demuestra que lo que cambia es el escalon y no otra
     // cosa: mismas fechas, mismo dia, distinto precio.
-    expect(evaluateSaas(enMesGratis({ tier: 'up_to_60', today: plainDate(2027, 4, 2) })).status).toBe(
+    expect(evaluateSaas(inFreeMonth({ tier: 'up_to_60', today: plainDate(2027, 4, 2) })).status).toBe(
       'read_only',
     );
   });
 
   it('cancelar pesa mas que el plan gratis', () => {
-    expect(evaluateSaas(enMesGratis({ tier: 'free', canceled: true })).status).toBe('canceled');
+    expect(evaluateSaas(inFreeMonth({ tier: 'free', canceled: true })).status).toBe('canceled');
   });
 
   it('lo dice sin hablar de meses gratis ni de deuda', () => {
-    const aviso = saasNotice(evaluateSaas(enMesGratis({ tier: 'free' })), saasPrice('free'));
+    const notice = saasNotice(evaluateSaas(inFreeMonth({ tier: 'free' })), saasPrice('free'));
 
-    expect(aviso.tone).toBe('info');
-    expect(aviso.title).toBe('Plan gratis');
-    expect(aviso.detail).toContain('Hasta 10 alumnos');
+    expect(notice.tone).toBe('info');
+    expect(notice.title).toBe('Plan gratis');
+    expect(notice.detail).toContain('Hasta 10 alumnos');
   });
 });
 
 describe('evaluateSaas con la cuenta cancelada', () => {
   it('no escribe ni sale en el directorio', () => {
-    const estado = evaluateSaas(enMesGratis({ canceled: true }));
+    const state = evaluateSaas(inFreeMonth({ canceled: true }));
 
-    expect(estado.status).toBe('canceled');
-    expect(estado.canWrite).toBe(false);
-    expect(estado.listed).toBe(false);
+    expect(state.status).toBe('canceled');
+    expect(state.canWrite).toBe(false);
+    expect(state.listed).toBe(false);
   });
 });
 
 describe('saasNotice', () => {
   it('avisa con tono de alerta en la ultima semana', () => {
-    expect(saasNotice(evaluateSaas(enMesGratis()), saasPrice('up_to_60')).tone).toBe('info');
+    expect(saasNotice(evaluateSaas(inFreeMonth()), saasPrice('up_to_60')).tone).toBe('info');
     expect(
-      saasNotice(evaluateSaas(enMesGratis({ today: plainDate(2026, 9, 27) })), saasPrice('up_to_60'))
+      saasNotice(evaluateSaas(inFreeMonth({ today: plainDate(2026, 9, 27) })), saasPrice('up_to_60'))
         .tone,
     ).toBe('warn');
   });
 
   it('dice el precio en soles enteros', () => {
-    const aviso = saasNotice(evaluateSaas(enMesGratis()), saasPrice('up_to_150'));
+    const notice = saasNotice(evaluateSaas(inFreeMonth()), saasPrice('up_to_150'));
 
-    expect(aviso.title).toBe('Te quedan 30 días de tu mes gratis');
-    expect(aviso.detail).toBe('Después, Sinchi cuesta S/ 299 al mes.');
+    expect(notice.title).toBe('Te quedan 30 días de tu mes gratis');
+    expect(notice.detail).toBe('Después, Sinchi cuesta S/ 299 al mes.');
   });
 
   it('en solo lectura promete que la puerta sigue', () => {
-    const estado = evaluateSaas(enMesGratis({ today: plainDate(2026, 11, 2) }));
-    const aviso = saasNotice(estado, saasPrice('up_to_60'));
+    const state = evaluateSaas(inFreeMonth({ today: plainDate(2026, 11, 2) }));
+    const notice = saasNotice(state, saasPrice('up_to_60'));
 
-    expect(aviso.tone).toBe('blocked');
-    expect(aviso.detail).toContain('La puerta sigue funcionando');
+    expect(notice.tone).toBe('blocked');
+    expect(notice.detail).toContain('La puerta sigue funcionando');
   });
 
   it('singulariza el dia', () => {
-    const unDia = evaluateSaas(enMesGratis({ today: plainDate(2026, 10, 1) }));
-    expect(saasNotice(unDia, saasPrice('up_to_60')).title).toBe('Te queda 1 día de tu mes gratis');
+    const oneDay = evaluateSaas(inFreeMonth({ today: plainDate(2026, 10, 1) }));
+    expect(saasNotice(oneDay, saasPrice('up_to_60')).title).toBe('Te queda 1 día de tu mes gratis');
 
-    const unDiaVencido = evaluateSaas(enMesGratis({ today: plainDate(2026, 10, 3) }));
-    expect(saasNotice(unDiaVencido, saasPrice('up_to_60')).title).toBe(
+    const oneDayOverdue = evaluateSaas(inFreeMonth({ today: plainDate(2026, 10, 3) }));
+    expect(saasNotice(oneDayOverdue, saasPrice('up_to_60')).title).toBe(
       'Tu suscripción venció hace 1 día',
     );
   });

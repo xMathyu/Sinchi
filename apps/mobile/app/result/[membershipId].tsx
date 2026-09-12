@@ -23,7 +23,7 @@ import { TintedScreen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useRoster, useScanVerdict, useToday } from '../../src/data/hooks';
 import { clearScanVerdict, validateScan } from '../../src/data/store';
-import { marcarAsistencia } from '../../src/data/actions';
+import { markAttendance } from '../../src/data/actions';
 import { formatClock, formatShortDate } from '../../src/lib/format';
 
 export default function ScanResultScreen() {
@@ -47,11 +47,11 @@ export default function ScanResultScreen() {
   const semaphore = semaphoreStyle(theme, message.level);
   const ink = semaphore.ink;
 
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /** Sale de la pantalla soltando el veredicto: el siguiente alumno es otro. */
-  const salir = () => {
+  const leave = () => {
     clearScanVerdict();
     router.back();
   };
@@ -60,17 +60,17 @@ export default function ScanResultScreen() {
     // Si el servidor ya lo registro al validar el QR, volver a marcar seria una
     // segunda asistencia del mismo dia. Aqui solo se cierra la pantalla.
     if (registrado) {
-      salir();
+      leave();
       return;
     }
-    setGuardando(true);
+    setSaving(true);
     setError(null);
-    void marcarAsistencia({ membershipId, method: 'qr' })
-      .then(salir)
+    void markAttendance({ membershipId, method: 'qr' })
+      .then(leave)
       .catch((causa: unknown) =>
         setError(causa instanceof Error ? causa.message : 'No se pudo registrar el ingreso.'),
       )
-      .finally(() => setGuardando(false));
+      .finally(() => setSaving(false));
   };
 
   return (
@@ -138,11 +138,11 @@ export default function ScanResultScreen() {
               </Text>
             )}
             <Button
-              label={guardando ? 'Registrando…' : registrado ? 'Listo' : 'Confirmar ingreso'}
+              label={saving ? 'Registrando…' : registrado ? 'Listo' : 'Confirmar ingreso'}
               variant="accent"
               accentColor={semaphore.ink}
               accentInk={theme.colors.ink}
-              disabled={guardando}
+              disabled={saving}
               onPress={confirm}
             />
           </>
@@ -174,7 +174,7 @@ export default function ScanResultScreen() {
               <OverrideButton membershipId={entry.view.membership.id} ink={ink} />
               <Pressable
                 accessibilityRole="button"
-                onPress={salir}
+                onPress={leave}
                 style={{
                   flex: 1,
                   backgroundColor: 'rgba(10,10,11,0.12)',
@@ -377,24 +377,24 @@ function OverrideButton({
   readonly membershipId: string;
   readonly ink: string;
 }) {
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: guardando }}
+      accessibilityState={{ disabled: saving }}
       accessibilityHint="Queda registrado con tu nombre y la hora"
       onPress={() => {
-        if (guardando) return;
-        setGuardando(true);
+        if (saving) return;
+        setSaving(true);
         // Por `actions`, no por el store: con sesion real la excepcion tiene que
         // llegar al servidor. Escrita solo en memoria, el rastro que la auditoria
         // existe para dejar se pierde al cerrar la app.
-        void marcarAsistencia({ membershipId, method: 'manual', overrideDenial: true })
+        void markAttendance({ membershipId, method: 'manual', overrideDenial: true })
           .then(() => {
             clearScanVerdict();
             router.back();
           })
-          .finally(() => setGuardando(false));
+          .finally(() => setSaving(false));
       }}
       style={{
         flex: 1,
@@ -405,7 +405,7 @@ function OverrideButton({
       }}
     >
       <Text variant="bodySmall" weight="semibold" color={ink}>
-        {guardando ? 'Registrando…' : 'Dejar pasar hoy'}
+        {saving ? 'Registrando…' : 'Dejar pasar hoy'}
       </Text>
     </Pressable>
   );

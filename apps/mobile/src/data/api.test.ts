@@ -28,8 +28,8 @@ import {
   fetchTrials,
   fetchMembership,
   fetchRoster,
-  fetchRutinas,
-  fetchRutinasDeMiGimnasio,
+  fetchRoutines,
+  fetchMyGymRoutines,
   fetchStaffMember,
   fetchCheckInPreview,
   fetchPlansFor,
@@ -99,15 +99,15 @@ suite('modos y locales', () => {
    * que en un `> 0` no lanza — simplemente esconde el boton para siempre.
    */
   it('/auth/modes devuelve los puestos como lista', async () => {
-    const modos = await fetchModes();
+    const modes = await fetchModes();
 
-    expect(Array.isArray(modos.staff)).toBe(true);
-    expect(typeof modos.student).toBe('boolean');
-    expect(modos.staff.length).toBeGreaterThan(0);
+    expect(Array.isArray(modes.staff)).toBe(true);
+    expect(typeof modes.student).toBe('boolean');
+    expect(modes.staff.length).toBeGreaterThan(0);
 
-    for (const puesto of modos.staff) {
-      expect(['owner', 'front_desk']).toContain(puesto.role);
-      expect(puesto.tenantId).toBeTruthy();
+    for (const post of modes.staff) {
+      expect(['owner', 'front_desk']).toContain(post.role);
+      expect(post.tenantId).toBeTruthy();
     }
   });
 
@@ -115,10 +115,10 @@ suite('modos y locales', () => {
     // El camino de siempre. El esquema del servidor lleva `.default({})` justo
     // para que este POST pelado no empiece a responder 400 el dia que se le
     // agrego el `tenantId` opcional.
-    const sesion = await switchToStaff();
+    const session = await switchToStaff();
 
-    expect(sesion.role).toBe('front_desk');
-    expect(sesion.tenantId).toBeTruthy();
+    expect(session.role).toBe('front_desk');
+    expect(session.tenantId).toBeTruthy();
   });
 
   it('pedir un local ajeno se rechaza, no se concede', async () => {
@@ -229,7 +229,7 @@ suite('hidratacion del store', () => {
     const { loadFromApi } = await import('./hydrate');
     const { buildDemoData } = await import('./demo');
 
-    const datos = await loadFromApi();
+    const details = await loadFromApi();
     const demo = buildDemoData();
 
     // La comprobacion que importa, y no se puede hacer por nombre: la base de
@@ -240,56 +240,56 @@ suite('hidratacion del store', () => {
     // Esto es lo que se persiguio media tarde: la app mostraba tres gimnasios
     // inventados aunque la sesion fuera real, porque ninguna pantalla de
     // contenido preguntaba al servidor.
-    expect(datos.user.id).not.toBe(demo.user.id);
+    expect(details.user.id).not.toBe(demo.user.id);
     const idsDemo = new Set(demo.tenants.map((t) => t.id));
-    for (const tenant of datos.tenants) {
+    for (const tenant of details.tenants) {
       expect(idsDemo.has(tenant.id)).toBe(false);
     }
 
     // Y coincide con lo que la api dice por su cuenta.
     const me = await fetchMe();
-    expect(datos.user.id).toBe(me.user.id);
-    expect(datos.memberships).toHaveLength(me.wallet.length);
+    expect(details.user.id).toBe(me.user.id);
+    expect(details.memberships).toHaveLength(me.wallet.length);
 
     // La forma tiene que servir tal cual al store.
-    expect(datos.users).toHaveLength(1);
-    expect(datos.memberships.length).toBe(datos.subscriptions.length);
-    expect(datos.activeTenantId).toBe(datos.tenants[0]!.id);
+    expect(details.users).toHaveLength(1);
+    expect(details.memberships.length).toBe(details.subscriptions.length);
+    expect(details.activeTenantId).toBe(details.tenants[0]!.id);
 
     // Sin gimnasios repetidos: dos membresias del mismo local traen el mismo
     // tenant, y duplicarlo saldria en el selector de "Mi QR".
-    const ids = datos.tenants.map((t) => t.id);
+    const ids = details.tenants.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
 
-    for (const cargo of datos.charges) {
+    for (const cargo of details.charges) {
       expect(Number.isInteger(cargo.amountCents)).toBe(true);
     }
 
     // Sin esto las comprobaciones de abajo serian vacias: un bucle sobre un
     // array vacio no afirma nada y el test pasaria sin mirar ni una fecha.
-    expect(datos.charges.length).toBeGreaterThan(0);
-    expect(datos.attendances.length).toBeGreaterThan(0);
+    expect(details.charges.length).toBeGreaterThan(0);
+    expect(details.attendances.length).toBeGreaterThan(0);
 
     // Lo que se cayo en el telefono: `Charge.createdAt` esta declarado como
     // `Date`, pero JSON entrega la cadena ISO. El tipo mentia, y la mentira no
     // explotaba aqui sino en el store, ordenando con `b.createdAt.getTime()` —
     // "undefined is not a function" a tres saltos del origen.
-    for (const cargo of datos.charges) {
+    for (const cargo of details.charges) {
       expect(cargo.createdAt).toBeInstanceOf(Date);
       expect(Number.isNaN(cargo.createdAt.getTime())).toBe(false);
     }
-    for (const asistencia of datos.attendances) {
-      expect(asistencia.checkedInAt).toBeInstanceOf(Date);
-      if (asistencia.syncedAt !== null) expect(asistencia.syncedAt).toBeInstanceOf(Date);
+    for (const attendance of details.attendances) {
+      expect(attendance.checkedInAt).toBeInstanceOf(Date);
+      if (attendance.syncedAt !== null) expect(attendance.syncedAt).toBeInstanceOf(Date);
     }
-    expect(datos.user.createdAt).toBeInstanceOf(Date);
-    for (const sub of datos.subscriptions) {
+    expect(details.user.createdAt).toBeInstanceOf(Date);
+    for (const sub of details.subscriptions) {
       if (sub.canceledAt !== null) expect(sub.canceledAt).toBeInstanceOf(Date);
     }
 
     // Y las fechas civiles siguen siendo objetos: PlainDate se eligio
     // precisamente para sobrevivir al viaje sin revivir nada.
-    for (const sub of datos.subscriptions) {
+    for (const sub of details.subscriptions) {
       expect(typeof sub.nextBillingDate).toBe('object');
       expect(sub.nextBillingDate).toHaveProperty('year');
     }
@@ -331,22 +331,22 @@ suite('rutas del staff', () => {
 
   it('marcar asistencia también devuelve el estado de DESPUÉS', async () => {
     const roster = await fetchRoster();
-    const entrada = roster.find((r) => r.quota.limit !== null && !r.quota.exhausted) ?? roster[0]!;
-    const antes = entrada.quota.used;
+    const walletEntry = roster.find((r) => r.quota.limit !== null && !r.quota.exhausted) ?? roster[0]!;
+    const before = walletEntry.quota.used;
 
-    const salida = await markManual({
-      membershipId: entrada.membership.id,
+    const manualOutcome = await markManual({
+      membershipId: walletEntry.membership.id,
       overrideDenial: true,
       clientId: randomUUID(),
     });
 
-    expect(salida.registered).toBe(true);
+    expect(manualOutcome.registered).toBe(true);
 
     // La respuesta traía el cupo de ANTES del insert: el staff marcaba a alguien
     // y la pantalla seguía diciendo "0 de 3". El mismo principio que ya se exigía
     // a los pagos, que aquí no se cumplía.
-    if (!salida.alreadyRegistered && entrada.quota.limit !== null) {
-      expect(salida.view.quota.used).toBe(antes + 1);
+    if (!manualOutcome.alreadyRegistered && walletEntry.quota.limit !== null) {
+      expect(manualOutcome.view.quota.used).toBe(before + 1);
     }
   });
 
@@ -379,24 +379,24 @@ suite('directorio y clase gratis', () => {
     // Es la única ruta de la app que atiende a alguien sin cuenta. Si dejara de
     // ser pública, el directorio se vería vacío y nadie sabría por qué.
     active = 'none';
-    const gimnasios = await fetchGyms();
+    const gyms = await fetchGyms();
 
-    expect(gimnasios.length).toBeGreaterThan(0);
-    for (const gimnasio of gimnasios) {
-      expect(gimnasio.slug).toBeTruthy();
-      expect(gimnasio.name).toBeTruthy();
-      expect(typeof gimnasio.trialClassEnabled).toBe('boolean');
-      expect(typeof gimnasio.weeklyClasses).toBe('number');
+    expect(gyms.length).toBeGreaterThan(0);
+    for (const gymRow of gyms) {
+      expect(gymRow.slug).toBeTruthy();
+      expect(gymRow.name).toBeTruthy();
+      expect(typeof gymRow.trialClassEnabled).toBe('boolean');
+      expect(typeof gymRow.weeklyClasses).toBe('number');
     }
   });
 
   it('la página del gimnasio trae precios, horarios y clases con fecha', async () => {
     active = 'none';
-    const gimnasios = await fetchGyms();
-    const conClases = gimnasios.find((gimnasio) => gimnasio.weeklyClasses > 0);
-    if (conClases === undefined) return; // el seed no dejó ninguno con horarios
+    const gyms = await fetchGyms();
+    const withClasses = gyms.find((gymRow) => gymRow.weeklyClasses > 0);
+    if (withClasses === undefined) return; // el seed no dejó ninguno con horarios
 
-    const gym = await fetchGym(conClases.slug);
+    const gym = await fetchGym(withClasses.slug);
 
     expect(gym.plans.length).toBeGreaterThan(0);
     expect(gym.schedules.length).toBeGreaterThan(0);
@@ -420,23 +420,23 @@ suite('directorio y clase gratis', () => {
     // local nuevo. Es el caso determinista con el que se comprueba que el
     // rechazo NO viaja como excepción.
     active = 'none';
-    const gimnasios = await fetchGyms();
+    const gyms = await fetchGyms();
     const gym = await fetchGym(
-      (gimnasios.find((g) => g.weeklyClasses > 0) ?? gimnasios[0]!).slug,
+      (gyms.find((g) => g.weeklyClasses > 0) ?? gyms[0]!).slug,
     );
     if (gym.slots.length === 0) return;
 
     active = 'student';
-    const salida = await bookTrial({
+    const manualOutcome = await bookTrial({
       slug: gym.slug,
       classScheduleId: gym.slots[0]!.scheduleId,
       date: `${gym.slots[0]!.date.year}-${String(gym.slots[0]!.date.month).padStart(2, '0')}-${String(gym.slots[0]!.date.day).padStart(2, '0')}`,
     });
 
-    expect(salida.booked).toBe(false);
-    if (!salida.booked) {
-      expect(salida.reason.code).toBeTruthy();
-      expect(salida.message.title.length).toBeGreaterThan(0);
+    expect(manualOutcome.booked).toBe(false);
+    if (!manualOutcome.booked) {
+      expect(manualOutcome.reason.code).toBeTruthy();
+      expect(manualOutcome.message.title.length).toBeGreaterThan(0);
     }
   });
 
@@ -447,13 +447,13 @@ suite('directorio y clase gratis', () => {
 
   it('el mostrador ve la lista de quién viene a probar', async () => {
     active = 'staff';
-    const reservas = await fetchTrials();
+    const bookings = await fetchTrials();
 
-    expect(Array.isArray(reservas)).toBe(true);
-    for (const reserva of reservas) {
-      expect(reserva.fullName).toBeTruthy();
-      expect(reserva.phone).toBeTruthy();
-      expect(['booked', 'attended', 'no_show', 'canceled']).toContain(reserva.status);
+    expect(Array.isArray(bookings)).toBe(true);
+    for (const booking of bookings) {
+      expect(booking.fullName).toBeTruthy();
+      expect(booking.phone).toBeTruthy();
+      expect(['booked', 'attended', 'no_show', 'canceled']).toContain(booking.status);
     }
   });
 });
@@ -471,26 +471,26 @@ suite('rutinas', () => {
    */
   it('el mostrador lee la biblioteca del local', async () => {
     active = 'staff';
-    const biblioteca = await fetchRutinas();
+    const biblioteca = await fetchRoutines();
 
     expect(Array.isArray(biblioteca.routines)).toBe(true);
     expect(Number.isInteger(biblioteca.membersOnly)).toBe(true);
 
-    for (const fila of biblioteca.routines) {
-      expect(typeof fila.routine.title).toBe('string');
-      expect(['public', 'members']).toContain(fila.routine.visibility);
-      expect(['draft', 'published']).toContain(fila.routine.status);
-      expect(Number.isInteger(fila.itemCount)).toBe(true);
+    for (const row of biblioteca.routines) {
+      expect(typeof row.routine.title).toBe('string');
+      expect(['public', 'members']).toContain(row.routine.visibility);
+      expect(['draft', 'published']).toContain(row.routine.status);
+      expect(Number.isInteger(row.itemCount)).toBe(true);
     }
   });
 
   it('el alumno lee la de su gimnasio, por membresía', async () => {
     active = 'student';
     const wallet = await fetchWallet();
-    const entrada = wallet[0];
-    if (entrada === undefined) return;
+    const walletEntry = wallet[0];
+    if (walletEntry === undefined) return;
 
-    const biblioteca = await fetchRutinasDeMiGimnasio(entrada.membership.id);
+    const biblioteca = await fetchMyGymRoutines(walletEntry.membership.id);
     expect(Array.isArray(biblioteca.routines)).toBe(true);
     // Para quien ya es alumno el gancho no dice nada: ya las tiene todas.
     expect(biblioteca.membersOnly).toBe(0);
@@ -506,17 +506,17 @@ suite('rutinas', () => {
    */
   it('la ficha del gimnasio trae las públicas y CUENTA las de alumnos', async () => {
     active = 'none';
-    const gimnasios = await fetchGyms();
-    const gym = await fetchGym(gimnasios[0]!.slug);
+    const gyms = await fetchGyms();
+    const gym = await fetchGym(gyms[0]!.slug);
 
     expect(Array.isArray(gym.routines)).toBe(true);
     expect(typeof gym.membersOnlyRoutines).toBe('number');
 
-    for (const fila of gym.routines) {
+    for (const row of gym.routines) {
       // Desde la calle solo se ve lo publicado y público. Cualquier otra cosa
       // aquí es una fuga.
-      expect(fila.routine.visibility).toBe('public');
-      expect(fila.routine.status).toBe('published');
+      expect(row.routine.visibility).toBe('public');
+      expect(row.routine.status).toBe('published');
     }
   });
 });

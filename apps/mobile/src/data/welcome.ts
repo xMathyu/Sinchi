@@ -21,25 +21,25 @@ const KEY = 'sinchi.bienvenida.v1';
  * login y corregir un instante después es justo el parpadeo que la portada
  * existe para evitar.
  */
-export type EstadoBienvenida = 'cargando' | 'pendiente' | 'vista';
+export type WelcomeState = 'cargando' | 'pendiente' | 'vista';
 
-let estado: EstadoBienvenida = 'cargando';
+let state: WelcomeState = 'cargando';
 const listeners = new Set<() => void>();
 
-function emit(next: EstadoBienvenida): void {
-  estado = next;
+function emit(next: WelcomeState): void {
+  state = next;
   for (const listener of listeners) listener();
 }
 
-export function subscribeBienvenida(listener: () => void): () => void {
+export function subscribeWelcomeState(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-export const getBienvenida = (): EstadoBienvenida => estado;
+export const getWelcomeState = (): WelcomeState => state;
 
 /** Lee el llavero al arrancar. Se llama junto a `restoreSession`. */
-export async function restaurarBienvenida(): Promise<void> {
+export async function restoreWelcomeState(): Promise<void> {
   try {
     emit((await SecureStore.getItemAsync(KEY)) === null ? 'pendiente' : 'vista');
   } catch {
@@ -57,8 +57,8 @@ export async function restaurarBienvenida(): Promise<void> {
  * qué esperar al disco, y si la escritura falla lo peor que pasa es que la
  * bienvenida vuelva a salir en el próximo arranque.
  */
-export async function marcarBienvenidaVista(): Promise<void> {
-  if (estado === 'vista') return;
+export async function markWelcomeSeen(): Promise<void> {
+  if (state === 'vista') return;
   emit('vista');
   try {
     await SecureStore.setItemAsync(KEY, new Date().toISOString());

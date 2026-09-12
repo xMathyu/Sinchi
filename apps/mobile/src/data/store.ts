@@ -75,7 +75,7 @@ export interface State extends DemoData {
   readonly activeTenantId: string;
   readonly online: boolean;
   /** Hay una carga desde la api en curso. */
-  readonly hidratando: boolean;
+  readonly hydrating: boolean;
   /**
    * Padron traido del servidor, ya calculado.
    *
@@ -145,7 +145,7 @@ const NADIE: User = {
   createdAt: new Date(0),
 };
 
-const SIN_TURNO: Staff = {
+const NO_SHIFT: Staff = {
   id: asId(''),
   tenantId: asId(''),
   userId: asId(''),
@@ -164,7 +164,7 @@ const SIN_TURNO: Staff = {
 function initialState(): State {
   return {
     user: NADIE,
-    staff: SIN_TURNO,
+    staff: NO_SHIFT,
     users: [],
     tenants: [],
     memberships: [],
@@ -176,7 +176,7 @@ function initialState(): State {
     role: 'student',
     activeTenantId: '',
     online: true,
-    hidratando: false,
+    hydrating: false,
     cargado: false,
     errorDeCarga: null,
     remoteRoster: null,
@@ -187,7 +187,7 @@ function initialState(): State {
 }
 
 /** Llena el store con los datos de demostracion. Solo desde la puerta de dev. */
-export function cargarDemostracion(): void {
+export function loadDemo(): void {
   const demo = buildDemoData();
   setState({
     ...initialState(),
@@ -242,8 +242,8 @@ export interface RemoteData {
  * la primera carga y el alumno veria su membresia real junto a tres que no
  * existen. Es exactamente el sintoma que hizo falta perseguir.
  */
-export function marcarHidratando(valor: boolean): void {
-  setState({ ...state, hidratando: valor });
+export function markHydrating(value: boolean): void {
+  setState({ ...state, hydrating: value });
 }
 
 /**
@@ -255,8 +255,8 @@ export function marcarHidratando(valor: boolean): void {
  * llega a montarse nunca. Vale mas ensenar la pantalla vacia —que el alumno
  * puede reintentar— que un cargando eterno.
  */
-export function marcarIntentoTerminado(error: string | null = null): void {
-  setState({ ...state, hidratando: false, cargado: true, errorDeCarga: error });
+export function markHydrationDone(error: string | null = null): void {
+  setState({ ...state, hydrating: false, cargado: true, errorDeCarga: error });
 }
 
 /**
@@ -276,8 +276,8 @@ export function applyRemoteRoster(
   // del alumno y no dice donde trabaja— y la puerta no sabia en que local
   // estaba: la cabecera salia con un separador suelto delante del nombre.
   const tenants: Tenant[] = [];
-  for (const entrada of roster) {
-    if (!tenants.some((t) => t.id === entrada.view.tenant.id)) tenants.push(entrada.view.tenant);
+  for (const walletEntry of roster) {
+    if (!tenants.some((t) => t.id === walletEntry.view.tenant.id)) tenants.push(walletEntry.view.tenant);
   }
 
   setState({
@@ -433,7 +433,7 @@ export function viewMembership(membershipId: string, hoy: PlainDate = today()): 
     subscription,
     pendingPlan: subscriptionRaw.pendingPlanId === null ? null : findPlan(subscriptionRaw.pendingPlanId),
     quota,
-    dropInPaidToday: pagoClaseDeHoy(charges, plan, hoy),
+    dropInPaidToday: todaysDropInPaid(charges, plan, hoy),
     receivable,
     delinquency,
     level,
@@ -455,7 +455,7 @@ export function viewMembership(membershipId: string, hoy: PlainDate = today()): 
  * en UTC, y con el corte en UTC la clase pagada por la noche dejaba de valer a
  * mitad de la ultima hora punta del dia.
  */
-function pagoClaseDeHoy(
+function todaysDropInPaid(
   charges: readonly Charge[],
   plan: Plan,
   hoy: PlainDate,
@@ -590,8 +590,8 @@ export function resolveQr(raw: string): QrResolution {
   const payload = parseQrPayload(raw);
   if (payload === null || payload.subject !== 'user') return { ok: false, reason: 'not_sinchi' };
 
-  const entrada = currentRoster().find((e) => e.user.id === payload.id);
-  if (entrada !== undefined) return { ok: true, membershipId: entrada.view.membership.id };
+  const walletEntry = currentRoster().find((e) => e.user.id === payload.id);
+  if (walletEntry !== undefined) return { ok: true, membershipId: walletEntry.view.membership.id };
 
   // Con el padron del servidor el dispositivo solo conoce a los de ESTE local,
   // asi que no puede distinguir "ese usuario no existe" de "existe pero no

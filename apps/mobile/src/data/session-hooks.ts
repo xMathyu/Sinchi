@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from 'react';
 import type { AppRole } from '@sinchi/shared';
 import { getSessionState, subscribeSession, type SessionState } from './session';
-import { getBienvenida, subscribeBienvenida, type EstadoBienvenida } from './bienvenida';
+import { getWelcomeState, subscribeWelcomeState, type WelcomeState } from './welcome';
 
 export function useSession(): SessionState {
   return useSyncExternalStore(subscribeSession, getSessionState, getSessionState);
@@ -27,6 +27,6 @@ export function useRole(): AppRole | null {
  * Vive junto a la sesión y no en el store porque lo lee el mismo sitio y en el
  * mismo momento: el enrutado del arranque, antes de que haya datos de nadie.
  */
-export function useBienvenida(): EstadoBienvenida {
-  return useSyncExternalStore(subscribeBienvenida, getBienvenida, getBienvenida);
+export function useWelcomeState(): WelcomeState {
+  return useSyncExternalStore(subscribeWelcomeState, getWelcomeState, getWelcomeState);
 }

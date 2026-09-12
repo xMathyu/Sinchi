@@ -40,15 +40,15 @@ import {
 } from './session';
 
 /** Con qué credencial se puede reservar ahora mismo. */
-export type CuentaParaReservar =
+export type BookingCredential =
   | { readonly kind: 'session' }
   | { readonly kind: 'guest'; readonly idToken: string }
   /** Nadie ha entrado: hay que pasar por el login antes de poder reservar. */
   | { readonly kind: 'none' };
 
-export function cuentaParaReservar(): CuentaParaReservar {
-  const estado = getSessionState();
-  if (estado.status === 'signed_in') return { kind: 'session' };
+export function bookingCredential(): BookingCredential {
+  const state = getSessionState();
+  if (state.status === 'signed_in') return { kind: 'session' };
 
   const idToken = currentFirebaseToken();
   return idToken === null ? { kind: 'none' } : { kind: 'guest', idToken };
@@ -62,14 +62,14 @@ export function cuentaParaReservar(): CuentaParaReservar {
  * dar es la forma más rápida de que la reserva parezca un trámite — y de dejar
  * dos versiones de la misma persona en la lista del gimnasio.
  */
-export function necesitaDatos(): boolean {
-  if (cuentaParaReservar().kind !== 'guest') return false;
+export function askForDetails(): boolean {
+  if (bookingCredential().kind !== 'guest') return false;
 
-  const datos = currentAccountDetails();
+  const details = currentAccountDetails();
   return (
-    datos === null ||
-    (datos.fullName ?? '').trim().length < 2 ||
-    (datos.phone ?? '').trim().length < 6
+    details === null ||
+    (details.fullName ?? '').trim().length < 2 ||
+    (details.phone ?? '').trim().length < 6
   );
 }
 
@@ -82,49 +82,49 @@ export function necesitaDatos(): boolean {
  * «nombre demasiado corto», y de paso dejó guardado un celular de tres
  * caracteres encima del bueno.
  */
-const dato = (valor: string | null | undefined): string | null => {
-  const limpio = (valor ?? '').trim();
-  return limpio.length === 0 ? null : limpio;
+const present = (value: string | null | undefined): string | null => {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length === 0 ? null : trimmed;
 };
 
-export class SinCuenta extends Error {
+export class NoAccountError extends Error {
   constructor() {
     super('Entra con tu correo o con Google para reservar tu clase gratis.');
     this.name = 'SinCuenta';
   }
 }
 
-export async function reservarClaseGratis(input: {
+export async function bookTrialClass(input: {
   readonly slug: string;
   readonly slot: TrialSlot;
   /** Solo se usan como invitado. Con sesión se ignoran: ya los sabemos. */
   readonly fullName?: string;
   readonly phone?: string;
 }): Promise<BookTrialDto> {
-  const cuenta = cuentaParaReservar();
+  const credential = bookingCredential();
   const date = formatPlainDate(input.slot.date);
 
-  if (cuenta.kind === 'session') {
+  if (credential.kind === 'session') {
     return bookTrial({ slug: input.slug, classScheduleId: input.slot.scheduleId, date });
   }
-  if (cuenta.kind === 'none') throw new SinCuenta();
+  if (credential.kind === 'none') throw new NoAccountError();
 
   // Lo que la pantalla haya recogido manda; si no recogió nada, se usa lo que la
   // persona escribió al registrarse — y si tampoco, la api lo resuelve por su
   // cuenta contra el código pendiente.
   const guardado = currentAccountDetails();
-  const fullName = dato(input.fullName) ?? dato(guardado?.fullName) ?? '';
-  const phone = dato(input.phone) ?? dato(guardado?.phone) ?? '';
+  const fullName = present(input.fullName) ?? present(guardado?.fullName) ?? '';
+  const phone = present(input.phone) ?? present(guardado?.phone) ?? '';
 
   // Se recuerdan en el dispositivo: si esta vez hubo que preguntarlos —porque la
   // cuenta se creó fuera del formulario de registro, o entró con Google sin
   // escribir su celular— la siguiente reserva, en este gimnasio o en otro, ya no
   // pregunta nada.
-  await saveAccountDetails({ fullName: dato(fullName), phone: dato(phone) });
+  await saveAccountDetails({ fullName: present(fullName), phone: present(phone) });
 
   return bookTrialAsGuest({
     slug: input.slug,
-    idToken: cuenta.idToken,
+    idToken: credential.idToken,
     fullName,
     phone,
     classScheduleId: input.slot.scheduleId,
@@ -140,43 +140,43 @@ export async function reservarClaseGratis(input: {
  * dos caminos —sesion y cuenta— se resuelven igual, y lo unico que cambia es que
  * al invitado a veces hay que preguntarle su nombre.
  */
-export async function reservarPlazaEnEvento(input: {
+export async function bookEventSeat(input: {
   readonly slug: string;
   readonly eventId: string;
   /** Solo se usan como invitado. Con sesión se ignoran: ya los sabemos. */
   readonly fullName?: string;
   readonly phone?: string;
 }): Promise<BookEventDto> {
-  const cuenta = cuentaParaReservar();
+  const credential = bookingCredential();
 
-  if (cuenta.kind === 'session') {
+  if (credential.kind === 'session') {
     return bookEvent({ slug: input.slug, eventId: input.eventId });
   }
-  if (cuenta.kind === 'none') throw new SinCuenta();
+  if (credential.kind === 'none') throw new NoAccountError();
 
   const guardado = currentAccountDetails();
-  const fullName = dato(input.fullName) ?? dato(guardado?.fullName) ?? '';
-  const phone = dato(input.phone) ?? dato(guardado?.phone) ?? '';
+  const fullName = present(input.fullName) ?? present(guardado?.fullName) ?? '';
+  const phone = present(input.phone) ?? present(guardado?.phone) ?? '';
 
   // Se recuerdan en el dispositivo, igual que en la clase gratis: la siguiente
   // reserva, aqui o en otro gimnasio, ya no pregunta nada.
-  await saveAccountDetails({ fullName: dato(fullName), phone: dato(phone) });
+  await saveAccountDetails({ fullName: present(fullName), phone: present(phone) });
 
   return bookEventAsGuest({
     slug: input.slug,
     eventId: input.eventId,
-    idToken: cuenta.idToken,
+    idToken: credential.idToken,
     fullName,
     phone,
   });
 }
 
 /** Las clases gratis que tiene reservadas, vengan por donde vengan. */
-export async function misClasesGratis(): Promise<readonly TrialBookingDto[]> {
-  const cuenta = cuentaParaReservar();
-  if (cuenta.kind === 'session') return fetchMyTrials();
-  if (cuenta.kind === 'none') return [];
-  return fetchGuestTrials(cuenta.idToken);
+export async function myTrialClasses(): Promise<readonly TrialBookingDto[]> {
+  const credential = bookingCredential();
+  if (credential.kind === 'session') return fetchMyTrials();
+  if (credential.kind === 'none') return [];
+  return fetchGuestTrials(credential.idToken);
 }
 
 /**
@@ -186,36 +186,36 @@ export async function misClasesGratis(): Promise<readonly TrialBookingDto[]> {
  * que ya sabe quién es; con solo cuenta de Google, por la ruta pública firmando
  * con el ID token.
  */
-export async function cambiarHoraDeClaseGratis(input: {
+export async function rescheduleTrialClass(input: {
   readonly bookingId: string;
   readonly slot: TrialSlot;
 }): Promise<BookTrialDto> {
-  const cuenta = cuentaParaReservar();
+  const credential = bookingCredential();
   const date = formatPlainDate(input.slot.date);
 
-  if (cuenta.kind === 'session') {
+  if (credential.kind === 'session') {
     return rescheduleTrial({
       bookingId: input.bookingId,
       classScheduleId: input.slot.scheduleId,
       date,
     });
   }
-  if (cuenta.kind === 'none') throw new SinCuenta();
+  if (credential.kind === 'none') throw new NoAccountError();
 
   return rescheduleGuestTrial({
     bookingId: input.bookingId,
-    idToken: cuenta.idToken,
+    idToken: credential.idToken,
     classScheduleId: input.slot.scheduleId,
     date,
   });
 }
 
-export async function cancelarClaseGratis(bookingId: string): Promise<void> {
-  const cuenta = cuentaParaReservar();
-  if (cuenta.kind === 'session') {
+export async function cancelTrialClass(bookingId: string): Promise<void> {
+  const credential = bookingCredential();
+  if (credential.kind === 'session') {
     await cancelTrial(bookingId);
     return;
   }
-  if (cuenta.kind === 'none') throw new SinCuenta();
-  await cancelGuestTrial(bookingId, cuenta.idToken);
+  if (credential.kind === 'none') throw new NoAccountError();
+  await cancelGuestTrial(bookingId, credential.idToken);
 }

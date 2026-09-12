@@ -29,60 +29,60 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { useUbicacionDelLocal } from '../src/data/hooks';
+import { useGymLocation } from '../src/data/hooks';
 import { useRole } from '../src/data/session-hooks';
-import { guardarUbicacionDelLocal } from '../src/data/actions';
-import { MapaParaElegir } from '../src/design/mapa-para-elegir';
+import { saveGymLocation } from '../src/data/actions';
+import { MapPicker } from '../src/design/map-picker';
 
 /** Lo mínimo que se acepta. «Lima» son cuatro letras y no lleva a una puerta. */
-const DIRECCION_MINIMA = 10;
+const ADDRESS_MIN = 10;
 
 export default function LocalScreen() {
   const theme = useTheme();
   // De la sesión y no del store: esta pantalla se abre sola desde un enlace.
-  const esDueno = useRole() === 'owner';
-  const { ubicacion, recargar } = useUbicacionDelLocal();
+  const isOwner = useRole() === 'owner';
+  const { location, reload } = useGymLocation();
 
-  const [direccion, setDireccion] = useState('');
+  const [address, setAddress] = useState('');
   const [pin, setPin] = useState<{ readonly lat: number; readonly lng: number } | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [intentado, setIntentado] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ubicacion === null) return;
-    setDireccion(ubicacion.address ?? '');
+    if (location === null) return;
+    setAddress(location.address ?? '');
     setPin(
-      ubicacion.latitude === null || ubicacion.longitude === null
+      location.latitude === null || location.longitude === null
         ? null
-        : { lat: ubicacion.latitude, lng: ubicacion.longitude },
+        : { lat: location.latitude, lng: location.longitude },
     );
-  }, [ubicacion]);
+  }, [location]);
 
   const falta =
-    direccion.trim().length === 0
+    address.trim().length === 0
       ? 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.'
-      : direccion.trim().length < DIRECCION_MINIMA
+      : address.trim().length < ADDRESS_MIN
         ? 'Un poco más: calle, número y distrito.'
         : null;
-  const listo = falta === null && !guardando;
+  const ready = falta === null && !saving;
 
-  async function guardar(): Promise<void> {
-    if (!listo) return;
-    setGuardando(true);
+  async function save(): Promise<void> {
+    if (!ready) return;
+    setSaving(true);
     setError(null);
     try {
-      await guardarUbicacionDelLocal({
-        address: direccion.trim(),
+      await saveGymLocation({
+        address: address.trim(),
         latitude: pin?.lat ?? null,
         longitude: pin?.lng ?? null,
       });
-      recargar();
+      reload();
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar la dirección.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   }
 
@@ -109,13 +109,13 @@ export default function LocalScreen() {
         <Card radius={theme.radii.xl}>
           <Field
             label="Calle, número y distrito"
-            value={direccion}
-            onChangeText={setDireccion}
+            value={address}
+            onChangeText={setAddress}
             placeholder="Av. Primavera 120, Surco"
             autoCapitalize="words"
-            editable={esDueno && !guardando}
+            editable={isOwner && !saving}
             hint="Como se la dirías a un taxista."
-            error={intentado ? (falta ?? undefined) : undefined}
+            error={attempted ? (falta ?? undefined) : undefined}
           />
         </Card>
       </Stack>
@@ -128,17 +128,17 @@ export default function LocalScreen() {
             : 'Toca el mapa para moverlo. Es lo que abre el navegador de tus alumnos.'}
         </Text>
 
-        {esDueno ? (
-          <MapaParaElegir pin={pin} onElegir={setPin} />
+        {isOwner ? (
+          <MapPicker pin={pin} onPick={setPin} />
         ) : (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             Solo el dueño puede cambiarlo.
           </Text>
         )}
 
-        {esDueno ? (
+        {isOwner ? (
           <Row gap={10} align="stretch">
-            <BotonDeGps onListo={setPin} />
+            <GpsButton onReady={setPin} />
             {pin !== null ? (
               <Pressable
                 accessibilityRole="button"
@@ -162,13 +162,13 @@ export default function LocalScreen() {
         </Card>
       ) : null}
 
-      {esDueno ? (
+      {isOwner ? (
         <Button
-          label={guardando ? 'Guardando…' : 'Guardar'}
-          disabled={!listo}
+          label={saving ? 'Guardando…' : 'Guardar'}
+          disabled={!ready}
           style={{ marginTop: 22 }}
-          onPress={() => void guardar()}
-          onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+          onPress={() => void save()}
+          onBlockedPress={saving ? undefined : () => setAttempted(true)}
         />
       ) : null}
 
@@ -189,24 +189,24 @@ export default function LocalScreen() {
  * denegado no vuelve a preguntarse. Pedido justo al tocar el botón que dice para
  * qué es, se concede.
  */
-function BotonDeGps({
-  onListo,
+function GpsButton({
+  onReady,
 }: {
-  readonly onListo: (pin: { readonly lat: number; readonly lng: number }) => void;
+  readonly onReady: (pin: { readonly lat: number; readonly lng: number }) => void;
 }) {
   const theme = useTheme();
-  const [buscando, setBuscando] = useState(false);
+  const [locating, setLocating] = useState(false);
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Usar mi ubicación actual"
-      disabled={buscando}
+      disabled={locating}
       onPress={() => {
-        setBuscando(true);
-        void ubicacionActual()
-          .then((punto) => {
-            if (punto === null) {
+        setLocating(true);
+        void currentPosition()
+          .then((point) => {
+            if (point === null) {
               Alert.alert(
                 'Sin permiso de ubicación',
                 Platform.OS === 'ios'
@@ -215,7 +215,7 @@ function BotonDeGps({
               );
               return;
             }
-            onListo(punto);
+            onReady(point);
           })
           .catch(() => {
             Alert.alert(
@@ -223,7 +223,7 @@ function BotonDeGps({
               'Puede que estés bajo techo. Mueve el mapa a mano y toca donde queda tu puerta.',
             );
           })
-          .finally(() => setBuscando(false));
+          .finally(() => setLocating(false));
       }}
       style={({ pressed }) => ({
         flex: 1,
@@ -236,12 +236,12 @@ function BotonDeGps({
         backgroundColor: withAlpha(theme.semaphore.ok, 0.12),
         borderWidth: 1,
         borderColor: withAlpha(theme.semaphore.ok, 0.3),
-        opacity: pressed || buscando ? 0.7 : 1,
+        opacity: pressed || locating ? 0.7 : 1,
       })}
     >
       <Crosshair size={15} color={theme.semaphore.ok} />
       <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
-        {buscando ? 'Buscándote…' : 'Estoy en el gimnasio'}
+        {locating ? 'Buscándote…' : 'Estoy en el gimnasio'}
       </Text>
     </Pressable>
   );
@@ -255,7 +255,7 @@ function BotonDeGps({
  * tenga instalado— reventaría la pantalla entera al importarlo. Lo que se pierde
  * sin él es el atajo; el mapa y la dirección siguen ahí.
  */
-async function ubicacionActual(): Promise<{ readonly lat: number; readonly lng: number } | null> {
+async function currentPosition(): Promise<{ readonly lat: number; readonly lng: number } | null> {
   let Location: typeof import('expo-location');
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -264,8 +264,8 @@ async function ubicacionActual(): Promise<{ readonly lat: number; readonly lng: 
     return null;
   }
 
-  const permiso = await Location.requestForegroundPermissionsAsync();
-  if (!permiso.granted) return null;
+  const permit = await Location.requestForegroundPermissionsAsync();
+  if (!permit.granted) return null;
 
   const posicion = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.High,

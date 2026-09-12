@@ -16,7 +16,7 @@ import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { useRoster, useStore, useToday } from '../src/data/hooks';
 import type { RosterEntry } from '../src/data/store';
-import { marcarAsistencia } from '../src/data/actions';
+import { markAttendance } from '../src/data/actions';
 import { initials } from '../src/lib/format';
 
 export default function ManualCheckInScreen() {
@@ -38,7 +38,7 @@ export default function ManualCheckInScreen() {
    * en vez de cerrarse la pantalla en silencio — que es como se perdian los
    * marcados fuera de horario.
    */
-  const [rechazo, setRechazo] = useState<{ titulo: string; detalle: string } | null>(null);
+  const [rechazo, setRechazo] = useState<{ title: string; detail: string } | null>(null);
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -61,14 +61,14 @@ export default function ManualCheckInScreen() {
    * veia el marcado y no tenia forma de saber por que. El motivo llegaba y se
    * tiraba a la basura.
    */
-  const marcar = useCallback(() => {
+  const mark = useCallback(() => {
     if (selected === null || marcando) return;
 
     setMarcando(true);
     setError(null);
     setRechazo(null);
 
-    void marcarAsistencia({
+    void markAttendance({
       membershipId: selected.view.membership.id,
       method: 'manual',
       /**
@@ -91,9 +91,9 @@ export default function ManualCheckInScreen() {
        */
       overrideDenial: true,
     })
-      .then((salida) => {
-        if (!salida.registrada) {
-          setRechazo({ titulo: salida.titulo, detalle: salida.detalle });
+      .then((outcome) => {
+        if (!outcome.registrada) {
+          setRechazo({ title: outcome.title, detail: outcome.detail });
           return;
         }
         setSelectedId(null);
@@ -220,7 +220,7 @@ export default function ManualCheckInScreen() {
           // dos peticiones. La idempotencia las colapsa en el servidor, pero la
           // pantalla no lo reflejaba.
           disabled={selected === null || marcando}
-          onPress={marcar}
+          onPress={mark}
         />
         {error !== null ? (
           <Text variant="micro" color={theme.semaphore.bad} align="center">
@@ -233,11 +233,11 @@ export default function ManualCheckInScreen() {
         {rechazo !== null ? (
           <Stack gap={4}>
             <Text variant="micro" weight="bold" color={theme.semaphore.alert} align="center">
-              {rechazo.titulo}
+              {rechazo.title}
             </Text>
-            {rechazo.detalle.length > 0 ? (
+            {rechazo.detail.length > 0 ? (
               <Text variant="micro" color={theme.colors.textSecondary} align="center">
-                {rechazo.detalle}
+                {rechazo.detail}
               </Text>
             ) : null}
           </Stack>

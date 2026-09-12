@@ -37,8 +37,8 @@ export function detectarSistema(userAgent: string | undefined): Sistema {
 }
 
 /** Nada de lo que entra aquí es del servidor: el nombre lo escribió recepción. */
-function escapar(texto: string): string {
-  return texto
+function escapar(text: string): string {
+  return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -46,11 +46,11 @@ function escapar(texto: string): string {
 }
 
 /** Dentro de un `<script>` no vale escapar HTML: `</script>` cerraría la etiqueta. */
-function enJs(texto: string | null): string {
-  return JSON.stringify(texto).replace(/</g, '\\u003c');
+function enJs(text: string | null): string {
+  return JSON.stringify(text).replace(/</g, '\\u003c');
 }
 
-function envoltorio(cuerpo: string, script = ''): string {
+function envoltorio(body: string, script = ''): string {
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -93,7 +93,7 @@ function envoltorio(cuerpo: string, script = ''): string {
   .pie { font-size: 12px; line-height: 17px; color: #8C8C95; margin-top: 4px; }
 </style>
 </head>
-<body><div class="tarjeta">${cuerpo}</div>${script}</body>
+<body><div class="tarjeta">${body}</div>${script}</body>
 </html>`;
 }
 
@@ -120,36 +120,36 @@ export interface Tiendas {
  * que un `sinchi://` que simplemente no hace nada.
  */
 function intentAndroid(ruta: string, respaldo: string): string {
-  const partes = [
+  const parts = [
     'Intent',
     'scheme=sinchi',
     'package=fit.sinchi.app',
     `S.browser_fallback_url=${encodeURIComponent(respaldo)}`,
   ];
-  return `intent://${ruta}#${partes.join(';')};end`;
+  return `intent://${ruta}#${parts.join(';')};end`;
 }
 
-export function paginaInvitacion(input: {
-  readonly gimnasio: string;
-  readonly nombre: string;
+export function invitePage(input: {
+  readonly gym: string;
+  readonly name: string;
   readonly plan: string;
   /** `sinchi:///invite/<token>` */
-  readonly enlaceApp: string;
+  readonly appHref: string;
   readonly sistema: Sistema;
   readonly tiendas: Tiendas;
 }): string {
   const { sistema, tiendas } = input;
   // El esquema sobra en la ruta del intent: Android lo lee de `scheme=`.
-  const ruta = input.enlaceApp.replace(/^sinchi:\/\/\/?/, '');
+  const ruta = input.appHref.replace(/^sinchi:\/\/\/?/, '');
 
   const destino =
     sistema === 'android' && tiendas.android !== null
       ? intentAndroid(ruta, tiendas.android)
-      : input.enlaceApp;
-  const abrir = `<a class="boton" id="abrir" href="${escapar(destino)}">Abrir en Sinchi</a>`;
+      : input.appHref;
+  const openHref = `<a class="boton" id="abrir" href="${escapar(destino)}">Abrir en Sinchi</a>`;
 
-  const tienda = (url: string, etiqueta: string, glifo: string) =>
-    `<a class="tienda" href="${escapar(url)}">${glifo}${etiqueta}</a>`;
+  const tienda = (url: string, label: string, glifo: string) =>
+    `<a class="tienda" href="${escapar(url)}">${glifo}${label}</a>`;
 
   let descarga = '';
   let pie: string;
@@ -181,12 +181,12 @@ export function paginaInvitacion(input: {
     pie = 'Sinchi vive en el teléfono. Abre este mismo enlace desde el tuyo y entrarás directo.';
   }
 
-  const cuerpo = `
+  const body = `
     ${LOGO}
-    <h1>${escapar(input.gimnasio)} te inscribió</h1>
-    <p>Hola ${escapar(input.nombre.trim().split(/\s+/)[0] ?? input.nombre)}, tu plan es
+    <h1>${escapar(input.gym)} te inscribió</h1>
+    <p>Hola ${escapar(input.name.trim().split(/\s+/)[0] ?? input.name)}, tu plan es
        <span class="dato">${escapar(input.plan)}</span>.</p>
-    ${sistema === 'otro' ? `<div class="tiendas">${descarga}</div>` : `${abrir}${descarga}`}
+    ${sistema === 'otro' ? `<div class="tiendas">${descarga}</div>` : `${openHref}${descarga}`}
     <p class="pie">${pie}</p>`;
 
   /**
@@ -208,7 +208,7 @@ export function paginaInvitacion(input: {
       ? `<script>
 (function () {
   var boton = document.getElementById('abrir');
-  var app = ${enJs(input.enlaceApp)};
+  var app = ${enJs(input.appHref)};
   var tienda = ${enJs(tiendas.ios)};
   if (!boton) return;
   boton.addEventListener('click', function (evento) {
@@ -225,7 +225,7 @@ export function paginaInvitacion(input: {
 </script>`
       : '';
 
-  return envoltorio(cuerpo, script);
+  return envoltorio(body, script);
 }
 
 export function paginaCaducada(): string {

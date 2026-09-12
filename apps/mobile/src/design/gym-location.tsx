@@ -34,12 +34,12 @@ import { useTheme } from './theme';
 const MAPAS: readonly MapApp[] =
   Platform.OS === 'ios' ? ['google', 'apple', 'waze'] : ['google', 'waze'];
 
-export function DondeQueda({
+export function GymLocationBlock({
   place,
-  titulo = 'Dónde queda',
+  title = 'Dónde queda',
 }: {
   readonly place: GymPlace;
-  readonly titulo?: string;
+  readonly title?: string;
 }) {
   const theme = useTheme();
 
@@ -49,7 +49,7 @@ export function DondeQueda({
 
   return (
     <Stack gap={12} style={{ marginTop: 24 }}>
-      <Eyebrow>{titulo}</Eyebrow>
+      <Eyebrow>{title}</Eyebrow>
 
       <Card radius={theme.radii.xl}>
         <Stack gap={14}>
@@ -60,11 +60,11 @@ export function DondeQueda({
             </Text>
           </Row>
 
-          <MapaDelLocal place={place} />
+          <GymMiniMap place={place} />
 
           <Row gap={8} align="stretch">
             {MAPAS.map((app) => (
-              <BotonDeMapa key={app} place={place} app={app} />
+              <MapButton key={app} place={place} app={app} />
             ))}
           </Row>
         </Stack>
@@ -73,7 +73,7 @@ export function DondeQueda({
   );
 }
 
-function BotonDeMapa({ place, app }: { readonly place: GymPlace; readonly app: MapApp }) {
+function MapButton({ place, app }: { readonly place: GymPlace; readonly app: MapApp }) {
   const theme = useTheme();
   const url = directionsUrl(place, app);
   if (url === null) return null;
@@ -122,19 +122,19 @@ function BotonDeMapa({ place, app }: { readonly place: GymPlace; readonly app: M
  * pierde es el recuadro del mapa; la dirección y los tres botones siguen ahí, y
  * son lo que de verdad lleva a alguien a la puerta.
  */
-function MapaDelLocal({ place }: { readonly place: GymPlace }) {
+function GymMiniMap({ place }: { readonly place: GymPlace }) {
   const theme = useTheme();
-  const [falloElMapa, setFalloElMapa] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
 
   const pin =
     place.latitude === null || place.longitude === null
       ? null
       : { latitude: place.latitude, longitude: place.longitude };
-  if (pin === null || falloElMapa) return null;
+  if (pin === null || mapFailed) return null;
 
-  const mapa = cargarMapa();
-  if (mapa === null) return null;
-  const { MapView, Marker } = mapa;
+  const maps = loadMaps();
+  if (maps === null) return null;
+  const { MapView, Marker } = maps;
 
   return (
     <View
@@ -161,7 +161,7 @@ function MapaDelLocal({ place }: { readonly place: GymPlace }) {
         rotateEnabled={false}
         pitchEnabled={false}
         pointerEvents="none"
-        onError={() => setFalloElMapa(true)}
+        onError={() => setMapFailed(true)}
       >
         <Marker coordinate={pin} title={place.name} description={place.address ?? undefined} />
       </MapView>
@@ -176,24 +176,24 @@ function MapaDelLocal({ place }: { readonly place: GymPlace }) {
  * resultado se guarda porque este componente se monta en cada ficha de gimnasio
  * que se abre, y un `require` que falla no es gratis.
  */
-type ModuloDeMapa = {
+type MapsModule = {
   readonly MapView: React.ComponentType<Record<string, unknown>>;
   readonly Marker: React.ComponentType<Record<string, unknown>>;
 };
 
-let moduloDeMapa: ModuloDeMapa | null | undefined;
+let mapsModule: MapsModule | null | undefined;
 
-function cargarMapa(): ModuloDeMapa | null {
-  if (moduloDeMapa !== undefined) return moduloDeMapa;
+function loadMaps(): MapsModule | null {
+  if (mapsModule !== undefined) return mapsModule;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m = require('react-native-maps') as {
       default: React.ComponentType<Record<string, unknown>>;
       Marker: React.ComponentType<Record<string, unknown>>;
     };
-    moduloDeMapa = { MapView: m.default, Marker: m.Marker };
+    mapsModule = { MapView: m.default, Marker: m.Marker };
   } catch {
-    moduloDeMapa = null;
+    mapsModule = null;
   }
-  return moduloDeMapa;
+  return mapsModule;
 }

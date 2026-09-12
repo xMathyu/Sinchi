@@ -9,7 +9,7 @@ import { makeDropInPlan, makeSubscription, makeWeeklyPlan } from '../testing/fix
 const ANIVERSARIO = { mode: 'anniversary' } as const;
 const plan = makeWeeklyPlan(2); // S/ 120
 
-const suscripcion = makeSubscription({
+const sub = makeSubscription({
   planId: plan.id,
   periodStart: plainDate(2026, 7, 12),
   nextBillingDate: plainDate(2026, 8, 12),
@@ -18,7 +18,7 @@ const suscripcion = makeSubscription({
 describe('computeReceivable', () => {
   it('no debe nada antes de la fecha de cobro', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2026, 8, 11),
@@ -29,7 +29,7 @@ describe('computeReceivable', () => {
 
   it('debe el periodo completo el mismo dia del cobro: se paga por adelantado', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2026, 8, 12),
@@ -42,28 +42,28 @@ describe('computeReceivable', () => {
   });
 
   it('acumula el segundo mes recien cuando vence', () => {
-    const unMes = computeReceivable({
-      subscription: suscripcion,
+    const oneMonth = computeReceivable({
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2026, 9, 11),
     });
-    expect(unMes.periodsOwed).toBe(1);
+    expect(oneMonth.periodsOwed).toBe(1);
 
-    const dosMeses = computeReceivable({
-      subscription: suscripcion,
+    const twoMonths = computeReceivable({
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2026, 9, 12),
     });
-    expect(dosMeses.periodsOwed).toBe(2);
-    expect(dosMeses.amountCents).toBe(fromSoles(240));
-    expect(dosMeses.daysPastDue).toBe(31);
+    expect(twoMonths.periodsOwed).toBe(2);
+    expect(twoMonths.amountCents).toBe(fromSoles(240));
+    expect(twoMonths.daysPastDue).toBe(31);
   });
 
   it('topa la deuda: el que desaparecio ocho meses dejo de ser alumno', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2027, 4, 12),
@@ -129,7 +129,7 @@ describe('applyPayment', () => {
 
   it('rechaza pagos de cero periodos', () => {
     expect(() =>
-      applyPayment({ subscription: suscripcion, policy: ANIVERSARIO, periodsPaid: 0 }),
+      applyPayment({ subscription: sub, policy: ANIVERSARIO, periodsPaid: 0 }),
     ).toThrow(RangeError);
   });
 });
@@ -137,27 +137,27 @@ describe('applyPayment', () => {
 describe('deuda y pago se cierran entre si', () => {
   it('pagar el total deja la deuda en cero', () => {
     const hoy = plainDate(2026, 9, 20);
-    const antes = computeReceivable({
-      subscription: suscripcion,
+    const before = computeReceivable({
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: hoy,
     });
-    expect(antes.periodsOwed).toBe(2);
+    expect(before.periodsOwed).toBe(2);
 
     const aplicado = applyPayment({
-      subscription: suscripcion,
+      subscription: sub,
       policy: ANIVERSARIO,
-      periodsPaid: antes.periodsOwed,
+      periodsPaid: before.periodsOwed,
     });
-    const despues = computeReceivable({
-      subscription: { ...suscripcion, ...aplicado },
+    const after = computeReceivable({
+      subscription: { ...sub, ...aplicado },
       plan,
       policy: ANIVERSARIO,
       today: hoy,
     });
-    expect(despues.due).toBe(false);
-    expect(despues.amountCents).toBe(0);
+    expect(after.due).toBe(false);
+    expect(after.amountCents).toBe(0);
   });
 });
 
@@ -166,7 +166,7 @@ describe('clase suelta', () => {
 
   it('no debe nada aunque la fecha de cobro este vencida hace meses', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan: dropIn,
       policy: ANIVERSARIO,
       today: plainDate(2027, 3, 1),
@@ -185,24 +185,24 @@ describe('clase suelta', () => {
    */
   it('de ahi sale que nunca caiga en mora', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan: dropIn,
       policy: ANIVERSARIO,
       today: plainDate(2027, 3, 1),
     });
-    const estado = evaluateDelinquency({
-      nextBillingDate: suscripcion.nextBillingDate,
+    const state = evaluateDelinquency({
+      nextBillingDate: sub.nextBillingDate,
       today: plainDate(2027, 3, 1),
       graceDays: 5,
       periodPaid: !r.due,
     });
-    expect(estado.status).toBe('active');
-    expect(estado.canTrain).toBe(true);
+    expect(state.status).toBe('active');
+    expect(state.canTrain).toBe(true);
   });
 
   it('el mismo alumno con un plan mensual si debe: la excepcion es del plan, no de la fecha', () => {
     const r = computeReceivable({
-      subscription: suscripcion,
+      subscription: sub,
       plan,
       policy: ANIVERSARIO,
       today: plainDate(2026, 8, 12),

@@ -18,26 +18,26 @@ import { cents, formatPENShort } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
-import { CargandoSeccion } from '../../src/design/loading';
+import { OfflineState, EmptyState } from '../../src/design/empty';
+import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGyms, useMisClasesGratis } from '../../src/data/hooks';
+import { useGyms, useMyTrialClasses } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { signOut } from '../../src/data/auth';
-import { cancelarClaseGratis } from '../../src/data/trials';
+import { cancelTrialClass } from '../../src/data/trials';
 import type { GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
 
 export default function ExploreScreen() {
   const theme = useTheme();
-  const { datos: gimnasios, cargando, error, recargar } = useGyms();
-  const reservas = useMisClasesGratis();
-  const proximas = reservas.datos.filter((reserva) => reserva.status === 'booked');
+  const { details: gyms, loading, error, reload } = useGyms();
+  const bookings = useMyTrialClasses();
+  const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
   // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
   // app: hay que dejarle a mano las dos únicas cosas que puede necesitar y que
   // no están aquí — su código para el mostrador, y salir de la cuenta.
-  const sesion = useSession();
-  const sinFicha = sesion.status === 'unlinked';
+  const session = useSession();
+  const unlinked = session.status === 'unlinked';
 
   return (
     <Screen scroll>
@@ -56,7 +56,7 @@ export default function ExploreScreen() {
               Cerrar
             </Text>
           </Pressable>
-        ) : sesion.status === 'signed_in' ? (
+        ) : session.status === 'signed_in' ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.replace('/student')}
@@ -74,23 +74,23 @@ export default function ExploreScreen() {
         precios, y reserva tu primera clase.
       </Text>
 
-      {proximas.length > 0 ? (
+      {upcoming.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
           <Eyebrow>Vas a probar</Eyebrow>
-          {proximas.map((reserva) => (
+          {upcoming.map((booking) => (
             <Card
-              key={reserva.id}
+              key={booking.id}
               accent={theme.semaphore.ok}
               borderColor={withAlpha(theme.semaphore.ok, 0.26)}
               radius={theme.radii.xl}
             >
               <Stack gap={7}>
                 <Text variant="bodySmall" weight="semibold">
-                  {reserva.gymName}
+                  {booking.gymName}
                 </Text>
                 <Text variant="caption" color={theme.colors.textSecondary}>
-                  {reserva.className} · {formatWeekdayAndDay(reserva.date)} a las{' '}
-                  {reserva.startTime}
+                  {booking.className} · {formatWeekdayAndDay(booking.date)} a las{' '}
+                  {booking.startTime}
                 </Text>
                 {/* Primero mover y después cancelar, y no al revés: quien no puede
                     el martes casi siempre puede el jueves, y lo único que había
@@ -104,7 +104,7 @@ export default function ExploreScreen() {
                     onPress={() =>
                       router.push({
                         pathname: '/explore/[slug]',
-                        params: { slug: reserva.gymSlug },
+                        params: { slug: booking.gymSlug },
                       })
                     }
                   >
@@ -121,15 +121,15 @@ export default function ExploreScreen() {
                       // gimnasio y deshacerlo exige volver a elegir hora.
                       Alert.alert(
                         'Cancelar tu clase de prueba',
-                        `${reserva.gymName} dejará de esperarte. Podrás reservar otro día.`,
+                        `${booking.gymName} dejará de esperarte. Podrás reservar otro día.`,
                         [
                           { text: 'No', style: 'cancel' },
                           {
                             text: 'Cancelar la clase',
                             style: 'destructive',
                             onPress: () => {
-                              void cancelarClaseGratis(reserva.id)
-                                .then(() => reservas.recargar())
+                              void cancelTrialClass(booking.id)
+                                .then(() => bookings.reload())
                                 .catch((causa: unknown) => {
                                   Alert.alert(
                                     'No se pudo cancelar',
@@ -153,39 +153,39 @@ export default function ExploreScreen() {
         </Stack>
       ) : null}
 
-      {sinFicha ? <PieDeCuentaNueva /> : null}
+      {unlinked ? <NewAccountFooter /> : null}
 
-      {cargando && gimnasios.length === 0 ? (
+      {loading && gyms.length === 0 ? (
         <View style={{ minHeight: 340 }}>
-          <CargandoSeccion texto="Buscando gimnasios…" />
+          <SectionLoader text="Buscando gimnasios…" />
         </View>
-      ) : error !== null && gimnasios.length === 0 ? (
+      ) : error !== null && gyms.length === 0 ? (
         <View style={{ minHeight: 340 }}>
-          <EstadoSinConexion
-            titulo="No se pudo traer la lista"
-            cuerpo="No llegamos al servidor. Los gimnasios siguen ahí; es la conexión la que falló."
+          <OfflineState
+            title="No se pudo traer la lista"
+            body="No llegamos al servidor. Los gimnasios siguen ahí; es la conexión la que falló."
             error={error}
-            onReintentar={recargar}
+            onReintentar={reload}
           />
         </View>
-      ) : gimnasios.length === 0 ? (
+      ) : gyms.length === 0 ? (
         <View style={{ minHeight: 340 }}>
-          <EstadoVacio
-            titulo="Todavía no hay gimnasios"
-            cuerpo="Ninguna escuela de la red está aceptando alumnos ahora mismo."
+          <EmptyState
+            title="Todavía no hay gimnasios"
+            body="Ninguna escuela de la red está aceptando alumnos ahora mismo."
             pie="Si tu gimnasio quiere aparecer aquí, escríbenos."
           />
         </View>
       ) : (
         <Stack gap={12} style={{ marginTop: 22 }}>
-          <Eyebrow>{gimnasios.length} en la red</Eyebrow>
-          {gimnasios.map((gimnasio) => (
-            <GymCard key={gimnasio.id} gym={gimnasio} />
+          <Eyebrow>{gyms.length} en la red</Eyebrow>
+          {gyms.map((gymCard) => (
+            <GymCard key={gymCard.id} gym={gymCard} />
           ))}
         </Stack>
       )}
 
-      <InvitacionAlDueno />
+      <OwnerInvitation />
     </Screen>
   );
 }
@@ -199,7 +199,7 @@ export default function ExploreScreen() {
  * evaluando Sinchi para su dojo llega mirando qué otros gimnasios ya lo usan,
  * y termina justo aquí.
  */
-function InvitacionAlDueno() {
+function OwnerInvitation() {
   const theme = useTheme();
   const router = useRouter();
 
@@ -241,7 +241,7 @@ function InvitacionAlDueno() {
  * su gimnasio dio de alta por DNI, sin invitación, es lo único que le conecta la
  * ficha con la app. Así que vive aquí, a un toque, en vez de recibirle.
  */
-function PieDeCuentaNueva() {
+function NewAccountFooter() {
   const theme = useTheme();
   const router = useRouter();
 

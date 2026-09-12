@@ -21,31 +21,31 @@ import { Avatar, Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/p
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { useClaims, useRoster } from '../src/data/hooks';
-import { vincularCuenta, type Vinculacion } from '../src/data/actions';
+import { linkAccount, type AccountClaim } from '../src/data/actions';
 import { initials } from '../src/lib/format';
 
 export default function ClaimsScreen() {
   const theme = useTheme();
-  const { claims, cargando, error, recargar } = useClaims();
+  const { claims, loading, error, reload } = useClaims();
   const roster = useRoster();
 
-  const [elegida, setElegida] = useState<Vinculacion | null>(null);
+  const [pickedClaim, setPickedClaim] = useState<AccountClaim | null>(null);
   const [membershipId, setMembershipId] = useState<string | null>(null);
-  const [busqueda, setBusqueda] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const candidatos = useMemo(() => {
-    const texto = busqueda.trim().toLowerCase();
-    if (texto.length === 0) return roster;
+  const candidates = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    if (text.length === 0) return roster;
     return roster.filter(
-      (entrada) =>
-        entrada.user.name.toLowerCase().includes(texto) ||
-        entrada.user.documentId.includes(texto.replace(/\s/g, '')),
+      (entry) =>
+        entry.user.name.toLowerCase().includes(text) ||
+        entry.user.documentId.includes(text.replace(/\s/g, '')),
     );
-  }, [roster, busqueda]);
+  }, [roster, query]);
 
-  const elegido = candidatos.find((e) => e.view.membership.id === membershipId) ?? null;
+  const picked = candidates.find((e) => e.view.membership.id === membershipId) ?? null;
 
   return (
     <Screen scroll>
@@ -68,14 +68,14 @@ export default function ClaimsScreen() {
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Row align="baseline">
           <Eyebrow>Códigos vigentes</Eyebrow>
-          <Pressable accessibilityRole="button" onPress={recargar} hitSlop={12}>
+          <Pressable accessibilityRole="button" onPress={reload} hitSlop={12}>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
               Actualizar
             </Text>
           </Pressable>
         </Row>
 
-        {cargando && claims.length === 0 ? (
+        {loading && claims.length === 0 ? (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Buscando códigos…
           </Text>
@@ -87,13 +87,13 @@ export default function ClaimsScreen() {
           </Card>
         ) : (
           claims.map((claim) => (
-            <CodigoFila
+            <CodeRow
               key={claim.id}
               claim={claim}
-              seleccionada={elegida?.id === claim.id}
+              selected={pickedClaim?.id === claim.id}
               onPress={() => {
-                setElegida(claim);
-                setAviso(null);
+                setPickedClaim(claim);
+                setNotice(null);
               }}
             />
           ))
@@ -102,13 +102,13 @@ export default function ClaimsScreen() {
 
       {/* El padrón solo aparece cuando ya hay un código elegido: sin él no hay
           nada que confirmar, y enseñar la lista entera invita a tocarla. */}
-      {elegida === null ? null : (
+      {pickedClaim === null ? null : (
         <>
           <Stack gap={10} style={{ marginTop: 22 }}>
-            <Eyebrow>¿De quién es la cuenta {elegida.code}?</Eyebrow>
+            <Eyebrow>¿De quién es la cuenta {pickedClaim.code}?</Eyebrow>
             <TextInput
-              value={busqueda}
-              onChangeText={setBusqueda}
+              value={query}
+              onChangeText={setQuery}
               placeholder="Buscar por nombre o documento"
               placeholderTextColor={theme.colors.textPlaceholder}
               autoCorrect={false}
@@ -125,27 +125,27 @@ export default function ClaimsScreen() {
           </Stack>
 
           <Stack gap={9} style={{ marginTop: 12 }}>
-            {candidatos.slice(0, 8).map((entrada) => {
-              const activa = entrada.view.membership.id === membershipId;
+            {candidates.slice(0, 8).map((entry) => {
+              const activa = entry.view.membership.id === membershipId;
               return (
                 <Pressable
-                  key={entrada.view.membership.id}
+                  key={entry.view.membership.id}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: activa }}
-                  onPress={() => setMembershipId(entrada.view.membership.id)}
+                  onPress={() => setMembershipId(entry.view.membership.id)}
                 >
                   <Card
                     radius={theme.radii.lg}
                     borderColor={activa ? theme.semaphore.ok : theme.colors.hairline}
                   >
                     <Row gap={12} justify="flex-start">
-                      <Avatar initials={initials(entrada.user.name)} size={40} />
+                      <Avatar initials={initials(entry.user.name)} size={40} />
                       <Stack gap={1} style={{ flex: 1 }}>
                         <Text variant="heading" weight="semibold">
-                          {entrada.user.name}
+                          {entry.user.name}
                         </Text>
                         <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                          DNI {entrada.user.documentId} · {entrada.view.plan.name}
+                          DNI {entry.user.documentId} · {entry.view.plan.name}
                         </Text>
                       </Stack>
                     </Row>
@@ -153,7 +153,7 @@ export default function ClaimsScreen() {
                 </Pressable>
               );
             })}
-            {candidatos.length === 0 ? (
+            {candidates.length === 0 ? (
               <Card radius={theme.radii.lg}>
                 <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
                   Nadie en el padrón coincide. La ficha tiene que existir antes de vincular.
@@ -181,68 +181,68 @@ export default function ClaimsScreen() {
           <Stack gap={8} style={{ marginTop: 18 }}>
             <Button
               label={
-                guardando
+                saving
                   ? 'Vinculando…'
-                  : elegido === null
+                  : picked === null
                     ? 'Elige la ficha del alumno'
-                    : `Vincular ${elegida.code} con ${elegido.user.name}`
+                    : `Vincular ${pickedClaim.code} con ${picked.user.name}`
               }
-              disabled={elegido === null || guardando}
+              disabled={picked === null || saving}
               onPress={() => {
-                if (elegido === null || guardando) return;
-                setGuardando(true);
-                setAviso(null);
-                void vincularCuenta(elegida.code, elegido.view.membership.id)
+                if (picked === null || saving) return;
+                setSaving(true);
+                setNotice(null);
+                void linkAccount(pickedClaim.code, picked.view.membership.id)
                   .then(() => {
-                    setAviso(`Listo. ${elegido.user.name} ya puede usar su app.`);
-                    setElegida(null);
+                    setNotice(`Listo. ${picked.user.name} ya puede usar su app.`);
+                    setPickedClaim(null);
                     setMembershipId(null);
-                    setBusqueda('');
-                    recargar();
+                    setQuery('');
+                    reload();
                   })
                   .catch((causa: unknown) => {
-                    setAviso(
+                    setNotice(
                       causa instanceof Error ? causa.message : 'No se pudo vincular la cuenta.',
                     );
                   })
-                  .finally(() => setGuardando(false));
+                  .finally(() => setSaving(false));
               }}
             />
           </Stack>
         </>
       )}
 
-      {aviso === null ? null : (
+      {notice === null ? null : (
         <Text
           variant="captionSmall"
           color={theme.colors.textSecondary}
           align="center"
           style={{ marginTop: 14 }}
         >
-          {aviso}
+          {notice}
         </Text>
       )}
     </Screen>
   );
 }
 
-function CodigoFila({
+function CodeRow({
   claim,
-  seleccionada,
+  selected,
   onPress,
 }: {
-  readonly claim: Vinculacion;
-  readonly seleccionada: boolean;
+  readonly claim: AccountClaim;
+  readonly selected: boolean;
   readonly onPress: () => void;
 }) {
   const theme = useTheme();
   const minutos = Math.max(0, Math.round((claim.expiresAt.getTime() - Date.now()) / 60_000));
 
   return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected: seleccionada }} onPress={onPress}>
+    <Pressable accessibilityRole="radio" accessibilityState={{ selected: selected }} onPress={onPress}>
       <Card
         radius={theme.radii.lg}
-        borderColor={seleccionada ? theme.semaphore.ok : theme.colors.hairline}
+        borderColor={selected ? theme.semaphore.ok : theme.colors.hairline}
       >
         <Row align="center" gap={12}>
           <Stack gap={2} style={{ flex: 1 }}>

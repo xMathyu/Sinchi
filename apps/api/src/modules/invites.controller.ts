@@ -13,7 +13,7 @@ import { parseWith } from '../common/zod.pipe';
 import { InviteService } from '../auth/invite.service';
 import { AuthService, type IssuedSession } from '../auth/auth.service';
 import { FirebaseVerifier } from '../auth/firebase';
-import { detectarSistema, paginaCaducada, paginaInvitacion } from './invite-page';
+import { detectarSistema, paginaCaducada, invitePage } from './invite-page';
 import { loadEnv } from '../config/env';
 
 const claimSchema = z.object({
@@ -63,17 +63,17 @@ export class InvitesController {
   @Public()
   @Get(':token/abrir')
   @Header('Content-Type', 'text/html; charset=utf-8')
-  async abrir(@Param('token') token: string, @Req() req: Request, @Res() res: Response) {
-    const enlaceApp = `sinchi:///invite/${token}`;
+  async openHref(@Param('token') token: string, @Req() req: Request, @Res() res: Response) {
+    const appHref = `sinchi:///invite/${token}`;
     const env = loadEnv();
     try {
-      const invitacion = await this.invites.preview(token);
+      const invite = await this.invites.preview(token);
       res.end(
-        paginaInvitacion({
-          gimnasio: invitacion.gymName,
-          nombre: invitacion.fullName,
-          plan: invitacion.planName,
-          enlaceApp,
+        invitePage({
+          gym: invite.gymName,
+          name: invite.fullName,
+          plan: invite.planName,
+          appHref,
           sistema: detectarSistema(req.get('user-agent')),
           tiendas: {
             ios: env.IOS_STORE_URL ?? null,

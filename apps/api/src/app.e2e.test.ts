@@ -223,19 +223,19 @@ suite('padrón del staff', () => {
   });
 
   it('busca por nombre y por documento', async () => {
-    const porNombre = await http
+    const byName = await http
       .get('/v1/staff/roster/search?q=sal')
       .set(auth(token.frontDesk))
       .expect(200);
     // Salas, Salcedo, Salazar.
-    expect(porNombre.body).toHaveLength(3);
+    expect(byName.body).toHaveLength(3);
 
-    const porDoc = await http
+    const byDocument = await http
       .get('/v1/staff/roster/search?q=70112334')
       .set(auth(token.frontDesk))
       .expect(200);
-    expect(porDoc.body).toHaveLength(1);
-    expect(porDoc.body[0].user.name).toBe('Diego Salas');
+    expect(byDocument.body).toHaveLength(1);
+    expect(byDocument.body[0].user.name).toBe('Diego Salas');
   });
 });
 
@@ -367,10 +367,10 @@ suite('cobro en mostrador libera el acceso', () => {
   it('el cobro extiende la renovación y reactiva', async () => {
     // Es el ciclo del MD 4.5: un pago manual activa lo mismo que activaría un
     // cobro con tarjeta.
-    const antes = await http.get(`/v1/staff/members/${diego}`).set(auth(token.frontDesk));
-    expect(antes.body.delinquency.status).toBe('suspended');
-    const deuda = antes.body.receivable.amountCents;
-    expect(deuda).toBeGreaterThan(0);
+    const before = await http.get(`/v1/staff/members/${diego}`).set(auth(token.frontDesk));
+    expect(before.body.delinquency.status).toBe('suspended');
+    const debt = before.body.receivable.amountCents;
+    expect(debt).toBeGreaterThan(0);
 
     const { body } = await http
       .post('/v1/staff/payments')
@@ -380,7 +380,7 @@ suite('cobro en mostrador libera el acceso', () => {
 
     expect(body.charge.status).toBe('succeeded');
     expect(body.charge.rail).toBe('cash');
-    expect(body.charge.amountCents).toBe(deuda);
+    expect(body.charge.amountCents).toBe(debt);
     expect(body.charge.recordedBy).not.toBeNull();
     // La respuesta trae el estado de DESPUÉS: el mostrador no debe recargar.
     expect(body.view.delinquency.status).toBe('active');
@@ -403,27 +403,27 @@ suite('cobro en mostrador libera el acceso', () => {
     // siguiente: pagar dos meses adelantados es valido. Lo que el indice unico
     // de la base impide es dos cargos exitosos del MISMO periodo, y eso se
     // verifica en `schema.test.ts` contra Postgres.
-    const antes = await http.get(`/v1/staff/members/${diego}`).set(auth(token.frontDesk));
-    const fechaAntes = antes.body.subscription.nextBillingDate;
+    const before = await http.get(`/v1/staff/members/${diego}`).set(auth(token.frontDesk));
+    const earlierDate = before.body.subscription.nextBillingDate;
 
-    const primero = await http
+    const first = await http
       .post('/v1/staff/payments')
       .set(auth(token.frontDesk))
       .send({ membershipId: diego, type: 'renewal', rail: 'cash' })
       .expect(201);
-    expect(primero.body.alreadyRecorded).toBe(false);
+    expect(first.body.alreadyRecorded).toBe(false);
 
-    const segundo = await http
+    const second = await http
       .post('/v1/staff/payments')
       .set(auth(token.frontDesk))
       .send({ membershipId: diego, type: 'renewal', rail: 'cash' })
       .expect(201);
-    expect(segundo.body.alreadyRecorded).toBe(false);
+    expect(second.body.alreadyRecorded).toBe(false);
 
     // Periodos distintos y consecutivos.
-    expect(segundo.body.charge.periodStart).not.toEqual(primero.body.charge.periodStart);
-    expect(primero.body.charge.periodEnd).toEqual(segundo.body.charge.periodStart);
-    expect(segundo.body.view.subscription.nextBillingDate).not.toEqual(fechaAntes);
+    expect(second.body.charge.periodStart).not.toEqual(first.body.charge.periodStart);
+    expect(first.body.charge.periodEnd).toEqual(second.body.charge.periodStart);
+    expect(second.body.view.subscription.nextBillingDate).not.toEqual(earlierDate);
   });
 
   it('la cola offline no duplica: mismo clientId, un solo cargo', async () => {
@@ -431,12 +431,12 @@ suite('cobro en mostrador libera el acceso', () => {
     const rosa = find(roster, 'Rosa Salazar').membership.id;
     const clientId = crypto.randomUUID();
 
-    const primero = await http
+    const first = await http
       .post('/v1/staff/payments')
       .set(auth(token.frontDesk))
       .send({ membershipId: rosa, type: 'renewal', rail: 'yape', clientId })
       .expect(201);
-    expect(primero.body.alreadyRecorded).toBe(false);
+    expect(first.body.alreadyRecorded).toBe(false);
 
     const reintento = await http
       .post('/v1/staff/payments')
@@ -444,7 +444,7 @@ suite('cobro en mostrador libera el acceso', () => {
       .send({ membershipId: rosa, type: 'renewal', rail: 'yape', clientId })
       .expect(201);
     expect(reintento.body.alreadyRecorded).toBe(true);
-    expect(reintento.body.charge.id).toBe(primero.body.charge.id);
+    expect(reintento.body.charge.id).toBe(first.body.charge.id);
   });
 
   it('rechaza el riel de tarjeta: no existe en la versión 1', async () => {
@@ -497,8 +497,8 @@ suite('QR firmado de punta a punta', () => {
 
   it('rechaza un código de otro secreto', async () => {
     const link = await http.post('/v1/me/device').set(auth(token.student)).send({}).expect(201);
-    const otro = new Uint8Array(randomBytes(32));
-    const code = generateTotp(otro, new Date(), hmacSha256);
+    const other = new Uint8Array(randomBytes(32));
+    const code = generateTotp(other, new Date(), hmacSha256);
     const payload = encodeQrPayload({ subject: 'user', id: link.body.userId as string, code });
 
     await http
@@ -518,10 +518,10 @@ suite('QR firmado de punta a punta', () => {
 
   it('rotar el secreto invalida el código anterior', async () => {
     // Es lo que hay que hacer cuando el alumno pierde el celular.
-    const antes = await http.get('/v1/me').set(auth(token.student)).expect(200);
-    const viejo = await http.post('/v1/me/device').set(auth(token.student)).send({}).expect(201);
-    const codigoViejo = generateTotp(
-      new Uint8Array(Buffer.from(viejo.body.secret as string, 'base64')),
+    const before = await http.get('/v1/me').set(auth(token.student)).expect(200);
+    const previous = await http.post('/v1/me/device').set(auth(token.student)).send({}).expect(201);
+    const previousCode = generateTotp(
+      new Uint8Array(Buffer.from(previous.body.secret as string, 'base64')),
       new Date(),
       hmacSha256,
     );
@@ -530,8 +530,8 @@ suite('QR firmado de punta a punta', () => {
 
     const payload = encodeQrPayload({
       subject: 'user',
-      id: antes.body.user.id as string,
-      code: codigoViejo,
+      id: before.body.user.id as string,
+      code: previousCode,
     });
     await http
       .post('/v1/staff/checkin/qr')
@@ -547,7 +547,7 @@ suite('cambio de plan', () => {
     const nova = wallet.find(
       (entry: RosterEntry & { tenant: { name: string } }) => entry.tenant.name === 'Nova BJJ Surco',
     );
-    const antes = nova.subscription.nextBillingDate;
+    const before = nova.subscription.nextBillingDate;
 
     const { body: plans } = await http
       .get(`/v1/me/memberships/${nova.membership.id}/plans`)
@@ -572,7 +572,7 @@ suite('cambio de plan', () => {
       ilimitado.priceCents - nova.plan.priceCents,
     );
     // La fecha de cobro NO se toca.
-    expect(body.view.subscription.nextBillingDate).toEqual(antes);
+    expect(body.view.subscription.nextBillingDate).toEqual(before);
     expect(body.view.plan.name).toBe('Ilimitado');
   });
 
@@ -586,22 +586,22 @@ suite('cambio de plan', () => {
       .get(`/v1/me/memberships/${nova.membership.id}/plans`)
       .set(auth(token.student))
       .expect(200);
-    const masBarato = [...plans]
+    const cheapest = [...plans]
       .sort((a: { priceCents: number }, b: { priceCents: number }) => a.priceCents - b.priceCents)
       .find((plan: { priceCents: number }) => plan.priceCents < nova.plan.priceCents);
-    expect(masBarato).toBeDefined();
+    expect(cheapest).toBeDefined();
 
     const { body } = await http
       .post(`/v1/me/memberships/${nova.membership.id}/plan`)
       .set(auth(token.student))
-      .send({ planId: masBarato.id })
+      .send({ planId: cheapest.id })
       .expect(201);
 
     expect(body.decision.kind).toBe('downgrade');
     expect(body.decision.chargeTodayCents).toBe(0);
     // Sigue con el plan caro hasta la renovacion: nunca hay devoluciones.
     expect(body.view.plan.name).toBe('Ilimitado');
-    expect(body.view.pendingPlan.name).toBe(masBarato.name);
+    expect(body.view.pendingPlan.name).toBe(cheapest.name);
   });
 
   it('no acepta un plan de otro gimnasio', async () => {
@@ -658,11 +658,11 @@ suite('alta de alumnos', () => {
       .set(auth(token.frontDesk))
       .expect(200);
 
-    const { body: activos } = await http
+    const { body: active } = await http
       .get('/v1/staff/roster')
       .set(auth(token.frontDesk))
       .expect(200);
-    const alguien = activos[0].membership.id;
+    const alguien = active[0].membership.id;
 
     // Reinscribir a alguien que ya esta dentro chocaba contra el indice parcial
     // de una suscripcion viva por membresia, y salia como 500. Un doble toque en
@@ -678,11 +678,11 @@ suite('alta de alumnos', () => {
     // `includeCanceled` es lo que hace alcanzable a quien cancelo. Sin el, su
     // `membershipId` no lo devuelve ninguna ruta y `resubscribe` —que existe
     // justo para volver— no se puede llamar desde ninguna pantalla.
-    const { body: conBajas } = await http
+    const { body: withDeletions } = await http
       .get('/v1/staff/roster?includeCanceled=true')
       .set(auth(token.frontDesk))
       .expect(200);
-    expect(conBajas.length).toBeGreaterThanOrEqual(activos.length);
+    expect(withDeletions.length).toBeGreaterThanOrEqual(active.length);
 
     // Y la ficha del mostrador tiene que abrirse aunque la suscripcion no este
     // viva: si se ven en la lista, hay que poder entrar a reinscribirlas.
@@ -699,16 +699,16 @@ suite('alta de alumnos', () => {
       .set(auth(token.frontDesk))
       .expect(200);
 
-    for (const entrada of roster) {
-      const { body: ficha } = await http
-        .get(`/v1/staff/members/${entrada.membership.id}`)
+    for (const walletEntry of roster) {
+      const { body: memberRecord } = await http
+        .get(`/v1/staff/members/${walletEntry.membership.id}`)
         .set(auth(token.frontDesk))
         .expect(200);
 
-      expect(ficha.subscription.id).toBe(entrada.subscription.id);
-      expect(ficha.subscription.status).toBe(entrada.subscription.status);
-      expect(ficha.plan.id).toBe(entrada.plan.id);
-      expect(ficha.badge).toBe(entrada.badge);
+      expect(memberRecord.subscription.id).toBe(walletEntry.subscription.id);
+      expect(memberRecord.subscription.status).toBe(walletEntry.subscription.status);
+      expect(memberRecord.plan.id).toBe(walletEntry.plan.id);
+      expect(memberRecord.badge).toBe(walletEntry.badge);
     }
   });
 
@@ -717,7 +717,7 @@ suite('alta de alumnos', () => {
       .get('/v1/staff/plans')
       .set(auth(token.frontDesk))
       .expect(200);
-    const dosPorSemana = plans.find((plan: { name: string }) => plan.name === '2x por semana');
+    const twicePerWeek = plans.find((plan: { name: string }) => plan.name === '2x por semana');
 
     const { body } = await http
       .post('/v1/staff/members')
@@ -726,7 +726,7 @@ suite('alta de alumnos', () => {
         name: 'Pedro Nuevo',
         documentId: '99887766',
         phone: '+51999888777',
-        planId: dosPorSemana.id,
+        planId: twicePerWeek.id,
       })
       .expect(201);
 

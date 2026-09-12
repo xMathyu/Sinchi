@@ -18,7 +18,7 @@ import { and, eq } from 'drizzle-orm';
 import { InjectDb } from '../../db/db.module';
 import { schema, withoutTenantIsolation, type Database } from '../../db/client';
 
-export interface SolicitudDeBaja {
+export interface DeletionRequest {
   readonly id: string;
   readonly status: 'pending' | 'done' | 'canceled';
   readonly requestedAt: string;
@@ -30,8 +30,8 @@ export class AccountDeletionService {
   constructor(@InjectDb() private readonly db: Database) {}
 
   /** La pendiente, si la hay. Es lo que la pantalla necesita para no ofrecer dos veces lo mismo. */
-  async pendiente(userId: string): Promise<SolicitudDeBaja | null> {
-    const fila = await withoutTenantIsolation(this.db, async (tx) => {
+  async pendiente(userId: string): Promise<DeletionRequest | null> {
+    const found = await withoutTenantIsolation(this.db, async (tx) => {
       const [row] = await tx
         .select()
         .from(schema.accountDeletionRequests)
@@ -45,7 +45,7 @@ export class AccountDeletionService {
       return row;
     });
 
-    return fila === undefined ? null : mapear(fila);
+    return found === undefined ? null : mapear(found);
   }
 
   /**
@@ -56,11 +56,11 @@ export class AccountDeletionService {
    * la segunda, y quien toca el boton dos veces porque la red tardo no merece
    * un error rojo por haber sido paciente.
    */
-  async pedir(userId: string, reason: string | null): Promise<SolicitudDeBaja> {
-    const yaHay = await this.pendiente(userId);
-    if (yaHay !== null) return yaHay;
+  async request(userId: string, reason: string | null): Promise<DeletionRequest> {
+    const alreadyPending = await this.pendiente(userId);
+    if (alreadyPending !== null) return alreadyPending;
 
-    const fila = await withoutTenantIsolation(this.db, async (tx) => {
+    const found = await withoutTenantIsolation(this.db, async (tx) => {
       const [row] = await tx
         .insert(schema.accountDeletionRequests)
         .values({ userId, reason: reason === null || reason.trim() === '' ? null : reason.trim() })
@@ -83,11 +83,11 @@ export class AccountDeletionService {
       return existente;
     });
 
-    if (fila === undefined) {
+    if (found === undefined) {
       // No deberia ocurrir: o inserto, o la perdio contra otra que si inserto.
       throw new Error('No se pudo registrar la solicitud de baja.');
     }
-    return mapear(fila);
+    return mapear(found);
   }
 
   /**
@@ -98,7 +98,7 @@ export class AccountDeletionService {
    * boton— es peor que no haber puesto el boton.
    */
   async cancelar(userId: string): Promise<boolean> {
-    const filas = await withoutTenantIsolation(this.db, async (tx) =>
+    const rows = await withoutTenantIsolation(this.db, async (tx) =>
       tx
         .update(schema.accountDeletionRequests)
         .set({ status: 'canceled', resolvedAt: new Date() })
@@ -110,15 +110,15 @@ export class AccountDeletionService {
         )
         .returning({ id: schema.accountDeletionRequests.id }),
     );
-    return filas.length > 0;
+    return rows.length > 0;
   }
 }
 
-function mapear(fila: typeof schema.accountDeletionRequests.$inferSelect): SolicitudDeBaja {
+function mapear(found: typeof schema.accountDeletionRequests.$inferSelect): DeletionRequest {
   return {
-    id: fila.id,
-    status: fila.status,
-    requestedAt: fila.requestedAt.toISOString(),
-    reason: fila.reason,
+    id: found.id,
+    status: found.status,
+    requestedAt: found.requestedAt.toISOString(),
+    reason: found.reason,
   };
 }

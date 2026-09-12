@@ -12,12 +12,12 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { loadEnv } from '../../config/env';
-import { correoInvitacion } from './invite-email';
+import { inviteEmail } from './invite-email';
 
-export interface ResultadoEnvio {
+export interface SendOutcome {
   readonly enviado: boolean;
   /** Por qué no se envió, cuando no se envió. */
-  readonly motivo: string | null;
+  readonly denial: string | null;
 }
 
 @Injectable()
@@ -29,26 +29,26 @@ export class MailService {
     return loadEnv().RESEND_API_KEY !== undefined;
   }
 
-  async enviarInvitacion(input: {
-    readonly para: string;
-    readonly nombre: string;
-    readonly gimnasio: string;
+  async sendInvite(input: {
+    readonly recipient: string;
+    readonly personName: string;
+    readonly gym: string;
     readonly plan: string;
-    readonly enlace: string;
-  }): Promise<ResultadoEnvio> {
+    readonly href: string;
+  }): Promise<SendOutcome> {
     const env = loadEnv();
     if (env.RESEND_API_KEY === undefined) {
-      return { enviado: false, motivo: 'El envío por correo no está configurado.' };
+      return { enviado: false, denial: 'El envío por correo no está configurado.' };
     }
 
-    const primerNombre = input.nombre.trim().split(/\s+/)[0] ?? input.nombre;
-    const texto = [
-      `Hola ${primerNombre},`,
+    const firstName = input.personName.trim().split(/\s+/)[0] ?? input.personName;
+    const text = [
+      `Hola ${firstName},`,
       '',
-      `${input.gimnasio} te dio de alta con el plan ${input.plan}.`,
+      `${input.gym} te dio de alta con el plan ${input.plan}.`,
       '',
       'Abre este enlace para activar tu cuenta:',
-      input.enlace,
+      input.href,
       '',
       'Desde la app verás tu plan, tu cupo de la semana y el código QR con',
       'el que entras al gimnasio. El código cambia cada 30 segundos y',
@@ -59,7 +59,7 @@ export class MailService {
     ].join('\n');
 
     try {
-      const respuesta = await fetch('https://api.resend.com/emails', {
+      const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -67,38 +67,38 @@ export class MailService {
         },
         body: JSON.stringify({
           from: env.MAIL_FROM,
-          to: [input.para],
-          subject: `${input.gimnasio} te inscribió en Sinchi`,
+          to: [input.recipient],
+          subject: `${input.gym} te inscribió en Sinchi`,
           // Las dos versiones. El texto plano no es un trámite: es lo que ven
           // los clientes que bloquean HTML y lo que leen los filtros de spam,
           // que desconfían de un correo que solo trae imágenes y un botón.
-          text: texto,
-          html: correoInvitacion({
-            primerNombre,
-            gimnasio: input.gimnasio,
+          text: text,
+          html: inviteEmail({
+            firstName,
+            gym: input.gym,
             plan: input.plan,
-            enlace: input.enlace,
+            href: input.href,
             logo: `${env.PUBLIC_BASE_URL}/v1/brand/logo.png`,
           }),
         }),
         signal: AbortSignal.timeout(10_000),
       });
 
-      if (!respuesta.ok) {
-        const cuerpo: unknown = await respuesta.json().catch(() => null);
-        const motivo =
-          typeof cuerpo === 'object' && cuerpo !== null && 'message' in cuerpo
-            ? String((cuerpo as { message: unknown }).message)
-            : `Resend respondió ${respuesta.status}.`;
-        this.logger.warn(`No se pudo enviar la invitación a ${input.para}: ${motivo}`);
-        return { enviado: false, motivo };
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        const denial =
+          typeof body === 'object' && body !== null && 'message' in body
+            ? String((body as { message: unknown }).message)
+            : `Resend respondió ${response.status}.`;
+        this.logger.warn(`No se pudo enviar la invitación a ${input.recipient}: ${denial}`);
+        return { enviado: false, denial };
       }
 
-      return { enviado: true, motivo: null };
+      return { enviado: true, denial: null };
     } catch (error) {
-      const motivo = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
-      this.logger.warn(`No se pudo enviar la invitación a ${input.para}: ${motivo}`);
-      return { enviado: false, motivo };
+      const denial = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
+      this.logger.warn(`No se pudo enviar la invitación a ${input.recipient}: ${denial}`);
+      return { enviado: false, denial };
     }
   }
 
@@ -117,17 +117,17 @@ export class MailService {
    * Como el resto de este archivo: **no puede tumbar lo que lo llama**. La
    * reserva ya existe y sale en la app del mostrador aunque Resend esté caído.
    */
-  async avisarClaseDePrueba(input: {
-    readonly para: string;
-    readonly gimnasio: string;
-    readonly nombre: string;
+  async notifyTrialBooking(input: {
+    readonly recipient: string;
+    readonly gym: string;
+    readonly personName: string;
     readonly telefono: string;
-    readonly clase: string;
+    readonly klass: string;
     /** "martes 2 de setiembre", ya formateado por quien conoce la zona. */
-    readonly cuando: string;
-    readonly hora: string;
+    readonly when: string;
+    readonly time: string;
     /** Lo que esa clase le cuesta. 0 = gratis. */
-    readonly precioCents: number;
+    readonly priceCents: number;
     /**
      * La persona MOVIO una reserva que ya tenia, no reservo por primera vez.
      *
@@ -136,34 +136,34 @@ export class MailService {
      * clases o un cambio. Con el tatami de por medio, esa duda se resuelve
      * preparando sitio para dos.
      */
-    readonly cambioDeHora?: boolean;
-  }): Promise<ResultadoEnvio> {
+    readonly rescheduled?: boolean;
+  }): Promise<SendOutcome> {
     const env = loadEnv();
     if (env.RESEND_API_KEY === undefined) {
-      return { enviado: false, motivo: 'El envío por correo no está configurado.' };
+      return { enviado: false, denial: 'El envío por correo no está configurado.' };
     }
 
     // Enlace de WhatsApp: es por donde se coordina de verdad en este mercado, y
     // el dueño lee este correo en el móvil. Sin esto tendría que copiar el
     // número a mano justo cuando quiere responder rápido.
-    const soloDigitos = input.telefono.replace(/\D/g, '');
-    const whatsapp = soloDigitos.length >= 9 ? `https://wa.me/${soloDigitos}` : null;
-    const gratis = input.precioCents === 0;
+    const digitsOnly = input.telefono.replace(/\D/g, '');
+    const whatsapp = digitsOnly.length >= 9 ? `https://wa.me/${digitsOnly}` : null;
+    const free = input.priceCents === 0;
 
-    const cambio = input.cambioDeHora === true;
+    const change = input.rescheduled === true;
 
-    const texto = [
-      cambio
-        ? `${input.nombre} cambió la hora de su clase de prueba en ${input.gimnasio}.`
-        : `${input.nombre} reservó una clase de prueba en ${input.gimnasio}.`,
+    const text = [
+      change
+        ? `${input.personName} cambió la hora de su clase de prueba en ${input.gym}.`
+        : `${input.personName} reservó una clase de prueba en ${input.gym}.`,
       '',
-      `Clase:    ${input.clase}`,
-      `Cuándo:   ${input.cuando}, ${input.hora}`,
+      `Clase:    ${input.klass}`,
+      `Cuándo:   ${input.when}, ${input.time}`,
       `Celular:  ${input.telefono}`,
-      `Cobro:    ${gratis ? 'gratis' : `S/ ${(input.precioCents / 100).toFixed(2)} al llegar`}`,
+      `Cobro:    ${free ? 'gratis' : `S/ ${(input.priceCents / 100).toFixed(2)} al llegar`}`,
       ...(whatsapp === null ? [] : ['', `Escríbele: ${whatsapp}`]),
       '',
-      ...(cambio
+      ...(change
         ? [
             'Es la MISMA persona y la misma reserva, movida: no esperes a dos.',
             'La hora de arriba es la que vale.',
@@ -177,7 +177,7 @@ export class MailService {
     ].join('\n');
 
     try {
-      const respuesta = await fetch('https://api.resend.com/emails', {
+      const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -185,32 +185,32 @@ export class MailService {
         },
         body: JSON.stringify({
           from: env.MAIL_FROM,
-          to: [input.para],
+          to: [input.recipient],
           // El asunto se lee entero en la notificación del móvil, que es donde
           // de verdad se lee: nombre y día, sin adornos.
-          subject: cambio
-            ? `Cambio de hora: ${input.nombre} ahora viene el ${input.cuando}`
-            : `Clase de prueba: ${input.nombre} viene el ${input.cuando}`,
-          text: texto,
+          subject: change
+            ? `Cambio de hora: ${input.personName} ahora viene el ${input.when}`
+            : `Clase de prueba: ${input.personName} viene el ${input.when}`,
+          text: text,
         }),
         signal: AbortSignal.timeout(10_000),
       });
 
-      if (!respuesta.ok) {
-        const cuerpo: unknown = await respuesta.json().catch(() => null);
-        const motivo =
-          typeof cuerpo === 'object' && cuerpo !== null && 'message' in cuerpo
-            ? String((cuerpo as { message: unknown }).message)
-            : `Resend respondió ${respuesta.status}.`;
-        this.logger.warn(`No se pudo avisar a ${input.para}: ${motivo}`);
-        return { enviado: false, motivo };
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        const denial =
+          typeof body === 'object' && body !== null && 'message' in body
+            ? String((body as { message: unknown }).message)
+            : `Resend respondió ${response.status}.`;
+        this.logger.warn(`No se pudo avisar a ${input.recipient}: ${denial}`);
+        return { enviado: false, denial };
       }
 
-      return { enviado: true, motivo: null };
+      return { enviado: true, denial: null };
     } catch (error) {
-      const motivo = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
-      this.logger.warn(`No se pudo avisar a ${input.para}: ${motivo}`);
-      return { enviado: false, motivo };
+      const denial = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
+      this.logger.warn(`No se pudo avisar a ${input.recipient}: ${denial}`);
+      return { enviado: false, denial };
     }
   }
 }

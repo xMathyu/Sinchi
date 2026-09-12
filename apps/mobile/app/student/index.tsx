@@ -23,11 +23,11 @@ import {
   Wordmark,
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { EstadoSinConexion, EstadoVacio } from '../../src/design/empty';
+import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import {
   useErrorDeCarga,
-  useMisClasesGratis,
+  useMyTrialClasses,
   useRefresco,
   useStore,
   useWallet,
@@ -45,7 +45,7 @@ export default function WalletScreen() {
   const active = wallet.filter((entry) => entry.subscription.status !== 'canceled').length;
   // Las clases gratis reservadas viven aqui y no en el directorio: es un
   // compromiso con una fecha, y esta es la pantalla que el alumno abre.
-  const clasesGratis = useMisClasesGratis().datos.filter((clase) => clase.status === 'booked');
+  const trialClasses = useMyTrialClasses().details.filter((klass) => klass.status === 'booked');
 
   return (
     <Screen scroll>
@@ -75,13 +75,13 @@ export default function WalletScreen() {
 
       {wallet.length === 0 && errorDeCarga !== null ? (
         <View style={{ flex: 1, minHeight: 380 }}>
-          <EstadoSinConexion error={errorDeCarga} onReintentar={reintentar} />
+          <OfflineState error={errorDeCarga} onReintentar={reintentar} />
         </View>
       ) : wallet.length === 0 ? (
         <View style={{ flex: 1, minHeight: 380 }}>
-          <EstadoVacio
-            titulo="Tu billetera está vacía"
-            cuerpo="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
+          <EmptyState
+            title="Tu billetera está vacía"
+            body="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
             pie="¿Todavía no entrenas en ninguno? Mira los de la red y prueba uno gratis."
             accion={
               <Button label="Explorar gimnasios" onPress={() => router.push('/explore')} />
@@ -97,16 +97,16 @@ export default function WalletScreen() {
         </Stack>
       )}
 
-      {clasesGratis.length > 0 ? (
+      {trialClasses.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
           <Eyebrow>Vas a probar</Eyebrow>
-          {clasesGratis.map((clase) => (
+          {trialClasses.map((klass) => (
             <Pressable
-              key={clase.id}
+              key={klass.id}
               accessibilityRole="button"
-              accessibilityLabel={`Clase gratis en ${clase.gymName}`}
+              accessibilityLabel={`Clase gratis en ${klass.gymName}`}
               onPress={() =>
-                router.push({ pathname: '/explore/[slug]', params: { slug: clase.gymSlug } })
+                router.push({ pathname: '/explore/[slug]', params: { slug: klass.gymSlug } })
               }
             >
               <Card
@@ -117,16 +117,16 @@ export default function WalletScreen() {
                 <Stack gap={5}>
                   <Row>
                     <Text variant="bodySmall" weight="semibold" numberOfLines={1}>
-                      {clase.gymName}
+                      {klass.gymName}
                     </Text>
                     <Badge
-                      label={(clase.priceCents ?? 0) === 0 ? 'CLASE GRATIS' : 'CLASE DE PRUEBA'}
+                      label={(klass.priceCents ?? 0) === 0 ? 'CLASE GRATIS' : 'CLASE DE PRUEBA'}
                       color={theme.semaphoreInk.ok}
                       background={theme.semaphore.ok}
                     />
                   </Row>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {clase.className} · {formatWeekdayAndDay(clase.date)} a las {clase.startTime}
+                    {klass.className} · {formatWeekdayAndDay(klass.date)} a las {klass.startTime}
                   </Text>
                 </Stack>
               </Card>
@@ -192,7 +192,7 @@ function GymCard({ entry }: { readonly entry: MembershipView }) {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${entry.tenant.name}, ${insigniaParaTi(entry.badge)}`}
+        accessibilityLabel={`${entry.tenant.name}, ${badgeForYou(entry.badge)}`}
       >
         <Card
           accent={semaphore.color}
@@ -205,7 +205,7 @@ function GymCard({ entry }: { readonly entry: MembershipView }) {
                 {brand}
                 {area === '' ? '' : `\n${area}`}
               </Text>
-              <Badge label={insigniaParaTi(entry.badge)} color={semaphore.color} />
+              <Badge label={badgeForYou(entry.badge)} color={semaphore.color} />
             </Row>
             <Row>
               <Text variant="caption" color={theme.colors.textSecondary}>
@@ -273,5 +273,5 @@ function SecondaryLine({
  * al reves por una razon concreta: al reves, el padron y la ficha del mostrador
  * le decian "DEBES S/ 150" al recepcionista que estaba mirando la deuda de otro.
  */
-const insigniaParaTi = (badge: string): string =>
+const badgeForYou = (badge: string): string =>
   badge.startsWith('DEBE ') ? `DEBES ${badge.slice('DEBE '.length)}` : badge;

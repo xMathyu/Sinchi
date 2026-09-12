@@ -14,8 +14,8 @@ const NOVA: GymPlace = {
   longitude: -76.9878,
 };
 
-const sinPin: GymPlace = { ...NOVA, latitude: null, longitude: null };
-const sinNada: GymPlace = { ...sinPin, address: null };
+const withoutPin: GymPlace = { ...NOVA, latitude: null, longitude: null };
+const withNothing: GymPlace = { ...withoutPin, address: null };
 
 describe('el pin del gimnasio', () => {
   it('sale solo con los dos números', () => {
@@ -54,7 +54,7 @@ describe('cómo llegar', () => {
    * «-12.1,-77.0» a `q` abre una BÚSQUEDA de ese texto en vez de ir ahí.
    */
   it('sin pin, Waze cambia de parámetro y no solo de valor', () => {
-    const url = directionsUrl(sinPin, 'waze')!;
+    const url = directionsUrl(withoutPin, 'waze')!;
     expect(url).toContain('?q=');
     expect(url).not.toContain('ll=');
     expect(url).toContain('navigate=yes');
@@ -63,12 +63,12 @@ describe('cómo llegar', () => {
   it('sin pin busca por nombre y dirección, con el nombre delante', () => {
     // Los mapas encuentran el negocio fichado mejor que la dirección sola, y
     // cuando no lo encuentran caen en la dirección igual.
-    const url = directionsUrl(sinPin, 'google')!;
+    const url = directionsUrl(withoutPin, 'google')!;
     expect(decodeURIComponent(url)).toContain('Nova BJJ, Av. Primavera 120, Surco');
   });
 
   it('escapa lo que escribió el dueño', () => {
-    const raro: GymPlace = { ...sinPin, address: 'Jr. Unión 120 & 122, Lima' };
+    const raro: GymPlace = { ...withoutPin, address: 'Jr. Unión 120 & 122, Lima' };
     const url = directionsUrl(raro, 'google')!;
     // Sin escapar, el `&` partiría la URL y el mapa recibiría media dirección.
     expect(url).not.toContain('& 122');
@@ -76,15 +76,15 @@ describe('cómo llegar', () => {
   });
 
   it('sin dirección ni pin no hay a dónde llevar a nadie', () => {
-    expect(directionsUrl(sinNada, 'google')).toBeNull();
-    expect(directionsUrl(sinNada, 'waze')).toBeNull();
-    expect(directionsUrl(sinNada, 'apple')).toBeNull();
-    expect(placeUrl(sinNada)).toBeNull();
-    expect(hasLocation(sinNada)).toBe(false);
+    expect(directionsUrl(withNothing, 'google')).toBeNull();
+    expect(directionsUrl(withNothing, 'waze')).toBeNull();
+    expect(directionsUrl(withNothing, 'apple')).toBeNull();
+    expect(placeUrl(withNothing)).toBeNull();
+    expect(hasLocation(withNothing)).toBe(false);
   });
 
   it('una dirección en blanco cuenta como ninguna', () => {
-    expect(hasLocation({ ...sinPin, address: '   ' })).toBe(false);
+    expect(hasLocation({ ...withoutPin, address: '   ' })).toBe(false);
   });
 
   it('con pin pero sin dirección sigue habiendo a dónde ir', () => {
@@ -98,6 +98,6 @@ describe('mirar dónde queda, que es otra pregunta que «llévame»', () => {
     expect(placeUrl(NOVA)).toBe(
       'https://www.google.com/maps/search/?api=1&query=-12.1104,-76.9878',
     );
-    expect(placeUrl(sinPin)).toContain('/maps/search/');
+    expect(placeUrl(withoutPin)).toContain('/maps/search/');
   });
 });

@@ -31,41 +31,41 @@ import {
   type GymCardDto,
   type GymDetailDto,
   type BibliotecaDto,
-  type EventoConCupo,
-  type PlanConUso,
-  type HorarioConUso,
-  type RutinaDetalleDto,
+  type EventWithSeats,
+  type PlanWithUsage,
+  type ScheduleWithUsage,
+  type RoutineDetailDto,
   type PlazaDto,
-  type PreciosDelLocal,
-  type UbicacionDelLocal,
+  type GymPricing,
+  type GymLocation,
   type SaasSubscriptionDto,
   type StaffPostDto,
   type SummaryDto,
   type TrialBookingDto,
 } from './api';
-import { misClasesGratis } from './trials';
+import { myTrialClasses } from './trials';
 import {
-  bajasDelGimnasio,
-  cargarDetalleAlumno,
-  planesDelGimnasio,
-  planesPara,
-  refrescarDatos,
-  resumenDelGimnasio,
-  planesDelDueno,
-  horariosDelDueno,
-  preciosDelLocal,
-  ubicacionDelLocal,
-  eventosDelGimnasio,
-  eventoDelGimnasio,
-  plazasDelEvento,
-  bibliotecaDelGimnasio,
-  bibliotecaDeMiGimnasio,
-  rutinaDelGimnasio,
-  rutinaDeMiGimnasio,
-  rutinaPublica,
-  suscripcionSinchi,
-  vinculacionesPendientes,
-  type Vinculacion,
+  gymDeletions,
+  loadStudentDetail,
+  gymPlans,
+  plansFor,
+  refreshDetails,
+  gymSummary,
+  ownerPlans,
+  ownerSchedules,
+  gymPricing,
+  gymLocation,
+  gymEvents,
+  gymEvent,
+  eventSeats,
+  gymLibrary,
+  myGymLibrary,
+  gymRoutine,
+  myGymRoutine,
+  publicRoutine,
+  sinchiSubscription,
+  pendingClaims,
+  type AccountClaim,
 } from './actions';
 import { ensureAccessCodeSecret } from './auth';
 import { getSessionState } from './session';
@@ -126,7 +126,7 @@ export function useMembership(membershipId: string): MembershipView {
     // Con padron del servidor la membresia no esta en `state.memberships`, y
     // `viewMembership` lanzaba "Membresia ... no encontrada" — que es como se
     // caia la pantalla de cobro al abrirla desde el padron.
-    const delServidor = remoto?.find((entrada) => entrada.view.membership.id === membershipId);
+    const delServidor = remoto?.find((entry) => entry.view.membership.id === membershipId);
     if (delServidor !== undefined) return delServidor.view;
     return viewMembership(membershipId, today);
   }, [membershipId, remoto, today, version]);
@@ -237,9 +237,9 @@ export function useAccessCode(): AccessCode {
     void loadSecret()
       .then(async (value) => {
         if (value !== null) return value;
-        const sesion = getSessionState();
-        if (sesion.status !== 'signed_in') return null;
-        return (await ensureAccessCodeSecret(sesion.session.userId)) ? loadSecret() : null;
+        const session = getSessionState();
+        if (session.status !== 'signed_in') return null;
+        return (await ensureAccessCodeSecret(session.session.userId)) ? loadSecret() : null;
       })
       .then((value) => {
         if (cancelled) return;
@@ -282,9 +282,9 @@ export function useScanVerdict(membershipId: string): ScanVerdict | null {
   return verdict !== null && verdict.membershipId === membershipId ? verdict : null;
 }
 
-export interface FichaAlumno {
+export interface StudentRecord {
   readonly view: MembershipView | null;
-  readonly cargando: boolean;
+  readonly loading: boolean;
   readonly error: string | null;
   /**
    * Lo que se ve sale del padron en cache, sin historial.
@@ -293,7 +293,7 @@ export interface FichaAlumno {
    * nunca" y "no pude traer sus pagos" se ven igual y significan lo contrario.
    */
   readonly parcial: boolean;
-  readonly recargar: () => void;
+  readonly reload: () => void;
 }
 
 /**
@@ -304,31 +304,31 @@ export interface FichaAlumno {
  * de inmediato y sin conexion sigue sirviendo para lo que importa en el
  * mostrador: saber si puede pasar y cuanto debe.
  */
-export function useStaffMember(membershipId: string): FichaAlumno {
+export function useStaffMember(membershipId: string): StudentRecord {
   const roster = useRoster();
-  const [detalle, setDetalle] = useState<MembershipView | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [detail, setDetail] = useState<MembershipView | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   const enCache =
-    roster.find((entrada) => entrada.view.membership.id === membershipId)?.view ?? null;
+    roster.find((entry) => entry.view.membership.id === membershipId)?.view ?? null;
 
   useEffect(() => {
     let cancelado = false;
-    setCargando(true);
+    setLoading(true);
     setError(null);
 
-    void cargarDetalleAlumno(membershipId)
+    void loadStudentDetail(membershipId)
       .then((vista) => {
-        if (!cancelado) setDetalle(vista);
+        if (!cancelado) setDetail(vista);
       })
       .catch((causa: unknown) => {
         if (cancelado) return;
         setError(causa instanceof Error ? causa.message : 'No se pudo traer la ficha.');
       })
       .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) setLoading(false);
       });
 
     return () => {
@@ -336,18 +336,18 @@ export function useStaffMember(membershipId: string): FichaAlumno {
     };
     // `roster` cambia cuando se recarga el padron tras cobrar o marcar, y es
     // justo cuando esta ficha quedo vieja.
-  }, [membershipId, intento, roster]);
+  }, [membershipId, attempt, roster]);
 
   return {
-    view: detalle ?? enCache,
-    cargando,
+    view: detail ?? enCache,
+    loading,
     error,
-    parcial: detalle === null && enCache !== null,
-    recargar: () => setIntento((n) => n + 1),
+    parcial: detail === null && enCache !== null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
-export interface MarcadoReciente {
+export interface RecentCheckIn {
   readonly id: string;
   readonly name: string;
   readonly at: Date;
@@ -362,25 +362,25 @@ export interface MarcadoReciente {
  * estan en su memoria. Sin conexion cae a lo que si tenga en cache, que en un
  * turno ya empezado es lo que se marco desde este aparato.
  */
-export function useRecentCheckIns(): readonly MarcadoReciente[] {
+export function useRecentCheckIns(): readonly RecentCheckIn[] {
   const roster = useRoster();
   const staff = useStore((s) => s.staff);
   const attendances = useStore((s) => s.attendances);
-  const [remotos, setRemotos] = useState<readonly MarcadoReciente[] | null>(null);
+  const [remotos, setRemotos] = useState<readonly RecentCheckIn[] | null>(null);
 
   useEffect(() => {
     if (getSessionState().status !== 'signed_in') return;
 
     let cancelado = false;
     void fetchRecentCheckIns()
-      .then((filas) => {
+      .then((rows) => {
         if (cancelado) return;
         setRemotos(
-          filas.map((fila) => ({
-            id: fila.id,
-            name: fila.userName,
-            at: fila.checkedInAt,
-            manual: fila.method === 'manual',
+          rows.map((row) => ({
+            id: row.id,
+            name: row.userName,
+            at: row.checkedInAt,
+            manual: row.method === 'manual',
           })),
         );
       })
@@ -393,7 +393,7 @@ export function useRecentCheckIns(): readonly MarcadoReciente[] {
     };
   }, [roster]);
 
-  const locales = useMemo(
+  const gyms = useMemo(
     () =>
       attendances
         .filter((a) => a.tenantId === staff.tenantId)
@@ -409,7 +409,7 @@ export function useRecentCheckIns(): readonly MarcadoReciente[] {
     [attendances, staff.tenantId, roster],
   );
 
-  return remotos ?? locales;
+  return remotos ?? gyms;
 }
 
 /**
@@ -423,22 +423,22 @@ export function useRecentCheckIns(): readonly MarcadoReciente[] {
  */
 export function usePlansFor(membershipId: string): {
   readonly plans: readonly Plan[];
-  readonly cargando: boolean;
+  readonly loading: boolean;
   readonly error: string | null;
 } {
   const [plans, setPlans] = useState<readonly Plan[] | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const locales = useStore((s) => s.plans);
+  const gyms = useStore((s) => s.plans);
 
   useEffect(() => {
     let cancelado = false;
-    setCargando(true);
+    setLoading(true);
     setError(null);
 
-    void planesPara(membershipId)
-      .then((lista) => {
-        if (!cancelado) setPlans(lista);
+    void plansFor(membershipId)
+      .then((list) => {
+        if (!cancelado) setPlans(list);
       })
       .catch((causa: unknown) => {
         if (!cancelado) {
@@ -446,7 +446,7 @@ export function usePlansFor(membershipId: string): {
         }
       })
       .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) setLoading(false);
       });
 
     return () => {
@@ -454,7 +454,7 @@ export function usePlansFor(membershipId: string): {
     };
   }, [membershipId]);
 
-  return { plans: plans ?? locales, cargando, error };
+  return { plans: plans ?? gyms, loading, error };
 }
 
 /**
@@ -470,14 +470,14 @@ export function usePlansFor(membershipId: string): {
  * solo local no pierde nada si la consulta no vuelve, y quien tiene dos ya sabe
  * cambiarse desde Ajustes.
  */
-export function useMisLocales(): readonly StaffPostDto[] {
-  const [locales, setLocales] = useState<readonly StaffPostDto[]>([]);
+export function useMyGyms(): readonly StaffPostDto[] {
+  const [gyms, setGyms] = useState<readonly StaffPostDto[]>([]);
 
   useEffect(() => {
     let cancelado = false;
     void fetchModes().then(
-      (modos) => {
-        if (!cancelado) setLocales(modos.staff);
+      (modes) => {
+        if (!cancelado) setGyms(modes.staff);
       },
       () => {
         // Sin respuesta, el padrón se pinta como siempre.
@@ -488,7 +488,7 @@ export function useMisLocales(): readonly StaffPostDto[] {
     };
   }, []);
 
-  return locales;
+  return gyms;
 }
 
 /**
@@ -499,24 +499,24 @@ export function useMisLocales(): readonly StaffPostDto[] {
  * cada pocos segundos movería la lista bajo el dedo justo al tocarla.
  */
 export function useClaims(): {
-  readonly claims: readonly Vinculacion[];
-  readonly cargando: boolean;
+  readonly claims: readonly AccountClaim[];
+  readonly loading: boolean;
   readonly error: string | null;
-  readonly recargar: () => void;
+  readonly reload: () => void;
 } {
-  const [claims, setClaims] = useState<readonly Vinculacion[]>([]);
-  const [cargando, setCargando] = useState(true);
+  const [claims, setClaims] = useState<readonly AccountClaim[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
-    setCargando(true);
+    setLoading(true);
     setError(null);
 
-    void vinculacionesPendientes()
-      .then((lista) => {
-        if (!cancelado) setClaims(lista);
+    void pendingClaims()
+      .then((list) => {
+        if (!cancelado) setClaims(list);
       })
       .catch((causa: unknown) => {
         if (!cancelado) {
@@ -524,15 +524,15 @@ export function useClaims(): {
         }
       })
       .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) setLoading(false);
       });
 
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
-  return { claims, cargando, error, recargar: () => setIntento((n) => n + 1) };
+  return { claims, loading, error, reload: () => setAttempt((n) => n + 1) };
 }
 
 /**
@@ -542,42 +542,42 @@ export function useClaims(): {
  * mes gratis avanza en días, no en cobros. Colgarla del padrón la volvería a
  * pedir en cada alta y cada pago para ver el mismo número.
  */
-export function useSuscripcionSinchi(): {
-  readonly suscripcion: SaasSubscriptionDto | null;
-  readonly recargar: () => void;
+export function useSinchiSubscription(): {
+  readonly subscription: SaasSubscriptionDto | null;
+  readonly reload: () => void;
 } {
-  const [suscripcion, setSuscripcion] = useState<SaasSubscriptionDto | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [subscription, setSubscription] = useState<SaasSubscriptionDto | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
-    void suscripcionSinchi()
-      .then((valor) => {
-        if (!cancelado) setSuscripcion(valor);
+    void sinchiSubscription()
+      .then((fetched) => {
+        if (!cancelado) setSubscription(fetched);
       })
       .catch(() => {});
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
   // Canjear un código mueve la fecha: sin volver a pedirla, la franja seguiría
   // diciendo los días de antes justo cuando el dueño acaba de ganar un mes.
-  return { suscripcion, recargar: () => setIntento((n) => n + 1) };
+  return { subscription, reload: () => setAttempt((n) => n + 1) };
 }
 
 /** Resumen del local para el dueño. `null` cuando no es el dueño o aún no llegó. */
 export function useOwnerSummary(): SummaryDto | null {
   const roster = useRoster();
-  const [resumen, setResumen] = useState<SummaryDto | null>(null);
+  const [summary, setSummary] = useState<SummaryDto | null>(null);
 
   useEffect(() => {
     let cancelado = false;
     // Se recalcula cuando cambia el padrón, que es justo cuando alguien cobró o
     // marcó: pedirlo en un temporizador movería los números sin motivo.
-    void resumenDelGimnasio()
-      .then((valor) => {
-        if (!cancelado) setResumen(valor);
+    void gymSummary()
+      .then((fetched) => {
+        if (!cancelado) setSummary(fetched);
       })
       .catch(() => {});
     return () => {
@@ -585,7 +585,7 @@ export function useOwnerSummary(): SummaryDto | null {
     };
   }, [roster]);
 
-  return resumen;
+  return summary;
 }
 
 /**
@@ -602,22 +602,22 @@ export function useOwnerSummary(): SummaryDto | null {
  * enlace y no viene con el padron, asi que se pide al montar y se recarga
  * despues de cada escritura.
  */
-export function useHorariosDelDueno(): {
-  readonly horarios: readonly HorarioConUso[] | null;
+export function useOwnerSchedules(): {
+  readonly schedules: readonly ScheduleWithUsage[] | null;
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
-  const [horarios, setHorarios] = useState<readonly HorarioConUso[] | null>(null);
+  const [schedules, setSchedules] = useState<readonly ScheduleWithUsage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    void horariosDelDueno()
-      .then((valor) => {
-        if (!cancelado) setHorarios(valor);
+    void ownerSchedules()
+      .then((fetched) => {
+        if (!cancelado) setSchedules(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -627,32 +627,32 @@ export function useHorariosDelDueno(): {
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
   return {
-    horarios,
+    schedules,
     error,
-    cargando: horarios === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: schedules === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
-export function usePlanesDelDueno(): {
-  readonly planes: readonly PlanConUso[] | null;
+export function useOwnerPlans(): {
+  readonly plans: readonly PlanWithUsage[] | null;
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
-  const [planes, setPlanes] = useState<readonly PlanConUso[] | null>(null);
+  const [ownerPlanList, setOwnerPlanList] = useState<readonly PlanWithUsage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    void planesDelDueno()
-      .then((valor) => {
-        if (!cancelado) setPlanes(valor);
+    void ownerPlans()
+      .then((fetched) => {
+        if (!cancelado) setOwnerPlanList(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) setError(e instanceof Error ? e.message : 'No se pudieron traer tus planes.');
@@ -660,13 +660,13 @@ export function usePlanesDelDueno(): {
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
   return {
-    planes,
+    plans: ownerPlanList,
     error,
-    cargando: planes === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: ownerPlanList === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
@@ -676,23 +676,23 @@ export function usePlanesDelDueno(): {
  * `drafts` solo lo pide el dueño: a recepción un evento sin publicar le ensucia
  * la lista de a quién espera, y la api se lo filtra igual.
  */
-export function useEventos(opciones: { readonly past?: boolean; readonly drafts?: boolean } = {}): {
-  readonly eventos: readonly EventoConCupo[] | null;
+export function useEvents(options: { readonly past?: boolean; readonly drafts?: boolean } = {}): {
+  readonly events: readonly EventWithSeats[] | null;
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
-  const { past = false, drafts = false } = opciones;
-  const [eventos, setEventos] = useState<readonly EventoConCupo[] | null>(null);
+  const { past = false, drafts = false } = options;
+  const [events, setEvents] = useState<readonly EventWithSeats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    void eventosDelGimnasio({ past, drafts })
-      .then((valor) => {
-        if (!cancelado) setEventos(valor);
+    void gymEvents({ past, drafts })
+      .then((fetched) => {
+        if (!cancelado) setEvents(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -702,7 +702,7 @@ export function useEventos(opciones: { readonly past?: boolean; readonly drafts?
     return () => {
       cancelado = true;
     };
-  }, [past, drafts, intento]);
+  }, [past, drafts, attempt]);
 
   /**
    * Y se vuelve a pedir al enfocar la pantalla.
@@ -714,41 +714,41 @@ export function useEventos(opciones: { readonly past?: boolean; readonly drafts?
    */
   useFocusEffect(
     useCallback(() => {
-      setIntento((n) => n + 1);
+      setAttempt((n) => n + 1);
     }, []),
   );
 
   return {
-    eventos,
+    events,
     error,
-    cargando: eventos === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: events === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
 /** Un evento con su lista de inscritos: es la pantalla del día del seminario. */
-export function useEvento(eventId: string): {
-  readonly evento: EventoConCupo | null;
+export function useEvent(eventId: string): {
+  readonly event: EventWithSeats | null;
   readonly plazas: readonly PlazaDto[];
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
-  const [evento, setEvento] = useState<EventoConCupo | null>(null);
+  const [event, setEvent] = useState<EventWithSeats | null>(null);
   const [plazas, setPlazas] = useState<readonly PlazaDto[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
     // Las dos a la vez: la cabecera sin la lista, o al revés, deja la pantalla
     // media hecha durante un salto perceptible.
-    void Promise.all([eventoDelGimnasio(eventId), plazasDelEvento(eventId)])
-      .then(([uno, lista]) => {
+    void Promise.all([gymEvent(eventId), eventSeats(eventId)])
+      .then(([uno, list]) => {
         if (cancelado) return;
-        setEvento(uno);
-        setPlazas(lista);
+        setEvent(uno);
+        setPlazas(list);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -758,22 +758,22 @@ export function useEvento(eventId: string): {
     return () => {
       cancelado = true;
     };
-  }, [eventId, intento]);
+  }, [eventId, attempt]);
 
   // Es la pantalla que el mostrador tiene abierta mientras entra la gente: si
   // alguien reservó desde el directorio hace un minuto, tiene que aparecer.
   useFocusEffect(
     useCallback(() => {
-      setIntento((n) => n + 1);
+      setAttempt((n) => n + 1);
     }, []),
   );
 
   return {
-    evento,
+    event,
     plazas,
     error,
-    cargando: evento === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: event === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
@@ -792,24 +792,24 @@ export function useEvento(eventId: string): {
 export function useBiblioteca(membershipId?: string): {
   readonly biblioteca: BibliotecaDto | null;
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
   const [biblioteca, setBiblioteca] = useState<BibliotecaDto | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    const pedir =
+    const request =
       membershipId === undefined
-        ? bibliotecaDelGimnasio()
-        : bibliotecaDeMiGimnasio(membershipId);
+        ? gymLibrary()
+        : myGymLibrary(membershipId);
 
-    void pedir
-      .then((valor) => {
-        if (!cancelado) setBiblioteca(valor);
+    void request
+      .then((fetched) => {
+        if (!cancelado) setBiblioteca(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -819,7 +819,7 @@ export function useBiblioteca(membershipId?: string): {
     return () => {
       cancelado = true;
     };
-  }, [membershipId, intento]);
+  }, [membershipId, attempt]);
 
   /**
    * Y se vuelve a pedir al enfocar.
@@ -830,15 +830,15 @@ export function useBiblioteca(membershipId?: string): {
    */
   useFocusEffect(
     useCallback(() => {
-      setIntento((n) => n + 1);
+      setAttempt((n) => n + 1);
     }, []),
   );
 
   return {
     biblioteca,
     error,
-    cargando: biblioteca === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: biblioteca === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
@@ -853,19 +853,19 @@ export function useBiblioteca(membershipId?: string): {
  * El resultado puede venir cerrado (`unlocked: false`), y eso NO es un error: es
  * la pantalla que le vende la mensualidad a quien está mirando algo que quiere.
  */
-export function useRutina(
+export function useRoutine(
   routineId: string,
   origen: { readonly membershipId?: string; readonly slug?: string } = {},
 ): {
-  readonly rutina: RutinaDetalleDto | null;
+  readonly routine: RoutineDetailDto | null;
   readonly error: string | null;
-  readonly cargando: boolean;
-  readonly recargar: () => void;
+  readonly loading: boolean;
+  readonly reload: () => void;
 } {
   const { membershipId, slug } = origen;
-  const [rutina, setRutina] = useState<RutinaDetalleDto | null>(null);
+  const [routine, setRoutine] = useState<RoutineDetailDto | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // Sin id no hay nada que pedir: es la pantalla de crear una rutina nueva,
@@ -874,16 +874,16 @@ export function useRutina(
 
     let cancelado = false;
     setError(null);
-    const pedir =
+    const request =
       slug !== undefined
-        ? rutinaPublica(slug, routineId)
+        ? publicRoutine(slug, routineId)
         : membershipId !== undefined
-          ? rutinaDeMiGimnasio(membershipId, routineId)
-          : rutinaDelGimnasio(routineId);
+          ? myGymRoutine(membershipId, routineId)
+          : gymRoutine(routineId);
 
-    void pedir
-      .then((valor) => {
-        if (!cancelado) setRutina(valor);
+    void request
+      .then((fetched) => {
+        if (!cancelado) setRoutine(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -893,32 +893,32 @@ export function useRutina(
     return () => {
       cancelado = true;
     };
-  }, [routineId, membershipId, slug, intento]);
+  }, [routineId, membershipId, slug, attempt]);
 
   return {
-    rutina,
+    routine,
     error,
-    cargando: routineId.length > 0 && rutina === null && error === null,
-    recargar: () => setIntento((n) => n + 1),
+    loading: routineId.length > 0 && routine === null && error === null,
+    reload: () => setAttempt((n) => n + 1),
   };
 }
 
 /** Lo que el local cobra aparte de los planes. */
-export function usePreciosDelLocal(): {
-  readonly precios: PreciosDelLocal | null;
+export function useGymPricing(): {
+  readonly pricing: GymPricing | null;
   readonly error: string | null;
-  readonly recargar: () => void;
+  readonly reload: () => void;
 } {
-  const [precios, setPrecios] = useState<PreciosDelLocal | null>(null);
+  const [pricing, setPricing] = useState<GymPricing | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    void preciosDelLocal()
-      .then((valor) => {
-        if (!cancelado) setPrecios(valor);
+    void gymPricing()
+      .then((fetched) => {
+        if (!cancelado) setPricing(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) setError(e instanceof Error ? e.message : 'No se pudo traer lo que cobras.');
@@ -926,27 +926,27 @@ export function usePreciosDelLocal(): {
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
-  return { precios, error, recargar: () => setIntento((n) => n + 1) };
+  return { pricing, error, reload: () => setAttempt((n) => n + 1) };
 }
 
 /** Dónde queda el local, como lo lee su dueño para corregirlo. */
-export function useUbicacionDelLocal(): {
-  readonly ubicacion: UbicacionDelLocal | null;
+export function useGymLocation(): {
+  readonly location: GymLocation | null;
   readonly error: string | null;
-  readonly recargar: () => void;
+  readonly reload: () => void;
 } {
-  const [ubicacion, setUbicacion] = useState<UbicacionDelLocal | null>(null);
+  const [location, setLocation] = useState<GymLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
     setError(null);
-    void ubicacionDelLocal()
-      .then((valor) => {
-        if (!cancelado) setUbicacion(valor);
+    void gymLocation()
+      .then((fetched) => {
+        if (!cancelado) setLocation(fetched);
       })
       .catch((e: unknown) => {
         if (!cancelado) {
@@ -956,9 +956,9 @@ export function useUbicacionDelLocal(): {
     return () => {
       cancelado = true;
     };
-  }, [intento]);
+  }, [attempt]);
 
-  return { ubicacion, error, recargar: () => setIntento((n) => n + 1) };
+  return { location, error, reload: () => setAttempt((n) => n + 1) };
 }
 
 /**
@@ -980,14 +980,14 @@ export function useRefresco(): {
     // El error se traga: refrescar es un extra sobre datos que ya están en
     // pantalla, y un aviso rojo por no haber podido actualizar algo que se
     // sigue viendo bien enseña a ignorar los avisos.
-    void refrescarDatos()
+    void refreshDetails()
       .catch(() => {})
       .finally(() => setRefrescando(false));
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      void refrescarDatos().catch(() => {});
+      void refreshDetails().catch(() => {});
     }, []),
   );
 
@@ -995,44 +995,44 @@ export function useRefresco(): {
 }
 
 /** Quienes cancelaron y conservan ficha. Se piden solo al abrirlas. */
-export function useBajas(activo: boolean): {
+export function useBajas(active: boolean): {
   readonly bajas: readonly RosterEntry[];
-  readonly cargando: boolean;
+  readonly loading: boolean;
 } {
   const [bajas, setBajas] = useState<readonly RosterEntry[]>([]);
-  const [cargando, setCargando] = useState(false);
+  const [loading, setLoading] = useState(false);
   const roster = useRoster();
 
   useEffect(() => {
-    if (!activo) return;
+    if (!active) return;
     let cancelado = false;
-    setCargando(true);
-    void bajasDelGimnasio()
-      .then((lista) => {
-        if (!cancelado) setBajas(lista);
+    setLoading(true);
+    void gymDeletions()
+      .then((list) => {
+        if (!cancelado) setBajas(list);
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) setLoading(false);
       });
     return () => {
       cancelado = true;
     };
     // `roster` en las dependencias: reactivar a alguien lo saca de esta lista.
-  }, [activo, roster]);
+  }, [active, roster]);
 
-  return { bajas, cargando };
+  return { bajas, loading };
 }
 
 /** Planes activos del local, para el mostrador. */
-export function usePlanesDelGimnasio(): readonly Plan[] {
-  const [planes, setPlanes] = useState<readonly Plan[]>([]);
+export function useGymPlans(): readonly Plan[] {
+  const [ownerPlanList, setOwnerPlanList] = useState<readonly Plan[]>([]);
 
   useEffect(() => {
     let cancelado = false;
-    void planesDelGimnasio()
-      .then((lista) => {
-        if (!cancelado) setPlanes(lista);
+    void gymPlans()
+      .then((list) => {
+        if (!cancelado) setOwnerPlanList(list);
       })
       .catch(() => {});
     return () => {
@@ -1040,7 +1040,7 @@ export function usePlanesDelGimnasio(): readonly Plan[] {
     };
   }, []);
 
-  return planes;
+  return ownerPlanList;
 }
 
 /**
@@ -1055,7 +1055,7 @@ export function useErrorDeCarga(): {
 } {
   const error = useStore((s) => s.errorDeCarga);
   const reintentar = useCallback(() => {
-    void refrescarDatos().catch(() => {});
+    void refreshDetails().catch(() => {});
   }, []);
   return { error, reintentar };
 }
@@ -1066,10 +1066,10 @@ export function useErrorDeCarga(): {
 
 /** Estado de una carga puntual contra la api. Lo comparten los tres de abajo. */
 export interface Carga<T> {
-  readonly datos: T;
-  readonly cargando: boolean;
+  readonly details: T;
+  readonly loading: boolean;
   readonly error: string | null;
-  readonly recargar: () => void;
+  readonly reload: () => void;
 }
 
 /**
@@ -1084,24 +1084,24 @@ export function useGyms(): Carga<readonly GymCardDto[]> {
 }
 
 export function useGym(slug: string): Carga<GymDetailDto | null> {
-  const pedir = useCallback(() => fetchGym(slug), [slug]);
-  return useCargaRemota<GymDetailDto | null>(pedir, null, 'No se pudo abrir este gimnasio.');
+  const request = useCallback(() => fetchGym(slug), [slug]);
+  return useCargaRemota<GymDetailDto | null>(request, null, 'No se pudo abrir este gimnasio.');
 }
 
 /** Las clases gratis que la persona tiene reservadas, con o sin ficha. */
-export function useMisClasesGratis(): Carga<readonly TrialBookingDto[]> {
+export function useMyTrialClasses(): Carga<readonly TrialBookingDto[]> {
   return useCargaRemota<readonly TrialBookingDto[]>(
-    misClasesGratis,
+    myTrialClasses,
     [],
     'No se pudieron traer tus clases gratis.',
   );
 }
 
 /** Quién viene a probar. La lista del mostrador: o lo que falta, o lo que pasó. */
-export function useClasesGratisDelGimnasio(soloPasadas = false): Carga<readonly TrialBooking[]> {
-  const pedir = useCallback(() => fetchTrials(soloPasadas), [soloPasadas]);
+export function useGymTrialClasses(pastOnly = false): Carga<readonly TrialBooking[]> {
+  const request = useCallback(() => fetchTrials(pastOnly), [pastOnly]);
   return useCargaRemota<readonly TrialBooking[]>(
-    pedir,
+    request,
     [],
     'No se pudo traer la lista de clases gratis.',
   );
@@ -1118,12 +1118,12 @@ export function useClasesGratisDelGimnasio(soloPasadas = false): Carga<readonly 
  * sus dependencias, y una flecha nueva en cada render sería un bucle de
  * peticiones.
  */
-const leerClaseGratis = async (): Promise<boolean | null> =>
+const readTrialBooking = async (): Promise<boolean | null> =>
   (await fetchTrialSettings()).trialClassEnabled;
 
-export function useOfreceClaseGratis(): Carga<boolean | null> {
+export function useTrialClassEnabled(): Carga<boolean | null> {
   return useCargaRemota<boolean | null>(
-    leerClaseGratis,
+    readTrialBooking,
     null,
     'No se pudo leer si el gimnasio ofrece clase gratis.',
   );
@@ -1137,52 +1137,52 @@ export function useOfreceClaseGratis(): Carga<boolean | null> {
  * la lista mientras cambia.
  */
 function useCargaRemota<T>(
-  pedir: () => Promise<T>,
+  request: () => Promise<T>,
   inicial: T,
-  mensajeDeError: string,
+  errorMessage: string,
 ): Carga<T> {
-  const [datos, setDatos] = useState<T>(inicial);
-  const [cargando, setCargando] = useState(true);
+  const [details, setDetails] = useState<T>(inicial);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [intento, setIntento] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelado = false;
-    setCargando(true);
+    setLoading(true);
     setError(null);
 
-    void pedir()
-      .then((valor) => {
-        if (!cancelado) setDatos(valor);
+    void request()
+      .then((fetched) => {
+        if (!cancelado) setDetails(fetched);
       })
       .catch((causa: unknown) => {
         // Se conserva lo que ya había en pantalla: sin conexión, el último
         // estado conocido es mejor que una pantalla vacía.
-        if (!cancelado) setError(causa instanceof Error ? causa.message : mensajeDeError);
+        if (!cancelado) setError(causa instanceof Error ? causa.message : errorMessage);
       })
       .finally(() => {
-        if (!cancelado) setCargando(false);
+        if (!cancelado) setLoading(false);
       });
 
     return () => {
       cancelado = true;
     };
-  }, [pedir, intento, mensajeDeError]);
+  }, [request, attempt, errorMessage]);
 
-  const recargar = useCallback(() => setIntento((n) => n + 1), []);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   // Al montar ya carga el efecto de arriba; sin este candado, entrar a la
   // pantalla dispararía dos peticiones idénticas.
-  const yaMontado = useRef(false);
+  const alreadyMounted = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      if (!yaMontado.current) {
-        yaMontado.current = true;
+      if (!alreadyMounted.current) {
+        alreadyMounted.current = true;
         return;
       }
-      setIntento((n) => n + 1);
+      setAttempt((n) => n + 1);
     }, []),
   );
 
-  return { datos, cargando, error, recargar };
+  return { details, loading, error, reload };
 }

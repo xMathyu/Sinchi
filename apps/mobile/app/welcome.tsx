@@ -11,7 +11,7 @@
  * gimnasios caben en una sola app; el código lo genera el teléfono y por eso
  * funciona sin datos; y el directorio deja reservar una clase de prueba.
  *
- * Se enseña UNA vez. El interruptor vive en `src/data/bienvenida.ts` y quien
+ * Se enseña UNA vez. El interruptor vive en `src/data/welcome.ts` y quien
  * decide enseñarla es `SessionRouter`, no esta pantalla: si cada pantalla
  * decidiera por su cuenta cuándo mostrarse, la que se olvide queda inalcanzable
  * y no se ve en una revisión de código.
@@ -31,7 +31,7 @@ import { screenPadding, withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { marcarBienvenidaVista } from '../src/data/bienvenida';
+import { markWelcomeSeen } from '../src/data/welcome';
 
 /**
  * Alto reservado al texto de cada lámina.
@@ -41,34 +41,34 @@ import { marcarBienvenidaVista } from '../src/data/bienvenida';
  * salto. Con el bloque anclado, un titular corto deja aire arriba y el pie no
  * se entera.
  */
-const ALTO_DEL_TEXTO = 210;
+const TEXT_BLOCK_HEIGHT = 210;
 
 /** Alto de la cabecera. Fijo para que el logo no salte cuando «Saltar» se va. */
-const ALTO_CABECERA = 56;
+const HEADER_HEIGHT = 56;
 
-interface Lamina {
+interface Slide {
   readonly eyebrow: string;
-  readonly titulo: string;
-  readonly cuerpo: string;
+  readonly title: string;
+  readonly body: string;
 }
 
-const LAMINAS: readonly Lamina[] = [
+const SLIDES: readonly Slide[] = [
   {
     eyebrow: 'Tus gimnasios',
-    titulo: 'Todos en una sola app',
-    cuerpo:
+    title: 'Todos en una sola app',
+    body:
       'Tu plan, tu cupo de la semana y lo que debes, gimnasio por gimnasio. Y si entrenas en más de uno, todos viven aquí.',
   },
   {
     eyebrow: 'Tu entrada',
-    titulo: 'Tu QR abre la puerta',
-    cuerpo:
+    title: 'Tu QR abre la puerta',
+    body:
       'Se genera en tu teléfono y cambia cada 30 segundos. En el sótano del gimnasio, sin datos, sigue funcionando.',
   },
   {
     eyebrow: 'Gimnasios cerca',
-    titulo: 'Prueba antes de pagar',
-    cuerpo:
+    title: 'Prueba antes de pagar',
+    body:
       'Busca gimnasios cerca de ti, mira sus horarios y reserva una clase de prueba desde aquí. Sin llamar a nadie.',
   },
 ];
@@ -85,7 +85,7 @@ const LAMINAS: readonly Lamina[] = [
  * Sale como una sola `Path` y no como 250 `Rect` por lo que cuesta cada nodo
  * de svg en una lista de ese tamaño.
  */
-const MODULOS_DEL_QR = ((): string => {
+const QR_MODULES = ((): string => {
   const LADO = 25;
   const enMarca = (x: number, y: number): boolean =>
     (x < 8 && y < 8) || (x > 16 && y < 8) || (x < 8 && y > 16);
@@ -112,57 +112,57 @@ const MODULOS_DEL_QR = ((): string => {
   return trozos.join('');
 })();
 
-export default function BienvenidaScreen() {
+export default function WelcomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scroller = useRef<ScrollView>(null);
-  const [indice, setIndice] = useState(0);
+  const [index, setIndex] = useState(0);
 
-  const ultima = indice === LAMINAS.length - 1;
+  const last = index === SLIDES.length - 1;
 
-  const salir = (): void => {
+  const leave = (): void => {
     // No se espera al llavero: `marcarBienvenidaVista` emite el estado antes de
     // escribir, así que el enrutado ya sabe que no tiene que volver aquí.
-    void marcarBienvenidaVista();
+    void markWelcomeSeen();
     router.replace('/login');
   };
 
   const avanzar = (): void => {
-    if (ultima) {
-      salir();
+    if (last) {
+      leave();
       return;
     }
-    scroller.current?.scrollTo({ x: width * (indice + 1), animated: true });
+    scroller.current?.scrollTo({ x: width * (index + 1), animated: true });
   };
 
-  const irA = (n: number): void => {
+  const goTo = (n: number): void => {
     scroller.current?.scrollTo({ x: width * n, animated: true });
   };
 
   // El índice sale del scroll y no del botón: se puede llegar deslizando, y dos
   // fuentes de verdad para «en cuál estoy» se separan en cuanto alguien desliza
   // a medias.
-  const alTerminarElScroll = (e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>): void => {
     const n = Math.round(e.nativeEvent.contentOffset.x / width);
-    setIndice(Math.min(Math.max(n, 0), LAMINAS.length - 1));
+    setIndex(Math.min(Math.max(n, 0), SLIDES.length - 1));
   };
 
   const ilustraciones = [
-    <MisGimnasios key="gimnasios" />,
-    <CodigoDeEntrada key="codigo" />,
-    <GimnasioPorDescubrir key="directorio" />,
+    <MyGyms key="gimnasios" />,
+    <EntryCode key="codigo" />,
+    <GymToDiscover key="directorio" />,
   ];
 
   return (
     <Screen padded={false}>
-      <Row style={{ height: ALTO_CABECERA, paddingHorizontal: screenPadding }}>
+      <Row style={{ height: HEADER_HEIGHT, paddingHorizontal: screenPadding }}>
         <Logo size={22} />
-        {ultima ? null : (
+        {last ? null : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Saltar la bienvenida"
-            onPress={salir}
+            onPress={leave}
             // El relleno llega hasta el margen de la pantalla: es donde cae el
             // pulgar, y sin él el área tocable termina en la última letra.
             style={{
@@ -185,20 +185,20 @@ export default function BienvenidaScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={alTerminarElScroll}
+        onMomentumScrollEnd={onScrollEnd}
         style={{ flex: 1 }}
       >
-        {LAMINAS.map((lamina, n) => (
-          <View key={lamina.titulo} style={{ width, paddingHorizontal: screenPadding }}>
+        {SLIDES.map((slide, n) => (
+          <View key={slide.title} style={{ width, paddingHorizontal: screenPadding }}>
             <View style={{ flex: 1, justifyContent: 'center' }}>{ilustraciones[n]}</View>
-            <View style={{ height: ALTO_DEL_TEXTO, justifyContent: 'flex-end' }}>
+            <View style={{ height: TEXT_BLOCK_HEIGHT, justifyContent: 'flex-end' }}>
               <Stack gap={12}>
-                <Eyebrow color={theme.semaphore.ok}>{lamina.eyebrow}</Eyebrow>
+                <Eyebrow color={theme.semaphore.ok}>{slide.eyebrow}</Eyebrow>
                 <Text variant="hero" weight="black">
-                  {lamina.titulo}
+                  {slide.title}
                 </Text>
                 <Text variant="body" color={theme.colors.textSecondary}>
-                  {lamina.cuerpo}
+                  {slide.body}
                 </Text>
               </Stack>
             </View>
@@ -208,30 +208,30 @@ export default function BienvenidaScreen() {
 
       <Stack gap={22} style={{ paddingHorizontal: screenPadding, paddingTop: 8 }}>
         <Row justify="flex-start" style={{ marginLeft: -8 }}>
-          {LAMINAS.map((lamina, n) => (
+          {SLIDES.map((slide, n) => (
             <Pressable
-              key={lamina.titulo}
+              key={slide.title}
               accessibilityRole="button"
-              accessibilityLabel={`Ir a la lámina ${n + 1} de ${LAMINAS.length}`}
-              accessibilityState={{ selected: n === indice }}
-              onPress={() => irA(n)}
+              accessibilityLabel={`Ir a la lámina ${n + 1} de ${SLIDES.length}`}
+              accessibilityState={{ selected: n === index }}
+              onPress={() => goTo(n)}
               // El alto tocable va en el envoltorio y no en el punto: el punto
               // mide 7 px, que es una sexta parte del mínimo alcanzable.
               style={{ height: 44, justifyContent: 'center', paddingHorizontal: 8 }}
             >
               <View
                 style={{
-                  width: n === indice ? 22 : 7,
+                  width: n === index ? 22 : 7,
                   height: 7,
                   borderRadius: theme.radii.pill,
                   backgroundColor:
-                    n === indice ? theme.semaphore.ok : withAlpha(theme.colors.ink, 0.14),
+                    n === index ? theme.semaphore.ok : withAlpha(theme.colors.ink, 0.14),
                 }}
               />
             </Pressable>
           ))}
         </Row>
-        <Button label={ultima ? 'Empezar' : 'Siguiente'} onPress={avanzar} />
+        <Button label={last ? 'Empezar' : 'Siguiente'} onPress={avanzar} />
       </Stack>
     </Screen>
   );
@@ -244,33 +244,33 @@ export default function BienvenidaScreen() {
  * suelta— porque es lo que hace la pantalla que promete: el semáforo diciendo
  * algo diferente en cada fila.
  */
-function MisGimnasios() {
+function MyGyms() {
   const theme = useTheme();
-  const ejemplos = [
-    { nombre: 'Nova BJJ Surco', detalle: 'Al día · te quedan 2 sesiones', color: theme.semaphore.ok },
+  const samples = [
+    { name: 'Nova BJJ Surco', detail: 'Al día · te quedan 2 sesiones', color: theme.semaphore.ok },
     {
-      nombre: 'Iron Muay Thai Lince',
-      detalle: 'Vence en 3 días · S/ 120',
+      name: 'Iron Muay Thai Lince',
+      detail: 'Vence en 3 días · S/ 120',
       color: theme.semaphore.warn,
     },
     {
-      nombre: 'Ronin Judo Magdalena',
-      detalle: 'Clase suelta · pagas al entrar',
+      name: 'Ronin Judo Magdalena',
+      detail: 'Clase suelta · pagas al entrar',
       color: theme.semaphore.ok,
     },
   ];
 
   return (
     <Stack gap={12}>
-      {ejemplos.map((gimnasio) => (
-        <Card key={gimnasio.nombre} radius={theme.radii.xl}>
+      {samples.map((gym) => (
+        <Card key={gym.name} radius={theme.radii.xl}>
           <Row gap={12}>
             <Stack gap={4} style={{ flex: 1 }}>
               <Text variant="heading" weight="semibold" numberOfLines={1}>
-                {gimnasio.nombre}
+                {gym.name}
               </Text>
               <Text variant="caption" color={theme.colors.textSecondary}>
-                {gimnasio.detalle}
+                {gym.detail}
               </Text>
             </Stack>
             <View
@@ -278,7 +278,7 @@ function MisGimnasios() {
                 width: 10,
                 height: 10,
                 borderRadius: theme.radii.pill,
-                backgroundColor: gimnasio.color,
+                backgroundColor: gym.color,
               }}
             />
           </Row>
@@ -289,7 +289,7 @@ function MisGimnasios() {
 }
 
 /** Segunda lámina: el código de la puerta. */
-function CodigoDeEntrada() {
+function EntryCode() {
   const theme = useTheme();
   const LADO = 196;
 
@@ -339,17 +339,17 @@ function CodigoDeEntrada() {
             { x: 2, y: 2 },
             { x: 20, y: 2 },
             { x: 2, y: 20 },
-          ].map((centro) => (
+          ].map((center) => (
             <Rect
-              key={`c-${centro.x}-${centro.y}`}
-              x={centro.x}
-              y={centro.y}
+              key={`c-${center.x}-${center.y}`}
+              x={center.x}
+              y={center.y}
               width={3}
               height={3}
               fill={theme.colors.canvas}
             />
           ))}
-          <Path d={MODULOS_DEL_QR} fill={theme.colors.canvas} />
+          <Path d={QR_MODULES} fill={theme.colors.canvas} />
         </Svg>
       </View>
 
@@ -390,7 +390,7 @@ function CodigoDeEntrada() {
 }
 
 /** Tercera lámina: la ficha de un gimnasio del directorio. */
-function GimnasioPorDescubrir() {
+function GymToDiscover() {
   const theme = useTheme();
 
   return (

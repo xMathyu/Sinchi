@@ -23,16 +23,16 @@
  */
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';
 import { TabBarShell, TabButton, TabContent } from '../../src/design/tab-bar';
-import { CargandoSeccion } from '../../src/design/loading';
+import { SectionLoader } from '../../src/design/loading';
 import { useStore } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 
 export default function StaffLayout() {
-  const sesion = useSession();
-  const cargado = useStore((estado) => estado.cargado);
+  const session = useSession();
+  const cargado = useStore((state) => state.cargado);
   // Solo con sesión real: en demostración el store ya viene lleno, y sin sesión
   // no hay nada que esperar.
-  const esperando = sesion.status === 'signed_in' && !cargado;
+  const esperando = session.status === 'signed_in' && !cargado;
 
   return (
     <Tabs>
@@ -40,14 +40,14 @@ export default function StaffLayout() {
         {/* La barra de pestañas se queda puesta: la espera es del contenido,
             no de la app. Tapar la pantalla entera hacía que dos segundos
             parecieran un arranque fallido. */}
-        {esperando ? <CargandoSeccion texto="Trayendo el padrón…" /> : <TabSlot />}
+        {esperando ? <SectionLoader text="Trayendo el padrón…" /> : <TabSlot />}
       </TabContent>
       <TabList asChild>
         <TabBarShell>
           <TabTrigger name="door" href="/staff" asChild>
             <TabButton icon="door" label="Puerta" />
           </TabTrigger>
-          <TabTrigger name="padron" href="/staff/padron" asChild>
+          <TabTrigger name="roster" href="/staff/roster" asChild>
             <TabButton icon="roster" label="Padrón" />
           </TabTrigger>
           <TabTrigger name="trials" href="/staff/trials" asChild>

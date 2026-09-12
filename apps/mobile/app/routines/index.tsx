@@ -27,14 +27,14 @@ import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { useTheme } from '../../src/design/theme';
 import { useBiblioteca } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import { cambiarPublicoDeRutina } from '../../src/data/actions';
-import { nivelCorto } from '../../src/lib/format';
-import type { RutinaEnLista } from '../../src/data/api';
+import { setRoutineAudience } from '../../src/data/actions';
+import { shortLevel } from '../../src/lib/format';
+import type { RoutineListItem } from '../../src/data/api';
 
 export default function BibliotecaScreen() {
   const theme = useTheme();
   const { membershipId } = useLocalSearchParams<{ membershipId?: string }>();
-  const esDelAlumno = membershipId !== undefined;
+  const belongsToStudent = membershipId !== undefined;
 
   /**
    * El rol sale de la SESIÓN y no del store, por lo mismo que en eventos: el
@@ -42,10 +42,10 @@ export default function BibliotecaScreen() {
    * se encontraba el vacío pidiéndole crear una rutina y sin el botón para
    * hacerlo.
    */
-  const esDueno = useRole() === 'owner' && !esDelAlumno;
-  const { biblioteca, error, cargando, recargar } = useBiblioteca(membershipId);
+  const isOwner = useRole() === 'owner' && !belongsToStudent;
+  const { biblioteca, error, loading, reload } = useBiblioteca(membershipId);
 
-  const rutinas = biblioteca?.routines ?? [];
+  const routines = biblioteca?.routines ?? [];
 
   return (
     <Screen scroll>
@@ -61,7 +61,7 @@ export default function BibliotecaScreen() {
       </Row>
 
       <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>
-        {esDelAlumno
+        {belongsToStudent
           ? 'Lo que tu gimnasio enseña en video: rutinas del día y técnicas paso a paso.'
           : 'Rutinas y técnicas en video. Tú decides cuáles ve cualquiera desde el directorio y cuáles son solo para tus alumnos.'}
       </Text>
@@ -75,7 +75,7 @@ export default function BibliotecaScreen() {
       )}
 
       <Stack gap={12} style={{ marginTop: 18 }}>
-        {cargando && (
+        {loading && (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Trayendo las rutinas…
           </Text>
@@ -84,33 +84,33 @@ export default function BibliotecaScreen() {
         {/* El vacío se calla cuando algo falló: decir «tu gimnasio no publicó
             ninguna» debajo de un error es afirmar un hecho que no sabemos, y el
             alumno se va creyendo que su local no tiene nada. */}
-        {!cargando && error === null && rutinas.length === 0 && (
+        {!loading && error === null && routines.length === 0 && (
           <Card tone="sunken">
             <Stack gap={14}>
               <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-                {esDelAlumno
+                {belongsToStudent
                   ? 'Tu gimnasio todavía no publicó ninguna rutina.'
                   : 'Todavía no tienes ninguna. Un video bien explicado —el uchimata, el día de pecho— es lo que hace que alguien te elija a ti y no al de al lado.'}
               </Text>
-              {esDueno && (
+              {isOwner && (
                 <Button label="Crear la primera" onPress={() => router.push('/routines/edit/nueva')} />
               )}
             </Stack>
           </Card>
         )}
 
-        {rutinas.map((fila) => (
-          <FilaDeRutina
-            key={fila.routine.id}
-            fila={fila}
-            esDueno={esDueno}
+        {routines.map((row) => (
+          <RoutineRow
+            key={row.routine.id}
+            row={row}
+            isOwner={isOwner}
             membershipId={membershipId}
-            onCambio={recargar}
+            onChange={reload}
           />
         ))}
       </Stack>
 
-      {esDueno && rutinas.length > 0 && (
+      {isOwner && routines.length > 0 && (
         <Button
           label="+ Nueva rutina"
           variant="secondary"
@@ -124,30 +124,30 @@ export default function BibliotecaScreen() {
   );
 }
 
-function FilaDeRutina({
-  fila,
-  esDueno,
+function RoutineRow({
+  row,
+  isOwner,
   membershipId,
-  onCambio,
+  onChange,
 }: {
-  readonly fila: RutinaEnLista;
-  readonly esDueno: boolean;
+  readonly row: RoutineListItem;
+  readonly isOwner: boolean;
   readonly membershipId: string | undefined;
-  readonly onCambio: () => void;
+  readonly onChange: () => void;
 }) {
   const theme = useTheme();
-  const [cambiando, setCambiando] = useState(false);
-  const { routine, itemCount, coverVideoUrl, hasVideo } = fila;
+  const [switching, setSwitching] = useState(false);
+  const { routine, itemCount, coverVideoUrl, hasVideo } = row;
 
-  const borrador = routine.status === 'draft';
-  const publica = routine.visibility === 'public';
+  const draft = routine.status === 'draft';
+  const isPublic = routine.visibility === 'public';
 
   const meta = [
-    nivelCorto(routine.level),
+    shortLevel(routine.level),
     itemCount === 0 ? null : `${itemCount} ${itemCount === 1 ? 'paso' : 'pasos'}`,
-    borrador ? 'Sin publicar' : null,
+    draft ? 'Sin publicar' : null,
   ]
-    .filter((parte) => parte !== null)
+    .filter((part) => part !== null)
     .join(' · ');
 
   return (
@@ -164,16 +164,16 @@ function FilaDeRutina({
         })
       }
     >
-      <Card radius={theme.radii.lg} style={{ opacity: borrador ? 0.6 : 1 }}>
+      <Card radius={theme.radii.lg} style={{ opacity: draft ? 0.6 : 1 }}>
         <Stack gap={12}>
           {/* Un video SUBIDO no trae portada —no hay miniatura sin decodificar
               el primer fotograma, y eso ya es transcodificar— y la api tampoco
               firma su URL para una lista. Se pinta el marcador igual: sin él, la
               tarjeta parece no tener video. */}
           {coverVideoUrl !== null ? (
-            <PortadaDeVideo url={coverVideoUrl} alto={150} />
+            <PortadaDeVideo url={coverVideoUrl} height={150} />
           ) : hasVideo ? (
-            <MarcadorDeVideo alto={150} />
+            <MarcadorDeVideo height={150} />
           ) : null}
 
           <Row align="flex-start">
@@ -194,8 +194,8 @@ function FilaDeRutina({
             </Stack>
 
             <Badge
-              label={publica ? 'PÚBLICA' : 'ALUMNOS'}
-              color={publica ? theme.semaphore.ok : theme.colors.textSecondary}
+              label={isPublic ? 'PÚBLICA' : 'ALUMNOS'}
+              color={isPublic ? theme.semaphore.ok : theme.colors.textSecondary}
             />
           </Row>
 
@@ -203,18 +203,18 @@ function FilaDeRutina({
               El dueño publica el uchimata para atraer, ve que funciona y quiere
               guardarse la serie entera para alumnos: hacerle abrir el editor
               para eso convierte un toque en un formulario. */}
-          {esDueno && (
+          {isOwner && (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
-                publica ? 'Dejarla solo para alumnos' : 'Publicarla para cualquiera'
+                isPublic ? 'Dejarla solo para alumnos' : 'Publicarla para cualquiera'
               }
-              disabled={cambiando}
+              disabled={switching}
               onPress={() => {
-                setCambiando(true);
-                void cambiarPublicoDeRutina(routine.id, publica ? 'members' : 'public')
-                  .then(onCambio)
-                  .finally(() => setCambiando(false));
+                setSwitching(true);
+                void setRoutineAudience(routine.id, isPublic ? 'members' : 'public')
+                  .then(onChange)
+                  .finally(() => setSwitching(false));
               }}
               style={{
                 flexDirection: 'row',
@@ -225,12 +225,12 @@ function FilaDeRutina({
                 paddingVertical: 7,
                 borderRadius: theme.radii.pill,
                 backgroundColor: withAlpha(
-                  publica ? theme.semaphore.ok : theme.colors.textSecondary,
+                  isPublic ? theme.semaphore.ok : theme.colors.textSecondary,
                   0.13,
                 ),
               }}
             >
-              {publica ? (
+              {isPublic ? (
                 <Globe size={13} color={theme.semaphore.ok} />
               ) : (
                 <Lock size={13} color={theme.colors.textSecondary} />
@@ -238,9 +238,9 @@ function FilaDeRutina({
               <Text
                 variant="micro"
                 weight="semibold"
-                color={publica ? theme.semaphore.ok : theme.colors.textSecondary}
+                color={isPublic ? theme.semaphore.ok : theme.colors.textSecondary}
               >
-                {publica ? 'La ve cualquiera' : 'Solo tus alumnos'}
+                {isPublic ? 'La ve cualquiera' : 'Solo tus alumnos'}
               </Text>
             </Pressable>
           )}

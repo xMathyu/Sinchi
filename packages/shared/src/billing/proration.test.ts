@@ -104,23 +104,23 @@ describe('prorateUpgrade', () => {
 describe('prorateFirstPeriod', () => {
   it('cobra la fraccion del mes que el alumno va a usar', () => {
     // 23 dias de un mes de referencia de 31, sobre S/ 150.
-    const monto = prorateFirstPeriod({
+    const amount = prorateFirstPeriod({
       start: plainDate(2026, 8, 20),
       end: plainDate(2026, 9, 12),
       monthlyPeriodLengthInDays: 31,
       monthlyPriceCents: fromSoles(150),
     });
-    expect(monto).toBe(11_129); // 15000 * 23 / 31 = 11129.03
+    expect(amount).toBe(11_129); // 15000 * 23 / 31 = 11129.03
   });
 
   it('un periodo completo se cobra completo', () => {
-    const monto = prorateFirstPeriod({
+    const amount = prorateFirstPeriod({
       start: plainDate(2026, 8, 12),
       end: plainDate(2026, 9, 12),
       monthlyPeriodLengthInDays: 31,
       monthlyPriceCents: fromSoles(150),
     });
-    expect(monto).toBe(fromSoles(150));
+    expect(amount).toBe(fromSoles(150));
   });
 
   it('rechaza periodos vacios', () => {

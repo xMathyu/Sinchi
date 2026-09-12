@@ -276,7 +276,7 @@ export class SaasService {
         : plan.freeUntil;
       const freeUntil = extendedFreeUntil(cubierto, today, promo.freeMonths);
 
-      const canje = await tx
+      const redemption = await tx
         .insert(schema.saasRedemptions)
         .values({
           promoCodeId: promo.id,
@@ -287,7 +287,7 @@ export class SaasService {
         .onConflictDoNothing()
         .returning({ id: schema.saasRedemptions.id });
 
-      if (canje.length === 0) {
+      if (redemption.length === 0) {
         return { redeemed: false as const, reason: 'already_used' as const };
       }
 
@@ -384,8 +384,8 @@ export class SaasService {
          * machacar su `free_until` le tiraria ese codigo a la basura justo el
          * dia que empieza a importarle.
          */
-        const conMes = freeUntilFrom(today);
-        freeUntil = isAfter(freeUntil, conMes) ? freeUntil : conMes;
+        const withMonth = freeUntilFrom(today);
+        freeUntil = isAfter(freeUntil, withMonth) ? freeUntil : withMonth;
         nextBillingDate = freeUntil;
         report.leftFreeTier += 1;
         this.logger.log(
@@ -403,12 +403,12 @@ export class SaasService {
         canceled: plan.canceled,
       });
 
-      const sinCambios =
+      const unchanged =
         tier === plan.tier &&
         state.status === plan.status &&
         formatPlainDate(freeUntil) === formatPlainDate(plan.freeUntil) &&
         formatPlainDate(nextBillingDate) === formatPlainDate(plan.nextBillingDate);
-      if (sinCambios) continue;
+      if (unchanged) continue;
 
       await withoutTenantIsolation(this.db, (tx) =>
         tx
@@ -555,8 +555,8 @@ export class SaasService {
       };
     }
 
-    const alta = plainDateInZone(row.createdAt, row.timezone);
-    const freeUntil = freeUntilFrom(alta);
+    const signUp = plainDateInZone(row.createdAt, row.timezone);
+    const freeUntil = freeUntilFrom(signUp);
 
     return {
       tenantId: row.tenantId,
@@ -582,15 +582,15 @@ export class SaasService {
 
     if (tenant === undefined) throw new NotFoundException('No existe el gimnasio.');
 
-    const alta = plainDateInZone(tenant.createdAt, tenant.timezone);
-    const freeUntil = freeUntilFrom(alta);
+    const signUp = plainDateInZone(tenant.createdAt, tenant.timezone);
+    const freeUntil = freeUntilFrom(signUp);
 
     await tx
       .insert(schema.saasSubscriptions)
       .values({
         tenantId,
         freeUntil: formatPlainDate(freeUntil),
-        periodStart: formatPlainDate(alta),
+        periodStart: formatPlainDate(signUp),
         nextBillingDate: formatPlainDate(freeUntil),
       })
       .onConflictDoNothing();

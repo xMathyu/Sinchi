@@ -40,7 +40,7 @@ const eventBookingSchema = z.object({
   eventId: z.string().uuid(),
 });
 /** El motivo es opcional: obligar a explicarse para irse es un peaje. */
-const bajaSchema = z.object({ reason: z.string().max(500).optional() });
+const deletionSchema = z.object({ reason: z.string().max(500).optional() });
 
 const linkDeviceSchema = z.object({
   /** `true` cuando el alumno perdió el celular: invalida los códigos viejos. */
@@ -159,8 +159,8 @@ export class StudentController {
     @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ) {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
-    const planes = await this.members.plans(tenantId);
-    return planes.filter((plan) => !isDropInPlan(plan));
+    const ownPlans = await this.members.plans(tenantId);
+    return ownPlans.filter((plan) => !isDropInPlan(plan));
   }
 
   /**
@@ -334,7 +334,7 @@ export class StudentController {
    * curso y desde cuando, no un boton que parece no haber hecho nada.
    */
   @Get('account/deletion-request')
-  async estadoDeBaja(@CurrentSession() session: Session) {
+  async deletionState(@CurrentSession() session: Session) {
     return { request: await this.bajas.pendiente(session.sub) };
   }
 
@@ -354,17 +354,17 @@ export class StudentController {
    */
   @AllowedWhenReadOnly()
   @Post('account/deletion-request')
-  async pedirBaja(
+  async requestDeletion(
     @CurrentSession() session: Session,
-    @Body(parseWith(bajaSchema)) body: z.infer<typeof bajaSchema>,
+    @Body(parseWith(deletionSchema)) body: z.infer<typeof deletionSchema>,
   ) {
-    return { request: await this.bajas.pedir(session.sub, body.reason ?? null) };
+    return { request: await this.bajas.request(session.sub, body.reason ?? null) };
   }
 
   /** Se arrepiente. Treinta dias son muchos para no poder desdecirse. */
   @AllowedWhenReadOnly()
   @Delete('account/deletion-request')
-  async cancelarBaja(@CurrentSession() session: Session) {
+  async cancelDeletion(@CurrentSession() session: Session) {
     return { canceled: await this.bajas.cancelar(session.sub) };
   }
 }

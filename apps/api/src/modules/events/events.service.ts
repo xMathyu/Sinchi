@@ -138,9 +138,9 @@ export class EventsService {
 
   async find(tenantId: string, eventId: string): Promise<EventWithSeats> {
     return withTenant(this.db, tenantId, async (tx) => {
-      const evento = await this.findInTx(tx, eventId);
-      const [conCupo] = await this.withSeats(tx, [evento]);
-      return conCupo!;
+      const eventRow = await this.findInTx(tx, eventId);
+      const [withCapacity] = await this.withSeats(tx, [eventRow]);
+      return withCapacity!;
     });
   }
 
@@ -302,12 +302,12 @@ export class EventsService {
       events.map((e) => e.id),
     );
     return events.map((event) => {
-      const cuenta = seats.get(event.id) ?? { taken: 0, paid: 0 };
+      const count = seats.get(event.id) ?? { taken: 0, paid: 0 };
       return {
         event,
-        seatsTaken: cuenta.taken,
-        seatsLeft: seatsLeft(event, cuenta.taken),
-        paidSeats: cuenta.paid,
+        seatsTaken: count.taken,
+        seatsLeft: seatsLeft(event, count.taken),
+        paidSeats: count.paid,
       };
     });
   }

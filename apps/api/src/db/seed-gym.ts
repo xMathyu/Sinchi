@@ -25,7 +25,7 @@ export const VIE = 5;
 export const SAB = 6;
 export const DOM = 7;
 
-export interface ClaseSpec {
+export interface ClassSpec {
   readonly name: string;
   readonly weekday: number;
   readonly startTime: string;
@@ -39,7 +39,7 @@ export interface PlanSpec {
   readonly soles: number;
 }
 
-export interface GimnasioSpec {
+export interface GymSpec {
   readonly slug: string;
   readonly name: string;
   /** RUC. `PENDIENTE` mientras el club no lo da: va en los comprobantes. */
@@ -68,14 +68,14 @@ export interface GimnasioSpec {
    * cobrar las siguientes.
    */
   readonly trialSoles?: number;
-  readonly planes: readonly PlanSpec[];
-  readonly horarios: readonly ClaseSpec[];
+  readonly gymPlans: readonly PlanSpec[];
+  readonly schedules: readonly ClassSpec[];
 }
 
-export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; created: boolean }> {
+export async function seedGym(spec: GymSpec): Promise<{ tenantId: string; created: boolean }> {
   const pool = createPool(process.env.DATABASE_URL!);
   const db = createDatabase(pool);
-  const etiqueta = `[${spec.slug}]`;
+  const label = `[${spec.slug}]`;
 
   try {
     const existing = await withoutTenantIsolation(db, (tx) =>
@@ -87,7 +87,7 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
     );
 
     if (existing[0] !== undefined) {
-      console.log(`${etiqueta} ya existe (${existing[0].id}); no se toca nada`);
+      console.log(`${label} ya existe (${existing[0].id}); no se toca nada`);
       return { tenantId: existing[0].id, created: false };
     }
 
@@ -122,12 +122,12 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
        * nadie abra la app, porque el job diario recorre esta tabla y lo que no
        * esta aqui no vence nunca.
        */
-      const alta = plainDateInZone(new Date(), TZ_LIMA);
+      const signUp = plainDateInZone(new Date(), TZ_LIMA);
       await tx.insert(schema.saasSubscriptions).values({
         tenantId: tenant!.id,
-        freeUntil: formatPlainDate(freeUntilFrom(alta)),
-        periodStart: formatPlainDate(alta),
-        nextBillingDate: formatPlainDate(freeUntilFrom(alta)),
+        freeUntil: formatPlainDate(freeUntilFrom(signUp)),
+        periodStart: formatPlainDate(signUp),
+        nextBillingDate: formatPlainDate(freeUntilFrom(signUp)),
       });
 
       return tenant!.id;
@@ -135,7 +135,7 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
 
     await withTenant(db, tenantId, async (tx) => {
       await tx.insert(schema.plans).values(
-        spec.planes.map((plan) => ({
+        spec.gymPlans.map((plan) => ({
           tenantId,
           name: plan.name,
           type: plan.type,
@@ -146,32 +146,32 @@ export async function seedGym(spec: GimnasioSpec): Promise<{ tenantId: string; c
         })),
       );
 
-      if (spec.horarios.length > 0) {
+      if (spec.schedules.length > 0) {
         await tx.insert(schema.classSchedules).values(
-          spec.horarios.map((clase) => ({
+          spec.schedules.map((klass) => ({
             tenantId,
-            name: clase.name,
-            weekday: clase.weekday,
-            startTime: clase.startTime,
-            endTime: clase.endTime,
+            name: klass.name,
+            weekday: klass.weekday,
+            startTime: klass.startTime,
+            endTime: klass.endTime,
             active: true,
           })),
         );
       }
     });
 
-    console.log(`${etiqueta} creado: ${tenantId}`);
+    console.log(`${label} creado: ${tenantId}`);
     console.log(
-      `${etiqueta} ${spec.planes.length} planes, ${spec.horarios.length} bloques de horario` +
+      `${label} ${spec.gymPlans.length} planes, ${spec.schedules.length} bloques de horario` +
         (dropIn === null ? '' : `, clase suelta S/${dropIn}`),
     );
     if (spec.trialClassEnabled === false) {
-      console.log(`${etiqueta} SIN clase de prueba por la app`);
+      console.log(`${label} SIN clase de prueba por la app`);
     } else if ((spec.trialSoles ?? 0) > 0) {
-      console.log(`${etiqueta} clase de prueba reservable, S/${spec.trialSoles} al llegar`);
+      console.log(`${label} clase de prueba reservable, S/${spec.trialSoles} al llegar`);
     }
     if (spec.taxId === 'PENDIENTE') {
-      console.log(`${etiqueta} AVISO: el RUC quedó como "PENDIENTE"`);
+      console.log(`${label} AVISO: el RUC quedó como "PENDIENTE"`);
     }
     return { tenantId, created: true };
   } finally {

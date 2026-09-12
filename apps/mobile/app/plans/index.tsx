@@ -27,19 +27,19 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { usePlanesDelDueno } from '../../src/data/hooks';
+import { useOwnerPlans } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import type { PlanConUso } from '../../src/data/api';
+import type { PlanWithUsage } from '../../src/data/api';
 
-export default function PlanesScreen() {
+export default function PlansScreen() {
   const theme = useTheme();
   // De la sesión: el del store llega con el padrón, y estas pantallas se
   // abren solas desde un enlace.
-  const esDueno = useRole() === 'owner';
-  const { planes, error, cargando } = usePlanesDelDueno();
+  const isOwner = useRole() === 'owner';
+  const { plans, error, loading } = useOwnerPlans();
 
-  const activos = planes?.filter((p) => p.plan.active) ?? [];
-  const archivados = planes?.filter((p) => !p.plan.active) ?? [];
+  const active = plans?.filter((p) => p.plan.active) ?? [];
+  const archivados = plans?.filter((p) => !p.plan.active) ?? [];
 
   return (
     <Screen scroll>
@@ -54,7 +54,7 @@ export default function PlanesScreen() {
         </Pressable>
       </Row>
 
-      {!esDueno ? (
+      {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Los precios los decide el dueño del local. Recepción puede verlos al inscribir a
@@ -80,15 +80,15 @@ export default function PlanesScreen() {
             <Row>
               <Eyebrow>Se ofrecen</Eyebrow>
               <Text variant="micro" color={theme.colors.textFaint}>
-                {activos.length} {activos.length === 1 ? 'plan' : 'planes'}
+                {active.length} {active.length === 1 ? 'plan' : 'planes'}
               </Text>
             </Row>
 
-            {cargando ? (
+            {loading ? (
               <Text variant="bodySmall" color={theme.colors.textSecondary}>
                 Trayendo tus planes…
               </Text>
-            ) : activos.length === 0 ? (
+            ) : active.length === 0 ? (
               <Card tone="sunken">
                 <Stack gap={14}>
                   <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
@@ -99,11 +99,11 @@ export default function PlanesScreen() {
                 </Stack>
               </Card>
             ) : (
-              activos.map((fila) => <FilaDePlan key={fila.plan.id} fila={fila} />)
+              active.map((row) => <PlanRow key={row.plan.id} row={row} />)
             )}
           </Stack>
 
-          {activos.length > 0 && (
+          {active.length > 0 && (
             <Button
               label="+ Nuevo plan"
               variant="secondary"
@@ -119,8 +119,8 @@ export default function PlanesScreen() {
                 Ya no se ofrecen, pero quien los tiene los conserva. Es como se sube un precio sin
                 tocarle la cuota a los alumnos de antes.
               </Text>
-              {archivados.map((fila) => (
-                <FilaDePlan key={fila.plan.id} fila={fila} />
+              {archivados.map((row) => (
+                <PlanRow key={row.plan.id} row={row} />
               ))}
             </Stack>
           )}
@@ -156,11 +156,11 @@ export default function PlanesScreen() {
   );
 }
 
-function FilaDePlan({ fila }: { readonly fila: PlanConUso }) {
+function PlanRow({ row }: { readonly row: PlanWithUsage }) {
   const theme = useTheme();
-  const { plan, activeMembers } = fila;
+  const { plan, activeMembers } = row;
 
-  const dias =
+  const days =
     plan.allowedDays === null ? null : plan.allowedDays.map(weekdayInitial).join(' · ');
 
   return (
@@ -183,7 +183,7 @@ function FilaDePlan({ fila }: { readonly fila: PlanConUso }) {
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary} numberOfLines={1}>
               {planShape(plan)}
-              {dias === null ? '' : ` · ${dias}`}
+              {days === null ? '' : ` · ${days}`}
             </Text>
             {activeMembers > 0 ? (
               <Text variant="micro" color={theme.colors.textFaint}>

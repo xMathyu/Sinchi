@@ -10,8 +10,8 @@ import {
 
 describe('qué se acepta', () => {
   it('lo que graba un celular', () => {
-    for (const tipo of ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm']) {
-      expect(checkVideoUpload({ contentType: tipo }), tipo).toBeNull();
+    for (const kind of ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm']) {
+      expect(checkVideoUpload({ contentType: kind }), kind).toBeNull();
     }
   });
 

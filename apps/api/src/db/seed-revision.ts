@@ -45,7 +45,7 @@
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 import { createDatabase, createPool, schema, withoutTenantIsolation } from './client';
-import { LUN, MAR, MIE, JUE, VIE, SAB, seedGym, seedOwner, type GimnasioSpec } from './seed-gym';
+import { LUN, MAR, MIE, JUE, VIE, SAB, seedGym, seedOwner, type GymSpec } from './seed-gym';
 
 /** La cuenta que se escribe en el formulario de Play. */
 const REVISOR = {
@@ -57,7 +57,7 @@ const REVISOR = {
   phone: '+51900000000',
 } as const;
 
-const DEMO: GimnasioSpec = {
+const DEMO: GymSpec = {
   slug: 'sinchi-demo',
   // Que el nombre lo diga. Sale en el directorio publico junto a los gimnasios
   // de verdad, y quien lo vea tiene que entender de una que no es uno de ellos.
@@ -65,14 +65,14 @@ const DEMO: GimnasioSpec = {
   // No pasa el digito verificador de SUNAT, a proposito. Ver la cabecera.
   taxId: '20000000000',
   enrollmentSoles: 0,
-  planes: [
+  gymPlans: [
     { name: '2 veces por semana', type: 'sessions_per_week', sessionsPerWeek: 2, soles: 120 },
     { name: '3 veces por semana', type: 'sessions_per_week', sessionsPerWeek: 3, soles: 150 },
     { name: 'Cualquier día', type: 'unlimited', sessionsPerWeek: null, soles: 180 },
   ],
   // Sin horarios el directorio enseña «0 clases por semana» y la clase de prueba
   // no tiene nada que reservar: la tarjeta del local sale vacia.
-  horarios: [
+  schedules: [
     { name: 'Clase general', weekday: LUN, startTime: '19:00', endTime: '20:00' },
     { name: 'Clase general', weekday: MAR, startTime: '19:00', endTime: '20:00' },
     { name: 'Clase general', weekday: MIE, startTime: '19:00', endTime: '20:00' },

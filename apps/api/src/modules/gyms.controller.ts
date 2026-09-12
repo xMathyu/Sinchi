@@ -182,16 +182,16 @@ export class GymsController {
   @Public()
   @Get(':slug')
   async gym(@Param('slug') slug: string) {
-    const detalle = await this.trials.gym(slug);
+    const detail = await this.trials.gym(slug);
     const [events, biblioteca] = await Promise.all([
-      this.events.publicUpcoming(detalle.id),
+      this.events.publicUpcoming(detail.id),
       // Con ojos de la calle: solo lo publicado y publico. `membersOnly` es el
       // numero que vende la mensualidad —"12 rutinas mas para alumnos"— sin
       // regalar los titulos de lo que hay detras.
-      this.routines.library(detalle.id, 'visitor'),
+      this.routines.library(detail.id, 'visitor'),
     ]);
     return {
-      ...detalle,
+      ...detail,
       events,
       routines: biblioteca.routines,
       membersOnlyRoutines: biblioteca.membersOnly,

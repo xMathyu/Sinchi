@@ -31,12 +31,12 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useHorariosDelDueno } from '../../src/data/hooks';
+import { useOwnerSchedules } from '../../src/data/hooks';
 import {
-  archivarOReactivarHorario,
-  crearHorarios,
-  eliminarHorario,
-  guardarHorario,
+  setScheduleActive,
+  createSchedules,
+  removeSchedule,
+  saveSchedule,
 } from '../../src/data/actions';
 
 /**
@@ -47,27 +47,27 @@ import {
  * tal cual: que lo rechace el dominio, con su mensaje, en vez de que esto
  * invente una hora que nadie escribió.
  */
-export function normalizaHora(texto: string): string {
-  const limpio = texto.trim().replace(/[.\s]/g, ':');
-  const soloDigitos = limpio.replace(/\D/g, '');
+export function normalizeTime(text: string): string {
+  const trimmed = text.trim().replace(/[.\s]/g, ':');
+  const digitsOnly = trimmed.replace(/\D/g, '');
 
-  const conDosPuntos = /^(\d{1,2}):(\d{2})$/.exec(limpio);
-  if (conDosPuntos !== null) {
-    return `${conDosPuntos[1]!.padStart(2, '0')}:${conDosPuntos[2]}`;
+  const withColon = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (withColon !== null) {
+    return `${withColon[1]!.padStart(2, '0')}:${withColon[2]}`;
   }
-  if (soloDigitos.length === 4) {
-    return `${soloDigitos.slice(0, 2)}:${soloDigitos.slice(2)}`;
+  if (digitsOnly.length === 4) {
+    return `${digitsOnly.slice(0, 2)}:${digitsOnly.slice(2)}`;
   }
-  if (soloDigitos.length === 3) {
-    return `0${soloDigitos.slice(0, 1)}:${soloDigitos.slice(1)}`;
+  if (digitsOnly.length === 3) {
+    return `0${digitsOnly.slice(0, 1)}:${digitsOnly.slice(1)}`;
   }
-  return texto.trim();
+  return text.trim();
 }
 
 /** `"19:00"` y `"20:30"` → `"1 h 30 min"`. `null` si alguna no se entiende. */
-export function duracionLegible(inicio: string, fin: string): string | null {
-  const leer = (hora: string): number | null => {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(hora);
+export function duracionLegible(startTime: string, endTime: string): string | null {
+  const read = (time: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(time);
     if (m === null) return null;
     const h = Number(m[1]);
     const min = Number(m[2]);
@@ -75,34 +75,34 @@ export function duracionLegible(inicio: string, fin: string): string | null {
     return h * 60 + min;
   };
 
-  const desde = leer(inicio);
-  const hasta = leer(fin);
-  if (desde === null || hasta === null || hasta <= desde) return null;
+  const from = read(startTime);
+  const until = read(endTime);
+  if (from === null || until === null || until <= from) return null;
 
-  const total = hasta - desde;
-  const horas = Math.floor(total / 60);
+  const total = until - from;
+  const times = Math.floor(total / 60);
   const minutos = total % 60;
-  if (horas === 0) return `${minutos} min`;
-  if (minutos === 0) return `${horas} h`;
-  return `${horas} h ${minutos} min`;
+  if (times === 0) return `${minutos} min`;
+  if (minutos === 0) return `${times} h`;
+  return `${times} h ${minutos} min`;
 }
 
-export default function EditorDeHorarioScreen() {
+export default function ScheduleEditorScreen() {
   const theme = useTheme();
   const { scheduleId, weekday } = useLocalSearchParams<{
     scheduleId: string;
     weekday?: string;
   }>();
-  const esNuevo = scheduleId === 'nuevo';
-  const { horarios, recargar } = useHorariosDelDueno();
+  const isNew = scheduleId === 'nuevo';
+  const { schedules, reload } = useOwnerSchedules();
 
   const existente = useMemo(
-    () => (esNuevo ? null : (horarios?.find((h) => h.schedule.id === scheduleId) ?? null)),
-    [horarios, scheduleId, esNuevo],
+    () => (isNew ? null : (schedules?.find((h) => h.schedule.id === scheduleId) ?? null)),
+    [schedules, scheduleId, isNew],
   );
 
-  const diaSugerido = Number(weekday);
-  const [nombre, setNombre] = useState('');
+  const suggestedDay = Number(weekday);
+  const [name, setName] = useState('');
   /**
    * Los dias marcados. Al crear pueden ser varios; al editar es siempre uno.
    *
@@ -115,16 +115,16 @@ export default function EditorDeHorarioScreen() {
    * permite lo otro que pidieron en la misma frase —«puede variar la hora»—:
    * creados de golpe, al viernes se le baja la hora sin tocar el lunes.
    */
-  const [dias, setDias] = useState<readonly IsoWeekday[]>([
-    Number.isInteger(diaSugerido) && diaSugerido >= 1 && diaSugerido <= 7
-      ? (diaSugerido as IsoWeekday)
+  const [days, setDays] = useState<readonly IsoWeekday[]>([
+    Number.isInteger(suggestedDay) && suggestedDay >= 1 && suggestedDay <= 7
+      ? (suggestedDay as IsoWeekday)
       : 1,
   ]);
-  const [inicio, setInicio] = useState('19:00');
-  const [fin, setFin] = useState('20:30');
-  const [aforo, setAforo] = useState('');
-  const [profesor, setProfesor] = useState('');
-  const [guardando, setGuardando] = useState(false);
+  const [startTime, setStartTime] = useState('19:00');
+  const [endTime, setEndTime] = useState('20:30');
+  const [capacity, setCapacity] = useState('');
+  const [instructor, setInstructor] = useState('');
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // El formulario se llena cuando llega la clase, no antes: la lista es remota y
@@ -132,30 +132,30 @@ export default function EditorDeHorarioScreen() {
   useEffect(() => {
     if (existente === null) return;
     const { schedule } = existente;
-    setNombre(schedule.name);
-    setDias([schedule.weekday]);
-    setInicio(schedule.startTime);
-    setFin(schedule.endTime);
-    setAforo(schedule.capacity === null ? '' : String(schedule.capacity));
-    setProfesor(schedule.instructor ?? '');
+    setName(schedule.name);
+    setDays([schedule.weekday]);
+    setStartTime(schedule.startTime);
+    setEndTime(schedule.endTime);
+    setCapacity(schedule.capacity === null ? '' : String(schedule.capacity));
+    setInstructor(schedule.instructor ?? '');
   }, [existente]);
 
-  const aforoLimpio = aforo.trim();
-  const capacidad = aforoLimpio.length === 0 ? null : Number(aforoLimpio);
+  const trimmedCapacity = capacity.trim();
+  const capacidad = trimmedCapacity.length === 0 ? null : Number(trimmedCapacity);
 
-  const borrador = {
-    name: nombre,
+  const draft = {
+    name: name,
     // Para validar da igual cual: lo unico que `checkScheduleDraft` mira del dia
     // es que sea de lunes a domingo, y todos los marcados lo son. El caso que
     // importa —ninguno marcado— se comprueba aparte, abajo.
-    weekday: dias[0] ?? 1,
-    startTime: inicio,
-    endTime: fin,
+    weekday: days[0] ?? 1,
+    startTime: startTime,
+    endTime: endTime,
     capacity: capacidad,
-    instructor: profesor.trim().length === 0 ? null : profesor,
+    instructor: instructor.trim().length === 0 ? null : instructor,
   };
-  const motivo = checkScheduleDraft(borrador);
-  const listo = motivo === null && dias.length > 0 && !guardando;
+  const denial = checkScheduleDraft(draft);
+  const ready = denial === null && days.length > 0 && !saving;
 
   /**
    * Si ya intento guardar.
@@ -165,7 +165,7 @@ export default function EditorDeHorarioScreen() {
    * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
    * enciende, que es justo cuando hace falta.
    */
-  const [intentado, setIntentado] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   /**
    * El motivo, puesto en el campo del que habla.
@@ -174,50 +174,50 @@ export default function EditorDeHorarioScreen() {
    * devuelve un motivo y no un booleano— asi que el mensaje puede ir debajo del
    * campo en vez de en un aviso al final que obliga a adivinar a que se refiere.
    */
-  const fallaDe = (campo: 'nombre' | 'horas' | 'aforo' | 'profesor'): string | undefined => {
-    if (!intentado || motivo === null) return undefined;
-    const suyo: Record<typeof campo, boolean> = {
-      nombre: motivo === 'name_too_short' || motivo === 'name_too_long',
-      horas:
-        motivo === 'time_malformed' ||
-        motivo === 'ends_before_start' ||
-        motivo === 'too_short',
-      aforo: motivo === 'capacity_not_integer' || motivo === 'capacity_out_of_range',
-      profesor: motivo === 'instructor_too_long',
+  const denialFor = (field: 'name' | 'hours' | 'capacity' | 'instructor'): string | undefined => {
+    if (!attempted || denial === null) return undefined;
+    const suyo: Record<typeof field, boolean> = {
+      name: denial === 'name_too_short' || denial === 'name_too_long',
+      hours:
+        denial === 'time_malformed' ||
+        denial === 'ends_before_start' ||
+        denial === 'too_short',
+      capacity: denial === 'capacity_not_integer' || denial === 'capacity_out_of_range',
+      instructor: denial === 'instructor_too_long',
     };
-    return suyo[campo] ? scheduleDenialMessage(motivo) : undefined;
+    return suyo[field] ? scheduleDenialMessage(denial) : undefined;
   };
 
-  const duracion = duracionLegible(inicio, fin);
+  const duracion = duracionLegible(startTime, endTime);
 
-  async function guardar(): Promise<void> {
-    if (!listo) return;
-    setGuardando(true);
+  async function save(): Promise<void> {
+    if (!ready) return;
+    setSaving(true);
     setError(null);
     const comun = {
-      name: nombre.trim(),
-      startTime: inicio,
-      endTime: fin,
+      name: name.trim(),
+      startTime: startTime,
+      endTime: endTime,
       capacity: capacidad,
-      instructor: profesor.trim().length === 0 ? null : profesor.trim(),
+      instructor: instructor.trim().length === 0 ? null : instructor.trim(),
       active: existente?.active ?? true,
     };
     try {
-      if (esNuevo) {
+      if (isNew) {
         // Una sola petición aunque sean cinco días: la api los escribe en una
         // transacción. Con cinco peticiones, la tercera puede fallar —la red de
         // un celular en un sótano es lo normal— y el horario queda a medias sin
         // que nadie lo haya decidido.
-        await crearHorarios({ ...comun, weekdays: dias });
+        await createSchedules({ ...comun, weekdays: days });
       } else {
-        await guardarHorario(scheduleId, { ...comun, weekday: dias[0]! });
+        await saveSchedule(scheduleId, { ...comun, weekday: days[0]! });
       }
-      recargar();
+      reload();
       router.back();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar la clase.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   }
 
@@ -225,7 +225,7 @@ export default function EditorDeHorarioScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
-          {esNuevo ? 'Nueva clase' : 'Editar clase'}
+          {isNew ? 'Nueva clase' : 'Editar clase'}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
@@ -239,39 +239,39 @@ export default function EditorDeHorarioScreen() {
         <Card radius={theme.radii.xl}>
           <Field
             label="Nombre de la clase"
-            value={nombre}
-            onChangeText={setNombre}
+            value={name}
+            onChangeText={setName}
             placeholder="Muay Thai principiantes"
             hint="Sale en tu ficha del directorio. Es lo que alguien lee para saber si esta clase es para él."
-            error={fallaDe('nombre')}
+            error={denialFor('name')}
           />
         </Card>
       </Stack>
 
       <Stack gap={10} style={{ marginTop: 20 }}>
-        <Eyebrow>{esNuevo ? 'Qué días' : 'Qué día'}</Eyebrow>
+        <Eyebrow>{isNew ? 'Qué días' : 'Qué día'}</Eyebrow>
         <Row gap={8} justify="flex-start">
-          {allWeekdays().map((opcion) => {
-            const activo = dias.includes(opcion);
+          {allWeekdays().map((option) => {
+            const active = days.includes(option);
             return (
               <Pressable
-                key={opcion}
+                key={option}
                 // Al crear son casillas —se marcan varias— y al editar una
                 // opción única. El rol lo dice de verdad: un lector de pantalla
                 // que anuncia «radio» sobre algo que acepta cinco marcas está
                 // describiendo otra pantalla.
-                accessibilityRole={esNuevo ? 'checkbox' : 'radio'}
-                accessibilityState={esNuevo ? { checked: activo } : { selected: activo }}
-                accessibilityLabel={weekdayName(opcion)}
+                accessibilityRole={isNew ? 'checkbox' : 'radio'}
+                accessibilityState={isNew ? { checked: active } : { selected: active }}
+                accessibilityLabel={weekdayName(option)}
                 onPress={() => {
-                  if (!esNuevo) {
-                    setDias([opcion]);
+                  if (!isNew) {
+                    setDays([option]);
                     return;
                   }
-                  setDias((puestos) =>
-                    puestos.includes(opcion)
-                      ? puestos.filter((d) => d !== opcion)
-                      : [...puestos, opcion].sort((a, b) => a - b),
+                  setDays((posts) =>
+                    posts.includes(option)
+                      ? posts.filter((d) => d !== option)
+                      : [...posts, option].sort((a, b) => a - b),
                   );
                 }}
                 style={{
@@ -280,19 +280,19 @@ export default function EditorDeHorarioScreen() {
                   borderRadius: 19,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: activo
+                  backgroundColor: active
                     ? withAlpha(theme.semaphore.ok, 0.16)
                     : theme.colors.surfaceRaised,
                   borderWidth: 1,
-                  borderColor: activo ? theme.semaphore.ok : theme.colors.border,
+                  borderColor: active ? theme.semaphore.ok : theme.colors.border,
                 }}
               >
                 <Text
                   variant="bodySmall"
                   weight="semibold"
-                  color={activo ? theme.semaphore.ok : theme.colors.textStrong}
+                  color={active ? theme.semaphore.ok : theme.colors.textStrong}
                 >
-                  {weekdayInitial(opcion)}
+                  {weekdayInitial(option)}
                 </Text>
               </Pressable>
             );
@@ -303,13 +303,13 @@ export default function EditorDeHorarioScreen() {
             misma frase —«puede variar la hora»—. Creados de golpe, al viernes se
             le baja la hora sin tocar el lunes. */}
         <Text variant="micro" color={theme.colors.textFaint}>
-          {!esNuevo
+          {!isNew
             ? 'Cada bloque es de un día. Para darla otro día más, créala de nuevo marcando ese día.'
-            : dias.length === 0
+            : days.length === 0
               ? 'Marca al menos un día.'
-              : dias.length === 1
+              : days.length === 1
                 ? 'Puedes marcar varios: se publica la misma clase en cada uno.'
-                : `Se publican ${dias.length} clases, una por día, todas a las ${inicio}. Después puedes cambiarle la hora a una sin tocar las otras.`}
+                : `Se publican ${days.length} clases, una por día, todas a las ${startTime}. Después puedes cambiarle la hora a una sin tocar las otras.`}
         </Text>
       </Stack>
 
@@ -320,23 +320,23 @@ export default function EditorDeHorarioScreen() {
             <View style={{ flex: 1 }}>
               <Field
                 label="Empieza"
-                value={inicio}
-                onChangeText={setInicio}
-                onBlur={() => setInicio((actual) => normalizaHora(actual))}
+                value={startTime}
+                onChangeText={setStartTime}
+                onBlur={() => setStartTime((actual) => normalizeTime(actual))}
                 placeholder="19:00"
                 keyboardType="numbers-and-punctuation"
-                error={fallaDe('horas')}
+                error={denialFor('hours')}
               />
             </View>
             <View style={{ flex: 1 }}>
               <Field
                 label="Termina"
-                value={fin}
-                onChangeText={setFin}
-                onBlur={() => setFin((actual) => normalizaHora(actual))}
+                value={endTime}
+                onChangeText={setEndTime}
+                onBlur={() => setEndTime((actual) => normalizeTime(actual))}
                 placeholder="20:30"
                 keyboardType="numbers-and-punctuation"
-                error={fallaDe('horas')}
+                error={denialFor('hours')}
               />
             </View>
           </Row>
@@ -354,52 +354,52 @@ export default function EditorDeHorarioScreen() {
           <Stack gap={14}>
             <Field
               label="Cuánta gente cabe"
-              value={aforo}
-              onChangeText={setAforo}
+              value={capacity}
+              onChangeText={setCapacity}
               placeholder="Sin límite"
               keyboardType="number-pad"
               hint="Déjalo vacío si no limitas el cupo. Es lo que corta las reservas de clase de prueba cuando se llena."
-              error={fallaDe('aforo')}
+              error={denialFor('capacity')}
             />
             <Field
               label="Quién la da"
-              value={profesor}
-              onChangeText={setProfesor}
+              value={instructor}
+              onChangeText={setInstructor}
               placeholder="Opcional"
               autoCapitalize="words"
-              error={fallaDe('profesor')}
+              error={denialFor('instructor')}
             />
           </Stack>
         </Card>
       </Stack>
 
-      {(error !== null || ((motivo !== null || dias.length === 0) && intentado)) && (
+      {(error !== null || ((denial !== null || days.length === 0) && attempted)) && (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 16 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
             {error ??
-              (dias.length === 0
+              (days.length === 0
                 ? 'Marca al menos un día de la semana.'
-                : motivo === null
+                : denial === null
                   ? ''
-                  : scheduleDenialMessage(motivo))}
+                  : scheduleDenialMessage(denial))}
           </Text>
         </Card>
       )}
 
       <Button
         label={
-          guardando
+          saving
             ? 'Guardando…'
-            : !esNuevo
+            : !isNew
               ? 'Guardar cambios'
-              : dias.length > 1
-                ? `Publicar ${dias.length} clases`
+              : days.length > 1
+                ? `Publicar ${days.length} clases`
                 : 'Publicar clase'
         }
-        disabled={!listo}
+        disabled={!ready}
         style={{ marginTop: 20 }}
-        onPress={() => void guardar()}
-        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+        onPress={() => void save()}
+        onBlockedPress={saving ? undefined : () => setAttempted(true)}
       />
 
       {existente !== null && (
@@ -417,9 +417,9 @@ export default function EditorDeHorarioScreen() {
             label={existente.active ? 'Sacar del horario' : 'Volver a ofrecerla'}
             variant="secondary"
             onPress={() => {
-              void archivarOReactivarHorario(scheduleId, !existente.active)
+              void setScheduleActive(scheduleId, !existente.active)
                 .then(() => {
-                  recargar();
+                  reload();
                   router.back();
                 })
                 .catch((e: unknown) =>
@@ -446,9 +446,9 @@ export default function EditorDeHorarioScreen() {
                     text: 'Borrar',
                     style: 'destructive',
                     onPress: () => {
-                      void eliminarHorario(scheduleId)
+                      void removeSchedule(scheduleId)
                         .then(() => {
-                          recargar();
+                          reload();
                           router.back();
                         })
                         .catch((e: unknown) =>

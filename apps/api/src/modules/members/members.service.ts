@@ -58,7 +58,7 @@ export class MembersService {
   async identityExists(email: string): Promise<{ readonly existe: boolean }> {
     if (email.length === 0) return { existe: false };
 
-    const filas = await withoutTenantIsolation(this.db, (tx) =>
+    const found = await withoutTenantIsolation(this.db, (tx) =>
       tx
         .select({ id: schema.users.id })
         .from(schema.users)
@@ -67,7 +67,7 @@ export class MembersService {
     );
 
     // Dos coincidencias no identifican a nadie: `email` no es unico en `users`.
-    return { existe: filas.length === 1 };
+    return { existe: found.length === 1 };
   }
 
   async enroll(tenantId: string, input: EnrollMemberInput): Promise<EnrollResult> {
@@ -123,8 +123,8 @@ export class MembersService {
 
       // Persona nueva: aqui SI hacen falta el nombre y el celular. Solo se
       // pueden omitir cuando se reutiliza una identidad que ya los tiene.
-      const nombre = input.name?.trim();
-      if (nombre === undefined || nombre.length < 2 || phone === null) {
+      const givenName = input.name?.trim();
+      if (givenName === undefined || givenName.length < 2 || phone === null) {
         throw new BadRequestException(
           'No hay ninguna identidad con ese documento: hacen falta el nombre y el celular.',
         );
@@ -133,7 +133,7 @@ export class MembersService {
       const [created] = await tx
         .insert(schema.users)
         .values({
-          name: nombre,
+          name: givenName,
           documentId,
           phone,
           email: input.email?.trim() ?? null,

@@ -30,38 +30,38 @@ import { Screen } from '../../src/design/screen';
 import { Button, Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
 import {
-  canjearCodigo,
+  redeemCode,
 } from '../../src/data/actions';
-import { cambiarDeLocal } from '../../src/data/auth';
+import { switchGym } from '../../src/data/auth';
 import type { StaffPostDto } from '../../src/data/api';
 import {
   useBajas,
   useClaims,
-  useMisLocales,
+  useMyGyms,
   useOwnerSummary,
   useRefresco,
   useRoster,
   useStore,
-  useSuscripcionSinchi,
+  useSinchiSubscription,
 } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
 import { describePromo, promoDenialMessage, type SaasNotice } from '@sinchi/shared';
 
-export default function PadronScreen() {
+export default function RosterScreen() {
   const theme = useTheme();
   const router = useRouter();
   const roster = useRoster();
-  const cargando = useStore((s) => s.hidratando);
-  const esDueno = useStore((s) => s.staff.role) === 'owner';
+  const loading = useStore((s) => s.hydrating);
+  const isOwner = useStore((s) => s.staff.role) === 'owner';
   const { claims } = useClaims();
-  const resumen = useOwnerSummary();
-  const { suscripcion, recargar: recargarSuscripcion } = useSuscripcionSinchi();
+  const summary = useOwnerSummary();
+  const { subscription, reload: reloadSubscription } = useSinchiSubscription();
   /**
    * `null` cuando quien mira es recepción: la suscripción es del dueño. Ahí no
    * se apaga nada — el alta le devuelve el motivo de la api en pantalla, que es
    * el mismo texto y llega en el momento de actuar.
    */
-  const puedeInscribir = suscripcion === null || suscripcion.state.canWrite;
+  const canEnroll = subscription === null || subscription.state.canWrite;
   const { refrescando, refrescar } = useRefresco();
 
   /**
@@ -73,46 +73,46 @@ export default function PadronScreen() {
    * equivocado se leen igual de bien que las del bueno, y no hay forma de
    * notarlo.
    */
-  const locales = useMisLocales();
+  const gyms = useMyGyms();
   const tenantId = useStore((s) => s.staff.tenantId);
   const localActual =
-    locales.length > 1 ? (locales.find((l) => l.tenantId === tenantId) ?? null) : null;
+    gyms.length > 1 ? (gyms.find((l) => l.tenantId === tenantId) ?? null) : null;
   const [query, setQuery] = useState('');
   // Las bajas no entran en el padron normal —el mostrador mira «quien entrena
   // aqui» todo el dia— pero tienen que ser alcanzables: son las unicas fichas
   // que se pueden reinscribir, y cancelar las hacia desaparecer de todas partes.
   const [viendoBajas, setViendoBajas] = useState(false);
-  const { bajas, cargando: cargandoBajas } = useBajas(viendoBajas);
+  const { bajas, loading: loadingDeletions } = useBajas(viendoBajas);
 
   const listado = useMemo(() => {
     const fuente = viendoBajas ? bajas : roster;
-    const texto = query.trim().toLowerCase();
+    const text = query.trim().toLowerCase();
     const filtrado =
-      texto.length === 0
+      text.length === 0
         ? [...fuente]
         : fuente.filter(
             (e) =>
-              e.user.name.toLowerCase().includes(texto) || e.user.documentId.includes(texto),
+              e.user.name.toLowerCase().includes(text) || e.user.documentId.includes(text),
           );
 
     return filtrado.sort((a, b) => {
-      const deudaA = a.view.receivable.amountCents;
-      const deudaB = b.view.receivable.amountCents;
-      if (deudaA !== deudaB) return deudaB - deudaA;
+      const debtA = a.view.receivable.amountCents;
+      const debtB = b.view.receivable.amountCents;
+      if (debtA !== debtB) return debtB - debtA;
       return a.user.name.localeCompare(b.user.name, 'es');
     });
   }, [roster, bajas, viendoBajas, query]);
 
-  const deudaTotal = roster.reduce((suma, e) => suma + e.view.receivable.amountCents, 0);
-  const conDeuda = roster.filter((e) => e.view.receivable.amountCents > 0).length;
+  const totalDebt = roster.reduce((sum, e) => sum + e.view.receivable.amountCents, 0);
+  const inDebt = roster.filter((e) => e.view.receivable.amountCents > 0).length;
 
   // Va a la ficha, no al cobro: la pregunta del mostrador no siempre es cobrar,
   // y para llegar a mirar a alguien no debería haber que abrir un cargo a medias.
-  const abrir = useCallback(
-    (entrada: RosterEntry) =>
+  const open = useCallback(
+    (entry: RosterEntry) =>
       router.push({
         pathname: '/member/[membershipId]',
-        params: { membershipId: entrada.view.membership.id },
+        params: { membershipId: entry.view.membership.id },
       }),
     [router],
   );
@@ -161,15 +161,15 @@ export default function PadronScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Inscribir un alumno"
-              accessibilityState={{ disabled: !puedeInscribir }}
-              disabled={!puedeInscribir}
+              accessibilityState={{ disabled: !canEnroll }}
+              disabled={!canEnroll}
               hitSlop={12}
               onPress={() => router.push('/enroll')}
             >
               <Card
                 radius={theme.radii.pill}
                 borderColor={withAlpha(
-                  puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary,
+                  canEnroll ? theme.semaphore.ok : theme.colors.textSecondary,
                   0.4,
                 )}
                 style={{ paddingVertical: 7, paddingHorizontal: 12 }}
@@ -177,7 +177,7 @@ export default function PadronScreen() {
                 <Text
                   variant="captionSmall"
                   weight="semibold"
-                  color={puedeInscribir ? theme.semaphore.ok : theme.colors.textSecondary}
+                  color={canEnroll ? theme.semaphore.ok : theme.colors.textSecondary}
                 >
                   + Alumno
                 </Text>
@@ -191,7 +191,7 @@ export default function PadronScreen() {
         </Text>
 
         {localActual !== null && (
-          <SelectorDeLocal locales={locales} actual={localActual} />
+          <SelectorDeLocal gyms={gyms} actual={localActual} />
         )}
 
         {/* A lo ancho, y solo para recepción: al dueño se lo dicen con más
@@ -201,9 +201,9 @@ export default function PadronScreen() {
 
             Se decide por el ROL y no por `resumen === null`: ese llega tarde, y
             con él la línea aparecía y se esfumaba sola al cargar el resumen. */}
-        {deudaTotal > 0 && !esDueno && (
+        {totalDebt > 0 && !isOwner && (
           <Text variant="captionSmall" color={theme.semaphore.warn} numberOfLines={1}>
-            {conDeuda} con deuda · {formatPEN(deudaTotal as Cents, { withDecimals: false })} por
+            {inDebt} con deuda · {formatPEN(totalDebt as Cents, { withDecimals: false })} por
             cobrar
           </Text>
         )}
@@ -216,41 +216,41 @@ export default function PadronScreen() {
           el vencimiento encima, el corte, o el plan gratis, que es lo que
           explica por qué no le están cobrando— y desaparece cuando la cuenta
           está al día pagando, que no necesita decir nada. */}
-      {suscripcion !== null &&
-      (suscripcion.state.status === 'trialing' ||
-        suscripcion.state.status === 'free' ||
-        suscripcion.notice.tone !== 'info') ? (
-        <AvisoSuscripcion notice={suscripcion.notice} onCanjeado={recargarSuscripcion} />
+      {subscription !== null &&
+      (subscription.state.status === 'trialing' ||
+        subscription.state.status === 'free' ||
+        subscription.notice.tone !== 'info') ? (
+        <SubscriptionNotice notice={subscription.notice} onCanjeado={reloadSubscription} />
       ) : null}
 
       {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
           es la misma pregunta mirada de lejos: cuánto entró, cuánto falta y
           quién no está pagando. */}
-      {resumen === null ? null : (
+      {summary === null ? null : (
         <Stack gap={10}>
           <Eyebrow>Este mes</Eyebrow>
           <Row gap={10} align="stretch">
             <Metrica
-              valor={formatPEN(resumen.collectedThisMonthCents as Cents, { withDecimals: false })}
-              etiqueta="cobrado"
+              value={formatPEN(summary.collectedThisMonthCents as Cents, { withDecimals: false })}
+              label="cobrado"
               color={theme.semaphore.ok}
             />
             <Metrica
-              valor={formatPEN(resumen.outstandingCents as Cents, { withDecimals: false })}
-              etiqueta="por cobrar"
-              color={resumen.outstandingCents > 0 ? theme.semaphore.warn : theme.colors.ink}
+              value={formatPEN(summary.outstandingCents as Cents, { withDecimals: false })}
+              label="por cobrar"
+              color={summary.outstandingCents > 0 ? theme.semaphore.warn : theme.colors.ink}
             />
           </Row>
           <Row gap={10} align="stretch">
             <Metrica
-              valor={String(resumen.checkInsToday)}
-              etiqueta="marcados hoy"
+              value={String(summary.checkInsToday)}
+              label="marcados hoy"
               color={theme.colors.ink}
             />
             <Metrica
-              valor={String(resumen.delinquentMembers)}
-              etiqueta={resumen.delinquentMembers === 1 ? 'moroso' : 'morosos'}
-              color={resumen.delinquentMembers > 0 ? theme.semaphore.bad : theme.colors.ink}
+              value={String(summary.delinquentMembers)}
+              label={summary.delinquentMembers === 1 ? 'moroso' : 'morosos'}
+              color={summary.delinquentMembers > 0 ? theme.semaphore.bad : theme.colors.ink}
             />
           </Row>
         </Stack>
@@ -268,7 +268,7 @@ export default function PadronScreen() {
           anunciado como «0 clases por semana» y sin una sola hora que alguien
           pueda reservar. Debajo de eventos y rutinas quedaba fuera de pantalla,
           que para lo único que le falta al dueño nuevo es como no estar. */}
-      {esDueno && (
+      {isOwner && (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Horarios"
@@ -301,7 +301,7 @@ export default function PadronScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Dónde queda"
-        onPress={() => router.push('/local')}
+        onPress={() => router.push('/location')}
       >
         <Card radius={theme.radii.lg} tone="sunken">
           <Row>
@@ -371,7 +371,7 @@ export default function PadronScreen() {
         </Card>
       </Pressable>
 
-      {esDueno && (
+      {isOwner && (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Planes y precios"
@@ -418,8 +418,8 @@ export default function PadronScreen() {
     </Stack>
   );
 
-  const vacio =
-    (viendoBajas ? cargandoBajas : cargando) && listado.length === 0 ? (
+  const blank =
+    (viendoBajas ? loadingDeletions : loading) && listado.length === 0 ? (
       <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
         {viendoBajas ? 'Buscando las bajas…' : 'Cargando el padrón…'}
       </Text>
@@ -449,10 +449,10 @@ export default function PadronScreen() {
     <Screen padded={false}>
       <FlatList
         data={listado}
-        keyExtractor={(entrada) => entrada.view.membership.id}
-        renderItem={({ item }) => <Fila entrada={item} onPress={() => abrir(item)} />}
+        keyExtractor={(entry) => entry.view.membership.id}
+        renderItem={({ item }) => <MemberRow entry={item} onPress={() => open(item)} />}
         ListHeaderComponent={cabecera}
-        ListEmptyComponent={vacio}
+        ListEmptyComponent={blank}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         contentContainerStyle={{ paddingHorizontal: screenPadding, paddingBottom: 24 }}
         keyboardShouldPersistTaps="handled"
@@ -470,16 +470,16 @@ export default function PadronScreen() {
   );
 }
 
-function Fila({
-  entrada,
+function MemberRow({
+  entry,
   onPress,
 }: {
-  readonly entrada: RosterEntry;
+  readonly entry: RosterEntry;
   readonly onPress: () => void;
 }) {
   const theme = useTheme();
-  const { view, user } = entrada;
-  const deuda = view.receivable.amountCents;
+  const { view, user } = entry;
+  const debt = view.receivable.amountCents;
 
   // El semáforo lo decide el dominio, no esta pantalla: aquí solo se traduce a
   // color. Si esta lista tuviera su propio criterio, un alumno podría verse
@@ -494,7 +494,7 @@ function Fila({
   return (
     <Pressable accessibilityRole="button" onPress={onPress}>
       <Card
-        borderColor={deuda > 0 ? withAlpha(color, 0.35) : theme.colors.hairline}
+        borderColor={debt > 0 ? withAlpha(color, 0.35) : theme.colors.hairline}
         radius={theme.radii.lg}
       >
         <Row justify="space-between" align="center" gap={12}>
@@ -509,10 +509,10 @@ function Fila({
           </Row>
 
           <Stack gap={2} style={{ alignItems: 'flex-end' }}>
-            {deuda > 0 ? (
+            {debt > 0 ? (
               <>
                 <Text variant="heading" color={color}>
-                  {formatPEN(deuda as Cents, { withDecimals: false })}
+                  {formatPEN(debt as Cents, { withDecimals: false })}
                 </Text>
                 <Text variant="micro" color={theme.colors.textFaint}>
                   cobrar
@@ -533,12 +533,12 @@ function Fila({
 
 /** Una cifra del resumen del dueño. */
 function Metrica({
-  valor,
-  etiqueta,
+  value,
+  label,
   color,
 }: {
-  readonly valor: string;
-  readonly etiqueta: string;
+  readonly value: string;
+  readonly label: string;
   readonly color: string;
 }) {
   const theme = useTheme();
@@ -546,10 +546,10 @@ function Metrica({
     <Card radius={theme.radii.xl} style={{ flex: 1 }}>
       <Stack gap={2}>
         <Text variant="displaySmall" weight="extrabold" color={color}>
-          {valor}
+          {value}
         </Text>
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
-          {etiqueta}
+          {label}
         </Text>
       </Stack>
     </Card>
@@ -564,7 +564,7 @@ function Metrica({
  * pantalla escribiera el suyo, el dueño leería una cosa en el padrón y otra
  * distinta al chocar contra el corte.
  */
-function AvisoSuscripcion({
+function SubscriptionNotice({
   notice,
   onCanjeado,
 }: {
@@ -572,10 +572,10 @@ function AvisoSuscripcion({
   readonly onCanjeado: () => void;
 }) {
   const theme = useTheme();
-  const [abierto, setAbierto] = useState(false);
-  const [codigo, setCodigo] = useState('');
+  const [opened, setOpened] = useState(false);
+  const [code, setCode] = useState('');
   const [canjeando, setCanjeando] = useState(false);
-  const [resultado, setResultado] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
 
   const color =
     notice.tone === 'blocked'
@@ -584,22 +584,22 @@ function AvisoSuscripcion({
         ? theme.semaphore.warn
         : theme.colors.ink;
 
-  const canjear = async (): Promise<void> => {
+  const redeem = async (): Promise<void> => {
     setCanjeando(true);
-    setResultado(null);
+    setOutcome(null);
     try {
-      const canje = await canjearCodigo(codigo);
-      if (canje.redeemed) {
-        setResultado(describePromo({ freeMonths: canje.freeMonths, freeUntil: canje.freeUntil }));
-        setCodigo('');
+      const redemption = await redeemCode(code);
+      if (redemption.redeemed) {
+        setOutcome(describePromo({ freeMonths: redemption.freeMonths, freeUntil: redemption.freeUntil }));
+        setCode('');
         onCanjeado();
       } else {
         // El motivo sale de `shared`: la app, el panel y la api dicen lo mismo
         // del mismo hecho, y la persona necesita saber si insistir sirve.
-        setResultado(promoDenialMessage(canje.reason));
+        setOutcome(promoDenialMessage(redemption.reason));
       }
     } catch (causa: unknown) {
-      setResultado(causa instanceof Error ? causa.message : 'No se pudo canjear.');
+      setOutcome(causa instanceof Error ? causa.message : 'No se pudo canjear.');
     } finally {
       setCanjeando(false);
     }
@@ -617,11 +617,11 @@ function AvisoSuscripcion({
 
         {/* El canje vive AQUI, pegado a la cuenta atrás, y no en ajustes: es el
             único momento en que el dueño piensa en cuánto le queda. */}
-        {abierto ? (
+        {opened ? (
           <Row gap={8} style={{ marginTop: 8 }}>
             <TextInput
-              value={codigo}
-              onChangeText={setCodigo}
+              value={code}
+              onChangeText={setCode}
               placeholder="Tu código"
               placeholderTextColor={theme.colors.textPlaceholder}
               autoCapitalize="characters"
@@ -639,14 +639,14 @@ function AvisoSuscripcion({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Canjear código"
-              disabled={canjeando || codigo.trim().length === 0}
+              disabled={canjeando || code.trim().length === 0}
               hitSlop={10}
-              onPress={() => void canjear()}
+              onPress={() => void redeem()}
             >
               <Text
                 variant="captionSmall"
                 weight="semibold"
-                color={codigo.trim().length === 0 ? theme.colors.textFaint : theme.semaphore.ok}
+                color={code.trim().length === 0 ? theme.colors.textFaint : theme.semaphore.ok}
               >
                 {canjeando ? 'Canjeando…' : 'Canjear'}
               </Text>
@@ -656,7 +656,7 @@ function AvisoSuscripcion({
           <Pressable
             accessibilityRole="button"
             hitSlop={10}
-            onPress={() => setAbierto(true)}
+            onPress={() => setOpened(true)}
             style={{ marginTop: 6 }}
           >
             <Text variant="captionSmall" weight="semibold" color={theme.colors.textSecondary}>
@@ -665,9 +665,9 @@ function AvisoSuscripcion({
           </Pressable>
         )}
 
-        {resultado === null ? null : (
+        {outcome === null ? null : (
           <Text variant="micro" color={theme.colors.textSecondary} style={{ marginTop: 4 }}>
-            {resultado}
+            {outcome}
           </Text>
         )}
       </Stack>
@@ -690,27 +690,27 @@ function AvisoSuscripcion({
  * ocupan el sitio donde el mostrador mira la deuda todo el día.
  */
 function SelectorDeLocal({
-  locales,
+  gyms,
   actual,
 }: {
-  readonly locales: readonly StaffPostDto[];
+  readonly gyms: readonly StaffPostDto[];
   readonly actual: StaffPostDto;
 }) {
   const theme = useTheme();
-  const [abierto, setAbierto] = useState(false);
-  const [cambiando, setCambiando] = useState<string | null>(null);
+  const [opened, setOpened] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const otros = locales.filter((local) => local.tenantId !== actual.tenantId);
+  const others = gyms.filter((local) => local.tenantId !== actual.tenantId);
 
   return (
     <Stack gap={8}>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ expanded: abierto }}
+        accessibilityState={{ expanded: opened }}
         accessibilityLabel={`${actual.tenantName ?? 'Este local'}. Cambiar de local`}
         hitSlop={8}
-        onPress={() => setAbierto((v) => !v)}
+        onPress={() => setOpened((v) => !v)}
       >
         <Row gap={8} justify="flex-start">
           <Text
@@ -722,20 +722,20 @@ function SelectorDeLocal({
             {actual.tenantName ?? 'Este local'}
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {abierto ? 'cerrar' : 'cambiar'}
+            {opened ? 'cerrar' : 'cambiar'}
           </Text>
         </Row>
       </Pressable>
 
-      {abierto &&
-        otros.map((local) => (
+      {opened &&
+        others.map((local) => (
           <Pressable
             key={local.tenantId}
             accessibilityRole="button"
             accessibilityLabel={`Cambiar a ${local.tenantName ?? 'el otro local'}`}
-            disabled={cambiando !== null}
+            disabled={switching !== null}
             onPress={() => {
-              setCambiando(local.tenantId);
+              setSwitching(local.tenantId);
               setError(null);
               /**
                * No hay `then` de éxito, y es a propósito: `cambiarDeLocal`
@@ -744,8 +744,8 @@ function SelectorDeLocal({
                * indicador después sería tocar el estado de un componente que
                * ya no existe.
                */
-              void cambiarDeLocal(local.tenantId).catch((causa: unknown) => {
-                setCambiando(null);
+              void switchGym(local.tenantId).catch((causa: unknown) => {
+                setSwitching(null);
                 setError(
                   causa instanceof Error ? causa.message : 'No se pudo cambiar de local.',
                 );
@@ -762,7 +762,7 @@ function SelectorDeLocal({
                     {local.role === 'owner' ? 'Dueño' : 'Recepción'}
                   </Text>
                 </Stack>
-                {cambiando === local.tenantId ? (
+                {switching === local.tenantId ? (
                   <ActivityIndicator color={theme.colors.textSecondary} />
                 ) : (
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>

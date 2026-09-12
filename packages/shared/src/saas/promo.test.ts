@@ -10,8 +10,8 @@ import { plainDate } from '../time/plain-date.js';
 
 describe('normalizePromoCode', () => {
   it('lleva a la misma forma lo que la gente escribe distinto', () => {
-    for (const escrito of ['sinchi-2026', 'SINCHI 2026', 'Sinchi2026', ' sinchi_2026 ']) {
-      expect(normalizePromoCode(escrito), escrito).toBe('SINCHI2026');
+    for (const input of ['sinchi-2026', 'SINCHI 2026', 'Sinchi2026', ' sinchi_2026 ']) {
+      expect(normalizePromoCode(input), input).toBe('SINCHI2026');
     }
   });
 

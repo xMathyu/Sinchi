@@ -12,7 +12,7 @@ import {
 import { plainDate } from '../time/plain-date.js';
 
 const ANIVERSARIO = { mode: 'anniversary' } as const;
-const DIA_12 = { mode: 'fixed_day', dayOfMonth: 12 } as const;
+const DAY_12 = { mode: 'fixed_day', dayOfMonth: 12 } as const;
 
 describe('advanceBillingDate con politica de aniversario', () => {
   it('avanza un mes', () => {
@@ -26,16 +26,16 @@ describe('advanceBillingDate con politica de aniversario', () => {
 
 describe('advanceBillingDate con politica de dia fijo', () => {
   it('salta al dia fijo del mes siguiente si ya paso', () => {
-    expect(advanceBillingDate(plainDate(2026, 8, 12), DIA_12)).toEqual(plainDate(2026, 9, 12));
-    expect(advanceBillingDate(plainDate(2026, 8, 20), DIA_12)).toEqual(plainDate(2026, 9, 12));
+    expect(advanceBillingDate(plainDate(2026, 8, 12), DAY_12)).toEqual(plainDate(2026, 9, 12));
+    expect(advanceBillingDate(plainDate(2026, 8, 20), DAY_12)).toEqual(plainDate(2026, 9, 12));
   });
 
   it('usa el dia fijo del mismo mes si todavia no llego', () => {
-    expect(advanceBillingDate(plainDate(2026, 8, 3), DIA_12)).toEqual(plainDate(2026, 8, 12));
+    expect(advanceBillingDate(plainDate(2026, 8, 3), DAY_12)).toEqual(plainDate(2026, 8, 12));
   });
 
   it('cruza el fin de anio', () => {
-    expect(advanceBillingDate(plainDate(2026, 12, 20), DIA_12)).toEqual(plainDate(2027, 1, 12));
+    expect(advanceBillingDate(plainDate(2026, 12, 20), DAY_12)).toEqual(plainDate(2027, 1, 12));
   });
 
   it('rechaza dias que no existen en todos los meses', () => {
@@ -69,13 +69,13 @@ describe('firstPeriod', () => {
   });
 
   it('con dia fijo el primer periodo es corto y va prorrateado', () => {
-    const { period, prorated } = firstPeriod(plainDate(2026, 8, 20), DIA_12);
+    const { period, prorated } = firstPeriod(plainDate(2026, 8, 20), DAY_12);
     expect(prorated).toBe(true);
     expect(period.end).toEqual(plainDate(2026, 9, 12));
   });
 
   it('con dia fijo, inscribirse el dia despues del corte da un mes completo', () => {
-    const { prorated } = firstPeriod(plainDate(2026, 8, 13), DIA_12);
+    const { prorated } = firstPeriod(plainDate(2026, 8, 13), DAY_12);
     expect(prorated).toBe(false);
   });
 });

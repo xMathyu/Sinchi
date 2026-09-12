@@ -31,9 +31,9 @@ import {
 import { PhotoCircle } from '../../src/design/photo';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { usePlanesDelGimnasio, useStaffMember } from '../../src/data/hooks';
+import { useGymPlans, useStaffMember } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
-import { marcarAsistencia, reactivarSuscripcion } from '../../src/data/actions';
+import { markAttendance, reactivateSubscription } from '../../src/data/actions';
 import { formatCheckInMoment, formatLongDate, formatShortDate } from '../../src/lib/format';
 
 type Pestana = 'attendance' | 'payments';
@@ -41,29 +41,29 @@ type Pestana = 'attendance' | 'payments';
 export default function MemberScreen() {
   const theme = useTheme();
   const { membershipId } = useLocalSearchParams<{ membershipId: string }>();
-  const ficha = useStaffMember(membershipId);
+  const record = useStaffMember(membershipId);
 
-  if (ficha.view === null) {
+  if (record.view === null) {
     return (
       <Screen>
         <Cabecera />
         <View style={{ flex: 1, justifyContent: 'center', gap: 14 }}>
-          {ficha.cargando ? (
+          {record.loading ? (
             <ActivityIndicator color={theme.colors.ink} />
           ) : (
             <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-              {ficha.error ?? 'No se encontró a este alumno en el padrón.'}
+              {record.error ?? 'No se encontró a este alumno en el padrón.'}
             </Text>
           )}
-          {ficha.error !== null && !ficha.cargando ? (
-            <Button label="Reintentar" variant="secondary" onPress={ficha.recargar} />
+          {record.error !== null && !record.loading ? (
+            <Button label="Reintentar" variant="secondary" onPress={record.reload} />
           ) : null}
         </View>
       </Screen>
     );
   }
 
-  return <Ficha view={ficha.view} parcial={ficha.parcial} error={ficha.error} />;
+  return <Record view={record.view} parcial={record.parcial} error={record.error} />;
 }
 
 function Cabecera() {
@@ -82,7 +82,7 @@ function Cabecera() {
   );
 }
 
-function Ficha({
+function Record({
   view,
   parcial,
   error,
@@ -94,12 +94,12 @@ function Ficha({
   const theme = useTheme();
   const [pestana, setPestana] = useState<Pestana>('attendance');
   const [marcando, setMarcando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const { quota, receivable, delinquency, plan, user } = view;
   const cancelada = view.subscription.status === 'canceled';
   /** Cambia lo que significan tres cifras de esta pantalla; ver más abajo. */
-  const paganPorClase = isDropInPlan(plan);
+  const payPerClass = isDropInPlan(plan);
 
   /**
    * El semáforo de ESTA pantalla, que no es el del padrón.
@@ -114,11 +114,11 @@ function Ficha({
    * estarían al día. Es la misma persona con dos respuestas correctas a dos
    * preguntas distintas.
    */
-  const nivel =
-    paganPorClase && !view.dropInPaidToday && !cancelada && delinquency.canTrain
+  const level =
+    payPerClass && !view.dropInPaidToday && !cancelada && delinquency.canTrain
       ? 'alert'
       : view.level;
-  const semaphore = semaphoreStyle(theme, nivel);
+  const semaphore = semaphoreStyle(theme, level);
 
   const asistencias = [...view.attendances].sort(
     (a, b) => b.checkedInAt.getTime() - a.checkedInAt.getTime(),
@@ -163,14 +163,14 @@ function Ficha({
                    mismo: no debe nada —nunca debe— pero la puerta le va a pedir
                    la clase de hoy. Decirle al mostrador "Puede entrenar" en
                    verde es mandarlo a una puerta que lo va a parar. */
-                paganPorClase && !view.dropInPaidToday
+                payPerClass && !view.dropInPaidToday
                 ? 'Falta la clase de hoy'
                 : delinquency.canTrain
                   ? 'Puede entrenar'
                   : 'No puede entrenar'}
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {motivo(view)}
+            {denial(view)}
           </Text>
         </Stack>
       </Card>
@@ -184,16 +184,16 @@ function Ficha({
           dinero que le va a entrar ese día. */}
       <Row gap={10} style={{ marginTop: 12 }} align="stretch">
         <Dato
-          label={paganPorClase ? 'Vino esta semana' : 'Cupo semanal'}
+          label={payPerClass ? 'Vino esta semana' : 'Cupo semanal'}
           value={
-            paganPorClase
+            payPerClass
               ? `${quota.used} ${quota.used === 1 ? 'vez' : 'veces'}`
               : quota.limit === null
                 ? 'Sin límite'
                 : `${quota.used} de ${quota.limit}`
           }
           hint={
-            paganPorClase
+            payPerClass
               ? 'paga cada clase'
               : quota.limit === null
                 ? 'plan ilimitado'
@@ -201,16 +201,16 @@ function Ficha({
           }
         />
         <Dato
-          label={paganPorClase ? 'La clase de hoy' : 'Renueva'}
+          label={payPerClass ? 'La clase de hoy' : 'Renueva'}
           value={
-            paganPorClase
+            payPerClass
               ? view.dropInPaidToday
                 ? 'Pagada'
                 : 'Sin pagar'
               : formatShortDate(view.subscription.nextBillingDate)
           }
           hint={
-            paganPorClase
+            payPerClass
               ? formatPEN(plan.priceCents, { withDecimals: false })
               : `gracia de ${view.tenant.graceDays} días`
           }
@@ -263,7 +263,7 @@ function Ficha({
       ) : null}
 
       {cancelada ? (
-        <Reactivar membershipId={view.membership.id} nombre={user.name} />
+        <Reactivar membershipId={view.membership.id} name={user.name} />
       ) : (
         <Stack gap={10} style={{ marginTop: 18 }}>
           <Button
@@ -281,8 +281,8 @@ function Ficha({
             disabled={marcando}
             onPress={() => {
               setMarcando(true);
-              setAviso(null);
-              void marcarAsistencia({
+              setNotice(null);
+              void markAttendance({
                 membershipId: view.membership.id,
                 method: 'manual',
                 // El mostrador marca a quien tiene delante aunque deba, y aunque
@@ -293,24 +293,24 @@ function Ficha({
                 // se perdía sin registrarse.
                 overrideDenial: true,
               })
-                .then((salida) =>
-                  setAviso(
-                    !salida.registrada
-                      ? `No se registró: ${salida.titulo.toLowerCase()}.`
-                      : salida.repetida
+                .then((outcome) =>
+                  setNotice(
+                    !outcome.registrada
+                      ? `No se registró: ${outcome.title.toLowerCase()}.`
+                      : outcome.repetida
                         ? 'Ya estaba marcado hoy.'
                         : 'Asistencia marcada.',
                   ),
                 )
                 .catch((causa: unknown) =>
-                  setAviso(causa instanceof Error ? causa.message : 'No se pudo marcar.'),
+                  setNotice(causa instanceof Error ? causa.message : 'No se pudo marcar.'),
                 )
                 .finally(() => setMarcando(false));
             }}
           />
-          {aviso === null ? null : (
+          {notice === null ? null : (
             <Text variant="micro" color={theme.colors.textSecondary} align="center">
-              {aviso}
+              {notice}
             </Text>
           )}
         </Stack>
@@ -336,23 +336,23 @@ function Ficha({
           </Text>
         </Card>
       ) : pestana === 'attendance' ? (
-        <Lista
-          vacia="Todavía no tiene asistencias registradas."
-          filas={asistencias.map((a) => ({
+        <Listing
+          blank="Todavía no tiene asistencias registradas."
+          rows={asistencias.map((a) => ({
             id: a.id,
-            izquierda: formatCheckInMoment(a.checkedInAt),
-            derecha: a.overrodeDenial ? 'excepción' : a.method === 'manual' ? 'manual' : 'QR',
-            alerta: a.overrodeDenial,
+            left: formatCheckInMoment(a.checkedInAt),
+            right: a.overrodeDenial ? 'excepción' : a.method === 'manual' ? 'manual' : 'QR',
+            alert: a.overrodeDenial,
           }))}
         />
       ) : (
-        <Lista
-          vacia="Todavía no hay pagos registrados."
-          filas={cargos.map((c) => ({
+        <Listing
+          blank="Todavía no hay pagos registrados."
+          rows={cargos.map((c) => ({
             id: c.id,
-            izquierda: `${formatPEN(c.amountCents)} · ${railLabel(c.rail)}`,
-            derecha: formatShortDate(c.periodStart ?? view.subscription.periodStart),
-            alerta: c.status !== 'succeeded',
+            left: `${formatPEN(c.amountCents)} · ${railLabel(c.rail)}`,
+            right: formatShortDate(c.periodStart ?? view.subscription.periodStart),
+            alert: c.status !== 'succeeded',
           }))}
         />
       )}
@@ -361,7 +361,7 @@ function Ficha({
 }
 
 /** Una línea de por qué el semáforo está donde está. */
-function motivo(view: MembershipView): string {
+function denial(view: MembershipView): string {
   const { delinquency, receivable, quota } = view;
   if (view.subscription.status === 'canceled') {
     return 'Canceló su suscripción. La ficha y el historial se conservan: puede volver sin registrarse otra vez.';
@@ -432,21 +432,21 @@ function Linea({
   );
 }
 
-interface Fila {
+interface DetailRow {
   readonly id: string;
-  readonly izquierda: string;
-  readonly derecha: string;
-  readonly alerta: boolean;
+  readonly left: string;
+  readonly right: string;
+  readonly alert: boolean;
 }
 
-function Lista({ filas, vacia }: { readonly filas: readonly Fila[]; readonly vacia: string }) {
+function Listing({ rows, blank }: { readonly rows: readonly DetailRow[]; readonly blank: string }) {
   const theme = useTheme();
 
-  if (filas.length === 0) {
+  if (rows.length === 0) {
     return (
       <Card tone="sunken" radius={16} style={{ marginTop: 12 }}>
         <Text variant="bodySmall" color={theme.colors.textSecondary} align="center">
-          {vacia}
+          {blank}
         </Text>
       </Card>
     );
@@ -454,20 +454,20 @@ function Lista({ filas, vacia }: { readonly filas: readonly Fila[]; readonly vac
 
   return (
     <Card padded={false} radius={16} style={{ marginTop: 12 }}>
-      {filas.map((fila, index) => (
-        <View key={fila.id}>
+      {rows.map((row, index) => (
+        <View key={row.id}>
           <Row style={{ paddingHorizontal: 16, paddingVertical: 13 }} gap={12}>
             <Text variant="bodySmall" weight="semibold" style={{ flex: 1 }}>
-              {fila.izquierda}
+              {row.left}
             </Text>
             <Text
               variant="captionSmall"
-              color={fila.alerta ? theme.semaphore.alert : theme.colors.textTertiary}
+              color={row.alert ? theme.semaphore.alert : theme.colors.textTertiary}
             >
-              {fila.derecha}
+              {row.right}
             </Text>
           </Row>
-          {index === filas.length - 1 ? null : <Divider />}
+          {index === rows.length - 1 ? null : <Divider />}
         </View>
       ))}
     </Card>
@@ -484,24 +484,24 @@ function Lista({ filas, vacia }: { readonly filas: readonly Fila[]; readonly vac
  */
 function Reactivar({
   membershipId,
-  nombre,
+  name,
 }: {
   readonly membershipId: string;
-  readonly nombre: string;
+  readonly name: string;
 }) {
   const theme = useTheme();
-  const planes = usePlanesDelGimnasio();
+  const plans = useGymPlans();
   const [planId, setPlanId] = useState<string | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Sin esto la reinscripción no daba señal de nada: el botón volvía a estar
   // pulsable, la ficha tardaba en recargarse, y el segundo toque chocaba contra
   // el índice de una suscripción por membresía. Salía como error del servidor.
-  const [listo, setListo] = useState(false);
+  const [ready, setReady] = useState(false);
 
-  const elegido = planes.find((plan) => plan.id === planId) ?? null;
+  const picked = plans.find((plan) => plan.id === planId) ?? null;
 
-  if (listo) {
+  if (ready) {
     return (
       <Card
         radius={theme.radii.xl}
@@ -513,7 +513,7 @@ function Reactivar({
             Reinscrito
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {nombre} vuelve a estar en el padrón con su historial completo. Cóbrale la mensualidad
+            {name} vuelve a estar en el padrón con su historial completo. Cóbrale la mensualidad
             para que el escáner valide su QR.
           </Text>
         </Stack>
@@ -524,23 +524,23 @@ function Reactivar({
   return (
     <Stack gap={10} style={{ marginTop: 18 }}>
       <Eyebrow>Volver a inscribir</Eyebrow>
-      {planes.length === 0 ? (
+      {plans.length === 0 ? (
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
           Trayendo los planes del gimnasio…
         </Text>
       ) : (
-        planes.map((plan) => {
-          const activo = plan.id === planId;
+        plans.map((plan) => {
+          const active = plan.id === planId;
           return (
             <Pressable
               key={plan.id}
               accessibilityRole="radio"
-              accessibilityState={{ selected: activo }}
+              accessibilityState={{ selected: active }}
               onPress={() => setPlanId(plan.id)}
             >
               <Card
                 radius={theme.radii.lg}
-                borderColor={activo ? theme.semaphore.ok : theme.colors.hairline}
+                borderColor={active ? theme.semaphore.ok : theme.colors.hairline}
               >
                 <Row>
                   <Text variant="heading" weight="semibold">
@@ -558,23 +558,23 @@ function Reactivar({
 
       <Button
         label={
-          guardando
+          saving
             ? 'Reinscribiendo…'
-            : elegido === null
+            : picked === null
               ? 'Elige un plan'
-              : `Reinscribir a ${nombre.trim().split(/\s+/)[0] ?? nombre} en ${elegido.name}`
+              : `Reinscribir a ${name.trim().split(/\s+/)[0] ?? name} en ${picked.name}`
         }
-        disabled={elegido === null || guardando}
+        disabled={picked === null || saving}
         onPress={() => {
-          if (elegido === null || guardando) return;
-          setGuardando(true);
+          if (picked === null || saving) return;
+          setSaving(true);
           setError(null);
-          void reactivarSuscripcion(membershipId, elegido.id)
-            .then(() => setListo(true))
+          void reactivateSubscription(membershipId, picked.id)
+            .then(() => setReady(true))
             .catch((causa: unknown) => {
               setError(causa instanceof Error ? causa.message : 'No se pudo reinscribir.');
             })
-            .finally(() => setGuardando(false));
+            .finally(() => setSaving(false));
         }}
       />
       {error === null ? null : (

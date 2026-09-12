@@ -24,16 +24,16 @@ import { routineAccessMessage } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
-import { CargandoSeccion } from '../../src/design/loading';
-import { EstadoSinConexion } from '../../src/design/empty';
-import { VideoDeRutina } from '../../src/design/video';
+import { SectionLoader } from '../../src/design/loading';
+import { OfflineState } from '../../src/design/empty';
+import { RoutineVideo } from '../../src/design/video';
 import { useTheme } from '../../src/design/theme';
-import { useRutina } from '../../src/data/hooks';
+import { useRoutine } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import { formatIsoDay, nivelCorto } from '../../src/lib/format';
-import type { PasoDto } from '../../src/data/api';
+import { formatIsoDay, shortLevel } from '../../src/lib/format';
+import type { StepDto } from '../../src/data/api';
 
-export default function RutinaScreen() {
+export default function RoutineScreen() {
   const theme = useTheme();
   const { routineId, membershipId, slug } = useLocalSearchParams<{
     routineId: string;
@@ -41,61 +41,61 @@ export default function RutinaScreen() {
     slug?: string;
   }>();
 
-  const { rutina, error, cargando, recargar } = useRutina(routineId, {
+  const { routine: detail, error, loading, reload } = useRoutine(routineId, {
     ...(membershipId === undefined ? {} : { membershipId }),
     ...(slug === undefined ? {} : { slug }),
   });
 
   // Solo el dueño de ESTE local la edita: quien la mira desde el directorio o
   // desde su membresía no es staff de aquí aunque lo sea de otro sitio.
-  const puedeEditar =
+  const canEdit =
     useRole() === 'owner' && membershipId === undefined && slug === undefined;
 
-  if (cargando) return <CargandoSeccion texto="Abriendo la rutina…" />;
+  if (loading) return <SectionLoader text="Abriendo la rutina…" />;
 
-  if (rutina === null) {
+  if (detail === null) {
     return (
       <Screen>
         <Row style={{ paddingTop: 8 }}>
-          <Volver />
+          <BackRow />
         </Row>
         <View style={{ flex: 1 }}>
-          <EstadoSinConexion
-            titulo="No se pudo abrir la rutina"
-            cuerpo="No llegamos al servidor. Vuelve a intentarlo en un momento."
+          <OfflineState
+            title="No se pudo abrir la rutina"
+            body="No llegamos al servidor. Vuelve a intentarlo en un momento."
             error={error ?? 'Esta rutina no está disponible.'}
-            onReintentar={recargar}
+            onReintentar={reload}
           />
         </View>
       </Screen>
     );
   }
 
-  if (!rutina.unlocked) {
-    const mensaje = routineAccessMessage(rutina.reason);
+  if (!detail.unlocked) {
+    const message = routineAccessMessage(detail.reason);
     return (
       <Screen scroll>
         <Row style={{ paddingTop: 8 }}>
-          <Volver />
+          <BackRow />
         </Row>
 
         <Stack gap={6} style={{ marginTop: 20 }}>
           <Text variant="title" weight="bold">
-            {rutina.teaser.title}
+            {detail.teaser.title}
           </Text>
-          {rutina.teaser.summary === null ? null : (
+          {detail.teaser.summary === null ? null : (
             <Text variant="bodySmall" color={theme.colors.textSecondary}>
-              {rutina.teaser.summary}
+              {detail.teaser.summary}
             </Text>
           )}
           <Text variant="micro" color={theme.colors.textFaint}>
             {[
-              nivelCorto(rutina.teaser.level),
-              rutina.teaser.itemCount === 0
+              shortLevel(detail.teaser.level),
+              detail.teaser.itemCount === 0
                 ? null
-                : `${rutina.teaser.itemCount} ${rutina.teaser.itemCount === 1 ? 'paso' : 'pasos'}`,
+                : `${detail.teaser.itemCount} ${detail.teaser.itemCount === 1 ? 'paso' : 'pasos'}`,
             ]
-              .filter((parte) => parte !== null)
+              .filter((part) => part !== null)
               .join(' · ')}
           </Text>
         </Stack>
@@ -112,11 +112,11 @@ export default function RutinaScreen() {
             <Row gap={10} justify="flex-start">
               <Lock size={17} color={theme.semaphore.alert} />
               <Text variant="bodySmall" weight="semibold">
-                {mensaje.title}
+                {message.title}
               </Text>
             </Row>
             <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {mensaje.detail}
+              {message.detail}
             </Text>
             {slug === undefined ? null : (
               <Button
@@ -132,14 +132,14 @@ export default function RutinaScreen() {
     );
   }
 
-  const { routine, itemCount } = rutina.card;
-  const publica = routine.visibility === 'public';
+  const { routine, itemCount } = detail.card;
+  const isPublic = routine.visibility === 'public';
 
   return (
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
-        <Volver />
-        {puedeEditar ? (
+        <BackRow />
+        {canEdit ? (
           <Pressable
             accessibilityRole="button"
             onPress={() =>
@@ -162,10 +162,10 @@ export default function RutinaScreen() {
           <Text variant="title" weight="bold" style={{ flex: 1 }}>
             {routine.title}
           </Text>
-          {puedeEditar ? (
+          {canEdit ? (
             <Badge
-              label={publica ? 'PÚBLICA' : 'ALUMNOS'}
-              color={publica ? theme.semaphore.ok : theme.colors.textSecondary}
+              label={isPublic ? 'PÚBLICA' : 'ALUMNOS'}
+              color={isPublic ? theme.semaphore.ok : theme.colors.textSecondary}
             />
           ) : null}
         </Row>
@@ -178,27 +178,27 @@ export default function RutinaScreen() {
 
         <Text variant="micro" color={theme.colors.textFaint}>
           {[
-            nivelCorto(routine.level),
+            shortLevel(routine.level),
             itemCount === 0 ? null : `${itemCount} ${itemCount === 1 ? 'paso' : 'pasos'}`,
             routine.status === 'draft' ? 'Sin publicar' : null,
             `Actualizada el ${formatIsoDay(routine.updatedAt)}`,
           ]
-            .filter((parte) => parte !== null)
+            .filter((part) => part !== null)
             .join(' · ')}
         </Text>
       </Stack>
 
       {routine.videoUrl === null ? null : (
         <View style={{ marginTop: 18 }}>
-          <VideoDeRutina url={routine.videoUrl} etiqueta={routine.title} alto={190} />
+          <RoutineVideo url={routine.videoUrl} label={routine.title} height={190} />
         </View>
       )}
 
-      {rutina.items.length === 0 ? null : (
+      {detail.items.length === 0 ? null : (
         <Stack gap={12} style={{ marginTop: 26 }}>
           <Eyebrow>Paso a paso</Eyebrow>
-          {rutina.items.map((paso, indice) => (
-            <Paso key={paso.id} paso={paso} numero={indice + 1} />
+          {detail.items.map((step, index) => (
+            <Step key={step.id} step={step} number={index + 1} />
           ))}
         </Stack>
       )}
@@ -217,7 +217,7 @@ export default function RutinaScreen() {
  * nada, y modelar solo el gimnasio de pesas dejaría al dojo rellenando casillas
  * vacías.
  */
-function Paso({ paso, numero }: { readonly paso: PasoDto; readonly numero: number }) {
+function Step({ step, number }: { readonly step: StepDto; readonly number: number }) {
   const theme = useTheme();
 
   return (
@@ -235,36 +235,36 @@ function Paso({ paso, numero }: { readonly paso: PasoDto; readonly numero: numbe
             }}
           >
             <Text variant="micro" weight="bold" color={theme.colors.textSecondary}>
-              {numero}
+              {number}
             </Text>
           </View>
           <Stack gap={2} style={{ flex: 1 }}>
             <Text variant="bodySmall" weight="semibold">
-              {paso.title}
+              {step.title}
             </Text>
-            {paso.prescription === null ? null : (
+            {step.prescription === null ? null : (
               <Text variant="micro" color={theme.semaphore.ok}>
-                {paso.prescription}
+                {step.prescription}
               </Text>
             )}
           </Stack>
         </Row>
 
-        {paso.instructions === null ? null : (
+        {step.instructions === null ? null : (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {paso.instructions}
+            {step.instructions}
           </Text>
         )}
 
-        {paso.videoUrl === null ? null : (
-          <VideoDeRutina url={paso.videoUrl} etiqueta={paso.title} alto={148} />
+        {step.videoUrl === null ? null : (
+          <RoutineVideo url={step.videoUrl} label={step.title} height={148} />
         )}
       </Stack>
     </Card>
   );
 }
 
-function Volver() {
+function BackRow() {
   const theme = useTheme();
   return (
     <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>

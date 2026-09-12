@@ -180,7 +180,7 @@ function charge(
 
 export function buildDemoData(): DemoData {
   const hoy = today();
-  const semanaPasada = addDays(hoy, -7);
+  const lastWeek = addDays(hoy, -7);
 
   // --- Gimnasios -----------------------------------------------------------
   const shotokan = tenant('dojo-shotokan', 'Dojo Shotokan Miraflores');
@@ -308,13 +308,13 @@ export function buildDemoData(): DemoData {
       recordedBy: staff.id,
     }),
     // Nova: 3 de 3 la semana pasada.
-    attendance('a-3', nova.id, 'm-mathyu-nova', 's-mathyu-nova', semanaPasada, '19:00'),
+    attendance('a-3', nova.id, 'm-mathyu-nova', 's-mathyu-nova', lastWeek, '19:00'),
     attendance(
       'a-4',
       nova.id,
       'm-mathyu-nova',
       's-mathyu-nova',
-      addDays(semanaPasada, -2),
+      addDays(lastWeek, -2),
       '19:00',
     ),
     attendance(
@@ -322,7 +322,7 @@ export function buildDemoData(): DemoData {
       nova.id,
       'm-mathyu-nova',
       's-mathyu-nova',
-      addDays(semanaPasada, -4),
+      addDays(lastWeek, -4),
       '19:00',
     ),
     // Shotokan, plan ilimitado.

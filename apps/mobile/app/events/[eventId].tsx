@@ -20,35 +20,35 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useEvento } from '../../src/data/hooks';
+import { useEvent } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import { cobrarPlazaDeEvento, marcarPlaza } from '../../src/data/actions';
+import { chargeEventSeat, markSeat } from '../../src/data/actions';
 import type { PlazaDto } from '../../src/data/api';
 import { formatEventDate } from '../../src/lib/format';
 
-export default function EventoScreen() {
+export default function EventScreen() {
   const theme = useTheme();
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   // De la sesión: el del store llega con el padrón y esta pantalla se abre sola.
-  const esDueno = useRole() === 'owner';
-  const { evento, plazas, error, cargando, recargar } = useEvento(eventId);
+  const isOwner = useRole() === 'owner';
+  const { event, plazas, error, loading, reload } = useEvent(eventId);
   const [trabajando, setTrabajando] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const vivas = plazas.filter((p) => p.registration.status !== 'canceled');
-  const porCobrar = vivas.filter((p) => !p.paid);
+  const receivable = vivas.filter((p) => !p.paid);
   const recaudado = vivas
     .filter((p) => p.paid)
     .reduce((sum, p) => sum + p.registration.priceCents, 0);
 
   async function accion(id: string, fn: () => Promise<unknown>): Promise<void> {
     setTrabajando(id);
-    setAviso(null);
+    setNotice(null);
     try {
       await fn();
-      recargar();
+      reload();
     } catch (e: unknown) {
-      setAviso(e instanceof Error ? e.message : 'No se pudo hacer.');
+      setNotice(e instanceof Error ? e.message : 'No se pudo hacer.');
     } finally {
       setTrabajando(null);
     }
@@ -58,7 +58,7 @@ export default function EventoScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold" numberOfLines={1} style={{ flex: 1 }}>
-          {evento?.event.name ?? 'Evento'}
+          {event?.event.name ?? 'Evento'}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
@@ -67,11 +67,11 @@ export default function EventoScreen() {
         </Pressable>
       </Row>
 
-      {cargando ? (
+      {loading ? (
         <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 20 }}>
           Trayendo el evento…
         </Text>
-      ) : error !== null || evento === null ? (
+      ) : error !== null || event === null ? (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
             {error ?? 'No se encontró el evento.'}
@@ -80,11 +80,11 @@ export default function EventoScreen() {
       ) : (
         <>
           <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>
-            {formatEventDate(evento.event.date)} · {evento.event.startTime}–{evento.event.endTime}
-            {evento.event.instructor === null ? '' : ` · ${evento.event.instructor}`}
+            {formatEventDate(event.event.date)} · {event.event.startTime}–{event.event.endTime}
+            {event.event.instructor === null ? '' : ` · ${event.event.instructor}`}
           </Text>
 
-          {evento.event.status === 'canceled' && (
+          {event.event.status === 'canceled' && (
             <Card
               tone="sunken"
               borderColor={withAlpha(theme.semaphore.bad, 0.4)}
@@ -96,7 +96,7 @@ export default function EventoScreen() {
             </Card>
           )}
 
-          {evento.event.status === 'draft' && (
+          {event.event.status === 'draft' && (
             <Card tone="sunken" style={{ marginTop: 14 }}>
               <Text variant="bodySmall" color={theme.colors.textSecondary}>
                 Sin publicar: todavía no sale en el directorio y nadie puede reservar.
@@ -107,31 +107,31 @@ export default function EventoScreen() {
           {/* Las tres preguntas del mostrador, en el orden en que las hace. */}
           <Row gap={10} align="stretch" style={{ marginTop: 18 }}>
             <Metrica
-              valor={
-                evento.seatsLeft === null
-                  ? String(evento.seatsTaken)
-                  : `${evento.seatsTaken}/${evento.seatsTaken + evento.seatsLeft}`
+              value={
+                event.seatsLeft === null
+                  ? String(event.seatsTaken)
+                  : `${event.seatsTaken}/${event.seatsTaken + event.seatsLeft}`
               }
-              etiqueta={evento.seatsLeft === null ? 'inscritos' : 'plazas'}
+              label={event.seatsLeft === null ? 'inscritos' : 'plazas'}
               color={
-                evento.seatsLeft !== null && evento.seatsLeft === 0
+                event.seatsLeft !== null && event.seatsLeft === 0
                   ? theme.semaphore.warn
                   : theme.colors.ink
               }
             />
             <Metrica
-              valor={formatPEN(recaudado as Cents, { withDecimals: false })}
-              etiqueta="cobrado"
+              value={formatPEN(recaudado as Cents, { withDecimals: false })}
+              label="cobrado"
               color={theme.semaphore.ok}
             />
             <Metrica
-              valor={String(porCobrar.length)}
-              etiqueta={porCobrar.length === 1 ? 'por cobrar' : 'por cobrar'}
-              color={porCobrar.length > 0 ? theme.semaphore.warn : theme.colors.ink}
+              value={String(receivable.length)}
+              label={receivable.length === 1 ? 'por cobrar' : 'por cobrar'}
+              color={receivable.length > 0 ? theme.semaphore.warn : theme.colors.ink}
             />
           </Row>
 
-          {esDueno && (
+          {isOwner && (
             <Button
               label="Editar el evento"
               variant="secondary"
@@ -140,10 +140,10 @@ export default function EventoScreen() {
             />
           )}
 
-          {aviso !== null && (
+          {notice !== null && (
             <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 14 }}>
               <Text variant="bodySmall" color={theme.semaphore.bad}>
-                {aviso}
+                {notice}
               </Text>
             </Card>
           )}
@@ -165,18 +165,18 @@ export default function EventoScreen() {
               </Card>
             ) : (
               vivas.map((plaza) => (
-                <FilaDePlaza
+                <SeatRow
                   key={plaza.registration.id}
                   plaza={plaza}
                   ocupado={trabajando === plaza.registration.id}
                   onCobrar={() =>
                     void accion(plaza.registration.id, () =>
-                      cobrarPlazaDeEvento(plaza.registration.id, 'cash'),
+                      chargeEventSeat(plaza.registration.id, 'cash'),
                     )
                   }
                   onVino={() =>
                     void accion(plaza.registration.id, () =>
-                      marcarPlaza(
+                      markSeat(
                         plaza.registration.id,
                         plaza.registration.status === 'attended' ? 'booked' : 'attended',
                       ),
@@ -194,7 +194,7 @@ export default function EventoScreen() {
   );
 }
 
-function FilaDePlaza({
+function SeatRow({
   plaza,
   ocupado,
   onCobrar,
@@ -265,12 +265,12 @@ function FilaDePlaza({
 }
 
 function Metrica({
-  valor,
-  etiqueta,
+  value,
+  label,
   color,
 }: {
-  readonly valor: string;
-  readonly etiqueta: string;
+  readonly value: string;
+  readonly label: string;
   readonly color: string;
 }) {
   const theme = useTheme();
@@ -278,10 +278,10 @@ function Metrica({
     <Card radius={theme.radii.lg} tone="sunken" style={{ flex: 1 }}>
       <Stack gap={1}>
         <Text variant="heading" weight="bold" color={color} numberOfLines={1}>
-          {valor}
+          {value}
         </Text>
         <Text variant="micro" color={theme.colors.textFaint}>
-          {etiqueta}
+          {label}
         </Text>
       </Stack>
     </Card>

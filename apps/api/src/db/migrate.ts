@@ -79,11 +79,11 @@ async function main(): Promise<void> {
     if (rows.length === 0) {
       console.warn('[migrate] AVISO: ninguna tabla tiene RLS activo.');
     } else {
-      const sinForzar = rows.filter((row) => !row.rls_forced);
+      const withoutForcing = rows.filter((row) => !row.rls_forced);
       console.log(
-        `[migrate] RLS activo y forzado en ${rows.length - sinForzar.length} de ${rows.length} tablas`,
+        `[migrate] RLS activo y forzado en ${rows.length - withoutForcing.length} de ${rows.length} tablas`,
       );
-      for (const row of sinForzar) {
+      for (const row of withoutForcing) {
         console.warn(`[migrate] AVISO: ${row.table_name} tiene RLS SIN FORZAR.`);
       }
 

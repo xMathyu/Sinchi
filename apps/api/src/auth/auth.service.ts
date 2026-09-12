@@ -36,7 +36,7 @@ import type { Session, SessionClaims } from './session';
 import { FirebaseVerifier } from './firebase';
 import {
   AccountLinkService,
-  type DatosDeRegistro,
+  type SignUpDetails,
   type PendingClaim,
 } from './account-link.service';
 import { InviteService } from './invite.service';
@@ -143,7 +143,7 @@ export class AuthService {
    */
   async signInWithGoogle(
     idToken: string,
-    datos: DatosDeRegistro = {},
+    details: SignUpDetails = {},
   ): Promise<IssuedSession | UnlinkedAccount> {
     const identity = await this.firebase.verify(idToken);
 
@@ -163,7 +163,7 @@ export class AuthService {
       // Los datos van al codigo pendiente, no a `users`: todavia no hay ficha a
       // la que atarlos. Sirven para que reservar una clase gratis no le vuelva a
       // preguntar lo que acaba de escribir.
-      return { linked: false, claim: await this.accountLink.issueClaim(identity, datos) };
+      return { linked: false, claim: await this.accountLink.issueClaim(identity, details) };
     }
 
     return this.issueForUser(userId);
@@ -577,7 +577,7 @@ export class AuthService {
    * gimnasio al otro y de vuelta.
    */
   async switchToStaff(session: Session, tenantId?: string): Promise<IssuedSession> {
-    const puestos = await this.staffRowsOf(session.sub);
+    const posts = await this.staffRowsOf(session.sub);
 
     /**
      * Sin gimnasio pedido, el de siempre. Con uno pedido, tiene que ser SUYO.
@@ -590,7 +590,7 @@ export class AuthService {
      * puede no ser el suyo.
      */
     const staffRow =
-      tenantId === undefined ? puestos[0] : puestos.find((p) => p.tenantId === tenantId);
+      tenantId === undefined ? posts[0] : posts.find((p) => p.tenantId === tenantId);
 
     if (staffRow === undefined) {
       throw new ForbiddenException(
@@ -640,7 +640,7 @@ export class AuthService {
    * nombre del gimnasio puesto, porque «cambiar a b3f1-…» no lo elige nadie.
    */
   async modesFor(userId: string): Promise<AvailableModes> {
-    const [puestos, membership] = await Promise.all([
+    const [posts, membership] = await Promise.all([
       this.staffRowsOf(userId),
       withUser(this.db, userId, (tx) =>
         tx
@@ -654,7 +654,7 @@ export class AuthService {
     ]);
 
     const student = membership !== undefined;
-    if (puestos.length === 0) return { student, staff: [] };
+    if (posts.length === 0) return { student, staff: [] };
 
     /**
      * Los nombres, en UNA consulta y sin adoptar ningún gimnasio.
@@ -664,25 +664,25 @@ export class AuthService {
      * golpe. Antes esto era un `withTenant` por puesto; con un solo local daba
      * igual, con cinco son cinco transacciones para leer cinco nombres.
      */
-    const nombres = await withoutTenantIsolation(this.db, (tx) =>
+    const names = await withoutTenantIsolation(this.db, (tx) =>
       tx
         .select({ id: schema.tenants.id, name: schema.tenants.name })
         .from(schema.tenants)
         .where(
           inArray(
             schema.tenants.id,
-            puestos.map((p) => p.tenantId),
+            posts.map((p) => p.tenantId),
           ),
         ),
     );
-    const nombrePorId = new Map(nombres.map((t) => [t.id, t.name]));
+    const nameById = new Map(names.map((t) => [t.id, t.name]));
 
     return {
       student,
-      staff: puestos.map((puesto) => ({
-        role: puesto.role === 'owner' ? ('owner' as const) : ('front_desk' as const),
-        tenantId: puesto.tenantId,
-        tenantName: nombrePorId.get(puesto.tenantId) ?? null,
+      staff: posts.map((post) => ({
+        role: post.role === 'owner' ? ('owner' as const) : ('front_desk' as const),
+        tenantId: post.tenantId,
+        tenantName: nameById.get(post.tenantId) ?? null,
       })),
     };
   }

@@ -52,7 +52,7 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
-import { registrarGimnasio } from '../src/data/actions';
+import { registerGym } from '../src/data/actions';
 import { completeEmailSignIn } from '../src/data/auth';
 import { firebaseConfigured } from '../src/data/firebase';
 import { currentAccountDetails } from '../src/data/session';
@@ -76,39 +76,39 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
  * contador: los pasos del ALTA son dos, y crear la cuenta es el peaje de
  * entrada, no una parte del alta.
  */
-type Paso = 'oferta' | 'cuenta' | 'plan' | 'datos';
+type Step = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type CampoDelAlta = 'nombre' | 'ruc' | 'documento' | 'mensualidad' | 'direccion';
+type SignUpField = 'name' | 'taxId' | 'documentId' | 'monthlyPrice' | 'address';
 
 /** Lo mínimo que se acepta como dirección. «Lima» son cuatro y no lleva a nadie. */
-const DIRECCION_MINIMA = 10;
+const ADDRESS_MIN = 10;
 
 /** Los de la cuenta, que es otro formulario y falla por otras razones. */
-type CampoDeLaCuenta = 'duenoNombre' | 'correo' | 'clave' | 'celular';
+type AccountField = 'ownerName' | 'email' | 'password' | 'phone';
 
 export default function GymSignUpScreen() {
   const theme = useTheme();
-  const sesion = useSession();
+  const session = useSession();
 
-  const [paso, setPaso] = useState<Paso>('oferta');
+  const [step, setStep] = useState<Step>('oferta');
 
-  const [nombre, setNombre] = useState('');
+  const [name, setName] = useState('');
   const [ruc, setRuc] = useState('');
-  const [duenoNombre, setDuenoNombre] = useState('');
-  const [documento, setDocumento] = useState('');
-  const [celular, setCelular] = useState('+51');
+  const [ownerName, setOwnerName] = useState('');
+  const [documentId, setDocumentId] = useState('');
+  const [phone, setPhone] = useState('+51');
   const [escalon, setEscalon] = useState<SaasTier>('free');
-  const [codigo, setCodigo] = useState('');
-  const [mensualidad, setMensualidad] = useState('');
-  const [direccion, setDireccion] = useState('');
+  const [code, setCode] = useState('');
+  const [monthlyPrice, setMonthlyPrice] = useState('');
+  const [address, setAddress] = useState('');
 
   // Solo para crear la cuenta, cuando hace falta. El nombre y el celular NO se
   // repiten aqui: son los mismos campos que pide el ultimo paso.
   const [correo, setCorreo] = useState('');
-  const [clave, setClave] = useState('');
+  const [password, setPassword] = useState('');
 
-  const [guardando, setGuardando] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -118,24 +118,24 @@ export default function GymSignUpScreen() {
    * `unlinked`. No se arregla aqui; se avisa antes de que llene cinco campos
    * para nada.
    */
-  const necesitaCuenta = sesion.status === 'signed_out';
+  const needsAccount = session.status === 'signed_out';
   /**
    * Solo `signed_in` es el callejon: una cuenta con ficha en un padron. Ni
    * `loading` ni `demo` lo son, y tratarlos como tal pintaba el aviso durante el
    * arranque y en el modo de demostracion, donde no significa nada.
    */
-  const yaEsAlumno = sesion.status === 'signed_in';
+  const alreadyStudent = session.status === 'signed_in';
 
   // Si llego con la cuenta ya hecha, lo que dio al registrarse se reusa. Volver
   // a preguntar el nombre y el celular a quien acaba de escribirlos es la queja
   // que este producto ya se comio una vez.
   useEffect(() => {
-    if (paso !== 'datos') return;
-    const datos = currentAccountDetails();
-    if (datos === null) return;
-    setDuenoNombre((previo) => (previo.trim().length > 0 ? previo : (datos.fullName ?? '')));
-    setCelular((previo) => (previo.trim().length > 3 ? previo : (datos.phone ?? '+51')));
-  }, [paso]);
+    if (step !== 'datos') return;
+    const details = currentAccountDetails();
+    if (details === null) return;
+    setOwnerName((previo) => (previo.trim().length > 0 ? previo : (details.fullName ?? '')));
+    setPhone((previo) => (previo.trim().length > 3 ? previo : (details.phone ?? '+51')));
+  }, [step]);
 
   /**
    * Que le falta a cada campo, por su nombre.
@@ -145,8 +145,8 @@ export default function GymSignUpScreen() {
    * los cinco campos, asi que no tenia como pintar ninguno en rojo. Un mapa por
    * campo cuesta lo mismo de calcular y es lo que deja marcar el que falla.
    */
-  const digitosDelRuc = ruc.replace(/\D/g, '').length;
-  const rucFalla = digitosDelRuc >= 11 ? checkRuc(ruc) : null;
+  const taxIdDigits = ruc.replace(/\D/g, '').length;
+  const taxIdDenial = taxIdDigits >= 11 ? checkRuc(ruc) : null;
 
   /**
    * La mensualidad, comprobada con la MISMA funcion que la api.
@@ -155,50 +155,50 @@ export default function GymSignUpScreen() {
    * tarifa, asi que el campo se pone rojo por el motivo exacto por el que el
    * alta habria respondido 400 — y no despues de haber llenado seis campos.
    */
-  const centimosDeLaMensualidad = aCentimos(mensualidad);
-  const planFalla =
-    centimosDeLaMensualidad === null
+  const monthlyCents = aCentimos(monthlyPrice);
+  const planDenial =
+    monthlyCents === null
       ? null
       : checkPlanDraft({
           name: 'Mensualidad',
           type: 'unlimited',
           sessionsPerWeek: null,
           allowedDays: null,
-          priceCents: centimosDeLaMensualidad,
+          priceCents: monthlyCents,
         });
 
-  const problemas: Readonly<Partial<Record<CampoDelAlta, string>>> = {
-    ...(nombre.trim().length === 0
-      ? { nombre: 'Escribe el nombre de tu gimnasio.' }
-      : nombre.trim().length < 3
-        ? { nombre: 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.' }
+  const problems: Readonly<Partial<Record<SignUpField, string>>> = {
+    ...(name.trim().length === 0
+      ? { name: 'Escribe el nombre de tu gimnasio.' }
+      : name.trim().length < 3
+        ? { name: 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.' }
         : {}),
     ...(ruc.trim().length === 0
       ? { ruc: 'Falta tu RUC. Es el de la boleta que le das a tus alumnos.' }
-      : digitosDelRuc < 11
+      : taxIdDigits < 11
         ? { ruc: 'El RUC tiene 11 dígitos.' }
-        : rucFalla !== null
-          ? { ruc: rucDenialMessage(rucFalla) }
+        : taxIdDenial !== null
+          ? { ruc: rucDenialMessage(taxIdDenial) }
           : {}),
-    ...(documento.trim().length === 0
-      ? { documento: 'Falta tu documento: es lo que te identifica en la red.' }
-      : documento.trim().length < 6
-        ? { documento: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
+    ...(documentId.trim().length === 0
+      ? { documentId: 'Falta tu documento: es lo que te identifica en la red.' }
+      : documentId.trim().length < 6
+        ? { documentId: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
         : {}),
-    ...(direccion.trim().length === 0
-      ? { direccion: 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.' }
-      : direccion.trim().length < DIRECCION_MINIMA
-        ? { direccion: 'Un poco más: calle, número y distrito.' }
+    ...(address.trim().length === 0
+      ? { address: 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.' }
+      : address.trim().length < ADDRESS_MIN
+        ? { address: 'Un poco más: calle, número y distrito.' }
         : {}),
-    ...(mensualidad.trim().length === 0
-      ? { mensualidad: 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.' }
-      : centimosDeLaMensualidad === null
-        ? { mensualidad: 'Escríbelo en soles, con números: 120 o 120.50.' }
-        : planFalla !== null
-          ? { mensualidad: planDenialMessage(planFalla) }
+    ...(monthlyPrice.trim().length === 0
+      ? { monthlyPrice: 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.' }
+      : monthlyCents === null
+        ? { monthlyPrice: 'Escríbelo en soles, con números: 120 o 120.50.' }
+        : planDenial !== null
+          ? { monthlyPrice: planDenialMessage(planDenial) }
           : {}),
   };
-  const listo = Object.keys(problemas).length === 0;
+  const ready = Object.keys(problems).length === 0;
 
   /**
    * Si ya intento guardar.
@@ -208,7 +208,7 @@ export default function GymSignUpScreen() {
    * y el boton no hace nada. Ese es justo el momento en que necesita saber por
    * que.
    */
-  const [intentado, setIntentado] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   /**
    * Lo que SI se dice mientras escribe: un dato completo y equivocado.
@@ -217,51 +217,51 @@ export default function GymSignUpScreen() {
    * callarlo hasta el boton obliga a volver a un campo que ya se dio por hecho.
    * Vacio es otra cosa: eso es ir en orden.
    */
-  const enVivo = (campo: CampoDelAlta): boolean => campo === 'ruc' && digitosDelRuc >= 11;
+  const liveDenial = (field: SignUpField): boolean => field === 'taxId' && taxIdDigits >= 11;
 
-  const falla = (campo: CampoDelAlta): string | undefined =>
-    intentado || enVivo(campo) ? problemas[campo] : undefined;
+  const denial = (field: SignUpField): string | undefined =>
+    attempted || liveDenial(field) ? problems[field] : undefined;
 
   /** Lo mismo para el formulario de la cuenta, que falla por otras razones. */
-  const problemasDeCuenta: Readonly<Partial<Record<CampoDeLaCuenta, string>>> = {
-    ...(duenoNombre.trim().length < 2 ? { duenoNombre: 'Escribe tu nombre.' } : {}),
+  const accountProblems: Readonly<Partial<Record<AccountField, string>>> = {
+    ...(ownerName.trim().length < 2 ? { ownerName: 'Escribe tu nombre.' } : {}),
     ...(correo.trim().length === 0
       ? { correo: 'Falta tu correo.' }
       : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())
         ? { correo: 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.' }
         : {}),
-    ...(clave.length === 0
-      ? { clave: 'Falta la contraseña.' }
-      : clave.length < 6
-        ? { clave: 'La contraseña va de 6 caracteres para arriba.' }
+    ...(password.length === 0
+      ? { password: 'Falta la contraseña.' }
+      : password.length < 6
+        ? { password: 'La contraseña va de 6 caracteres para arriba.' }
         : {}),
-    ...(celular.trim().length < 8
-      ? { celular: 'Falta tu celular, con el código del país: +51987654321.' }
+    ...(phone.trim().length < 8
+      ? { phone: 'Falta tu celular, con el código del país: +51987654321.' }
       : {}),
   };
-  const cuentaLista = Object.keys(problemasDeCuenta).length === 0;
-  const fallaDeCuenta = (campo: CampoDeLaCuenta): string | undefined =>
-    intentado ? problemasDeCuenta[campo] : undefined;
+  const accountReady = Object.keys(accountProblems).length === 0;
+  const accountDenialFor = (field: AccountField): string | undefined =>
+    attempted ? accountProblems[field] : undefined;
 
   // Cada paso es un formulario distinto: entrar al siguiente con los rojos del
   // anterior ya puestos marca campos que esta persona no ha llegado a tocar.
   useEffect(() => {
-    setIntentado(false);
-  }, [paso]);
+    setAttempted(false);
+  }, [step]);
 
-  const irADatos = (): void => {
+  const goToDetails = (): void => {
     setError(null);
-    setPaso('datos');
+    setStep('datos');
   };
 
-  const crearCuenta = (): void => {
+  const createAccount = (): void => {
     setError(null);
-    setGuardando(true);
-    void completeEmailSignIn(correo, clave, 'signUp', {
-      fullName: duenoNombre.trim(),
-      phone: celular.trim(),
+    setSaving(true);
+    void completeEmailSignIn(correo, password, 'signUp', {
+      fullName: ownerName.trim(),
+      phone: phone.trim(),
     }).then((outcome) => {
-      setGuardando(false);
+      setSaving(false);
       if (outcome.kind === 'error') {
         setError(outcome.message);
         return;
@@ -269,24 +269,24 @@ export default function GymSignUpScreen() {
       // `needs_link` es el resultado ESPERADO: quien registra un gimnasio no
       // tiene ficha en ningun padron, y ese es justo el estado que deja la
       // credencial con la que se firma el alta.
-      setPaso('plan');
+      setStep('plan');
     });
   };
 
-  const crear = async (): Promise<void> => {
+  const create = async (): Promise<void> => {
     setError(null);
-    setGuardando(true);
+    setSaving(true);
     try {
-      const alta = await registrarGimnasio({
-        gymName: nombre.trim(),
+      const signUp = await registerGym({
+        gymName: name.trim(),
         taxId: ruc.trim(),
         saasTier: escalon,
-        monthlyPriceCents: centimosDeLaMensualidad ?? 0,
-        address: direccion.trim(),
-        ownerName: duenoNombre.trim().length >= 2 ? duenoNombre.trim() : undefined,
-        documentId: documento.trim(),
-        phone: celular.trim().length >= 6 ? celular.trim() : undefined,
-        promoCode: codigo.trim().length > 0 ? codigo.trim() : undefined,
+        monthlyPriceCents: monthlyCents ?? 0,
+        address: address.trim(),
+        ownerName: ownerName.trim().length >= 2 ? ownerName.trim() : undefined,
+        documentId: documentId.trim(),
+        phone: phone.trim().length >= 6 ? phone.trim() : undefined,
+        promoCode: code.trim().length > 0 ? code.trim() : undefined,
       });
 
       /**
@@ -295,16 +295,16 @@ export default function GymSignUpScreen() {
        * inscribir, que es lo único que un gimnasio recién creado puede hacer.
        * La puerta, vacía, no le dice nada todavía.
        */
-      void alta;
-      router.replace('/staff/padron');
+      void signUp;
+      router.replace('/staff/roster');
     } catch (causa: unknown) {
       setError(causa instanceof Error ? causa.message : 'No se pudo crear el gimnasio.');
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
-  const avisoDeError =
+  const errorNotice =
     error === null ? null : (
       <Card borderColor={withAlpha(theme.semaphore.bad, 0.4)} style={{ marginTop: 18 }}>
         <Text variant="bodySmall" color={theme.semaphore.bad}>
@@ -317,11 +317,11 @@ export default function GymSignUpScreen() {
   // La oferta
   // -------------------------------------------------------------------------
 
-  if (paso === 'oferta') {
+  if (step === 'oferta') {
     return (
       <Screen scroll style={{ flexGrow: 1 }}>
         <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
-          <Volver etiqueta="Entrar" onPress={() => router.back()} />
+          <BackRow label="Entrar" onPress={() => router.back()} />
 
           <Eyebrow color={theme.semaphore.ok} style={{ marginTop: 14 }}>
             Tu gimnasio en Sinchi
@@ -341,9 +341,9 @@ export default function GymSignUpScreen() {
             style={{ marginTop: 22 }}
           >
             <Stack gap={10}>
-              <Promesa texto={`Hasta ${SAAS_FREE_TIER_LIMIT} alumnos, gratis para siempre`} />
-              <Promesa texto="Primer mes gratis cuando pases a pagar" />
-              <Promesa texto="Sin tarjeta para empezar" />
+              <Promesa text={`Hasta ${SAAS_FREE_TIER_LIMIT} alumnos, gratis para siempre`} />
+              <Promesa text="Primer mes gratis cuando pases a pagar" />
+              <Promesa text="Sin tarjeta para empezar" />
             </Stack>
           </Card>
 
@@ -351,28 +351,28 @@ export default function GymSignUpScreen() {
 
           <Stack gap={14} style={{ marginTop: 14 }}>
             <Beneficio
-              icono={Users}
-              titulo="Padrón con semáforo"
-              cuerpo="Quién está al día y quién debe."
+              icon={Users}
+              title="Padrón con semáforo"
+              body="Quién está al día y quién debe."
             />
             <Beneficio
-              icono={QrCode}
-              titulo="Puerta con QR"
-              cuerpo="El alumno muestra su código; ves verde o rojo."
+              icon={QrCode}
+              title="Puerta con QR"
+              body="El alumno muestra su código; ves verde o rojo."
             />
             <Beneficio
-              icono={CreditCard}
-              titulo="Cobro por adelantado"
-              cuerpo="Se cobra solo y avisa si alguien se atrasa."
+              icon={CreditCard}
+              title="Cobro por adelantado"
+              body="Se cobra solo y avisa si alguien se atrasa."
             />
             <Beneficio
-              icono={CalendarDays}
-              titulo="Clases de prueba"
-              cuerpo="Sales en el directorio de la red."
+              icon={CalendarDays}
+              title="Clases de prueba"
+              body="Sales en el directorio de la red."
             />
           </Stack>
 
-          {yaEsAlumno ? (
+          {alreadyStudent ? (
             <Card borderColor={withAlpha(theme.semaphore.warn, 0.4)} style={{ marginTop: 22 }}>
               <Text variant="bodySmall" color={theme.semaphore.warn}>
                 Esta cuenta ya está vinculada a un gimnasio como alumno. Para registrar
@@ -384,7 +384,7 @@ export default function GymSignUpScreen() {
           <Stack gap={12} style={{ marginTop: 'auto', paddingTop: 26 }}>
             <Button
               label="Empezar gratis"
-              onPress={() => setPaso(necesitaCuenta ? 'cuenta' : 'plan')}
+              onPress={() => setStep(needsAccount ? 'cuenta' : 'plan')}
             />
             <Text variant="caption" color={theme.colors.textFaint} align="center">
               Son dos pasos y no pedimos tarjeta.
@@ -399,11 +399,11 @@ export default function GymSignUpScreen() {
   // La cuenta, solo para quien llega sin sesion
   // -------------------------------------------------------------------------
 
-  if (paso === 'cuenta') {
+  if (step === 'cuenta') {
     return (
       <Screen scroll style={{ flexGrow: 1 }}>
         <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
-          <Volver etiqueta="Atrás" onPress={() => setPaso('oferta')} />
+          <BackRow label="Atrás" onPress={() => setStep('oferta')} />
 
           <Text variant="title" weight="bold" style={{ marginTop: 22 }}>
             Crea tu cuenta
@@ -413,20 +413,20 @@ export default function GymSignUpScreen() {
             que el alta queda a tu nombre.
           </Text>
 
-          {avisoDeError}
+          {errorNotice}
 
           {firebaseConfigured() ? (
             <>
               <Stack gap={14} style={{ marginTop: 24 }}>
                 <Field
                   label="Tu nombre"
-                  value={duenoNombre}
-                  onChangeText={setDuenoNombre}
+                  value={ownerName}
+                  onChangeText={setOwnerName}
                   placeholder="Nombre y apellido"
                   autoCapitalize="words"
                   autoComplete="name"
-                  editable={!guardando}
-                  error={fallaDeCuenta('duenoNombre')}
+                  editable={!saving}
+                  error={accountDenialFor('ownerName')}
                 />
                 <Field
                   label="Correo"
@@ -436,48 +436,48 @@ export default function GymSignUpScreen() {
                   autoCapitalize="none"
                   autoComplete="email"
                   keyboardType="email-address"
-                  editable={!guardando}
-                  error={fallaDeCuenta('correo')}
+                  editable={!saving}
+                  error={accountDenialFor('email')}
                 />
                 <Field
                   label="Contraseña"
-                  value={clave}
-                  onChangeText={setClave}
+                  value={password}
+                  onChangeText={setPassword}
                   placeholder="Al menos 6 caracteres"
                   secureTextEntry
                   autoCapitalize="none"
                   autoComplete="new-password"
-                  editable={!guardando}
-                  error={fallaDeCuenta('clave')}
+                  editable={!saving}
+                  error={accountDenialFor('password')}
                 />
                 <Field
                   label="Tu celular"
-                  value={celular}
-                  onChangeText={setCelular}
+                  value={phone}
+                  onChangeText={setPhone}
                   placeholder="+51987654321"
                   keyboardType="phone-pad"
                   autoComplete="tel"
-                  editable={!guardando}
+                  editable={!saving}
                   hint="Es con lo que te ubicamos si algo pasa con tu cuenta."
-                  error={fallaDeCuenta('celular')}
+                  error={accountDenialFor('phone')}
                 />
               </Stack>
 
               <View style={{ marginTop: 'auto', paddingTop: 26 }}>
                 <Button
-                  label={guardando ? 'Creando…' : 'Crear cuenta y seguir'}
-                  disabled={!cuentaLista || guardando}
-                  onPress={crearCuenta}
-                  onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+                  label={saving ? 'Creando…' : 'Crear cuenta y seguir'}
+                  disabled={!accountReady || saving}
+                  onPress={createAccount}
+                  onBlockedPress={saving ? undefined : () => setAttempted(true)}
                 />
-                {intentado && !cuentaLista ? (
+                {attempted && !accountReady ? (
                   <Text
                     variant="caption"
                     color={theme.semaphore.bad}
                     align="center"
                     style={{ marginTop: 10 }}
                   >
-                    {resumenDeFaltantes(problemasDeCuenta)}
+                    {missingFieldsSummary(accountProblems)}
                   </Text>
                 ) : null}
               </View>
@@ -494,7 +494,7 @@ export default function GymSignUpScreen() {
             </Card>
           )}
 
-          {guardando && <ActivityIndicator color={theme.colors.ink} style={{ marginTop: 16 }} />}
+          {saving && <ActivityIndicator color={theme.colors.ink} style={{ marginTop: 16 }} />}
         </Stack>
       </Screen>
     );
@@ -504,19 +504,19 @@ export default function GymSignUpScreen() {
   // Paso 1 de 2 — el plan
   // -------------------------------------------------------------------------
 
-  if (paso === 'plan') {
-    const precio = SAAS_TIER_PRICES[escalon];
-    const gratis = isFreeTier(escalon);
-    const nota = gratis
+  if (step === 'plan') {
+    const price = SAAS_TIER_PRICES[escalon];
+    const free = isFreeTier(escalon);
+    const note = free
       ? `Con ${SAAS_FREE_TIER_LIMIT} alumnos o menos no se te cobra. Ni ahora ni en un año.`
       : 'Arrancas sin pagar: el primer cobro te llega recién al mes.';
 
     return (
       <Screen scroll style={{ flexGrow: 1 }}>
         <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
-          <Volver
-            etiqueta="Atrás"
-            onPress={() => setPaso(necesitaCuenta ? 'cuenta' : 'oferta')}
+          <BackRow
+            label="Atrás"
+            onPress={() => setStep(needsAccount ? 'cuenta' : 'oferta')}
           />
 
           <Progreso hechos={1} />
@@ -535,7 +535,7 @@ export default function GymSignUpScreen() {
               <Pastilla
                 key={tier}
                 tier={tier}
-                elegido={escalon === tier}
+                picked={escalon === tier}
                 onPress={() => setEscalon(tier)}
               />
             ))}
@@ -550,12 +550,12 @@ export default function GymSignUpScreen() {
                 <Text
                   variant="hero"
                   weight="black"
-                  color={gratis ? theme.semaphore.ok : theme.colors.ink}
+                  color={free ? theme.semaphore.ok : theme.colors.ink}
                 >
-                  {gratis ? 'Gratis' : formatPEN(precio, { withDecimals: false })}
+                  {free ? 'Gratis' : formatPEN(price, { withDecimals: false })}
                 </Text>
                 <Text variant="bodySmall" color={theme.colors.textFaint}>
-                  {gratis ? 'para siempre' : 'al mes'}
+                  {free ? 'para siempre' : 'al mes'}
                 </Text>
               </Row>
               <View
@@ -568,11 +568,11 @@ export default function GymSignUpScreen() {
                 }}
               >
                 <Eyebrow color={theme.semaphore.ok}>
-                  {gratis ? 'No pagas nunca' : '1er mes gratis'}
+                  {free ? 'No pagas nunca' : '1er mes gratis'}
                 </Eyebrow>
               </View>
               <Text variant="caption" color={theme.colors.textSecondary}>
-                {nota}
+                {note}
               </Text>
             </Stack>
           </Card>
@@ -589,8 +589,8 @@ export default function GymSignUpScreen() {
           <View style={{ marginTop: 22 }}>
             <Field
               label="Código de promoción (opcional)"
-              value={codigo}
-              onChangeText={setCodigo}
+              value={code}
+              onChangeText={setCode}
               placeholder="Si tienes uno, suma meses gratis"
               autoCapitalize="none"
               optional
@@ -598,7 +598,7 @@ export default function GymSignUpScreen() {
           </View>
 
           <View style={{ marginTop: 'auto', paddingTop: 26 }}>
-            <Button label="Continuar" onPress={irADatos} />
+            <Button label="Continuar" onPress={goToDetails} />
           </View>
         </Stack>
       </Screen>
@@ -612,7 +612,7 @@ export default function GymSignUpScreen() {
   return (
     <Screen scroll style={{ flexGrow: 1 }}>
       <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
-        <Volver etiqueta="Tu plan" onPress={() => setPaso('plan')} />
+        <BackRow label="Tu plan" onPress={() => setStep('plan')} />
 
         <Progreso hechos={2} />
 
@@ -620,19 +620,19 @@ export default function GymSignUpScreen() {
           Últimos datos
         </Text>
 
-        {avisoDeError}
+        {errorNotice}
 
         <Eyebrow style={{ marginTop: 20 }}>Tu gimnasio</Eyebrow>
 
         <Stack gap={14} style={{ marginTop: 10 }}>
           <Field
             label="Nombre del gimnasio"
-            value={nombre}
-            onChangeText={setNombre}
+            value={name}
+            onChangeText={setName}
             placeholder="Dojo Shotokan Miraflores"
             autoCapitalize="words"
-            editable={!guardando}
-            error={falla('nombre')}
+            editable={!saving}
+            error={denial('name')}
           />
           <Field
             label="RUC"
@@ -640,9 +640,9 @@ export default function GymSignUpScreen() {
             onChangeText={setRuc}
             placeholder="20100070970"
             keyboardType="number-pad"
-            editable={!guardando}
+            editable={!saving}
             hint="El de la boleta que le das a tus alumnos."
-            error={falla('ruc')}
+            error={denial('taxId')}
           />
         </Stack>
 
@@ -654,13 +654,13 @@ export default function GymSignUpScreen() {
         <Stack gap={14} style={{ marginTop: 14 }}>
           <Field
             label="Dirección del local"
-            value={direccion}
-            onChangeText={setDireccion}
+            value={address}
+            onChangeText={setAddress}
             placeholder="Av. Primavera 120, Surco"
             autoCapitalize="words"
-            editable={!guardando}
+            editable={!saving}
             hint="Como se la dirías a un taxista. Sale en tu ficha, con el mapa y el botón de cómo llegar."
-            error={falla('direccion')}
+            error={denial('address')}
           />
         </Stack>
 
@@ -677,13 +677,13 @@ export default function GymSignUpScreen() {
         <Stack gap={14} style={{ marginTop: 10 }}>
           <Field
             label="Cuánto cobras al mes, en soles"
-            value={mensualidad}
-            onChangeText={setMensualidad}
+            value={monthlyPrice}
+            onChangeText={setMonthlyPrice}
             placeholder="120"
             keyboardType="decimal-pad"
-            editable={!guardando}
+            editable={!saving}
             hint="Se crea como «Mensualidad», sin límite de sesiones. Puedes cambiarla y añadir más tarifas —dos veces por semana, clase suelta— desde Padrón → Planes."
-            error={falla('mensualidad')}
+            error={denial('monthlyPrice')}
           />
         </Stack>
 
@@ -692,41 +692,41 @@ export default function GymSignUpScreen() {
         <Stack gap={14} style={{ marginTop: 10 }}>
           <Field
             label="Tu nombre"
-            value={duenoNombre}
-            onChangeText={setDuenoNombre}
+            value={ownerName}
+            onChangeText={setOwnerName}
             placeholder="Como quieres que te vean tus alumnos"
             autoCapitalize="words"
-            editable={!guardando}
+            editable={!saving}
           />
           <Field
             label="Tu documento"
-            value={documento}
-            onChangeText={setDocumento}
+            value={documentId}
+            onChangeText={setDocumentId}
             placeholder="DNI o carné de extranjería"
             keyboardType="number-pad"
-            editable={!guardando}
-            error={falla('documento')}
+            editable={!saving}
+            error={denial('documentId')}
           />
           <Field
             label="Tu celular"
-            value={celular}
-            onChangeText={setCelular}
+            value={phone}
+            onChangeText={setPhone}
             placeholder="+51987654321"
             keyboardType="phone-pad"
-            editable={!guardando}
+            editable={!saving}
           />
         </Stack>
 
         <Stack gap={12} style={{ marginTop: 'auto', paddingTop: 26 }}>
           <Button
-            label={guardando ? 'Creando…' : 'Crear mi gimnasio'}
-            onPress={() => void crear()}
-            disabled={!listo || guardando}
-            onBlockedPress={guardando ? undefined : () => setIntentado(true)}
+            label={saving ? 'Creando…' : 'Crear mi gimnasio'}
+            onPress={() => void create()}
+            disabled={!ready || saving}
+            onBlockedPress={saving ? undefined : () => setAttempted(true)}
           />
-          {intentado && !listo ? (
+          {attempted && !ready ? (
             <Text variant="caption" color={theme.semaphore.bad} align="center">
-              {resumenDeFaltantes(problemas)}
+              {missingFieldsSummary(problems)}
             </Text>
           ) : null}
           <Text variant="caption" color={theme.colors.textFaint} align="center">
@@ -747,34 +747,34 @@ export default function GymSignUpScreen() {
  * cuenta — repetir tres frases ahi abajo tapa la pantalla, y los rojos ya estan
  * puestos arriba.
  */
-function resumenDeFaltantes(problemas: Readonly<Record<string, string | undefined>>): string {
-  const motivos = Object.values(problemas).filter(
-    (motivo): motivo is string => motivo !== undefined,
+function missingFieldsSummary(problems: Readonly<Record<string, string | undefined>>): string {
+  const denials = Object.values(problems).filter(
+    (denial): denial is string => denial !== undefined,
   );
-  if (motivos.length === 1) return motivos[0]!;
-  return `Faltan ${motivos.length} campos, marcados arriba en rojo.`;
+  if (denials.length === 1) return denials[0]!;
+  return `Faltan ${denials.length} campos, marcados arriba en rojo.`;
 }
 
 /** Fila de vuelta, con los 44px que exige un objetivo tactil. */
-function Volver({
-  etiqueta,
+function BackRow({
+  label,
   onPress,
 }: {
-  readonly etiqueta: string;
+  readonly label: string;
   readonly onPress: () => void;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Volver a ${etiqueta}`}
+      accessibilityLabel={`Volver a ${label}`}
       onPress={onPress}
       style={{ height: 44, marginLeft: -8, paddingHorizontal: 8, justifyContent: 'center' }}
     >
       <Row gap={6} justify="flex-start">
         <ChevronLeft size={16} color={theme.colors.textSecondary} />
         <Text variant="bodySmall" color={theme.colors.textSecondary}>
-          {etiqueta}
+          {label}
         </Text>
       </Row>
     </Pressable>
@@ -791,15 +791,15 @@ function Progreso({ hechos }: { readonly hechos: 1 | 2 }) {
   return (
     <Row gap={12} justify="flex-start" style={{ marginTop: 10 }}>
       <Row gap={5} justify="flex-start">
-        <Tramo lleno />
-        <Tramo lleno={hechos === 2} />
+        <Tramo full />
+        <Tramo full={hechos === 2} />
       </Row>
       <Eyebrow>Paso {hechos} de 2</Eyebrow>
     </Row>
   );
 }
 
-function Tramo({ lleno = false }: { readonly lleno?: boolean }) {
+function Tramo({ full = false }: { readonly full?: boolean }) {
   const theme = useTheme();
   return (
     <View
@@ -807,43 +807,43 @@ function Tramo({ lleno = false }: { readonly lleno?: boolean }) {
         width: 28,
         height: 4,
         borderRadius: theme.radii.pill,
-        backgroundColor: lleno ? theme.colors.ink : theme.colors.chipActive,
+        backgroundColor: full ? theme.colors.ink : theme.colors.chipActive,
       }}
     />
   );
 }
 
-function Promesa({ texto }: { readonly texto: string }) {
+function Promesa({ text }: { readonly text: string }) {
   const theme = useTheme();
   return (
     <Row gap={10} justify="flex-start">
       <Check size={18} color={theme.semaphore.ok} strokeWidth={2.4} />
       <Text variant="bodySmall" style={{ flex: 1 }}>
-        {texto}
+        {text}
       </Text>
     </Row>
   );
 }
 
 function Beneficio({
-  icono: Icono,
-  titulo,
-  cuerpo,
+  icon: Icon,
+  title,
+  body,
 }: {
-  readonly icono: LucideIcon;
-  readonly titulo: string;
-  readonly cuerpo: string;
+  readonly icon: LucideIcon;
+  readonly title: string;
+  readonly body: string;
 }) {
   const theme = useTheme();
   return (
     <Row gap={12} align="flex-start" justify="flex-start">
-      <Icono size={20} color={theme.colors.textStrong} style={{ marginTop: 1 }} />
+      <Icon size={20} color={theme.colors.textStrong} style={{ marginTop: 1 }} />
       <Stack gap={3} style={{ flex: 1 }}>
         <Text variant="bodySmall" weight="semibold">
-          {titulo}
+          {title}
         </Text>
         <Text variant="caption" color={theme.colors.textTertiary}>
-          {cuerpo}
+          {body}
         </Text>
       </Stack>
     </Row>
@@ -853,26 +853,26 @@ function Beneficio({
 /** Una pastilla por escalón. Cuatro en fila, cada una con los 44px de alto. */
 function Pastilla({
   tier,
-  elegido,
+  picked,
   onPress,
 }: {
   readonly tier: SaasTier;
-  readonly elegido: boolean;
+  readonly picked: boolean;
   readonly onPress: () => void;
 }) {
   const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ selected: elegido }}
+      accessibilityState={{ selected: picked }}
       accessibilityLabel={SAAS_TIER_LABELS[tier]}
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
         height: 44,
         borderRadius: theme.radii.pill,
-        backgroundColor: elegido ? theme.colors.actionPrimary : theme.colors.surfaceRaised,
-        borderWidth: elegido ? 0 : 1,
+        backgroundColor: picked ? theme.colors.actionPrimary : theme.colors.surfaceRaised,
+        borderWidth: picked ? 0 : 1,
         borderColor: theme.colors.border,
         alignItems: 'center',
         justifyContent: 'center',
@@ -882,7 +882,7 @@ function Pastilla({
       <Text
         variant="caption"
         weight="semibold"
-        color={elegido ? theme.colors.actionPrimaryInk : theme.colors.textStrong}
+        color={picked ? theme.colors.actionPrimaryInk : theme.colors.textStrong}
       >
         {PASTILLA[tier]}
       </Text>

@@ -89,15 +89,15 @@ async function status(
 
   console.log('');
   for (const gym of elegidos) {
-    const resumen = await saas.summaryFor(gym.id);
-    const aviso = saasNotice(resumen.state, resumen.priceCents);
+    const summary = await saas.summaryFor(gym.id);
+    const notice = saasNotice(summary.state, summary.priceCents);
 
     console.log(`  ${gym.name} (${gym.slug})`);
-    console.log(`    estado   : ${resumen.state.status} — ${aviso.title}`);
-    console.log(`    escalon  : ${SAAS_TIER_LABELS[resumen.tier]} · ${formatPEN(resumen.priceCents)}/mes`);
-    console.log(`    gratis   : hasta ${formatPlainDate(resumen.freeUntil)}`);
-    console.log(`    proximo  : ${formatPlainDate(resumen.nextBillingDate)}`);
-    console.log(`    escribe  : ${resumen.state.canWrite ? 'si' : 'NO (solo lectura)'}`);
+    console.log(`    estado   : ${summary.state.status} — ${notice.title}`);
+    console.log(`    escalon  : ${SAAS_TIER_LABELS[summary.tier]} · ${formatPEN(summary.priceCents)}/mes`);
+    console.log(`    gratis   : hasta ${formatPlainDate(summary.freeUntil)}`);
+    console.log(`    proximo  : ${formatPlainDate(summary.nextBillingDate)}`);
+    console.log(`    escribe  : ${summary.state.canWrite ? 'si' : 'NO (solo lectura)'}`);
     console.log('');
   }
 }
@@ -127,7 +127,7 @@ async function pay(
   );
   if (gym === undefined) throw new Error(`No existe el gimnasio "${slug}".`);
 
-  const resultado = await saas.recordPayment({
+  const outcome = await saas.recordPayment({
     tenantId: gym.id,
     rail: riel,
     reference: reference ?? null,
@@ -141,14 +141,14 @@ async function pay(
     console.log('  AVISO: sin numero de operacion. Registrarlo dos veces cobrara dos meses.');
     console.log('');
   }
-  if (resultado.alreadyRecorded) {
+  if (outcome.alreadyRecorded) {
     // El indice unico lo paro. Es la red que evita regalarle un mes al gimnasio
     // cuando dos personas atienden el mismo correo del banco.
     console.log(`  ${gym.name}: ese periodo YA estaba pagado. No se registro nada.`);
   } else {
-    console.log(`  ${gym.name}: cobrado ${formatPEN(resultado.amountCents as Cents)}`);
-    console.log(`  periodo : ${formatPlainDate(resultado.periodStart)} → ${formatPlainDate(resultado.periodEnd)}`);
-    console.log(`  escalon : ${SAAS_TIER_LABELS[resultado.tier]}`);
+    console.log(`  ${gym.name}: cobrado ${formatPEN(outcome.amountCents as Cents)}`);
+    console.log(`  periodo : ${formatPlainDate(outcome.periodStart)} → ${formatPlainDate(outcome.periodEnd)}`);
+    console.log(`  escalon : ${SAAS_TIER_LABELS[outcome.tier]}`);
   }
   console.log('');
 }
@@ -161,21 +161,21 @@ async function pay(
  * es un agujero abierto—. `usos` acepta `ilimitado` cuando se quiere de verdad.
  */
 async function promo(db: ReturnType<typeof createDatabase>, args: readonly string[]): Promise<void> {
-  const [accion, raw, mesesRaw, usosRaw, ...nota] = args;
+  const [accion, raw, rawMonths, usosRaw, ...note] = args;
 
   if (accion === 'list') {
-    const filas = await withoutTenantIsolation(db, (tx) =>
+    const rows = await withoutTenantIsolation(db, (tx) =>
       tx.select().from(schema.saasPromoCodes).orderBy(schema.saasPromoCodes.createdAt),
     );
     console.log('');
-    if (filas.length === 0) console.log('  (no hay códigos todavía)');
-    for (const fila of filas) {
-      const tope = fila.maxRedemptions === null ? 'ilimitado' : String(fila.maxRedemptions);
-      const estado = fila.active ? '' : ' [APAGADO]';
+    if (rows.length === 0) console.log('  (no hay códigos todavía)');
+    for (const row of rows) {
+      const cap = row.maxRedemptions === null ? 'ilimitado' : String(row.maxRedemptions);
+      const state = row.active ? '' : ' [APAGADO]';
       console.log(
-        `  ${fila.code.padEnd(16)} ${fila.freeMonths} mes(es)  ` +
-          `${fila.redeemedCount}/${tope} usados${estado}` +
-          (fila.note === null ? '' : `  — ${fila.note}`),
+        `  ${row.code.padEnd(16)} ${row.freeMonths} mes(es)  ` +
+          `${row.redeemedCount}/${cap} usados${state}` +
+          (row.note === null ? '' : `  — ${row.note}`),
       );
     }
     console.log('');
@@ -206,8 +206,8 @@ async function promo(db: ReturnType<typeof createDatabase>, args: readonly strin
     throw new Error('uso: saas-cli promo <new|list|off> ...');
   }
 
-  const meses = Number(mesesRaw ?? '1');
-  if (!Number.isInteger(meses) || meses < 1 || meses > PROMO_MAX_FREE_MONTHS) {
+  const months = Number(rawMonths ?? '1');
+  if (!Number.isInteger(months) || months < 1 || months > PROMO_MAX_FREE_MONTHS) {
     throw new Error(`Los meses van de 1 a ${PROMO_MAX_FREE_MONTHS}.`);
   }
 
@@ -225,14 +225,14 @@ async function promo(db: ReturnType<typeof createDatabase>, args: readonly strin
   await withoutTenantIsolation(db, (tx) =>
     tx.insert(schema.saasPromoCodes).values({
       code,
-      freeMonths: meses,
+      freeMonths: months,
       maxRedemptions: usos,
-      note: nota.length > 0 ? nota.join(' ') : null,
+      note: note.length > 0 ? note.join(' ') : null,
     }),
   );
 
   console.log('');
-  console.log(`  ${code} — ${meses} mes(es) gratis, ${usos ?? 'sin'} tope de usos`);
+  console.log(`  ${code} — ${months} mes(es) gratis, ${usos ?? 'sin'} tope de usos`);
   console.log('');
 }
 

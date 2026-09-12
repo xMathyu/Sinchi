@@ -37,7 +37,7 @@ import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { useMembership, useStore, useToday } from '../../src/data/hooks';
 import { railLabel } from '../../src/data/store';
-import { registrarPago } from '../../src/data/actions';
+import { registerPayment } from '../../src/data/actions';
 import { formatLongDate, initials } from '../../src/lib/format';
 
 const CONCEPTS: readonly { readonly value: ChargeType; readonly label: string }[] = [
@@ -266,7 +266,7 @@ export default function ChargeScreen() {
             setEnviando(true);
             setError(null);
 
-            void registrarPago({
+            void registerPayment({
               membershipId: params.membershipId,
               // `ChargeType` incluye 'proration' y 'saas', que no se cobran en
               // mostrador: la primera la genera un cambio de plan y la segunda
@@ -276,12 +276,12 @@ export default function ChargeScreen() {
               periods,
               amountCents: amount,
             })
-              .then((salida) => {
+              .then((outcome) => {
                 // La llave de idempotencia es por alumno, concepto y dia. Salva
                 // del doble toque, pero tambien descarta el segundo cobro
                 // legitimo del mismo dia —dos clases sueltas, por ejemplo— y en
                 // silencio se ve igual que un cobro bueno.
-                if (salida.repetido) {
+                if (outcome.repetido) {
                   setError(
                     'Ya había un cobro de este concepto para este alumno hoy. No se creó un segundo cargo.',
                   );

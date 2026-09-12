@@ -54,8 +54,8 @@ function declareIdentity(uid: string): string {
 /** Documentos y celulares distintos por corrida: son unicos en la red. */
 const runId = randomInt(10_000_000, 89_000_000);
 let contador = 0;
-const siguiente = (): string => String(runId + ++contador);
-const celular = (): string => `+519${siguiente().slice(0, 8)}`;
+const nextValue = (): string => String(runId + ++contador);
+const nextPhone = (): string => `+519${nextValue().slice(0, 8)}`;
 
 /** RUC reales: el alta comprueba el digito verificador. */
 const RUC = ['20100070970', '20131312955', '20100047218'];
@@ -63,35 +63,35 @@ const RUC = ['20100070970', '20131312955', '20100047218'];
 const auth = (bearer: string) => ({ Authorization: `Bearer ${bearer}` });
 
 /** Los gimnasios que esta prueba crea son PERMANENTES: se borran al terminar. */
-const creados: string[] = [];
+const created: string[] = [];
 
 interface Local {
   readonly tenantId: string;
   readonly slug: string;
-  readonly dueno: string;
+  readonly owner: string;
 }
 
-let indiceRuc = 0;
+let taxIdIndex = 0;
 
-async function nuevoGimnasio(): Promise<Local> {
+async function newGym(): Promise<Local> {
   const uid = `dueno-horarios-${runId}-${++contador}`;
   const { body, status } = await http.post('/v1/gyms/signup').send({
     idToken: declareIdentity(uid),
     gymName: `Dojo Horarios ${runId} ${contador}`,
-    taxId: RUC[indiceRuc++ % RUC.length]!,
+    taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
     monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
-    documentId: siguiente(),
-    phone: celular(),
+    documentId: nextValue(),
+    phone: nextPhone(),
   });
   if (status !== 201) throw new Error(`No se pudo crear el gimnasio: ${JSON.stringify(body)}`);
-  creados.push(body.tenantId as string);
+  created.push(body.tenantId as string);
   return {
     tenantId: body.tenantId as string,
     slug: body.slug as string,
-    dueno: body.session.accessToken as string,
+    owner: body.session.accessToken as string,
   };
 }
 
@@ -102,16 +102,16 @@ async function nuevoGimnasio(): Promise<Local> {
  * de comprobar lo que mas importa del permiso: que recepcion LEA el horario —lo
  * necesita en la puerta— y no pueda cambiarlo.
  */
-async function recepcion(tenantId: string): Promise<string> {
+async function frontDeskToken(tenantId: string): Promise<string> {
   const { schema, withTenant, withoutTenantIsolation } = await import('./db/client');
   const { DATABASE } = await import('./db/db.module');
   const db = app.get(DATABASE);
-  const phone = celular();
+  const phone = nextPhone();
 
   const userId = await withoutTenantIsolation(db, async (tx) => {
     const [user] = await tx
       .insert(schema.users)
-      .values({ name: `Recepción ${runId}`, documentId: siguiente(), phone })
+      .values({ name: `Recepción ${runId}`, documentId: nextValue(), phone })
       .returning({ id: schema.users.id });
     return user!.id;
   });
@@ -136,7 +136,7 @@ async function recepcion(tenantId: string): Promise<string> {
  * respuesta es siempre una LISTA — tambien con un solo dia. `publicar` la
  * deshace para las pruebas que solo miran el bloque.
  */
-const bloqueBase = {
+const baseBlock = {
   name: 'Muay Thai principiantes',
   weekdays: [1],
   startTime: '19:00',
@@ -147,35 +147,35 @@ const bloqueBase = {
 };
 
 /** Lo mismo en singular, que es lo que acepta EDITAR un bloque. */
-const bloqueEditado = (extra: Record<string, unknown> = {}) => {
-  const { weekdays, ...resto } = bloqueBase;
-  return { ...resto, weekday: weekdays[0], ...extra };
+const editedBlock = (extra: Record<string, unknown> = {}) => {
+  const { weekdays, ...rest } = baseBlock;
+  return { ...rest, weekday: weekdays[0], ...extra };
 };
 
 /** Publica marcando un solo dia y devuelve ese bloque. */
-async function publicar(local: Local, extra: Record<string, unknown> = {}) {
+async function publish(local: Local, extra: Record<string, unknown> = {}) {
   const { body } = await http
     .post('/v1/staff/schedules')
-    .set(auth(local.dueno))
-    .send({ ...bloqueBase, ...extra })
+    .set(auth(local.owner))
+    .send({ ...baseBlock, ...extra })
     .expect(201);
   return body[0];
 }
 
 /** Un bloque en cada dia de la semana: garantiza que siempre haya cupo cercano. */
-async function publicarSemanaEntera(local: Local): Promise<void> {
+async function publishWholeWeek(local: Local): Promise<void> {
   for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [weekday] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [weekday] })
       .expect(201);
   }
 }
 
-const fichaDe = async (slug: string) => (await http.get(`/v1/gyms/${slug}`).expect(200)).body;
+const recordOf = async (slug: string) => (await http.get(`/v1/gyms/${slug}`).expect(200)).body;
 
-const tarjetaDe = async (slug: string) => {
+const cardOf = async (slug: string) => {
   const { body } = await http.get('/v1/gyms').expect(200);
   return body.find((g: { slug: string }) => g.slug === slug);
 };
@@ -204,11 +204,11 @@ beforeAll(async () => {
 }, 90_000);
 
 afterAll(async () => {
-  if (app !== undefined && creados.length > 0) {
+  if (app !== undefined && created.length > 0) {
     const { schema, withoutTenantIsolation } = await import('./db/client');
     const { DATABASE } = await import('./db/db.module');
     await withoutTenantIsolation(app.get(DATABASE), (tx) =>
-      tx.delete(schema.tenants).where(inArray(schema.tenants.id, creados)),
+      tx.delete(schema.tenants).where(inArray(schema.tenants.id, created)),
     );
   }
   await app?.close();
@@ -216,90 +216,90 @@ afterAll(async () => {
 
 suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
   it('nace con la lista vacía y sin una sola hora reservable', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
 
-    const { body: lista } = await http
+    const { body: list } = await http
       .get('/v1/staff/schedules/all')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
-    expect(lista).toEqual([]);
+    expect(list).toEqual([]);
 
     // Este es el estado que dejaba muerta la clase gratis: la ficha ofrece la
     // clase de prueba y no tiene ni un cupo que ofrecer.
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.trialClassEnabled).toBe(true);
-    expect(ficha.schedules).toEqual([]);
-    expect(ficha.slots).toEqual([]);
+    const record = await recordOf(local.slug);
+    expect(record.trialClassEnabled).toBe(true);
+    expect(record.schedules).toEqual([]);
+    expect(record.slots).toEqual([]);
   });
 
   it('el dueño publica uno y sale en su ficha y en el directorio', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
 
-    const creado = await publicar(local);
+    const created = await publish(local);
 
-    expect(creado.name).toBe(bloqueBase.name);
-    expect(creado.weekday).toBe(1);
-    expect(creado.capacity).toBe(20);
+    expect(created.name).toBe(baseBlock.name);
+    expect(created.weekday).toBe(1);
+    expect(created.capacity).toBe(20);
 
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.schedules).toHaveLength(1);
-    expect(ficha.slots.length).toBeGreaterThan(0);
+    const record = await recordOf(local.slug);
+    expect(record.schedules).toHaveLength(1);
+    expect(record.slots.length).toBeGreaterThan(0);
 
     // Antes salia "0 clases por semana" y sin disciplinas, que es como se ve un
     // local cerrado.
-    const tarjeta = await tarjetaDe(local.slug);
-    expect(tarjeta.weeklyClasses).toBe(1);
-    expect(tarjeta.disciplines).toEqual([bloqueBase.name]);
+    const card = await cardOf(local.slug);
+    expect(card.weeklyClasses).toBe(1);
+    expect(card.disciplines).toEqual([baseBlock.name]);
   });
 
   it('la lista del mostrador solo trae los activos; la del dueño, todos', async () => {
-    const local = await nuevoGimnasio();
-    const creado = await publicar(local);
+    const local = await newGym();
+    const created = await publish(local);
 
     await http
-      .post(`/v1/staff/schedules/${creado.id}/active`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/schedules/${created.id}/active`)
+      .set(auth(local.owner))
       .send({ active: false })
       .expect(201);
 
     // El escaner valida contra lo que el local da HOY: un bloque archivado
     // abriria la puerta a deshora.
-    const { body: mostrador } = await http
+    const { body: frontDesk } = await http
       .get('/v1/staff/schedules')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
-    expect(mostrador).toEqual([]);
+    expect(frontDesk).toEqual([]);
 
-    const { body: delDueno } = await http
+    const { body: ownerToken } = await http
       .get('/v1/staff/schedules/all')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
-    expect(delDueno).toHaveLength(1);
-    expect(delDueno[0].active).toBe(false);
+    expect(ownerToken).toHaveLength(1);
+    expect(ownerToken[0].active).toBe(false);
 
     // Y desaparece de la ficha publica: no se ofrece lo que no se da.
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.schedules).toEqual([]);
+    const record = await recordOf(local.slug);
+    expect(record.schedules).toEqual([]);
   });
 
   it('reactivar lo devuelve al horario sin volver a teclearlo', async () => {
-    const local = await nuevoGimnasio();
-    const creado = await publicar(local);
+    const local = await newGym();
+    const created = await publish(local);
 
     await http
-      .post(`/v1/staff/schedules/${creado.id}/active`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/schedules/${created.id}/active`)
+      .set(auth(local.owner))
       .send({ active: false })
       .expect(201);
     await http
-      .post(`/v1/staff/schedules/${creado.id}/active`)
-      .set(auth(local.dueno))
+      .post(`/v1/staff/schedules/${created.id}/active`)
+      .set(auth(local.owner))
       .send({ active: true })
       .expect(201);
 
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.schedules).toHaveLength(1);
-    expect(ficha.schedules[0].name).toBe(bloqueBase.name);
+    const record = await recordOf(local.slug);
+    expect(record.schedules).toHaveLength(1);
+    expect(record.schedules[0].name).toBe(baseBlock.name);
   });
 
   /**
@@ -310,23 +310,23 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
    * a medias y el directorio anuncia una clase por semana donde hay tres.
    */
   it('publica la misma clase en varios días de una vez', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
 
-    const { body: creados } = await http
+    const { body: created } = await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [1, 3, 5] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [1, 3, 5] })
       .expect(201);
 
-    expect(creados).toHaveLength(3);
-    expect(creados.map((b: { weekday: number }) => b.weekday).sort()).toEqual([1, 3, 5]);
+    expect(created).toHaveLength(3);
+    expect(created.map((b: { weekday: number }) => b.weekday).sort()).toEqual([1, 3, 5]);
     // Misma hora, mismo nombre, mismo aforo: lo unico que cambia es el dia.
-    expect(new Set(creados.map((b: { startTime: string }) => b.startTime)).size).toBe(1);
+    expect(new Set(created.map((b: { startTime: string }) => b.startTime)).size).toBe(1);
 
-    const tarjeta = await tarjetaDe(local.slug);
-    expect(tarjeta.weeklyClasses).toBe(3);
+    const card = await cardOf(local.slug);
+    expect(card.weeklyClasses).toBe(3);
     // Tres bloques de la misma clase son UNA disciplina, no tres.
-    expect(tarjeta.disciplines).toEqual([bloqueBase.name]);
+    expect(card.disciplines).toEqual([baseBlock.name]);
   });
 
   /**
@@ -334,80 +334,80 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
    * otra mitad de lo que se pidio: «puede variar la hora».
    */
   it('cada día queda por separado: cambiarle la hora a uno no toca los otros', async () => {
-    const local = await nuevoGimnasio();
-    const { body: creados } = await http
+    const local = await newGym();
+    const { body: created } = await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [1, 5] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [1, 5] })
       .expect(201);
 
-    const viernes = creados.find((b: { weekday: number }) => b.weekday === 5);
+    const viernes = created.find((b: { weekday: number }) => b.weekday === 5);
     await http
       .post(`/v1/staff/schedules/${viernes.id}`)
-      .set(auth(local.dueno))
-      .send(bloqueEditado({ weekday: 5, startTime: '18:00', endTime: '19:30' }))
+      .set(auth(local.owner))
+      .send(editedBlock({ weekday: 5, startTime: '18:00', endTime: '19:30' }))
       .expect(201);
 
-    const { body: todos } = await http
+    const { body: all } = await http
       .get('/v1/staff/schedules/all')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
 
-    const porDia = new Map(
-      todos.map((h: { schedule: { weekday: number; startTime: string } }) => [
+    const byDay = new Map(
+      all.map((h: { schedule: { weekday: number; startTime: string } }) => [
         h.schedule.weekday,
         h.schedule.startTime,
       ]),
     );
-    expect(porDia.get(5)).toBe('18:00');
-    expect(porDia.get(1)).toBe('19:00');
+    expect(byDay.get(5)).toBe('18:00');
+    expect(byDay.get(1)).toBe('19:00');
   });
 
   it('el día repetido no duplica el bloque', async () => {
     // Dos veces el martes es el mismo martes, y dos bloques idénticos salen en
     // el directorio como dos clases distintas.
-    const local = await nuevoGimnasio();
-    const { body: creados } = await http
+    const local = await newGym();
+    const { body: created } = await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [2, 2, 2] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [2, 2, 2] })
       .expect(201);
 
-    expect(creados).toHaveLength(1);
+    expect(created).toHaveLength(1);
   });
 
   it('sin ningún día no publica nada', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [] })
       .expect(400);
   });
 
   it('editar cambia lo que se ofrece de aquí en adelante', async () => {
-    const local = await nuevoGimnasio();
-    const creado = await publicar(local);
+    const local = await newGym();
+    const created = await publish(local);
 
-    const { body: editado } = await http
-      .post(`/v1/staff/schedules/${creado.id}`)
-      .set(auth(local.dueno))
-      .send(bloqueEditado({ name: 'Muay Thai avanzados', startTime: '20:00', endTime: '21:30' }))
+    const { body: edited } = await http
+      .post(`/v1/staff/schedules/${created.id}`)
+      .set(auth(local.owner))
+      .send(editedBlock({ name: 'Muay Thai avanzados', startTime: '20:00', endTime: '21:30' }))
       .expect(201);
 
-    expect(editado.id).toBe(creado.id);
-    expect(editado.name).toBe('Muay Thai avanzados');
-    expect(editado.startTime).toBe('20:00');
+    expect(edited.id).toBe(created.id);
+    expect(edited.name).toBe('Muay Thai avanzados');
+    expect(edited.startTime).toBe('20:00');
   });
 });
 
 suite('lo que el horario no acepta', () => {
   it('rechaza la clase que termina antes de empezar, con su motivo', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     const { body } = await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, startTime: '20:00', endTime: '19:00' })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, startTime: '20:00', endTime: '19:00' })
       .expect(400);
 
     // El texto del dominio, no un error de la base: es el mismo que apaga el
@@ -416,100 +416,100 @@ suite('lo que el horario no acepta', () => {
   });
 
   it('rechaza el bloque de duración cero', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, startTime: '19:00', endTime: '19:00' })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, startTime: '19:00', endTime: '19:00' })
       .expect(400);
   });
 
   it('rechaza el día que no existe', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [8] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [8] })
       .expect(400);
   });
 
   it('rechaza el aforo de cero', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, capacity: 0 })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, capacity: 0 })
       .expect(400);
   });
 
   it('no encuentra el bloque de otro gimnasio', async () => {
-    const uno = await nuevoGimnasio();
-    const otro = await nuevoGimnasio();
-    const creado = await publicar(uno);
+    const uno = await newGym();
+    const other = await newGym();
+    const created = await publish(uno);
 
     // Aislamiento por tenant: para el otro local ese bloque no existe.
     await http
-      .post(`/v1/staff/schedules/${creado.id}`)
-      .set(auth(otro.dueno))
-      .send(bloqueEditado())
+      .post(`/v1/staff/schedules/${created.id}`)
+      .set(auth(other.owner))
+      .send(editedBlock())
       .expect(404);
   });
 });
 
 suite('quién puede tocarlo', () => {
   it('recepción lo lee —lo necesita en la puerta— pero no lo escribe', async () => {
-    const local = await nuevoGimnasio();
-    await http.post('/v1/staff/schedules').set(auth(local.dueno)).send(bloqueBase).expect(201);
+    const local = await newGym();
+    await http.post('/v1/staff/schedules').set(auth(local.owner)).send(baseBlock).expect(201);
 
-    const mostrador = await recepcion(local.tenantId);
+    const frontDesk = await frontDeskToken(local.tenantId);
 
-    await http.get('/v1/staff/schedules').set(auth(mostrador)).expect(200);
+    await http.get('/v1/staff/schedules').set(auth(frontDesk)).expect(200);
 
-    await http.post('/v1/staff/schedules').set(auth(mostrador)).send(bloqueBase).expect(403);
-    await http.get('/v1/staff/schedules/all').set(auth(mostrador)).expect(403);
+    await http.post('/v1/staff/schedules').set(auth(frontDesk)).send(baseBlock).expect(403);
+    await http.get('/v1/staff/schedules/all').set(auth(frontDesk)).expect(403);
   });
 
   it('sin sesión no se escribe nada', async () => {
-    await http.post('/v1/staff/schedules').send(bloqueBase).expect(401);
+    await http.post('/v1/staff/schedules').send(baseBlock).expect(401);
   });
 });
 
 suite('lo que el dueño necesita saber antes de tocarlo', () => {
   it('avisa de los bloques que se pisan, sin impedirlos', async () => {
-    const local = await nuevoGimnasio();
+    const local = await newGym();
     // Dos tatamis, dos clases a las 19:00 del lunes: legitimo, y por eso se
     // permite. Lo que no puede pasar es que se entere al ver el horario.
-    await http.post('/v1/staff/schedules').set(auth(local.dueno)).send(bloqueBase).expect(201);
+    await http.post('/v1/staff/schedules').set(auth(local.owner)).send(baseBlock).expect(201);
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, name: 'Judo adultos', startTime: '20:00', endTime: '21:00' })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, name: 'Judo adultos', startTime: '20:00', endTime: '21:00' })
       .expect(201);
 
     const { body } = await http
       .get('/v1/staff/schedules/all')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
     expect(body).toHaveLength(2);
     expect(body.every((h: { overlaps: boolean }) => h.overlaps)).toBe(true);
   });
 
   it('no marca solape entre días distintos ni al tocarse en el borde', async () => {
-    const local = await nuevoGimnasio();
-    await http.post('/v1/staff/schedules').set(auth(local.dueno)).send(bloqueBase).expect(201);
+    const local = await newGym();
+    await http.post('/v1/staff/schedules').set(auth(local.owner)).send(baseBlock).expect(201);
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekdays: [2] })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, weekdays: [2] })
       .expect(201);
     // Empieza justo cuando la del lunes acaba: horario seguido, no choque.
     await http
       .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send({ ...bloqueBase, name: 'Clinch', startTime: '20:30', endTime: '21:30' })
+      .set(auth(local.owner))
+      .send({ ...baseBlock, name: 'Clinch', startTime: '20:30', endTime: '21:30' })
       .expect(201);
 
-    const { body } = await http.get('/v1/staff/schedules/all').set(auth(local.dueno));
+    const { body } = await http.get('/v1/staff/schedules/all').set(auth(local.owner));
     expect(body.every((h: { overlaps: boolean }) => !h.overlaps)).toBe(true);
   });
 });
@@ -522,13 +522,13 @@ suite('el directorio no anuncia una clase suelta como mensualidad', () => {
    * pantalla donde la gente compara dojos.
    */
   it('el «desde» sale de la mensualidad más barata, no del drop_in', async () => {
-    const local = await nuevoGimnasio();
-    await http.post('/v1/staff/schedules').set(auth(local.dueno)).send(bloqueBase).expect(201);
+    const local = await newGym();
+    await http.post('/v1/staff/schedules').set(auth(local.owner)).send(baseBlock).expect(201);
 
     // La clase suelta la escribe el dueño: el alta solo crea la mensualidad.
     await http
       .post('/v1/staff/plans')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .send({
         name: 'Clase suelta',
         type: 'drop_in',
@@ -538,20 +538,20 @@ suite('el directorio no anuncia una clase suelta como mensualidad', () => {
       })
       .expect(201);
 
-    const { body: planes } = await http.get('/v1/staff/plans').set(auth(local.dueno)).expect(200);
-    const suelta = planes.find((p: { type: string }) => p.type === 'drop_in');
-    const mensualMasBarata = Math.min(
-      ...planes
+    const { body: plans } = await http.get('/v1/staff/plans').set(auth(local.owner)).expect(200);
+    const dropIn = plans.find((p: { type: string }) => p.type === 'drop_in');
+    const cheapestMonthly = Math.min(
+      ...plans
         .filter((p: { type: string }) => p.type !== 'drop_in')
         .map((p: { priceCents: number }) => p.priceCents),
     );
-    expect(suelta.priceCents).toBeLessThan(mensualMasBarata);
+    expect(dropIn.priceCents).toBeLessThan(cheapestMonthly);
 
-    const tarjeta = await tarjetaDe(local.slug);
-    expect(tarjeta.fromPriceCents).toBe(mensualMasBarata);
+    const card = await cardOf(local.slug);
+    expect(card.fromPriceCents).toBe(cheapestMonthly);
 
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.fromPriceCents).toBe(mensualMasBarata);
+    const record = await recordOf(local.slug);
+    expect(record.fromPriceCents).toBe(cheapestMonthly);
   });
 });
 
@@ -564,9 +564,9 @@ suite('el alta no revienta con un celular ya registrado', () => {
    * le dice al dueno que corregir, y lo que se pierde es un alta.
    */
   it('responde 409 con un motivo, no 500', async () => {
-    const compartido = celular();
-    const primero = await nuevoGimnasio();
-    expect(primero.tenantId).toBeDefined();
+    const compartido = nextPhone();
+    const first = await newGym();
+    expect(first.tenantId).toBeDefined();
 
     // Alguien que ya existe en la red con ese celular.
     const { schema, withoutTenantIsolation } = await import('./db/client');
@@ -574,21 +574,21 @@ suite('el alta no revienta con un celular ya registrado', () => {
     await withoutTenantIsolation(app.get(DATABASE), (tx) =>
       tx
         .insert(schema.users)
-        .values({ name: 'Ya estaba', documentId: siguiente(), phone: compartido }),
+        .values({ name: 'Ya estaba', documentId: nextValue(), phone: compartido }),
     );
 
     const uid = `dueno-choque-${runId}-${++contador}`;
     const { body, status } = await http.post('/v1/gyms/signup').send({
       idToken: declareIdentity(uid),
       gymName: `Dojo Choque ${runId} ${contador}`,
-      taxId: RUC[indiceRuc++ % RUC.length]!,
+      taxId: RUC[taxIdIndex++ % RUC.length]!,
       saasTier: 'free',
       monthlyPriceCents: 12_000,
       address: 'Av. Primavera 120, Surco',
       ownerName: 'Dueño con celular repetido',
       // Documento DISTINTO: si coincidiera, el alta adoptaria esa identidad y no
       // llegaria nunca al indice.
-      documentId: siguiente(),
+      documentId: nextValue(),
       phone: compartido,
     });
 
@@ -608,42 +608,42 @@ suite('la cadena entera: alguien que no es nadie reserva en un gimnasio de hoy',
    */
   it('se da de alta, publica su horario, y un desconocido reserva su clase gratis', async () => {
     // 1. Cualquiera crea su gimnasio, gratis.
-    const local = await nuevoGimnasio();
+    const local = await newGym();
 
     // 2. Y publica sus clases el mismo dia, sin que nadie le siembre nada.
-    await publicarSemanaEntera(local);
+    await publishWholeWeek(local);
 
     // 3. Sale vivo en el directorio: con sus clases y su disciplina.
-    const tarjeta = await tarjetaDe(local.slug);
-    expect(tarjeta.weeklyClasses).toBe(7);
-    expect(tarjeta.trialClassEnabled).toBe(true);
+    const card = await cardOf(local.slug);
+    expect(card.weeklyClasses).toBe(7);
+    expect(card.trialClassEnabled).toBe(true);
 
     // 4. Su ficha ofrece horas de verdad.
-    const ficha = await fichaDe(local.slug);
-    expect(ficha.slots.length).toBeGreaterThan(0);
-    const cupo = ficha.slots[0];
+    const record = await recordOf(local.slug);
+    expect(record.slots.length).toBeGreaterThan(0);
+    const quota = record.slots[0];
 
     // 5. Alguien SIN ficha en ningun padron reserva.
     const visitante = declareIdentity(`visitante-${runId}-${++contador}`);
-    const fecha = `${cupo.date.year}-${String(cupo.date.month).padStart(2, '0')}-${String(cupo.date.day).padStart(2, '0')}`;
-    const { body: reserva } = await http
+    const isoDate = `${quota.date.year}-${String(quota.date.month).padStart(2, '0')}-${String(quota.date.day).padStart(2, '0')}`;
+    const { body: trialRow } = await http
       .post(`/v1/gyms/${local.slug}/trial`)
       .send({
         idToken: visitante,
         fullName: 'Carla Visitante',
-        phone: celular(),
-        classScheduleId: cupo.scheduleId,
-        date: fecha,
+        phone: nextPhone(),
+        classScheduleId: quota.scheduleId,
+        date: isoDate,
       })
       .expect(201);
 
-    expect(reserva.booked).toBe(true);
-    expect(reserva.booking.className).toBe(bloqueBase.name);
+    expect(trialRow.booked).toBe(true);
+    expect(trialRow.booking.className).toBe(baseBlock.name);
 
     // 6. Y el mostrador la ve venir.
     const { body: pruebas } = await http
       .get('/v1/staff/trials')
-      .set(auth(local.dueno))
+      .set(auth(local.owner))
       .expect(200);
     expect(pruebas.some((r: { fullName: string }) => r.fullName === 'Carla Visitante')).toBe(true);
   });
@@ -653,39 +653,39 @@ suite('la cadena entera: alguien que no es nadie reserva en un gimnasio de hoy',
    * reserva lleva copiada la clase y la hora, y el FK es ON DELETE set null.
    */
   it('borrar el bloque conserva la reserva que apuntaba a él', async () => {
-    const local = await nuevoGimnasio();
-    await publicarSemanaEntera(local);
+    const local = await newGym();
+    await publishWholeWeek(local);
 
-    const ficha = await fichaDe(local.slug);
-    const cupo = ficha.slots[0];
-    const fecha = `${cupo.date.year}-${String(cupo.date.month).padStart(2, '0')}-${String(cupo.date.day).padStart(2, '0')}`;
+    const record = await recordOf(local.slug);
+    const quota = record.slots[0];
+    const isoDate = `${quota.date.year}-${String(quota.date.month).padStart(2, '0')}-${String(quota.date.day).padStart(2, '0')}`;
 
     await http
       .post(`/v1/gyms/${local.slug}/trial`)
       .send({
         idToken: declareIdentity(`visitante-borrado-${runId}-${++contador}`),
         fullName: 'Quien ya reservó',
-        phone: celular(),
-        classScheduleId: cupo.scheduleId,
-        date: fecha,
+        phone: nextPhone(),
+        classScheduleId: quota.scheduleId,
+        date: isoDate,
       })
       .expect(201);
 
     // El dueño lo ve venir antes de tocarlo: es el numero que convierte
     // "borrar" en una decision y no en una apuesta.
-    const { body: antes } = await http.get('/v1/staff/schedules/all').set(auth(local.dueno));
-    const fila = antes.find((h: { schedule: { id: string } }) => h.schedule.id === cupo.scheduleId);
-    expect(fila.upcomingTrials).toBe(1);
+    const { body: before } = await http.get('/v1/staff/schedules/all').set(auth(local.owner));
+    const row = before.find((h: { schedule: { id: string } }) => h.schedule.id === quota.scheduleId);
+    expect(row.upcomingTrials).toBe(1);
 
     await http
-      .delete(`/v1/staff/schedules/${cupo.scheduleId}`)
-      .set(auth(local.dueno))
+      .delete(`/v1/staff/schedules/${quota.scheduleId}`)
+      .set(auth(local.owner))
       .expect(200);
 
-    const { body: pruebas } = await http.get('/v1/staff/trials').set(auth(local.dueno)).expect(200);
-    const reserva = pruebas.find((r: { fullName: string }) => r.fullName === 'Quien ya reservó');
-    expect(reserva).toBeDefined();
-    expect(reserva.className).toBe(bloqueBase.name);
-    expect(reserva.startTime).toBe(bloqueBase.startTime);
+    const { body: pruebas } = await http.get('/v1/staff/trials').set(auth(local.owner)).expect(200);
+    const trialRow = pruebas.find((r: { fullName: string }) => r.fullName === 'Quien ya reservó');
+    expect(trialRow).toBeDefined();
+    expect(trialRow.className).toBe(baseBlock.name);
+    expect(trialRow.startTime).toBe(baseBlock.startTime);
   });
 });

@@ -7,20 +7,20 @@
  * un DOM.
  */
 import { describe, expect, it } from 'vitest';
-import { detectarSistema, paginaInvitacion, type Tiendas } from './invite-page';
+import { detectarSistema, invitePage, type Tiendas } from './invite-page';
 
 const IOS = 'https://apps.apple.com/pe/app/sinchi/id123456789';
 const ANDROID = 'https://play.google.com/store/apps/details?id=fit.sinchi.app';
 
 const base = {
-  gimnasio: 'Club Kaizen',
-  nombre: 'Diego Salas',
+  gym: 'Club Kaizen',
+  name: 'Diego Salas',
   plan: '2 por semana',
-  enlaceApp: 'sinchi:///invite/abc123',
+  appHref: 'sinchi:///invite/abc123',
 } as const;
 
 const pagina = (sistema: 'ios' | 'android' | 'otro', tiendas: Tiendas = { ios: IOS, android: ANDROID }) =>
-  paginaInvitacion({ ...base, sistema, tiendas });
+  invitePage({ ...base, sistema, tiendas });
 
 describe('detectarSistema', () => {
   it('reconoce un iPhone', () => {
@@ -98,9 +98,9 @@ describe('paginaInvitacion', () => {
   });
 
   it('escapa el nombre del gimnasio, que lo escribió recepción', () => {
-    const html = paginaInvitacion({
+    const html = invitePage({
       ...base,
-      gimnasio: '<script>alert(1)</script>',
+      gym: '<script>alert(1)</script>',
       sistema: 'ios',
       tiendas: { ios: IOS, android: ANDROID },
     });

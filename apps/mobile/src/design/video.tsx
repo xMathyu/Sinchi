@@ -32,23 +32,23 @@ import { Text } from './primitives';
 import { useTheme } from './theme';
 
 /** Abre lo que no se puede reproducir dentro. */
-export function abrirVideo(url: string): void {
+export function openVideo(url: string): void {
   void Linking.openURL(url).catch(() => {
     // Un enlace que el sistema no sabe abrir no puede tumbar la pantalla: la
     // rutina sigue teniendo sus instrucciones, que es la mitad que importa.
   });
 }
 
-type Tema = ReturnType<typeof useTheme>;
+type Theme = ReturnType<typeof useTheme>;
 
 /**
  * `alto` fijo y proporción 16:9, que es lo que graba un celular en horizontal.
  * La miniatura se recorta —`cover`— y no se deforma: una técnica estirada se ve
  * mal hecha, y eso es lo contrario de lo que el gimnasio quiere enseñar.
  */
-function marcoDe(theme: Tema, alto: number) {
+function marcoDe(theme: Theme, height: number) {
   return {
-    height: alto,
+    height: height,
     borderRadius: theme.radii.lg,
     overflow: 'hidden' as const,
     backgroundColor: theme.colors.surfaceSunken,
@@ -67,11 +67,11 @@ type Marco = ReturnType<typeof marcoDe>;
  * la api no firma su URL para una lista, donde nadie va a reproducir nada. Sin
  * este marcador, una rutina con video propio se ve igual que una sin video.
  */
-export function MarcadorDeVideo({ alto = 168 }: { readonly alto?: number }) {
+export function MarcadorDeVideo({ height = 168 }: { readonly height?: number }) {
   const theme = useTheme();
 
   return (
-    <View style={[marcoDe(theme, alto), { alignItems: 'center', justifyContent: 'center', gap: 8 }]}>
+    <View style={[marcoDe(theme, height), { alignItems: 'center', justifyContent: 'center', gap: 8 }]}>
       <View
         style={{
           width: 46,
@@ -100,35 +100,35 @@ export function MarcadorDeVideo({ alto = 168 }: { readonly alto?: number }) {
  */
 export function PortadaDeVideo({
   url,
-  alto = 168,
+  height = 168,
 }: {
   readonly url: string;
-  readonly alto?: number;
+  readonly height?: number;
 }) {
   const theme = useTheme();
   const video = parseVideoLink(url);
   if (video === null) return null;
 
-  return <Portada video={video} marco={marcoDe(theme, alto)} />;
+  return <Portada video={video} marco={marcoDe(theme, height)} />;
 }
 
 /** Miniatura que se convierte en reproductor. Es la de la FICHA. */
-export function VideoDeRutina({
+export function RoutineVideo({
   url,
-  etiqueta,
-  alto = 168,
+  label,
+  height = 168,
 }: {
   readonly url: string;
   /** Para el lector de pantalla: «Ver el video de …». */
-  readonly etiqueta: string;
-  readonly alto?: number;
+  readonly label: string;
+  readonly height?: number;
 }) {
   const theme = useTheme();
   const [reproduciendo, setReproduciendo] = useState(false);
   const video = parseVideoLink(url);
 
   if (video === null) return null;
-  const marco = marcoDe(theme, alto);
+  const marco = marcoDe(theme, height);
 
   if (reproduciendo && video.playback === 'file') {
     return (
@@ -141,7 +141,7 @@ export function VideoDeRutina({
   if (reproduciendo && video.playback === 'embed') {
     return (
       <View style={marco}>
-        <ReproductorEmbebido video={video} etiqueta={etiqueta} />
+        <ReproductorEmbebido video={video} label={label} />
       </View>
     );
   }
@@ -149,9 +149,9 @@ export function VideoDeRutina({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Ver el video de ${etiqueta}`}
+      accessibilityLabel={`Ver el video de ${label}`}
       onPress={() => {
-        if (video.playback === 'external') abrirVideo(video.url);
+        if (video.playback === 'external') openVideo(video.url);
         else setReproduciendo(true);
       }}
     >
@@ -264,13 +264,13 @@ function ReproductorNativo({ url }: { readonly url: string }) {
  */
 function ReproductorEmbebido({
   video,
-  etiqueta,
+  label,
 }: {
   readonly video: VideoLink;
-  readonly etiqueta: string;
+  readonly label: string;
 }) {
   const theme = useTheme();
-  const [cargando, setCargando] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   if (video.embedUrl === null) return null;
 
@@ -291,7 +291,7 @@ iframe{border:0;width:100%;height:100%;display:block}</style>
     <View style={{ flex: 1 }}>
       <WebView
         source={{ html, baseUrl: origen }}
-        accessibilityLabel={`Video de ${etiqueta}`}
+        accessibilityLabel={`Video de ${label}`}
         style={{ flex: 1, backgroundColor: '#000' }}
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
@@ -301,9 +301,9 @@ iframe{border:0;width:100%;height:100%;display:block}</style>
         javaScriptEnabled
         domStorageEnabled={false}
         thirdPartyCookiesEnabled={false}
-        onLoadEnd={() => setCargando(false)}
+        onLoadEnd={() => setLoading(false)}
       />
-      {cargando ? (
+      {loading ? (
         <View
           style={{
             position: 'absolute',
@@ -321,10 +321,10 @@ iframe{border:0;width:100%;height:100%;display:block}</style>
       ) : (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Abrir el video de ${etiqueta} en ${
+          accessibilityLabel={`Abrir el video de ${label} en ${
             video.provider === 'vimeo' ? 'Vimeo' : 'YouTube'
           }`}
-          onPress={() => abrirVideo(video.url)}
+          onPress={() => openVideo(video.url)}
           hitSlop={8}
           style={{
             position: 'absolute',

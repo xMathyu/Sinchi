@@ -64,8 +64,8 @@ export function formatLongDate(date: PlainDate): string {
  * igual.
  */
 export function formatEventDate(date: PlainDate): string {
-  const dia = weekdayName(isoWeekday(date)).slice(0, 3);
-  return `${dia} ${date.day} ${MONTH_SHORT[date.month - 1] ?? ''}`;
+  const day = weekdayName(isoWeekday(date)).slice(0, 3);
+  return `${day} ${date.day} ${MONTH_SHORT[date.month - 1] ?? ''}`;
 }
 
 /** `Jueves 20` con la inicial en mayuscula, como en el historial del diseno. */
@@ -108,7 +108,7 @@ export function splitGymName(name: string): { readonly brand: string; readonly a
  * una linea que ya lleva los pasos y el estado, «Para cualquiera» ocupa sitio
  * para no decir nada. La ausencia de nivel ya significa eso.
  */
-export function nivelCorto(
+export function shortLevel(
   level: 'beginner' | 'intermediate' | 'advanced' | null,
 ): string | null {
   switch (level) {
@@ -125,9 +125,9 @@ export function nivelCorto(
 
 /** `3 set` a partir de un instante ISO. Para «actualizada el …». */
 export function formatIsoDay(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return '';
-  return formatShortDate(plainDateInZone(fecha, TZ_LIMA));
+  const plainDate = new Date(iso);
+  if (Number.isNaN(plainDate.getTime())) return '';
+  return formatShortDate(plainDateInZone(plainDate, TZ_LIMA));
 }
 
 /**
@@ -138,10 +138,10 @@ export function formatIsoDay(iso: string): string {
  * «120.50» y «120,50» igual, porque es el mismo numero escrito por la misma
  * persona en el mismo teclado.
  */
-export function aCentimos(texto: string): number | null {
-  const limpio = texto.trim().replace(',', '.');
-  if (limpio.length === 0) return null;
-  const valor = Number(limpio);
-  if (!Number.isFinite(valor) || valor < 0) return null;
-  return Math.round(valor * 100);
+export function aCentimos(text: string): number | null {
+  const trimmed = text.trim().replace(',', '.');
+  if (trimmed.length === 0) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
 }

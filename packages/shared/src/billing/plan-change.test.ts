@@ -15,7 +15,7 @@ const plan2x = makeWeeklyPlan(2); // S/ 120
 const plan3x = makeWeeklyPlan(3); // S/ 150
 const ilimitado = makeUnlimitedPlan(); // S/ 180
 
-const suscripcion = makeSubscription({
+const sub = makeSubscription({
   planId: plan2x.id,
   periodStart: plainDate(2026, 8, 12),
   nextBillingDate: plainDate(2026, 9, 12),
@@ -23,7 +23,7 @@ const suscripcion = makeSubscription({
 
 describe('upgrade', () => {
   const decision = decidePlanChange({
-    subscription: suscripcion,
+    subscription: sub,
     currentPlan: plan2x,
     targetPlan: plan3x,
     today: HOY,
@@ -44,7 +44,7 @@ describe('upgrade', () => {
 
   it('NO mueve la fecha de renovacion', () => {
     if (decision.kind !== 'upgrade') throw new Error('esperaba upgrade');
-    expect(decision.nextBillingDate).toEqual(suscripcion.nextBillingDate);
+    expect(decision.nextBillingDate).toEqual(sub.nextBillingDate);
   });
 });
 
@@ -105,7 +105,7 @@ describe('cambio lateral', () => {
 describe('casos borde', () => {
   it('el mismo plan no es un cambio', () => {
     const decision = decidePlanChange({
-      subscription: suscripcion,
+      subscription: sub,
       currentPlan: plan2x,
       targetPlan: plan2x,
       today: HOY,
@@ -116,7 +116,7 @@ describe('casos borde', () => {
   it('rechaza un plan inactivo', () => {
     expect(() =>
       decidePlanChange({
-        subscription: suscripcion,
+        subscription: sub,
         currentPlan: plan2x,
         targetPlan: makeWeeklyPlan(3, { active: false }),
         today: HOY,
@@ -127,7 +127,7 @@ describe('casos borde', () => {
   it('rechaza un plan de otro gimnasio', () => {
     expect(() =>
       decidePlanChange({
-        subscription: suscripcion,
+        subscription: sub,
         currentPlan: plan2x,
         targetPlan: makeWeeklyPlan(3, { tenantId: asId('tenant-2') }),
         today: HOY,

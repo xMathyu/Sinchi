@@ -37,39 +37,39 @@ import Lock from 'lucide-react-native/icons/lock';
 import { Badge, Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { Screen } from '../../src/design/screen';
-import { EstadoSinConexion } from '../../src/design/empty';
-import { CargandoSeccion } from '../../src/design/loading';
-import { DondeQueda } from '../../src/design/donde-queda';
+import { OfflineState } from '../../src/design/empty';
+import { SectionLoader } from '../../src/design/loading';
+import { GymLocationBlock } from '../../src/design/gym-location';
 import { useTheme } from '../../src/design/theme';
-import { useGym, useMisClasesGratis, useToday, useWallet } from '../../src/data/hooks';
+import { useGym, useMyTrialClasses, useToday, useWallet } from '../../src/data/hooks';
 import {
-  cambiarHoraDeClaseGratis,
-  cuentaParaReservar,
-  necesitaDatos,
-  reservarClaseGratis,
-  reservarPlazaEnEvento,
+  rescheduleTrialClass,
+  bookingCredential,
+  askForDetails,
+  bookTrialClass,
+  bookEventSeat,
 } from '../../src/data/trials';
-import type { BookEventDto, BookTrialDto, EventoConCupo, RutinaEnLista } from '../../src/data/api';
+import type { BookEventDto, BookTrialDto, EventWithSeats, RoutineListItem } from '../../src/data/api';
 import {
   formatEventDate,
   formatLongDate,
   formatWeekdayAndDay,
-  nivelCorto,
+  shortLevel,
 } from '../../src/lib/format';
 
 export default function GymScreen() {
   const theme = useTheme();
   const { slug } = useLocalSearchParams<{ slug: string }>();
-  const { datos: gym, cargando, error, recargar } = useGym(slug ?? '');
-  const reservas = useMisClasesGratis();
-  const billetera = useWallet();
+  const { details: gym, loading, error, reload } = useGym(slug ?? '');
+  const bookings = useMyTrialClasses();
+  const wallet = useWallet();
   const hoy = useToday();
 
   const [slot, setSlot] = useState<TrialSlot | null>(null);
-  const [nombre, setNombre] = useState('');
-  const [celular, setCelular] = useState('+51');
-  const [reservando, setReservando] = useState(false);
-  const [salida, setSalida] = useState<BookTrialDto | null>(null);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('+51');
+  const [submitting, setBooking] = useState(false);
+  const [outcome, setOutcome] = useState<BookTrialDto | null>(null);
   /**
    * Está eligiendo una hora nueva para la reserva que ya tiene.
    *
@@ -78,31 +78,31 @@ export default function GymScreen() {
    * una pantalla aparte a elegir entre las mismas catorce filas sería contar lo
    * mismo dos veces.
    */
-  const [cambiando, setCambiando] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
-  const cuenta = cuentaParaReservar();
+  const account = bookingCredential();
   // Solo si de verdad no sabemos quién es. Con identidad Sinchi los datos están
   // en el padrón; sin ficha, en lo que escribió al crear su cuenta. Preguntar
   // otra vez lo que la persona acaba de dar convierte la reserva en un trámite.
-  const pideDatos = necesitaDatos();
-  const yaReservada = reservas.datos.find(
-    (reserva) => reserva.gymSlug === slug && reserva.status === 'booked',
+  const needsDetails = askForDetails();
+  const existingBooking = bookings.details.find(
+    (booking) => booking.gymSlug === slug && booking.status === 'booked',
   );
 
-  if (cargando && gym === null) return <CargandoSeccion texto="Abriendo el gimnasio…" />;
+  if (loading && gym === null) return <SectionLoader text="Abriendo el gimnasio…" />;
 
   if (gym === null) {
     return (
       <Screen>
         <Row style={{ paddingTop: 8 }}>
-          <Volver />
+          <BackRow />
         </Row>
         <View style={{ flex: 1 }}>
-          <EstadoSinConexion
-            titulo="No se pudo abrir este gimnasio"
-            cuerpo="No llegamos al servidor. Vuelve a intentarlo en un momento."
+          <OfflineState
+            title="No se pudo abrir este gimnasio"
+            body="No llegamos al servidor. Vuelve a intentarlo en un momento."
             error={error ?? 'Este gimnasio no está disponible.'}
-            onReintentar={recargar}
+            onReintentar={reload}
           />
         </View>
       </Screen>
@@ -112,11 +112,11 @@ export default function GymScreen() {
   const puedeReservar = gym.trialClassEnabled && gym.slots.length > 0;
   // `?? 0` porque la app se actualiza sola y la api no: contra un despliegue
   // viejo el campo no viene, y «PRUEBA undefined» es peor que asumir gratis.
-  const precioCents = gym.trialClassPriceCents ?? 0;
-  const gratis = precioCents === 0;
-  const precio = formatPEN(cents(precioCents));
+  const priceCents = gym.trialClassPriceCents ?? 0;
+  const free = priceCents === 0;
+  const price = formatPEN(cents(priceCents));
   /** Para la insignia y el botón, donde «S/ 40.00» se come media línea. */
-  const precioCorto = formatPENShort(cents(precioCents));
+  const shortPrice = formatPENShort(cents(priceCents));
   /**
    * Ya entrena aquí.
    *
@@ -124,9 +124,9 @@ export default function GymScreen() {
    * un local nuevo— pero enterarse DESPUÉS de elegir día y hora es que la
    * pantalla te haga trabajar para nada. La billetera ya sabe la respuesta.
    */
-  const esAlumno = billetera.some(
-    (entrada) =>
-      entrada.tenant.id === gym.id && entrada.subscription.status !== 'canceled',
+  const isStudent = wallet.some(
+    (entry) =>
+      entry.tenant.id === gym.id && entry.subscription.status !== 'canceled',
   );
 
   /**
@@ -138,7 +138,7 @@ export default function GymScreen() {
    * trabajar para nada.
    */
   const puedeOfrecer =
-    puedeReservar && !esAlumno && yaReservada === undefined && !(salida?.booked ?? false);
+    puedeReservar && !isStudent && existingBooking === undefined && !(outcome?.booked ?? false);
 
   /**
    * Y se ofrece MOVER a quien ya tiene la suya y lo pidió.
@@ -149,9 +149,9 @@ export default function GymScreen() {
    * aire entre una cosa y la otra. Quien solo quería venir el jueves en vez del
    * martes no debería jugarse nada.
    */
-  const puedeCambiar = cambiando && yaReservada !== undefined && puedeReservar && !esAlumno;
+  const canReschedule = switching && existingBooking !== undefined && puedeReservar && !isStudent;
   /** Quien puede tocar las filas del horario, por cualquiera de los dos motivos. */
-  const eligiendo = puedeOfrecer || puedeCambiar;
+  const eligiendo = puedeOfrecer || canReschedule;
 
   /**
    * Mueve la que ya tiene. Mismo botón, misma salida, otra llamada.
@@ -160,22 +160,22 @@ export default function GymScreen() {
    * el motivo por el que esa hora no sirve— para que la pantalla no tenga que
    * distinguir dos casos que para quien la usa son uno.
    */
-  const confirmarCambio = (): void => {
-    if (slot === null || yaReservada === undefined) return;
-    setReservando(true);
-    setSalida(null);
+  const confirmReschedule = (): void => {
+    if (slot === null || existingBooking === undefined) return;
+    setBooking(true);
+    setOutcome(null);
 
-    void cambiarHoraDeClaseGratis({ bookingId: yaReservada.id, slot })
-      .then((resultado) => {
-        setSalida(resultado);
-        if (resultado.booked) {
+    void rescheduleTrialClass({ bookingId: existingBooking.id, slot })
+      .then((outcome) => {
+        setOutcome(outcome);
+        if (outcome.booked) {
           setSlot(null);
-          setCambiando(false);
-          reservas.recargar();
+          setSwitching(false);
+          bookings.reload();
         }
       })
       .catch((causa: unknown) => {
-        setSalida({
+        setOutcome({
           booked: false,
           reason: { code: 'slot_not_available' },
           message: {
@@ -184,33 +184,33 @@ export default function GymScreen() {
           },
         });
       })
-      .finally(() => setReservando(false));
+      .finally(() => setBooking(false));
   };
 
   const confirmar = (): void => {
     if (slot === null) return;
-    setReservando(true);
-    setSalida(null);
+    setBooking(true);
+    setOutcome(null);
 
     // Solo se mandan si la pantalla los pidió. Mandar los campos vacíos —que es
     // lo que hay cuando no se enseñaron— tapaba lo que ya sabíamos de la persona
     // y la api rechazaba la reserva por «nombre demasiado corto».
-    void reservarClaseGratis({
+    void bookTrialClass({
       slug: gym.slug,
       slot,
-      ...(pideDatos ? { fullName: nombre, phone: celular } : {}),
+      ...(needsDetails ? { fullName: name, phone: phone } : {}),
     })
-      .then((resultado) => {
-        setSalida(resultado);
-        if (resultado.booked) {
+      .then((outcome) => {
+        setOutcome(outcome);
+        if (outcome.booked) {
           setSlot(null);
-          reservas.recargar();
+          bookings.reload();
         }
       })
       .catch((causa: unknown) => {
         // Un fallo de red no es un rechazo del gimnasio, pero se enseña en el
         // mismo sitio: quien reserva solo necesita saber que no quedó hecho.
-        setSalida({
+        setOutcome({
           booked: false,
           reason: { code: 'slot_not_available' },
           message: {
@@ -219,13 +219,13 @@ export default function GymScreen() {
           },
         });
       })
-      .finally(() => setReservando(false));
+      .finally(() => setBooking(false));
   };
 
   return (
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
-        <Volver />
+        <BackRow />
         {/* Sin horario publicado la insignia promete una reserva que esta misma
             pantalla no puede ofrecer: debajo solo hay siete días vacíos y un
             «este gimnasio todavía no publicó sus horarios». Es el estado de todo
@@ -233,7 +233,7 @@ export default function GymScreen() {
             sin bloques. */}
         {gym.trialClassEnabled && gym.schedules.length > 0 ? (
           <Badge
-            label={gratis ? '1 CLASE GRATIS' : `PRUEBA ${precioCorto}`}
+            label={free ? '1 CLASE GRATIS' : `PRUEBA ${shortPrice}`}
             color={theme.semaphoreInk.ok}
             background={theme.semaphore.ok}
           />
@@ -261,7 +261,7 @@ export default function GymScreen() {
       ) : null}
 
       {/* --- Reservar, si toca ---------------------------------------------- */}
-      {esAlumno ? (
+      {isStudent ? (
         <Card tone="sunken" radius={theme.radii.xl} style={{ marginTop: 22 }}>
           <Stack gap={6}>
             <Text variant="bodySmall" weight="semibold">
@@ -273,7 +273,7 @@ export default function GymScreen() {
             </Text>
           </Stack>
         </Card>
-      ) : yaReservada !== undefined ? (
+      ) : existingBooking !== undefined ? (
         <Card
           accent={theme.semaphore.ok}
           borderColor={withAlpha(theme.semaphore.ok, 0.26)}
@@ -285,34 +285,34 @@ export default function GymScreen() {
               Ya tienes tu clase reservada
             </Text>
             <Text variant="caption" color={theme.colors.textSecondary}>
-              {yaReservada.className} · {formatWeekdayAndDay(yaReservada.date)} a las{' '}
-              {yaReservada.startTime}. Te esperan.
-              {(yaReservada.priceCents ?? 0) === 0
+              {existingBooking.className} · {formatWeekdayAndDay(existingBooking.date)} a las{' '}
+              {existingBooking.startTime}. Te esperan.
+              {(existingBooking.priceCents ?? 0) === 0
                 ? ''
-                : ` Se paga en el local: ${formatPEN(cents(yaReservada.priceCents))}.`}
+                : ` Se paga en el local: ${formatPEN(cents(existingBooking.priceCents))}.`}
             </Text>
             {/* La salida que faltaba. Antes, desde aquí, lo único que se podía
                 hacer con una reserva hecha era cancelarla — y quien solo quería
                 otra hora acababa soltando el cupo para volver a pedirlo. */}
-            {puedeReservar && !esAlumno ? (
+            {puedeReservar && !isStudent ? (
               <Pressable
                 accessibilityRole="button"
                 hitSlop={10}
                 style={{ alignSelf: 'flex-start', paddingTop: 4 }}
                 onPress={() => {
-                  setCambiando((puesto) => !puesto);
+                  setSwitching((post) => !post);
                   setSlot(null);
-                  setSalida(null);
+                  setOutcome(null);
                 }}
               >
                 <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
-                  {cambiando ? 'Dejarlo como está' : 'Cambiar la hora'}
+                  {switching ? 'Dejarlo como está' : 'Cambiar la hora'}
                 </Text>
               </Pressable>
             ) : null}
           </Stack>
         </Card>
-      ) : salida !== null && salida.booked ? (
+      ) : outcome !== null && outcome.booked ? (
         <Card
           accent={theme.semaphore.ok}
           borderColor={withAlpha(theme.semaphore.ok, 0.26)}
@@ -324,14 +324,14 @@ export default function GymScreen() {
               Listo, te esperan
             </Text>
             <Text variant="caption" color={theme.colors.textSecondary}>
-              {salida.booking.className} · {formatWeekdayAndDay(salida.booking.date)} a las{' '}
-              {salida.booking.startTime}. El gimnasio ya tiene tu nombre en su lista.
+              {outcome.booking.className} · {formatWeekdayAndDay(outcome.booking.date)} a las{' '}
+              {outcome.booking.startTime}. El gimnasio ya tiene tu nombre en su lista.
             </Text>
             <Text variant="captionSmall" color={theme.colors.textFaint}>
-              {(salida.booking.priceCents ?? 0) === 0
+              {(outcome.booking.priceCents ?? 0) === 0
                 ? 'Llega unos minutos antes y di que vienes por tu clase de prueba.'
                 : `Llega unos minutos antes. La clase se paga en el local: ${formatPEN(
-                    cents(salida.booking.priceCents),
+                    cents(outcome.booking.priceCents),
                   )}.`}
             </Text>
           </Stack>
@@ -343,7 +343,7 @@ export default function GymScreen() {
           pregunta tres cosas en orden: cuánto cuesta, dónde queda y cuándo hay
           clase. La tercera es la más larga de leer, y ponerla en medio deja la
           segunda al final de un scroll. */}
-      <DondeQueda
+      <GymLocationBlock
         place={{
           name: gym.name,
           address: gym.address ?? null,
@@ -363,16 +363,16 @@ export default function GymScreen() {
             puede prometerlo: debajo solo va el aviso de que este local todavía
             no publicó su horario. */}
         <Eyebrow>
-          {puedeCambiar
+          {canReschedule
             ? 'Elige tu hora nueva'
             : !gym.trialClassEnabled || gym.schedules.length === 0
               ? 'Horarios'
-              : gratis
+              : free
                 ? 'Tu primera clase, gratis'
                 : 'Reserva tu clase de prueba'}
         </Eyebrow>
 
-        {puedeCambiar ? (
+        {canReschedule ? (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             Tu sitio no se pierde: se mueve. El gimnasio recibe el aviso con la hora
             nueva.
@@ -384,21 +384,21 @@ export default function GymScreen() {
           </Text>
         ) : puedeOfrecer ? (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {gratis
+            {free
               ? 'Elige el día y la hora a la que vendrás. El gimnasio recibe el aviso al instante.'
-              : `Elige el día y la hora. Reservas tu sitio y pagas ${precio} al llegar; el gimnasio recibe el aviso al instante.`}
+              : `Elige el día y la hora. Reservas tu sitio y pagas ${price} al llegar; el gimnasio recibe el aviso al instante.`}
           </Text>
         ) : null}
 
-        <Horario
+        <Timetable
           schedules={gym.schedules}
           slots={eligiendo ? gym.slots : []}
-          elegida={slot}
-          onElegir={setSlot}
+          picked={slot}
+          onPick={setSlot}
           hoy={hoy}
         />
 
-        {puedeOfrecer && cuenta.kind === 'none' ? (
+        {puedeOfrecer && account.kind === 'none' ? (
           <Stack gap={10}>
             <Card tone="sunken" radius={theme.radii.lg}>
               <Text variant="captionSmall" color={theme.colors.textSecondary}>
@@ -412,9 +412,9 @@ export default function GymScreen() {
 
         {/* Cambiar la hora no pide nada más: el nombre y el celular ya están en
             la reserva que se mueve, y la cuenta es la misma que la hizo. */}
-        {puedeCambiar ? (
+        {canReschedule ? (
           <>
-            {salida !== null && !salida.booked ? (
+            {outcome !== null && !outcome.booked ? (
               <Card
                 accent={theme.semaphore.alert}
                 borderColor={withAlpha(theme.semaphore.alert, 0.28)}
@@ -422,38 +422,38 @@ export default function GymScreen() {
               >
                 <Stack gap={4}>
                   <Text variant="bodySmall" weight="semibold">
-                    {salida.message.title}
+                    {outcome.message.title}
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {salida.message.detail}
+                    {outcome.message.detail}
                   </Text>
                 </Stack>
               </Card>
             ) : null}
 
             <Button
-              label={reservando ? 'Cambiando…' : 'Cambiar mi hora'}
-              disabled={slot === null || reservando}
-              onPress={confirmarCambio}
+              label={submitting ? 'Cambiando…' : 'Cambiar mi hora'}
+              disabled={slot === null || submitting}
+              onPress={confirmReschedule}
             />
           </>
         ) : null}
 
-        {puedeOfrecer && cuenta.kind !== 'none' ? (
+        {puedeOfrecer && account.kind !== 'none' ? (
           <>
-            {pideDatos ? (
+            {needsDetails ? (
               <Card radius={theme.radii.xl}>
                 <Stack gap={14}>
-                  <Campo
-                    etiqueta="Tu nombre"
-                    valor={nombre}
-                    onChange={setNombre}
+                  <LabeledInput
+                    label="Tu nombre"
+                    value={name}
+                    onChange={setName}
                     placeholder="Nombre y apellido"
                   />
-                  <Campo
-                    etiqueta="Tu celular"
-                    valor={celular}
-                    onChange={setCelular}
+                  <LabeledInput
+                    label="Tu celular"
+                    value={phone}
+                    onChange={setPhone}
                     placeholder="+51987654321"
                     keyboardType="phone-pad"
                     pie="Es con lo que el gimnasio te reconoce al llegar."
@@ -462,7 +462,7 @@ export default function GymScreen() {
               </Card>
             ) : null}
 
-            {salida !== null && !salida.booked ? (
+            {outcome !== null && !outcome.booked ? (
               <Card
                 accent={theme.semaphore.alert}
                 borderColor={withAlpha(theme.semaphore.alert, 0.28)}
@@ -470,10 +470,10 @@ export default function GymScreen() {
               >
                 <Stack gap={4}>
                   <Text variant="bodySmall" weight="semibold">
-                    {salida.message.title}
+                    {outcome.message.title}
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {salida.message.detail}
+                    {outcome.message.detail}
                   </Text>
                 </Stack>
               </Card>
@@ -481,16 +481,16 @@ export default function GymScreen() {
 
             <Button
               label={
-                reservando
+                submitting
                   ? 'Reservando…'
-                  : gratis
+                  : free
                     ? 'Reservar mi clase gratis'
-                    : `Reservar mi clase · ${precioCorto}`
+                    : `Reservar mi clase · ${shortPrice}`
               }
               disabled={
                 slot === null ||
-                reservando ||
-                (pideDatos && (nombre.trim().length < 2 || celular.trim().length < 7))
+                submitting ||
+                (needsDetails && (name.trim().length < 2 || phone.trim().length < 7))
               }
               onPress={confirmar}
             />
@@ -511,12 +511,12 @@ export default function GymScreen() {
           <Text variant="micro" color={theme.colors.textFaint}>
             Seminarios y talleres. No hace falta ser alumno del local para venir.
           </Text>
-          {gym.events.map((fila) => (
-            <TarjetaDeEvento
-              key={fila.event.id}
-              fila={fila}
+          {gym.events.map((row) => (
+            <EventCard
+              key={row.event.id}
+              row={row}
               slug={gym.slug}
-              esAlumno={esAlumno}
+              isStudent={isStudent}
             />
           ))}
         </Stack>
@@ -534,8 +534,8 @@ export default function GymScreen() {
             Rutinas y técnicas en video, abiertas para cualquiera.
           </Text>
 
-          {gym.routines.map((fila) => (
-            <TarjetaDeRutina key={fila.routine.id} fila={fila} slug={gym.slug} />
+          {gym.routines.map((row) => (
+            <RoutineCard key={row.routine.id} row={row} slug={gym.slug} />
           ))}
 
           {/* El número, sin los títulos. Enseñar qué hay detrás regalaría la
@@ -611,20 +611,20 @@ export default function GymScreen() {
  * que se puede mirar ahora mismo, y una lista de títulos no invita a tocar
  * nada. La miniatura no cuesta ninguna subida — sale del propio enlace.
  */
-function TarjetaDeRutina({
-  fila,
+function RoutineCard({
+  row,
   slug,
 }: {
-  readonly fila: RutinaEnLista;
+  readonly row: RoutineListItem;
   readonly slug: string;
 }) {
   const theme = useTheme();
-  const { routine, itemCount, coverVideoUrl, hasVideo } = fila;
+  const { routine, itemCount, coverVideoUrl, hasVideo } = row;
   const meta = [
-    nivelCorto(routine.level),
+    shortLevel(routine.level),
     itemCount === 0 ? null : `${itemCount} ${itemCount === 1 ? 'paso' : 'pasos'}`,
   ]
-    .filter((parte) => parte !== null)
+    .filter((part) => part !== null)
     .join(' · ');
 
   return (
@@ -641,9 +641,9 @@ function TarjetaDeRutina({
       <Card radius={theme.radii.xl}>
         <Stack gap={12}>
           {coverVideoUrl !== null ? (
-            <PortadaDeVideo url={coverVideoUrl} alto={150} />
+            <PortadaDeVideo url={coverVideoUrl} height={150} />
           ) : hasVideo ? (
-            <MarcadorDeVideo alto={150} />
+            <MarcadorDeVideo height={150} />
           ) : null}
           <Stack gap={3}>
             <Text variant="heading" weight="semibold" numberOfLines={2}>
@@ -677,24 +677,24 @@ function TarjetaDeRutina({
  * cinco segundos en una tabla que hay que interpretar, y enseñar solo el de
  * alumno sería un precio que no va a pagar.
  */
-function TarjetaDeEvento({
-  fila,
+function EventCard({
+  row,
   slug,
-  esAlumno,
+  isStudent,
 }: {
-  readonly fila: EventoConCupo;
+  readonly row: EventWithSeats;
   readonly slug: string;
-  readonly esAlumno: boolean;
+  readonly isStudent: boolean;
 }) {
   const theme = useTheme();
-  const [reservando, setReservando] = useState(false);
-  const [resultado, setResultado] = useState<BookEventDto | null>(null);
+  const [submitting, setBooking] = useState(false);
+  const [outcome, setOutcome] = useState<BookEventDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { event, seatsLeft } = fila;
-  const precio = esAlumno ? event.memberPriceCents : event.guestPriceCents;
-  const lleno = seatsLeft !== null && seatsLeft === 0;
-  const yaTiene = resultado?.booked === true;
+  const { event, seatsLeft } = row;
+  const price = isStudent ? event.memberPriceCents : event.guestPriceCents;
+  const full = seatsLeft !== null && seatsLeft === 0;
+  const alreadyHas = outcome?.booked === true;
 
   return (
     <Card radius={theme.radii.xl}>
@@ -716,9 +716,9 @@ function TarjetaDeEvento({
           </Stack>
           <Stack gap={1} style={{ alignItems: 'flex-end' }}>
             <Text variant="heading" weight="bold">
-              {formatPEN(cents(precio), { withDecimals: false })}
+              {formatPEN(cents(price), { withDecimals: false })}
             </Text>
-            {esAlumno && event.guestPriceCents > event.memberPriceCents && (
+            {isStudent && event.guestPriceCents > event.memberPriceCents && (
               <Text variant="micro" color={theme.semaphore.ok}>
                 precio de alumno
               </Text>
@@ -734,26 +734,26 @@ function TarjetaDeEvento({
           </Text>
         )}
 
-        {yaTiene ? (
+        {alreadyHas ? (
           <Text variant="captionSmall" color={theme.semaphore.ok}>
             Tienes tu plaza. Se paga en el local.
           </Text>
-        ) : lleno ? (
+        ) : full ? (
           <Text variant="captionSmall" color={theme.colors.textTertiary}>
             Se agotaron las plazas.
           </Text>
         ) : (
           <Button
-            label={reservando ? 'Reservando…' : `Reservar mi plaza · ${formatPENShort(cents(precio))}`}
-            disabled={reservando}
+            label={submitting ? 'Reservando…' : `Reservar mi plaza · ${formatPENShort(cents(price))}`}
+            disabled={submitting}
             onPress={() => {
-              setReservando(true);
+              setBooking(true);
               setError(null);
-              void reservarPlazaEnEvento({ slug, eventId: event.id })
-                .then((salida) => {
-                  setResultado(salida);
-                  if (!salida.booked) {
-                    setError(eventBookingDenialMessage(salida.reason as never));
+              void bookEventSeat({ slug, eventId: event.id })
+                .then((outcome) => {
+                  setOutcome(outcome);
+                  if (!outcome.booked) {
+                    setError(eventBookingDenialMessage(outcome.reason as never));
                   }
                 })
                 .catch((e: unknown) =>
@@ -763,7 +763,7 @@ function TarjetaDeEvento({
                       : 'No se pudo reservar. Inténtalo otra vez.',
                   ),
                 )
-                .finally(() => setReservando(false));
+                .finally(() => setBooking(false));
             }}
           />
         )}
@@ -793,51 +793,51 @@ function TarjetaDeEvento({
  * semana se ofrece su próxima fecha con clases — que puede ser hoy mismo, o el
  * martes que viene si el de hoy ya empezó.
  */
-function Horario({
+function Timetable({
   schedules,
   slots,
-  elegida,
-  onElegir,
+  picked,
+  onPick,
   hoy,
 }: {
   /** El horario semanal del gimnasio, completo. */
   readonly schedules: readonly ClassSchedule[];
   /** Las clases que además se pueden reservar, con fecha. Vacío = no se reserva. */
   readonly slots: readonly TrialSlot[];
-  readonly elegida: TrialSlot | null;
-  readonly onElegir: (slot: TrialSlot) => void;
+  readonly picked: TrialSlot | null;
+  readonly onPick: (slot: TrialSlot) => void;
   readonly hoy: PlainDate;
 }) {
   const theme = useTheme();
 
   const disciplinas = useMemo(
-    () => [...new Set(schedules.map((clase) => clase.name))].sort(),
+    () => [...new Set(schedules.map((klass) => klass.name))].sort(),
     [schedules],
   );
   const [filtro, setFiltro] = useState<string | null>(null);
 
   const visibles = useMemo(
-    () => (filtro === null ? schedules : schedules.filter((clase) => clase.name === filtro)),
+    () => (filtro === null ? schedules : schedules.filter((klass) => klass.name === filtro)),
     [schedules, filtro],
   );
 
   /** Las clases de cada día, ordenadas por hora. */
-  const porDia = useMemo(() => {
-    const mapa = new Map<IsoWeekday, readonly ClassSchedule[]>();
-    for (const dia of allWeekdays()) {
-      const delDia = visibles
-        .filter((clase) => clase.weekday === dia)
+  const byDay = useMemo(() => {
+    const maps = new Map<IsoWeekday, readonly ClassSchedule[]>();
+    for (const day of allWeekdays()) {
+      const ofTheDay = visibles
+        .filter((klass) => klass.weekday === day)
         .slice()
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
-      if (delDia.length > 0) mapa.set(dia, delDia);
+      if (ofTheDay.length > 0) maps.set(day, ofTheDay);
     }
-    return mapa;
+    return maps;
   }, [visibles]);
 
-  const primerDia = allWeekdays().find((dia) => porDia.has(dia)) ?? null;
-  const [tocado, setTocado] = useState<IsoWeekday | null>(null);
-  const dia = tocado !== null && porDia.has(tocado) ? tocado : primerDia;
-  const delDia = dia === null ? [] : (porDia.get(dia) ?? []);
+  const firstDay = allWeekdays().find((day) => byDay.has(day)) ?? null;
+  const [touched, setTouched] = useState<IsoWeekday | null>(null);
+  const day = touched !== null && byDay.has(touched) ? touched : firstDay;
+  const ofTheDay = day === null ? [] : (byDay.get(day) ?? []);
 
   /**
    * La próxima vez que toca ese día.
@@ -845,15 +845,15 @@ function Horario({
    * El horario del gimnasio dice «los martes»; reservar exige un martes
    * concreto, así que la cabecera lleva fecha. Si hoy es martes, es hoy.
    */
-  const fecha = dia === null ? null : addDays(hoy, (dia - isoWeekday(hoy) + 7) % 7);
+  const date = day === null ? null : addDays(hoy, (day - isoWeekday(hoy) + 7) % 7);
 
   /** La misma clase, en esa fecha, si además se puede reservar. */
-  const reservable = (clase: ClassSchedule): TrialSlot | null => {
-    if (fecha === null) return null;
-    const iso = formatPlainDate(fecha);
+  const reservable = (klass: ClassSchedule): TrialSlot | null => {
+    if (date === null) return null;
+    const iso = formatPlainDate(date);
     return (
       slots.find(
-        (slot) => slot.scheduleId === clase.id && formatPlainDate(slot.date) === iso,
+        (slot) => slot.scheduleId === klass.id && formatPlainDate(slot.date) === iso,
       ) ?? null
     );
   };
@@ -865,14 +865,14 @@ function Horario({
       {disciplinas.length > 1 ? (
         <Row justify="flex-start" style={{ flexWrap: 'wrap', gap: 8 }}>
           <Chip label="Todas" selected={filtro === null} onPress={() => setFiltro(null)} />
-          {disciplinas.map((nombre) => (
+          {disciplinas.map((name) => (
             <Chip
-              key={nombre}
-              label={nombre}
-              selected={filtro === nombre}
+              key={name}
+              label={name}
+              selected={filtro === name}
               onPress={() => {
-                setFiltro(nombre);
-                setTocado(null);
+                setFiltro(name);
+                setTouched(null);
               }}
             />
           ))}
@@ -880,17 +880,17 @@ function Horario({
       ) : null}
 
       <Row gap={6} justify="flex-start">
-        {allWeekdays().map((cada) => {
-          const hay = porDia.has(cada);
-          const activo = cada === dia;
+        {allWeekdays().map((each) => {
+          const exists = byDay.has(each);
+          const active = each === day;
 
           return (
             <Pressable
-              key={cada}
+              key={each}
               accessibilityRole="button"
-              accessibilityState={{ selected: activo, disabled: !hay }}
-              accessibilityLabel={`${weekdayName(cada)}${hay ? '' : ', sin clases'}`}
-              onPress={hay ? () => setTocado(cada) : undefined}
+              accessibilityState={{ selected: active, disabled: !exists }}
+              accessibilityLabel={`${weekdayName(each)}${exists ? '' : ', sin clases'}`}
+              onPress={exists ? () => setTouched(each) : undefined}
               style={{
                 flex: 1,
                 aspectRatio: 1,
@@ -898,18 +898,18 @@ function Horario({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 3,
-                backgroundColor: hay ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
-                borderWidth: activo ? 1.5 : hay ? 0 : 1,
-                borderStyle: activo || hay ? 'solid' : 'dashed',
-                borderColor: activo ? theme.semaphore.ok : theme.colors.borderStrong,
+                backgroundColor: exists ? theme.colors.surfaceHigh : theme.colors.surfaceSunken,
+                borderWidth: active ? 1.5 : exists ? 0 : 1,
+                borderStyle: active || exists ? 'solid' : 'dashed',
+                borderColor: active ? theme.semaphore.ok : theme.colors.borderStrong,
               }}
             >
               <Text
                 variant="caption"
-                weight={hay ? 'bold' : 'semibold'}
-                color={hay ? theme.colors.ink : theme.colors.textDisabled}
+                weight={exists ? 'bold' : 'semibold'}
+                color={exists ? theme.colors.ink : theme.colors.textDisabled}
               >
-                {weekdayInitial(cada)}
+                {weekdayInitial(each)}
               </Text>
               {/* El punto dice que ese día hay clase: sin él, un día vacío y uno
                   lleno se ven igual hasta tocarlos. */}
@@ -918,7 +918,7 @@ function Horario({
                   width: 4,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: hay ? theme.semaphore.ok : 'transparent',
+                  backgroundColor: exists ? theme.semaphore.ok : 'transparent',
                 }}
               />
             </Pressable>
@@ -926,7 +926,7 @@ function Horario({
         })}
       </Row>
 
-      {delDia.length === 0 || fecha === null ? (
+      {ofTheDay.length === 0 || date === null ? (
         <Card tone="sunken" radius={theme.radii.lg}>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             {filtro === null
@@ -942,9 +942,9 @@ function Horario({
             justify="flex-start"
           >
             <Text variant="captionSmall" weight="bold" color={theme.colors.textSecondary}>
-              {mayuscula(weekdayName(isoWeekday(fecha)))} {formatLongDate(fecha)}
+              {mayuscula(weekdayName(isoWeekday(date)))} {formatLongDate(date)}
             </Text>
-            {formatPlainDate(fecha) === formatPlainDate(hoy) ? (
+            {formatPlainDate(date) === formatPlainDate(hoy) ? (
               <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
                 HOY
               </Text>
@@ -952,15 +952,15 @@ function Horario({
           </Row>
 
           <Stack gap={9} style={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 4 }}>
-            {delDia.map((clase) => {
-              const slot = reservable(clase);
+            {ofTheDay.map((klass) => {
+              const slot = reservable(klass);
               return (
-                <ClaseRow
-                  key={clase.id}
-                  clase={clase}
+                <ClassRow
+                  key={klass.id}
+                  klass={klass}
                   slot={slot}
-                  selected={slot !== null && esLaMisma(elegida, slot)}
-                  onPress={slot === null ? undefined : () => onElegir(slot)}
+                  selected={slot !== null && isTheSame(picked, slot)}
+                  onPress={slot === null ? undefined : () => onPick(slot)}
                 />
               );
             })}
@@ -977,14 +977,14 @@ function Horario({
  * El `scheduleId` solo no basta —un horario se repite cada semana— y la fecha
  * sola tampoco: un día puede tener varias clases.
  */
-const esLaMisma = (elegida: TrialSlot | null, opcion: TrialSlot): boolean =>
-  elegida !== null &&
-  elegida.scheduleId === opcion.scheduleId &&
-  elegida.date.year === opcion.date.year &&
-  elegida.date.month === opcion.date.month &&
-  elegida.date.day === opcion.date.day;
+const isTheSame = (picked: TrialSlot | null, option: TrialSlot): boolean =>
+  picked !== null &&
+  picked.scheduleId === option.scheduleId &&
+  picked.date.year === option.date.year &&
+  picked.date.month === option.date.month &&
+  picked.date.day === option.date.day;
 
-function Volver() {
+function BackRow() {
   const theme = useTheme();
   return (
     <Pressable
@@ -1008,13 +1008,13 @@ function Volver() {
  * no —el gimnasio no acepta reservas, o esa de hoy ya empezó— se sigue viendo:
  * es su horario, y esconderlo sería mentir sobre cuándo abre.
  */
-function ClaseRow({
-  clase,
+function ClassRow({
+  klass,
   slot,
   selected,
   onPress,
 }: {
-  readonly clase: ClassSchedule;
+  readonly klass: ClassSchedule;
   readonly slot: TrialSlot | null;
   readonly selected: boolean;
   readonly onPress?: (() => void) | undefined;
@@ -1030,11 +1030,11 @@ function ClaseRow({
           weight={selected ? 'semibold' : 'regular'}
           color={reservable ? theme.colors.ink : theme.colors.textSecondary}
         >
-          {clase.name}
+          {klass.name}
         </Text>
-        {clase.instructor === null ? null : (
+        {klass.instructor === null ? null : (
           <Text variant="micro" color={theme.colors.textFaint}>
-            {clase.instructor}
+            {klass.instructor}
           </Text>
         )}
       </Stack>
@@ -1048,7 +1048,7 @@ function ClaseRow({
         weight="semibold"
         color={reservable ? theme.colors.textStrong : theme.colors.textTertiary}
       >
-        {clase.startTime} – {clase.endTime}
+        {klass.startTime} – {klass.endTime}
       </Text>
     </Row>
   );
@@ -1061,7 +1061,7 @@ function ClaseRow({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${clase.name}, de ${clase.startTime} a ${clase.endTime}`}
+      accessibilityLabel={`${klass.name}, de ${klass.startTime} a ${klass.endTime}`}
       onPress={onPress}
       style={({ pressed }) => ({
         backgroundColor: selected ? withAlpha(theme.semaphore.ok, 0.14) : 'transparent',
@@ -1078,17 +1078,17 @@ function ClaseRow({
   );
 }
 
-function Campo({
-  etiqueta,
-  valor,
+function LabeledInput({
+  label,
+  value,
   onChange,
   placeholder,
   keyboardType,
   pie,
 }: {
-  readonly etiqueta: string;
-  readonly valor: string;
-  readonly onChange: (texto: string) => void;
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (text: string) => void;
   readonly placeholder?: string;
   readonly keyboardType?: 'phone-pad';
   readonly pie?: string;
@@ -1097,10 +1097,10 @@ function Campo({
   return (
     <Stack gap={4}>
       <Text variant="captionSmall" color={theme.colors.textTertiary}>
-        {etiqueta}
+        {label}
       </Text>
       <TextInput
-        value={valor}
+        value={value}
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
@@ -1123,4 +1123,4 @@ function Campo({
   );
 }
 
-const mayuscula = (texto: string): string => `${texto.charAt(0).toUpperCase()}${texto.slice(1)}`;
+const mayuscula = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;

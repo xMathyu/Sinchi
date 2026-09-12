@@ -40,7 +40,7 @@ export async function loadFromApi(): Promise<RemoteData> {
   const me = await fetchMe();
 
   const detalles = await Promise.all(
-    me.wallet.map((entrada) => fetchMembership(entrada.membership.id)),
+    me.wallet.map((entry) => fetchMembership(entry.membership.id)),
   );
 
   // El horario es del LOCAL, asi que se pide uno por gimnasio y no por
@@ -48,13 +48,13 @@ export async function loadFromApi(): Promise<RemoteData> {
   // lo mismo. Se traga el error porque un gimnasio sin horarios configurados es
   // legitimo —significa que no los controla— y no puede impedir que cargue la
   // billetera.
-  const porLocal = new Map<string, string>();
-  for (const detalle of detalles) {
-    if (!porLocal.has(detalle.tenant.id)) porLocal.set(detalle.tenant.id, detalle.membership.id);
+  const byGym = new Map<string, string>();
+  for (const detail of detalles) {
+    if (!byGym.has(detail.tenant.id)) byGym.set(detail.tenant.id, detail.membership.id);
   }
-  const horarios = (
+  const weekSchedules = (
     await Promise.all(
-      [...porLocal.values()].map((membershipId) =>
+      [...byGym.values()].map((membershipId) =>
         fetchMySchedules(membershipId).catch(() => []),
       ),
     )
@@ -65,12 +65,12 @@ export async function loadFromApi(): Promise<RemoteData> {
   const charges: Charge[] = [];
   const attendances: Attendance[] = [];
 
-  for (const detalle of detalles) {
-    empujarUnico(tenants, detalle.tenant);
-    empujarUnico(plans, detalle.plan);
-    if (detalle.pendingPlan !== null) empujarUnico(plans, detalle.pendingPlan);
-    charges.push(...detalle.charges);
-    attendances.push(...detalle.attendances);
+  for (const detail of detalles) {
+    empujarUnico(tenants, detail.tenant);
+    empujarUnico(plans, detail.plan);
+    if (detail.pendingPlan !== null) empujarUnico(plans, detail.pendingPlan);
+    charges.push(...detail.charges);
+    attendances.push(...detail.attendances);
   }
 
   // Los planes a los que se puede cambiar tambien hacen falta: la pantalla de
@@ -84,7 +84,7 @@ export async function loadFromApi(): Promise<RemoteData> {
     plans,
     charges,
     attendances,
-    schedules: horarios,
+    schedules: weekSchedules,
     activeTenantId: tenants[0]?.id ?? '',
   };
 }
@@ -101,8 +101,8 @@ export async function hydrate(): Promise<void> {
  * mismo plan traen el mismo plan. Sin esto el selector de gimnasios mostraria
  * Kaizen dos veces.
  */
-function empujarUnico<T extends { readonly id: string }>(lista: T[], item: T): void {
-  if (!lista.some((x) => x.id === item.id)) lista.push(item);
+function empujarUnico<T extends { readonly id: string }>(list: T[], item: T): void {
+  if (!list.some((x) => x.id === item.id)) list.push(item);
 }
 
 /**
@@ -134,11 +134,11 @@ export async function hydrateStaff(session: {
   ]);
 
   applyRemoteRoster(
-    roster.map((entrada) => ({
-      user: entrada.user,
+    roster.map((entry) => ({
+      user: entry.user,
       // Sin cargos ni asistencias: el padron muestra el semaforo, que el
       // servidor ya calculo. El historial se pide al abrir cada alumno.
-      view: { ...entrada, attendances: [], charges: [] },
+      view: { ...entry, attendances: [], charges: [] },
     })),
     {
       // El token lleva `staffId` firmado pero la api no lo devuelve al cliente,

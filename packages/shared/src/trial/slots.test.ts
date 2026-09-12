@@ -61,10 +61,10 @@ describe('proximas clases', () => {
 
   it('la ventana es de dos semanas exactas', () => {
     // Un horario todos los dias: hay tantas opciones como dias de la ventana.
-    const todos = [1, 2, 3, 4, 5, 6, 7].map((weekday) =>
+    const all = [1, 2, 3, 4, 5, 6, 7].map((weekday) =>
       makeSchedule(weekday as 1, '19:00', '20:00'),
     );
-    const slots = upcomingClassSlots({ schedules: todos, today: JUEVES, now: '06:00' });
+    const slots = upcomingClassSlots({ schedules: all, today: JUEVES, now: '06:00' });
 
     expect(slots).toHaveLength(TRIAL_WINDOW_DAYS);
   });

@@ -25,24 +25,24 @@ const TINTA_VERDE = '#08260F';
 const FUENTE =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
-function escapar(texto: string): string {
-  return texto
+function escapar(text: string): string {
+  return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
 
-export function correoInvitacion(input: {
-  readonly primerNombre: string;
-  readonly gimnasio: string;
+export function inviteEmail(input: {
+  readonly firstName: string;
+  readonly gym: string;
   readonly plan: string;
-  readonly enlace: string;
+  readonly href: string;
   readonly logo: string;
 }): string {
-  const gimnasio = escapar(input.gimnasio);
+  const gym = escapar(input.gym);
   const plan = escapar(input.plan);
-  const enlace = escapar(input.enlace);
+  const href = escapar(input.href);
 
   return `<!doctype html>
 <html lang="es">
@@ -58,17 +58,17 @@ export function correoInvitacion(input: {
            style="display:block;border-radius:13px;border:0;">
 
       <div style="color:${TINTA};font-size:23px;line-height:29px;font-weight:700;letter-spacing:-0.5px;padding:20px 0 8px;">
-        ${gimnasio} te inscribió
+        ${gym} te inscribió
       </div>
 
       <div style="color:${SECUNDARIO};font-size:15px;line-height:22px;">
-        Hola ${escapar(input.primerNombre)}, tu plan es
+        Hola ${escapar(input.firstName)}, tu plan es
         <span style="color:${TINTA};font-weight:600;">${plan}</span>.
       </div>
 
       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:24px 0 14px;">
         <tr><td align="center" bgcolor="${VERDE}" style="border-radius:16px;">
-          <a href="${enlace}"
+          <a href="${href}"
              style="display:block;padding:16px 24px;font-family:${FUENTE};font-size:17px;font-weight:700;color:${TINTA_VERDE};text-decoration:none;">
             Activar mi cuenta
           </a>
@@ -77,7 +77,7 @@ export function correoInvitacion(input: {
 
       <div style="color:#8C8C95;font-size:12px;line-height:18px;">
         Si el botón no funciona, copia este enlace:<br>
-        <a href="${enlace}" style="color:${VERDE};text-decoration:none;word-break:break-all;">${enlace}</a>
+        <a href="${href}" style="color:${VERDE};text-decoration:none;word-break:break-all;">${href}</a>
       </div>
 
       <div style="height:1px;background:rgba(255,255,255,0.07);margin:22px 0;"></div>

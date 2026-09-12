@@ -90,21 +90,21 @@ export interface RoutineDenial {
   readonly itemIndex?: number;
 }
 
-const vacio = (texto: string | null): boolean => texto === null || texto.trim().length === 0;
+const blank = (text: string | null): boolean => text === null || text.trim().length === 0;
 
 export function checkRoutineDraft(draft: RoutineDraft): RoutineDenial | null {
   const title = draft.title.trim();
   if (title.length < ROUTINE_TITLE_MIN) return { code: 'title_too_short' };
   if (title.length > ROUTINE_TITLE_MAX) return { code: 'title_too_long' };
 
-  if (!vacio(draft.summary) && draft.summary!.trim().length > ROUTINE_SUMMARY_MAX) {
+  if (!blank(draft.summary) && draft.summary!.trim().length > ROUTINE_SUMMARY_MAX) {
     return { code: 'summary_too_long' };
   }
 
-  if (!vacio(draft.videoUrl) && draft.videoAssetId !== null) {
+  if (!blank(draft.videoUrl) && draft.videoAssetId !== null) {
     return { code: 'both_video_sources' };
   }
-  if (!vacio(draft.videoUrl) && parseVideoLink(draft.videoUrl!) === null) {
+  if (!blank(draft.videoUrl) && parseVideoLink(draft.videoUrl!) === null) {
     return { code: 'bad_video_link' };
   }
 
@@ -119,32 +119,32 @@ export function checkRoutineDraft(draft: RoutineDraft): RoutineDenial | null {
    * biblioteca viene a hacer.
    */
   if (
-    vacio(draft.videoUrl) &&
+    blank(draft.videoUrl) &&
     draft.videoAssetId === null &&
-    vacio(draft.summary) &&
+    blank(draft.summary) &&
     draft.items.length === 0
   ) {
     return { code: 'nothing_to_show' };
   }
 
   for (const [index, item] of draft.items.entries()) {
-    const nombre = item.title.trim();
-    if (nombre.length < ROUTINE_ITEM_TITLE_MIN) {
+    const name = item.title.trim();
+    if (name.length < ROUTINE_ITEM_TITLE_MIN) {
       return { code: 'item_title_too_short', itemIndex: index };
     }
-    if (nombre.length > ROUTINE_ITEM_TITLE_MAX) {
+    if (name.length > ROUTINE_ITEM_TITLE_MAX) {
       return { code: 'item_title_too_long', itemIndex: index };
     }
-    if (!vacio(item.instructions) && item.instructions!.trim().length > ROUTINE_INSTRUCTIONS_MAX) {
+    if (!blank(item.instructions) && item.instructions!.trim().length > ROUTINE_INSTRUCTIONS_MAX) {
       return { code: 'item_instructions_too_long', itemIndex: index };
     }
-    if (!vacio(item.prescription) && item.prescription!.trim().length > ROUTINE_PRESCRIPTION_MAX) {
+    if (!blank(item.prescription) && item.prescription!.trim().length > ROUTINE_PRESCRIPTION_MAX) {
       return { code: 'item_prescription_too_long', itemIndex: index };
     }
-    if (!vacio(item.videoUrl) && item.videoAssetId !== null) {
+    if (!blank(item.videoUrl) && item.videoAssetId !== null) {
       return { code: 'both_video_sources', itemIndex: index };
     }
-    if (!vacio(item.videoUrl) && parseVideoLink(item.videoUrl!) === null) {
+    if (!blank(item.videoUrl) && parseVideoLink(item.videoUrl!) === null) {
       return { code: 'item_bad_video_link', itemIndex: index };
     }
   }
@@ -156,7 +156,7 @@ export const isValidRoutineDraft = (draft: RoutineDraft): boolean =>
   checkRoutineDraft(draft) === null;
 
 export function routineDenialMessage(denial: RoutineDenial): string {
-  const paso = denial.itemIndex === undefined ? '' : `Paso ${denial.itemIndex + 1}: `;
+  const step = denial.itemIndex === undefined ? '' : `Paso ${denial.itemIndex + 1}: `;
 
   switch (denial.code) {
     case 'title_too_short':
@@ -166,7 +166,7 @@ export function routineDenialMessage(denial: RoutineDenial): string {
     case 'summary_too_long':
       return `La descripción no puede pasar de ${ROUTINE_SUMMARY_MAX} caracteres.`;
     case 'both_video_sources':
-      return `${paso}tiene un video subido y un enlace a la vez. Deja uno de los dos: con los dos puestos, nadie sabe cuál se ve.`;
+      return `${step}tiene un video subido y un enlace a la vez. Deja uno de los dos: con los dos puestos, nadie sabe cuál se ve.`;
     case 'bad_video_link':
       return 'Ese enlace de video no se entiende. Pega la dirección de YouTube o Vimeo, o cualquier enlace que empiece por https.';
     case 'nothing_to_show':
@@ -174,14 +174,14 @@ export function routineDenialMessage(denial: RoutineDenial): string {
     case 'too_many_items':
       return `Una rutina admite hasta ${ROUTINE_MAX_ITEMS} pasos. Si son más, pártela en dos.`;
     case 'item_title_too_short':
-      return `${paso}ponle nombre al ejercicio o a la técnica.`;
+      return `${step}ponle nombre al ejercicio o a la técnica.`;
     case 'item_title_too_long':
-      return `${paso}el nombre no puede pasar de ${ROUTINE_ITEM_TITLE_MAX} caracteres.`;
+      return `${step}el nombre no puede pasar de ${ROUTINE_ITEM_TITLE_MAX} caracteres.`;
     case 'item_instructions_too_long':
-      return `${paso}las instrucciones no pueden pasar de ${ROUTINE_INSTRUCTIONS_MAX} caracteres.`;
+      return `${step}las instrucciones no pueden pasar de ${ROUTINE_INSTRUCTIONS_MAX} caracteres.`;
     case 'item_prescription_too_long':
-      return `${paso}las series no pueden pasar de ${ROUTINE_PRESCRIPTION_MAX} caracteres.`;
+      return `${step}las series no pueden pasar de ${ROUTINE_PRESCRIPTION_MAX} caracteres.`;
     case 'item_bad_video_link':
-      return `${paso}ese enlace de video no se entiende. Pega la dirección de YouTube o Vimeo.`;
+      return `${step}ese enlace de video no se entiende. Pega la dirección de YouTube o Vimeo.`;
   }
 }

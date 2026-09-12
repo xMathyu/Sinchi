@@ -9,9 +9,9 @@
  *   npm run db:seed:kaizen -w @sinchi/api
  */
 import 'dotenv/config';
-import { JUE, LUN, MAR, MIE, SAB, VIE, seedGym, seedOwner, type GimnasioSpec } from './seed-gym';
+import { JUE, LUN, MAR, MIE, SAB, VIE, seedGym, seedOwner, type GymSpec } from './seed-gym';
 
-const KAIZEN: GimnasioSpec = {
+const KAIZEN: GymSpec = {
   slug: 'kaizen',
   name: 'Asociación Deportiva Club Kaizen',
   // PENDIENTE: el RUC real lo tiene que dar el club. Se marca en vez de
@@ -20,13 +20,13 @@ const KAIZEN: GimnasioSpec = {
   // La matricula es del gimnasio, no del plan: se cobra una vez al entrar y no
   // cambia segun cuantas veces por semana venga la persona.
   enrollmentSoles: 50,
-  planes: [
+  gymPlans: [
     { name: '1 vez por semana', type: 'sessions_per_week', sessionsPerWeek: 1, soles: 120 },
     { name: '2 veces por semana', type: 'sessions_per_week', sessionsPerWeek: 2, soles: 150 },
     { name: '3 veces por semana', type: 'sessions_per_week', sessionsPerWeek: 3, soles: 180 },
     { name: 'Cualquier día', type: 'unlimited', sessionsPerWeek: null, soles: 200 },
   ],
-  horarios: [
+  schedules: [
     // Judo Kids 4 a 7
     { name: 'Judo Kids (4 a 7 años)', weekday: MAR, startTime: '17:00', endTime: '18:00' },
     { name: 'Judo Kids (4 a 7 años)', weekday: JUE, startTime: '17:00', endTime: '18:00' },

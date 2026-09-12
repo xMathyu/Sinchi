@@ -33,19 +33,19 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useHorariosDelDueno } from '../../src/data/hooks';
+import { useOwnerSchedules } from '../../src/data/hooks';
 import { useRole } from '../../src/data/session-hooks';
-import type { HorarioConUso } from '../../src/data/api';
+import type { ScheduleWithUsage } from '../../src/data/api';
 
-export default function HorariosScreen() {
+export default function SchedulesScreen() {
   const theme = useTheme();
   // De la sesión: el del store llega con el padrón, y estas pantallas se
   // abren solas desde un enlace.
-  const esDueno = useRole() === 'owner';
-  const { horarios, error, cargando } = useHorariosDelDueno();
+  const isOwner = useRole() === 'owner';
+  const { schedules, error, loading } = useOwnerSchedules();
 
-  const activos = horarios?.filter((h) => h.active) ?? [];
-  const archivados = horarios?.filter((h) => !h.active) ?? [];
+  const activeBlocks = schedules?.filter((h) => h.active) ?? [];
+  const archivados = schedules?.filter((h) => !h.active) ?? [];
 
   return (
     <Screen scroll>
@@ -60,7 +60,7 @@ export default function HorariosScreen() {
         </Pressable>
       </Row>
 
-      {!esDueno ? (
+      {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             El horario lo decide el dueño del local. Recepción lo ve en la puerta al marcar
@@ -82,11 +82,11 @@ export default function HorariosScreen() {
             </Card>
           )}
 
-          {cargando ? (
+          {loading ? (
             <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 20 }}>
               Trayendo tus horarios…
             </Text>
-          ) : activos.length === 0 ? (
+          ) : activeBlocks.length === 0 ? (
             /**
              * El vacío dice lo que CUESTA, no solo que está vacío.
              *
@@ -110,11 +110,11 @@ export default function HorariosScreen() {
           ) : (
             <>
               <Stack gap={18} style={{ marginTop: 22 }}>
-                {allWeekdays().map((dia) => (
-                  <DiaDeLaSemana
-                    key={dia}
-                    dia={dia}
-                    filas={activos.filter((h) => h.schedule.weekday === dia)}
+                {allWeekdays().map((day) => (
+                  <Weekday
+                    key={day}
+                    day={day}
+                    rows={activeBlocks.filter((h) => h.schedule.weekday === day)}
                   />
                 ))}
               </Stack>
@@ -135,8 +135,8 @@ export default function HorariosScreen() {
                 No se ofrecen ni validan en la puerta. Es donde vive la clase de temporada: la
                 vuelves a poner con un toque cuando toque.
               </Text>
-              {archivados.map((fila) => (
-                <FilaDeHorario key={fila.schedule.id} fila={fila} conDia />
+              {archivados.map((row) => (
+                <ScheduleRow key={row.schedule.id} row={row} withDay />
               ))}
             </Stack>
           )}
@@ -155,31 +155,31 @@ export default function HorariosScreen() {
  * parece completo cuando le falta el sábado, y el hueco es justo lo que el dueño
  * viene a ver.
  */
-function DiaDeLaSemana({
-  dia,
-  filas,
+function Weekday({
+  day,
+  rows,
 }: {
-  readonly dia: IsoWeekday;
-  readonly filas: readonly HorarioConUso[];
+  readonly day: IsoWeekday;
+  readonly rows: readonly ScheduleWithUsage[];
 }) {
   const theme = useTheme();
 
   return (
     <Stack gap={9}>
       <Row>
-        <Eyebrow>{weekdayName(dia)}</Eyebrow>
+        <Eyebrow>{weekdayName(day)}</Eyebrow>
         <Text variant="micro" color={theme.colors.textFaint}>
-          {filas.length === 0
+          {rows.length === 0
             ? 'sin clases'
-            : `${filas.length} ${filas.length === 1 ? 'clase' : 'clases'}`}
+            : `${rows.length} ${rows.length === 1 ? 'clase' : 'clases'}`}
         </Text>
       </Row>
 
-      {filas.length === 0 ? (
+      {rows.length === 0 ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Añadir una clase el ${weekdayName(dia)}`}
-          onPress={() => router.push(`/schedules/nuevo?weekday=${dia}`)}
+          accessibilityLabel={`Añadir una clase el ${weekdayName(day)}`}
+          onPress={() => router.push(`/schedules/nuevo?weekday=${day}`)}
         >
           <Card radius={theme.radii.lg} borderColor={theme.colors.borderDashed}>
             <Text variant="captionSmall" color={theme.colors.textFaint}>
@@ -188,21 +188,21 @@ function DiaDeLaSemana({
           </Card>
         </Pressable>
       ) : (
-        filas.map((fila) => <FilaDeHorario key={fila.schedule.id} fila={fila} />)
+        rows.map((row) => <ScheduleRow key={row.schedule.id} row={row} />)
       )}
     </Stack>
   );
 }
 
-function FilaDeHorario({
-  fila,
-  conDia = false,
+function ScheduleRow({
+  row,
+  withDay = false,
 }: {
-  readonly fila: HorarioConUso;
-  readonly conDia?: boolean;
+  readonly row: ScheduleWithUsage;
+  readonly withDay?: boolean;
 }) {
   const theme = useTheme();
-  const { schedule, active, upcomingTrials, overlaps } = fila;
+  const { schedule, active, upcomingTrials, overlaps } = row;
 
   return (
     <Pressable
@@ -223,7 +223,7 @@ function FilaDeHorario({
               {schedule.name}
             </Text>
             <Text variant="captionSmall" color={theme.colors.textSecondary} numberOfLines={1}>
-              {conDia ? `${weekdayName(schedule.weekday)} · ` : ''}
+              {withDay ? `${weekdayName(schedule.weekday)} · ` : ''}
               {scheduleRange(schedule)}
               {schedule.instructor === null ? '' : ` · ${schedule.instructor}`}
             </Text>
