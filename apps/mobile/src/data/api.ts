@@ -304,6 +304,11 @@ export interface GymCardDto {
   /** Lo que cuesta la clase de prueba. 0 = gratis. */
   readonly trialClassPriceCents: number;
   readonly fromPriceCents: number | null;
+  /** Dónde queda. `null` en los locales dados de alta antes de que se pidiera. */
+  readonly address?: string | null;
+  /** El pin del mapa, si el dueño lo puso. Los dos, o ninguno. */
+  readonly latitude?: number | null;
+  readonly longitude?: number | null;
   readonly weeklyClasses: number;
   readonly disciplines: readonly string[];
 }
@@ -1442,6 +1447,8 @@ export interface SignUpGymInput {
   readonly saasTier: SaasTier;
   /** La mensualidad con la que nace el local. Sin ella no puede inscribir. */
   readonly monthlyPriceCents: number;
+  /** Dónde queda. Sin ella el local es un nombre en una lista. */
+  readonly address: string;
   readonly ownerName?: string;
   readonly documentId: string;
   readonly phone?: string;
@@ -1499,6 +1506,24 @@ export const fetchTrials = async (soloPasadas = false): Promise<readonly TrialBo
  * La lee también recepción, que no puede cambiarla: la pantalla tiene que poder
  * decir por qué no llega nadie a probar.
  */
+/**
+ * Dónde queda el local, como lo lee y lo escribe su dueño.
+ *
+ * Aparte de los precios y con su propia ruta: son dos pantallas distintas, y
+ * juntarlas obligaría a mandar los cuatro precios cada vez que se corrige una
+ * coma de la dirección.
+ */
+export interface UbicacionDelLocal {
+  readonly address: string | null;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+}
+
+export const fetchUbicacion = (): Promise<UbicacionDelLocal> => request('/staff/location');
+
+export const guardarUbicacion = (input: UbicacionDelLocal): Promise<UbicacionDelLocal> =>
+  request('/staff/location', { method: 'POST', body: input });
+
 export const fetchTrialSettings = (): Promise<{ readonly trialClassEnabled: boolean }> =>
   request('/staff/trials/settings');
 

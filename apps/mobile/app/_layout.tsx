@@ -289,6 +289,9 @@ const RUTAS_DE: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     // pantalla queda escrita para nadie. Ya se pagó una vez con `plans`.
     'events',
     'schedules',
+    // Donde queda el local. Del staff: recepcion la LEE —se la preguntan por
+    // telefono tanto como el precio— y dentro se apaga para que no la escriba.
+    'local',
   ]),
   student: new Set(['pay', 'plan-change']),
 };

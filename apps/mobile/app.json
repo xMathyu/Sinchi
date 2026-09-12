@@ -57,6 +57,15 @@
           "cameraPermission": "Sinchi usa la cámara para escanear el QR de los alumnos en la puerta.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Sinchi usa tu ubicación solo cuando marcas dónde queda tu gimnasio en el mapa.",
+          "locationWhenInUsePermission": "Sinchi usa tu ubicación solo cuando marcas dónde queda tu gimnasio en el mapa.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
       ]
     ],
     "experiments": {

@@ -12,6 +12,7 @@
  * de Google.
  */
 import { Alert, Pressable, View } from 'react-native';
+import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
 import { cents, formatPENShort } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
@@ -348,6 +349,26 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
             <Text variant="captionSmall" color={theme.colors.textTertiary} numberOfLines={1}>
               {gym.disciplines.slice(0, 3).join(' · ')}
             </Text>
+          ) : null}
+
+          {/* DÓNDE queda, en la tarjeta y no solo dentro.
+              Es la primera pregunta de quien busca dónde entrenar —nadie cruza
+              Lima para una clase de prueba— y tenerla que responder abriendo los
+              cinco gimnasios de la lista para descartar cuatro es justo lo que
+              una lista debería evitar. En una línea: aquí se descarta, no se
+              decide. */}
+          {(gym.address ?? '').trim().length > 0 ? (
+            <Row gap={6} justify="flex-start" align="center">
+              <MapPin size={12} color={theme.colors.textFaint} />
+              <Text
+                variant="captionSmall"
+                color={theme.colors.textTertiary}
+                numberOfLines={1}
+                style={{ flex: 1 }}
+              >
+                {gym.address}
+              </Text>
+            </Row>
           ) : null}
         </Stack>
       </Card>

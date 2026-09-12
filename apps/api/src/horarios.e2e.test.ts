@@ -81,6 +81,7 @@ async function nuevoGimnasio(): Promise<Local> {
     taxId: RUC[indiceRuc++ % RUC.length]!,
     saasTier: 'up_to_60',
     monthlyPriceCents: 12_000,
+    address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
     documentId: siguiente(),
     phone: celular(),
@@ -583,6 +584,7 @@ suite('el alta no revienta con un celular ya registrado', () => {
       taxId: RUC[indiceRuc++ % RUC.length]!,
       saasTier: 'free',
       monthlyPriceCents: 12_000,
+      address: 'Av. Primavera 120, Surco',
       ownerName: 'Dueño con celular repetido',
       // Documento DISTINTO: si coincidiera, el alta adoptaria esa identidad y no
       // llegaria nunca al indice.

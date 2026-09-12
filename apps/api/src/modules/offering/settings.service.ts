@@ -37,9 +37,95 @@ export interface GymPricing {
   readonly trialClassPriceCents: number;
 }
 
+/**
+ * Donde queda el local, que es lo primero que pregunta quien lo busca.
+ *
+ * Va aparte de `GymPricing` y con sus propias rutas porque no es plata: son dos
+ * pantallas distintas del dueno y mezclarlas obligaria a mandar los cuatro
+ * precios cada vez que corrige una coma de la direccion.
+ */
+export interface GymLocation {
+  readonly address: string | null;
+  /** Los dos, o ninguno. Media coordenada no lleva a nadie a ningun sitio. */
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+}
+
+/** Lo minimo que se acepta: «Lima» son cuatro letras y no lleva a una puerta. */
+const DIRECCION_MINIMA = 10;
+const DIRECCION_MAXIMA = 240;
+
 @Injectable()
 export class GymSettingsService {
   constructor(@InjectDb() private readonly db: Database) {}
+
+  async readLocation(tenantId: string): Promise<GymLocation> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .select({
+          address: schema.tenants.address,
+          latitude: schema.tenants.latitude,
+          longitude: schema.tenants.longitude,
+        })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
+
+  async writeLocation(tenantId: string, input: GymLocation): Promise<GymLocation> {
+    const address = (input.address ?? '').trim();
+    if (address.length < DIRECCION_MINIMA) {
+      throw new BadRequestException(
+        'Escribe dónde queda tu gimnasio: calle, número y distrito. Es lo primero que mira quien te busca.',
+      );
+    }
+    if (address.length > DIRECCION_MAXIMA) {
+      throw new BadRequestException(
+        `La dirección no puede pasar de ${DIRECCION_MAXIMA} caracteres.`,
+      );
+    }
+
+    /**
+     * O las dos coordenadas o ninguna.
+     *
+     * Media coordenada no es medio dato: es un punto en el ecuador o en
+     * Greenwich, y el mapa lo dibujaria sin dudar. El CHECK de la base dice lo
+     * mismo; aqui se dice antes para que el mensaje sea del producto.
+     */
+    const tienePin = input.latitude !== null && input.longitude !== null;
+    if (!tienePin && (input.latitude !== null || input.longitude !== null)) {
+      throw new BadRequestException('El punto del mapa necesita latitud y longitud.');
+    }
+    if (
+      tienePin &&
+      (Math.abs(input.latitude!) > 90 || Math.abs(input.longitude!) > 180)
+    ) {
+      throw new BadRequestException('Ese punto no está en el mapa.');
+    }
+
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .update(schema.tenants)
+        .set({
+          address,
+          latitude: tienePin ? input.latitude : null,
+          longitude: tienePin ? input.longitude : null,
+        })
+        .where(eq(schema.tenants.id, tenantId))
+        .returning({
+          address: schema.tenants.address,
+          latitude: schema.tenants.latitude,
+          longitude: schema.tenants.longitude,
+        });
+
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
 
   async read(tenantId: string): Promise<GymPricing> {
     return withTenant(this.db, tenantId, async (tx) => {

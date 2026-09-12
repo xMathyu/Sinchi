@@ -119,6 +119,7 @@ async function nuevoGimnasio(): Promise<Local> {
     taxId: RUC[indiceRuc++ % RUC.length]!,
     saasTier: 'up_to_60',
     monthlyPriceCents: 12_000,
+    address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
     documentId: siguiente(),
     phone: celular(),

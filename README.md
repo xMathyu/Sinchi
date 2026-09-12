@@ -103,8 +103,8 @@ el video no cobra nada. La baja sí. Ver
 ### El gimnasio se da de alta solo
 
 Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —con dígito
-verificador comprobado—, escalón, **su mensualidad**, sus datos y, si lo tiene,
-un código de promoción. Al terminar entra como dueño, con su mes gratis
+verificador comprobado—, escalón, **su dirección**, **su mensualidad**, sus datos
+y, si lo tiene, un código de promoción. Al terminar entra como dueño, con su mes gratis
 corriendo.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
@@ -120,6 +120,17 @@ gente compara dojos. Ahora **la mensualidad se pide en el alta** —un campo, y
 obligatorio— y el local nace con esa tarifa y solo con esa. Las demás —dos veces
 por semana, la clase suelta— las escribe el dueño desde Padrón → Planes, ya
 sabiendo lo que cobra.
+
+El tercero era **dónde queda**. El directorio listaba dojos con su precio, su
+horario y sus disciplinas y callaba la primera pregunta de quien busca dónde
+entrenar: nadie cruza Lima para una clase de prueba, así que una lista sin
+direcciones obliga a abrir los cinco para descartar cuatro. Ahora la dirección se
+pide en el alta y sale en la tarjeta; dentro, la ficha dibuja el mapa y tres
+botones abren **Google Maps, Waze o Apple Maps** ya con la ruta puesta. El *pin*
+es aparte y opcional —lo pone el dueño desde Padrón → Dónde queda, con un toque
+en el mapa o con «estoy en el gimnasio»— porque geocodificar un texto escrito a
+mano falla justo donde importa: la cuadra sin número, el pasaje que el mapa no
+conoce.
 
 El segundo era el **horario**, y no daba la cara: el gimnasio nacía con cero
 bloques y `class_schedules` solo la sabía llenar un script nuestro. Sin bloques

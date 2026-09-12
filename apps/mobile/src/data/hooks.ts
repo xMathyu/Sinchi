@@ -37,6 +37,7 @@ import {
   type RutinaDetalleDto,
   type PlazaDto,
   type PreciosDelLocal,
+  type UbicacionDelLocal,
   type SaasSubscriptionDto,
   type StaffPostDto,
   type SummaryDto,
@@ -53,6 +54,7 @@ import {
   planesDelDueno,
   horariosDelDueno,
   preciosDelLocal,
+  ubicacionDelLocal,
   eventosDelGimnasio,
   eventoDelGimnasio,
   plazasDelEvento,
@@ -927,6 +929,36 @@ export function usePreciosDelLocal(): {
   }, [intento]);
 
   return { precios, error, recargar: () => setIntento((n) => n + 1) };
+}
+
+/** Dónde queda el local, como lo lee su dueño para corregirlo. */
+export function useUbicacionDelLocal(): {
+  readonly ubicacion: UbicacionDelLocal | null;
+  readonly error: string | null;
+  readonly recargar: () => void;
+} {
+  const [ubicacion, setUbicacion] = useState<UbicacionDelLocal | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void ubicacionDelLocal()
+      .then((valor) => {
+        if (!cancelado) setUbicacion(valor);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudo traer la dirección.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [intento]);
+
+  return { ubicacion, error, recargar: () => setIntento((n) => n + 1) };
 }
 
 /**

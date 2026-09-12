@@ -39,6 +39,8 @@ import {
   borrarPlan,
   fetchHorariosDelDueno,
   crearHorario,
+  fetchUbicacion,
+  guardarUbicacion,
   editarHorario,
   archivarHorario,
   borrarHorario,
@@ -79,6 +81,7 @@ import {
   type HorarioConUso,
   type HorarioEscrito,
   type HorarioNuevo,
+  type UbicacionDelLocal,
   type PreciosDelLocal,
   markManual,
   recordPayment,
@@ -661,6 +664,19 @@ export async function archivarOReactivarHorario(
 export async function eliminarHorario(scheduleId: string): Promise<void> {
   exigeServidor('Borrar un horario');
   await borrarHorario(scheduleId);
+}
+
+/** Dónde queda el local. Lo lee todo el staff; escribirlo es del dueño. */
+export async function ubicacionDelLocal(): Promise<UbicacionDelLocal> {
+  exigeServidor('Ver dónde queda tu local');
+  return await fetchUbicacion();
+}
+
+export async function guardarUbicacionDelLocal(
+  ubicacion: UbicacionDelLocal,
+): Promise<UbicacionDelLocal> {
+  exigeServidor('Guardar la dirección');
+  return await guardarUbicacion(ubicacion);
 }
 
 export async function preciosDelLocal(): Promise<PreciosDelLocal> {

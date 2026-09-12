@@ -594,6 +594,7 @@ suite('el dueño con dos locales', () => {
         taxId: RUC_SEGUNDO,
         saasTier: 'free',
         monthlyPriceCents: 12_000,
+        address: 'Av. Primavera 120, Surco',
         documentId: SERGIO_DNI,
       })
       .expect(201);

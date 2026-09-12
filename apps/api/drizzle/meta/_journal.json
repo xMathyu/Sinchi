@@ -120,6 +120,13 @@
       "when": 1788566389119,
       "tag": "0016_baja_de_cuenta",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788566390119,
+      "tag": "0017_donde_queda_el_gimnasio",
+      "breakpoints": true
     }
   ]
 }

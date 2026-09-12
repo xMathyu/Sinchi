@@ -20,6 +20,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -278,6 +279,29 @@ export const tenants = pgTable(
      * mas comun, y con una sola columna no se puede ni escribir.
      */
     trialClassPriceCents: integer('trial_class_price_cents').notNull().default(0),
+    /**
+     * Donde queda el local, escrito como se lo dirias a un taxista.
+     *
+     * El directorio listaba gimnasios sin decir DONDE estan, y esa es la primera
+     * pregunta de quien busca dojo: nadie cruza Lima para una clase de prueba.
+     *
+     * Nullable porque los gimnasios que ya existen no la tienen y no se les
+     * puede inventar una. El alta si la exige, igual que la mensualidad.
+     */
+    address: text('address'),
+    /**
+     * El punto en el mapa, si el dueno lo puso.
+     *
+     * Aparte de `address` y no derivado de ella: geocodificar un texto escrito a
+     * mano acierta casi siempre y falla justo donde importa —la cuadra sin
+     * numero, el pasaje sin nombre en el mapa— y un pin equivocado manda a
+     * alguien a otra puerta. Lo pone el dueno, que sabe donde esta parado.
+     *
+     * Sin pin, «como llegar» abre el mapa buscando la direccion escrita, que es
+     * lo que haria cualquiera a mano.
+     */
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
     status: tenantStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

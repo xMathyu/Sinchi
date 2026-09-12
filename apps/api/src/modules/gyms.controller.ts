@@ -45,6 +45,8 @@ const signUpSchema = idTokenSchema.extend({
   // `checkPlanDraft` en el servicio, con el mismo mensaje que ve el formulario;
   // aqui solo se comprueba que sea un entero de centimos y no un texto.
   monthlyPriceCents: z.number().int().min(0),
+  // Donde queda. El minimo real lo pone el servicio, con su mensaje.
+  address: z.string().min(1).max(240),
   ownerName: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
   phone: z.string().min(6).max(20).optional(),
@@ -114,6 +116,7 @@ export class GymsController {
       taxId: body.taxId,
       saasTier: body.saasTier,
       monthlyPriceCents: body.monthlyPriceCents,
+      address: body.address,
       ownerName: body.ownerName,
       documentId: body.documentId,
       phone: body.phone,

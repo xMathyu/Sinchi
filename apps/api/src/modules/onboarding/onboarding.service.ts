@@ -69,6 +69,14 @@ const MAX_LOCALES_POR_PERSONA = 5;
  */
 const PRIMERA_TARIFA = 'Mensualidad';
 
+/**
+ * Lo minimo que se acepta como direccion: diez caracteres.
+ *
+ * No comprueba que exista —eso no se puede saber desde aqui— sino que alguien
+ * escribio algo. «Lima» son cuatro y no lleva a nadie a ninguna puerta.
+ */
+const DIRECCION_MINIMA = 10;
+
 export interface SignUpGymInput {
   readonly firebaseUid: string;
   readonly email: string | null;
@@ -96,6 +104,15 @@ export interface SignUpGymInput {
    * es un punto de partida: es una mentira con nuestra letra.
    */
   readonly monthlyPriceCents: number;
+  /**
+   * Donde queda el local, escrito como se lo dirias a un taxista.
+   *
+   * Obligatoria en el alta por lo mismo que la mensualidad: el directorio la
+   * ensena, y un gimnasio sin direccion es un nombre en una lista. La columna es
+   * nullable para los locales que ya existen —no se les puede inventar una— pero
+   * los nuevos nacen con ella.
+   */
+  readonly address: string;
   /** Del dueno. */
   readonly ownerName?: string | undefined;
   readonly documentId: string;
@@ -198,6 +215,13 @@ export class OnboardingService {
     });
     if (tarifaFalla !== null) throw new BadRequestException(planDenialMessage(tarifaFalla));
 
+    const address = input.address.trim();
+    if (address.length < DIRECCION_MINIMA) {
+      throw new BadRequestException(
+        'Escribe dónde queda tu gimnasio: calle, número y distrito. Es lo primero que mira quien busca dónde entrenar.',
+      );
+    }
+
     const persona = await this.resolveOwner(input);
 
     await this.assertLocalesDisponibles(persona.userId);
@@ -212,6 +236,7 @@ export class OnboardingService {
           slug,
           timezone: TZ_LIMA,
           saasTier: input.saasTier,
+          address,
         })
         .returning({ id: schema.tenants.id });
 

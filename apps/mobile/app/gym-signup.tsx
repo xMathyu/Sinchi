@@ -79,7 +79,10 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 type Paso = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type CampoDelAlta = 'nombre' | 'ruc' | 'documento' | 'mensualidad';
+type CampoDelAlta = 'nombre' | 'ruc' | 'documento' | 'mensualidad' | 'direccion';
+
+/** Lo mínimo que se acepta como dirección. «Lima» son cuatro y no lleva a nadie. */
+const DIRECCION_MINIMA = 10;
 
 /** Los de la cuenta, que es otro formulario y falla por otras razones. */
 type CampoDeLaCuenta = 'duenoNombre' | 'correo' | 'clave' | 'celular';
@@ -98,6 +101,7 @@ export default function GymSignUpScreen() {
   const [escalon, setEscalon] = useState<SaasTier>('free');
   const [codigo, setCodigo] = useState('');
   const [mensualidad, setMensualidad] = useState('');
+  const [direccion, setDireccion] = useState('');
 
   // Solo para crear la cuenta, cuando hace falta. El nombre y el celular NO se
   // repiten aqui: son los mismos campos que pide el ultimo paso.
@@ -180,6 +184,11 @@ export default function GymSignUpScreen() {
       ? { documento: 'Falta tu documento: es lo que te identifica en la red.' }
       : documento.trim().length < 6
         ? { documento: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
+        : {}),
+    ...(direccion.trim().length === 0
+      ? { direccion: 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.' }
+      : direccion.trim().length < DIRECCION_MINIMA
+        ? { direccion: 'Un poco más: calle, número y distrito.' }
         : {}),
     ...(mensualidad.trim().length === 0
       ? { mensualidad: 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.' }
@@ -273,6 +282,7 @@ export default function GymSignUpScreen() {
         taxId: ruc.trim(),
         saasTier: escalon,
         monthlyPriceCents: centimosDeLaMensualidad ?? 0,
+        address: direccion.trim(),
         ownerName: duenoNombre.trim().length >= 2 ? duenoNombre.trim() : undefined,
         documentId: documento.trim(),
         phone: celular.trim().length >= 6 ? celular.trim() : undefined,
@@ -633,6 +643,24 @@ export default function GymSignUpScreen() {
             editable={!guardando}
             hint="El de la boleta que le das a tus alumnos."
             error={falla('ruc')}
+          />
+        </Stack>
+
+        {/* Antes el directorio listaba dojos sin decir DONDE estan, que es la
+            primera pregunta de quien busca donde entrenar: nadie cruza Lima
+            para una clase de prueba. Se pide aqui porque un local sin direccion
+            es un nombre en una lista, y porque el dueno no la va a ir a poner
+            despues a una pantalla que no sabe que existe. */}
+        <Stack gap={14} style={{ marginTop: 14 }}>
+          <Field
+            label="Dirección del local"
+            value={direccion}
+            onChangeText={setDireccion}
+            placeholder="Av. Primavera 120, Surco"
+            autoCapitalize="words"
+            editable={!guardando}
+            hint="Como se la dirías a un taxista. Sale en tu ficha, con el mapa y el botón de cómo llegar."
+            error={falla('direccion')}
           />
         </Stack>
 

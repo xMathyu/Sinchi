@@ -39,6 +39,7 @@ import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { Screen } from '../../src/design/screen';
 import { EstadoSinConexion } from '../../src/design/empty';
 import { CargandoSeccion } from '../../src/design/loading';
+import { DondeQueda } from '../../src/design/donde-queda';
 import { useTheme } from '../../src/design/theme';
 import { useGym, useMisClasesGratis, useToday, useWallet } from '../../src/data/hooks';
 import {
@@ -336,6 +337,20 @@ export default function GymScreen() {
           </Stack>
         </Card>
       ) : null}
+
+      {/* --- Dónde queda ----------------------------------------------------
+          Va DESPUÉS de la reserva y antes del horario. Quien abre esta ficha
+          pregunta tres cosas en orden: cuánto cuesta, dónde queda y cuándo hay
+          clase. La tercera es la más larga de leer, y ponerla en medio deja la
+          segunda al final de un scroll. */}
+      <DondeQueda
+        place={{
+          name: gym.name,
+          address: gym.address ?? null,
+          latitude: gym.latitude ?? null,
+          longitude: gym.longitude ?? null,
+        }}
+      />
 
       {/* --- El horario, que es también el selector --------------------------
           Antes eran dos cosas: una tira de días para reservar y, más abajo, una

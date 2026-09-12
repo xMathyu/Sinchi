@@ -42,6 +42,9 @@ export * from './routines/draft.js';
 export * from './routines/access.js';
 export * from './routines/upload.js';
 
+// Donde queda el gimnasio, y como llegar
+export * from './location/maps.js';
+
 // Clase gratis
 export * from './trial/slots.js';
 export * from './trial/validate.js';

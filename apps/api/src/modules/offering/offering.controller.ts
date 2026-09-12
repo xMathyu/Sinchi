@@ -68,6 +68,20 @@ const scheduleCreateSchema = scheduleSchema.omit({ weekday: true }).extend({
   weekdays: z.array(z.number().int()).min(1).max(7),
 });
 
+/**
+ * Donde queda el local.
+ *
+ * El rango de las coordenadas se acota aqui y ademas en el servicio y ademas en
+ * la base (`tenants_coords_range`). No es paranoia repetida: teclear «-77.0» sin
+ * el punto da 770, y un pin en un sitio que no existe manda a alguien a la calle
+ * a las siete de la tarde.
+ */
+const locationSchema = z.object({
+  address: z.string().min(1).max(240),
+  latitude: z.number().min(-90).max(90).nullable().default(null),
+  longitude: z.number().min(-180).max(180).nullable().default(null),
+});
+
 const pricingSchema = z.object({
   enrollmentFeeCents: z.number().int(),
   dropInPriceCents: z.number().int().nullable(),
@@ -258,5 +272,27 @@ export class OfferingController {
     @Body(parseWith(pricingSchema)) body: z.infer<typeof pricingSchema>,
   ) {
     return this.settings.write(assertStaffSession(session).tenantId, body);
+  }
+
+  // -------------------------------------------------------------------------
+  // Donde queda el local
+  // -------------------------------------------------------------------------
+
+  /**
+   * Lo lee todo el staff: a recepcion le preguntan por telefono como llegar
+   * tanto como por el precio.
+   */
+  @Get('location')
+  location(@CurrentSession() session: Session) {
+    return this.settings.readLocation(assertStaffSession(session).tenantId);
+  }
+
+  @OwnerOnly()
+  @Post('location')
+  setLocation(
+    @CurrentSession() session: Session,
+    @Body(parseWith(locationSchema)) body: z.infer<typeof locationSchema>,
+  ) {
+    return this.settings.writeLocation(assertStaffSession(session).tenantId, body);
   }
 }

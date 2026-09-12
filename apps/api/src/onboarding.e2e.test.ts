@@ -86,6 +86,8 @@ interface AltaInput {
   readonly promoCode?: string;
   /** Lo que el dueño escribe como mensualidad. `null` lo omite del cuerpo. */
   readonly monthlyPriceCents?: number | null;
+  /** Dónde queda. `null` lo omite del cuerpo. */
+  readonly address?: string | null;
 }
 
 const alta = async (input: AltaInput) => {
@@ -97,6 +99,9 @@ const alta = async (input: AltaInput) => {
     ...(input.monthlyPriceCents === null
       ? {}
       : { monthlyPriceCents: input.monthlyPriceCents ?? 12_000 }),
+    ...(input.address === null
+      ? {}
+      : { address: input.address ?? 'Av. Primavera 120, Surco' }),
     ownerName: `Dueño ${input.uid}`,
     documentId: siguiente(),
     phone: `+519${siguiente().slice(0, 8)}`,
@@ -324,6 +329,114 @@ suite('el precio del directorio es el que escribió el dueño', () => {
       taxId: RUC[3]!,
       monthlyPriceCents: null,
     });
+
+    expect(status).toBe(400);
+  });
+});
+
+/**
+ * El directorio decia el precio, el horario y las disciplinas de cada dojo y
+ * callaba donde queda. Es la primera pregunta de quien busca donde entrenar:
+ * nadie cruza Lima para una clase de prueba.
+ */
+suite('el gimnasio dice dónde queda', () => {
+  it('la dirección sale en el directorio y en la ficha', async () => {
+    const direccion = 'Jr. Los Cedros 455, Lince';
+    const { body, status } = await alta({
+      uid: `dueno-${runId}-direccion`,
+      gymName: `Dojo Con Dirección ${runId}`,
+      taxId: RUC[0]!,
+      address: direccion,
+    });
+    expect(status).toBe(201);
+
+    const { body: directorio } = await http.get('/v1/gyms').expect(200);
+    const tarjeta = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
+    expect(tarjeta.address).toBe(direccion);
+
+    const { body: ficha } = await http.get(`/v1/gyms/${body.slug}`).expect(200);
+    expect(ficha.address).toBe(direccion);
+    // El pin es aparte y opcional: el alta no lo pide, lo pone el dueño después.
+    expect(ficha.latitude).toBeNull();
+    expect(ficha.longitude).toBeNull();
+  });
+
+  it('sin dirección no hay alta', async () => {
+    const { status } = await alta({
+      uid: `dueno-${runId}-sin-direccion`,
+      gymName: `Dojo Sin Dirección ${runId}`,
+      taxId: RUC[1]!,
+      address: null,
+    });
+    expect(status).toBe(400);
+  });
+
+  it('«Lima» a secas no es una dirección', async () => {
+    // No se comprueba que exista —eso no se puede saber desde aquí— sino que
+    // alguien escribió algo que lleva a una puerta.
+    const { body, status } = await alta({
+      uid: `dueno-${runId}-direccion-corta`,
+      gymName: `Dojo Vago ${runId}`,
+      taxId: RUC[2]!,
+      address: 'Lima',
+    });
+    expect(status).toBe(400);
+    expect(body.message).toContain('dónde queda');
+  });
+
+  it('el dueño la corrige, y puede poner su punto en el mapa', async () => {
+    const { body: local } = await alta({
+      uid: `dueno-${runId}-mapa`,
+      gymName: `Dojo Del Mapa ${runId}`,
+      taxId: RUC[3]!,
+    });
+    const dueno = { Authorization: `Bearer ${local.session.accessToken}` };
+
+    const { body: guardada } = await http
+      .post('/v1/staff/location')
+      .set(dueno)
+      .send({
+        address: 'Av. Arequipa 3000, San Isidro',
+        latitude: -12.0931,
+        longitude: -77.0349,
+      })
+      .expect(201);
+
+    expect(guardada.address).toBe('Av. Arequipa 3000, San Isidro');
+    expect(guardada.latitude).toBeCloseTo(-12.0931, 4);
+
+    const { body: ficha } = await http.get(`/v1/gyms/${local.slug}`).expect(200);
+    expect(ficha.latitude).toBeCloseTo(-12.0931, 4);
+    expect(ficha.longitude).toBeCloseTo(-77.0349, 4);
+  });
+
+  it('media coordenada no se guarda: es un punto en el ecuador', async () => {
+    const { body: local } = await alta({
+      uid: `dueno-${runId}-media-coordenada`,
+      gymName: `Dojo Media Coordenada ${runId}`,
+      taxId: RUC[0]!,
+    });
+
+    const { status } = await http
+      .post('/v1/staff/location')
+      .set({ Authorization: `Bearer ${local.session.accessToken}` })
+      .send({ address: 'Av. Arequipa 3000, San Isidro', latitude: -12.0931, longitude: null });
+
+    expect(status).toBe(400);
+  });
+
+  it('un punto que no está en el mapa tampoco', async () => {
+    // Teclear «-77.0» sin el punto da 770, y el mapa lo dibujaría sin dudar.
+    const { body: local } = await alta({
+      uid: `dueno-${runId}-punto-imposible`,
+      gymName: `Dojo Imposible ${runId}`,
+      taxId: RUC[1]!,
+    });
+
+    const { status } = await http
+      .post('/v1/staff/location')
+      .set({ Authorization: `Bearer ${local.session.accessToken}` })
+      .send({ address: 'Av. Arequipa 3000, San Isidro', latitude: -12.0931, longitude: 770 });
 
     expect(status).toBe(400);
   });

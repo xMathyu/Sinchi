@@ -293,6 +293,34 @@ export default function PadronScreen() {
         </Pressable>
       )}
 
+      {/* Va pegada a Horarios y por la misma razón: son las dos cosas que un
+          local recién dado de alta necesita para que su ficha sirva de algo. Sin
+          horario no hay ni una hora que reservar; sin dirección, quien lo
+          encuentra en el directorio no sabe si le queda a diez cuadras o a una
+          hora, que es la pregunta que decide si va. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Dónde queda"
+        onPress={() => router.push('/local')}
+      >
+        <Card radius={theme.radii.lg} tone="sunken">
+          <Row>
+            <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="bodySmall" weight="semibold">
+                Dónde queda
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                Tu dirección y tu punto en el mapa. Es lo que abre el navegador de quien
+                va a probar.
+              </Text>
+            </Stack>
+            <Text variant="body" color={theme.colors.textTertiary}>
+              ›
+            </Text>
+          </Row>
+        </Card>
+      </Pressable>
+
       {/* Los eventos los ve TODO el staff, no solo el dueño: la lista del día
           del seminario la opera quien recibe a la gente en la puerta. Escribir
           el evento sí es del dueño, y eso se apaga dentro. */}

@@ -65,6 +65,17 @@ export interface GymCard {
   readonly weeklyClasses: number;
   /** Nombres distintos de clase: "Judo Kids", "Judo Adultos"… */
   readonly disciplines: readonly string[];
+  /**
+   * Donde queda. `null` en los locales dados de alta antes de que se pidiera.
+   *
+   * Va en la TARJETA y no solo en la ficha: es la primera pregunta de quien
+   * busca donde entrenar, y tenerla que responder abriendo los cinco gimnasios
+   * de la lista para descartar cuatro es justo lo que la lista deberia evitar.
+   */
+  readonly address: string | null;
+  /** El pin del mapa, si el dueno lo puso. Los dos, o ninguno. */
+  readonly latitude: number | null;
+  readonly longitude: number | null;
 }
 
 export interface GymDetail extends GymCard {
@@ -206,6 +217,9 @@ export class TrialsService {
           name: schema.tenants.name,
           trialClassEnabled: schema.tenants.trialClassEnabled,
           trialClassPriceCents: schema.tenants.trialClassPriceCents,
+          address: schema.tenants.address,
+          latitude: schema.tenants.latitude,
+          longitude: schema.tenants.longitude,
         })
         .from(schema.tenants)
         .where(eq(schema.tenants.status, 'active'))
@@ -302,6 +316,9 @@ export class TrialsService {
         timezone: gym.timezone,
         enrollmentFeeCents: gym.enrollmentFeeCents,
         dropInPriceCents: gym.dropInPriceCents,
+        address: gym.address,
+        latitude: gym.latitude,
+        longitude: gym.longitude,
         // Sin la clase suelta, por lo mismo que en `aggregates`: este numero se
         // lee "al mes" y el `drop_in` es el precio de una clase.
         fromPriceCents: plans.find((plan) => plan.type !== 'drop_in')?.priceCents ?? null,
@@ -980,6 +997,9 @@ export class TrialsService {
           trialClassPriceCents: schema.tenants.trialClassPriceCents,
           enrollmentFeeCents: schema.tenants.enrollmentFeeCents,
           dropInPriceCents: schema.tenants.dropInPriceCents,
+          address: schema.tenants.address,
+          latitude: schema.tenants.latitude,
+          longitude: schema.tenants.longitude,
         })
         .from(schema.tenants)
         .where(condition)
