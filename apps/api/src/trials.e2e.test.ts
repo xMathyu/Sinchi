@@ -559,6 +559,109 @@ suite('lo que ve quien reservo', () => {
 });
 
 /**
+ * Cambiar la hora sin soltar el cupo.
+ *
+ * Lo reportaron los primeros que usaron el directorio: elegida la hora, no había
+ * forma de cambiarla. La única salida era cancelar y volver a reservar, con la
+ * reserva en el aire entre una cosa y otra — y al gimnasio le llegaba una
+ * cancelación, que es justo lo que no quiere.
+ */
+suite('mover la clase de prueba a otra hora', () => {
+  const otroSlot = () => nova.slots[nova.slots.length - 1]!;
+
+  const mover = (bookingId: string, token: string, slot: Slot): request.Test =>
+    http.post(`/v1/gyms/trials/${bookingId}/reschedule`).send({
+      idToken: token,
+      classScheduleId: slot.scheduleId,
+      date: iso(slot.date),
+    });
+
+  it('la misma reserva queda con la hora nueva', async () => {
+    const token = declareIdentity(`cambio-${runId}-18`);
+    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+
+    const { body, status } = await mover(reserva.booking.id, token, otroSlot());
+
+    expect(status).toBe(201);
+    expect(body.booked).toBe(true);
+    // Es LA MISMA fila, no una nueva: así el índice único de «una por gimnasio»
+    // nunca ve dos vivas, y el mostrador ve una persona esperada y no dos.
+    expect(body.booking.id).toBe(reserva.booking.id);
+    expect(body.booking.startTime).toBe(otroSlot().startTime);
+    expect(body.booking.status).toBe('booked');
+
+    const { body: mias } = await http
+      .post('/v1/gyms/trials/mine')
+      .send({ idToken: token })
+      .expect(201);
+    const suya = (mias as { id: string; startTime: string }[]).filter(
+      (row) => row.id === reserva.booking.id,
+    );
+    expect(suya).toHaveLength(1);
+    expect(suya[0]!.startTime).toBe(otroSlot().startTime);
+  });
+
+  it('mover no la convierte en una segunda reserva', async () => {
+    // La trampa del atajo fácil —cancelar y reservar de nuevo por dentro— es que
+    // deja dos filas y el padrón del gimnasio cuenta dos personas esperadas.
+    const token = declareIdentity(`cambio-${runId}-19`);
+    const phone = nextPhone();
+    const { body: reserva } = await reservar('nova-bjj', {
+      token,
+      slot: nova.slots[0]!,
+      phone,
+    });
+
+    await mover(reserva.booking.id, token, otroSlot()).expect(201);
+
+    const { body: mias } = await http
+      .post('/v1/gyms/trials/mine')
+      .send({ idToken: token })
+      .expect(201);
+    expect(mias).toHaveLength(1);
+  });
+
+  it('no acepta una hora que el gimnasio no dicta', async () => {
+    const token = declareIdentity(`cambio-${runId}-20`);
+    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+
+    const { body } = await mover(reserva.booking.id, token, {
+      ...nova.slots[0]!,
+      // Un año por delante: fuera de la ventana de dos semanas, seguro.
+      date: { ...nova.slots[0]!.date, year: nova.slots[0]!.date.year + 1 },
+    });
+
+    expect(body.booked).toBe(false);
+    expect(body.reason.code).toBe('slot_not_available');
+  });
+
+  it('nadie mueve la reserva de otro', async () => {
+    const { body: reserva } = await reservar('nova-bjj', {
+      token: declareIdentity(`cambio-${runId}-21`),
+      slot: nova.slots[0]!,
+    });
+
+    await mover(
+      reserva.booking.id,
+      declareIdentity(`cambio-${runId}-22`),
+      otroSlot(),
+    ).expect(404);
+  });
+
+  it('una reserva cancelada ya no se mueve: se vuelve a reservar', async () => {
+    const token = declareIdentity(`cambio-${runId}-23`);
+    const { body: reserva } = await reservar('nova-bjj', { token, slot: nova.slots[0]! });
+
+    await http
+      .post(`/v1/gyms/trials/${reserva.booking.id}/cancel`)
+      .send({ idToken: token })
+      .expect(201);
+
+    await mover(reserva.booking.id, token, otroSlot()).expect(404);
+  });
+});
+
+/**
  * El interruptor del gimnasio.
  *
  * No todos dan clase de prueba, así que tiene que poder apagarse — y apagarlo no

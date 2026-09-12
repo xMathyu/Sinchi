@@ -26,6 +26,8 @@ import {
   cancelTrial,
   fetchGuestTrials,
   fetchMyTrials,
+  rescheduleGuestTrial,
+  rescheduleTrial,
   type BookEventDto,
   type BookTrialDto,
   type TrialBookingDto,
@@ -175,6 +177,37 @@ export async function misClasesGratis(): Promise<readonly TrialBookingDto[]> {
   if (cuenta.kind === 'session') return fetchMyTrials();
   if (cuenta.kind === 'none') return [];
   return fetchGuestTrials(cuenta.idToken);
+}
+
+/**
+ * Cambia la hora de una reserva que ya existe.
+ *
+ * Mismo criterio que todo lo de este archivo: con sesión va por `/me/trials`,
+ * que ya sabe quién es; con solo cuenta de Google, por la ruta pública firmando
+ * con el ID token.
+ */
+export async function cambiarHoraDeClaseGratis(input: {
+  readonly bookingId: string;
+  readonly slot: TrialSlot;
+}): Promise<BookTrialDto> {
+  const cuenta = cuentaParaReservar();
+  const date = formatPlainDate(input.slot.date);
+
+  if (cuenta.kind === 'session') {
+    return rescheduleTrial({
+      bookingId: input.bookingId,
+      classScheduleId: input.slot.scheduleId,
+      date,
+    });
+  }
+  if (cuenta.kind === 'none') throw new SinCuenta();
+
+  return rescheduleGuestTrial({
+    bookingId: input.bookingId,
+    idToken: cuenta.idToken,
+    classScheduleId: input.slot.scheduleId,
+    date,
+  });
 }
 
 export async function cancelarClaseGratis(bookingId: string): Promise<void> {

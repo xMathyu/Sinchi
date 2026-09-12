@@ -30,6 +30,11 @@ const trialSchema = z.object({
   classScheduleId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
 });
+/** La hora nueva. El gimnasio no se repite: sale de la reserva que se mueve. */
+const rescheduleSchema = z.object({
+  classScheduleId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+});
 const eventBookingSchema = z.object({
   slug: z.string().min(2).max(80),
   eventId: z.string().uuid(),
@@ -281,6 +286,23 @@ export class StudentController {
       eventId: body.eventId,
       account: { kind: 'user', userId: session.sub },
     });
+  }
+
+  /**
+   * Mueve su clase de prueba a otra hora.
+   *
+   * Existe para no obligar a cancelar. La respuesta tiene la misma forma que
+   * reservar —200 con `booked: true/false`— porque el rechazo no es un error de
+   * la peticion: la hora elegida puede haber dejado de estar, y quien lo lee
+   * necesita el motivo para elegir otra.
+   */
+  @Post('trials/:bookingId/reschedule')
+  rescheduleTrial(
+    @CurrentSession() session: Session,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body(parseWith(rescheduleSchema)) body: z.infer<typeof rescheduleSchema>,
+  ) {
+    return this.trials.rescheduleOwn({ kind: 'user', userId: session.sub }, bookingId, body);
   }
 
   @Post('trials/:bookingId/cancel')

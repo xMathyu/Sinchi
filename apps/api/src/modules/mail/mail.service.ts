@@ -128,6 +128,15 @@ export class MailService {
     readonly hora: string;
     /** Lo que esa clase le cuesta. 0 = gratis. */
     readonly precioCents: number;
+    /**
+     * La persona MOVIO una reserva que ya tenia, no reservo por primera vez.
+     *
+     * Sin esto, al dueno le llegan dos correos identicos —«Ana viene el martes»,
+     * «Ana viene el jueves»— y no tiene forma de saber si son dos personas, dos
+     * clases o un cambio. Con el tatami de por medio, esa duda se resuelve
+     * preparando sitio para dos.
+     */
+    readonly cambioDeHora?: boolean;
   }): Promise<ResultadoEnvio> {
     const env = loadEnv();
     if (env.RESEND_API_KEY === undefined) {
@@ -141,8 +150,12 @@ export class MailService {
     const whatsapp = soloDigitos.length >= 9 ? `https://wa.me/${soloDigitos}` : null;
     const gratis = input.precioCents === 0;
 
+    const cambio = input.cambioDeHora === true;
+
     const texto = [
-      `${input.nombre} reservó una clase de prueba en ${input.gimnasio}.`,
+      cambio
+        ? `${input.nombre} cambió la hora de su clase de prueba en ${input.gimnasio}.`
+        : `${input.nombre} reservó una clase de prueba en ${input.gimnasio}.`,
       '',
       `Clase:    ${input.clase}`,
       `Cuándo:   ${input.cuando}, ${input.hora}`,
@@ -150,8 +163,15 @@ export class MailService {
       `Cobro:    ${gratis ? 'gratis' : `S/ ${(input.precioCents / 100).toFixed(2)} al llegar`}`,
       ...(whatsapp === null ? [] : ['', `Escríbele: ${whatsapp}`]),
       '',
-      'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
-      'de Sinchi y eligió este horario.',
+      ...(cambio
+        ? [
+            'Es la MISMA persona y la misma reserva, movida: no esperes a dos.',
+            'La hora de arriba es la que vale.',
+          ]
+        : [
+            'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
+            'de Sinchi y eligió este horario.',
+          ]),
       '',
       'La lista completa de quién viene está en la app, en Clases de prueba.',
     ].join('\n');
@@ -168,7 +188,9 @@ export class MailService {
           to: [input.para],
           // El asunto se lee entero en la notificación del móvil, que es donde
           // de verdad se lee: nombre y día, sin adornos.
-          subject: `Clase de prueba: ${input.nombre} viene el ${input.cuando}`,
+          subject: cambio
+            ? `Cambio de hora: ${input.nombre} ahora viene el ${input.cuando}`
+            : `Clase de prueba: ${input.nombre} viene el ${input.cuando}`,
           text: texto,
         }),
         signal: AbortSignal.timeout(10_000),

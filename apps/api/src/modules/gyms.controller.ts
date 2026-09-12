@@ -51,6 +51,12 @@ const signUpSchema = idTokenSchema.extend({
   promoCode: z.string().max(40).optional(),
 });
 
+/** La hora nueva. El gimnasio no se repite: sale de la reserva que se mueve. */
+const guestRescheduleSchema = idTokenSchema.extend({
+  classScheduleId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+});
+
 const bookSchema = idTokenSchema.extend({
   /**
    * Nombre y celular solo se le piden a quien no tiene ficha: con identidad
@@ -127,6 +133,26 @@ export class GymsController {
   async mine(@Body(parseWith(idTokenSchema)) body: z.infer<typeof idTokenSchema>) {
     const identity = await this.firebase.verify(body.idToken);
     return this.trials.forAccount(identity.uid);
+  }
+
+  /**
+   * Mueve la reserva a otra hora, sin ficha en ningún padrón.
+   *
+   * El par de `/me/trials/:id/reschedule`, para quien reservó solo con su cuenta
+   * de Google. Se declara antes que `:slug` por lo mismo que las de arriba.
+   */
+  @Public()
+  @Post('trials/:bookingId/reschedule')
+  async reschedule(
+    @Param('bookingId') bookingId: string,
+    @Body(parseWith(guestRescheduleSchema)) body: z.infer<typeof guestRescheduleSchema>,
+  ) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.trials.rescheduleOwn(
+      { kind: 'firebase', uid: identity.uid, email: identity.email, displayName: identity.displayName },
+      bookingId,
+      { classScheduleId: body.classScheduleId, date: body.date },
+    );
   }
 
   /** Cancelar libera el cupo: quien avisa que no puede el martes puede el jueves. */

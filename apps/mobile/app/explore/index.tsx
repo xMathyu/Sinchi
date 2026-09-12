@@ -91,39 +91,61 @@ export default function ExploreScreen() {
                   {reserva.className} · {formatWeekdayAndDay(reserva.date)} a las{' '}
                   {reserva.startTime}
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  hitSlop={10}
-                  onPress={() => {
-                    // Confirmar antes de soltar el cupo: es una sola por
-                    // gimnasio y deshacerlo exige volver a elegir hora.
-                    Alert.alert(
-                      'Cancelar tu clase de prueba',
-                      `${reserva.gymName} dejará de esperarte. Podrás reservar otro día.`,
-                      [
-                        { text: 'No', style: 'cancel' },
-                        {
-                          text: 'Cancelar la clase',
-                          style: 'destructive',
-                          onPress: () => {
-                            void cancelarClaseGratis(reserva.id)
-                              .then(() => reservas.recargar())
-                              .catch((causa: unknown) => {
-                                Alert.alert(
-                                  'No se pudo cancelar',
-                                  causa instanceof Error ? causa.message : 'Intenta de nuevo.',
-                                );
-                              });
+                {/* Primero mover y después cancelar, y no al revés: quien no puede
+                    el martes casi siempre puede el jueves, y lo único que había
+                    aquí —cancelar— le hacía soltar el cupo para volver a pedirlo.
+                    Cancelar se queda, en gris, como lo que es: la salida de quien
+                    de verdad no va a ir. */}
+                <Row gap={16} justify="flex-start">
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/explore/[slug]',
+                        params: { slug: reserva.gymSlug },
+                      })
+                    }
+                  >
+                    <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+                      Cambiar la hora
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={() => {
+                      // Confirmar antes de soltar el cupo: es una sola por
+                      // gimnasio y deshacerlo exige volver a elegir hora.
+                      Alert.alert(
+                        'Cancelar tu clase de prueba',
+                        `${reserva.gymName} dejará de esperarte. Podrás reservar otro día.`,
+                        [
+                          { text: 'No', style: 'cancel' },
+                          {
+                            text: 'Cancelar la clase',
+                            style: 'destructive',
+                            onPress: () => {
+                              void cancelarClaseGratis(reserva.id)
+                                .then(() => reservas.recargar())
+                                .catch((causa: unknown) => {
+                                  Alert.alert(
+                                    'No se pudo cancelar',
+                                    causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+                                  );
+                                });
+                            },
                           },
-                        },
-                      ],
-                    );
-                  }}
-                >
-                  <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                    Cancelar
-                  </Text>
-                </Pressable>
+                        ],
+                      );
+                    }}
+                  >
+                    <Text variant="captionSmall" color={theme.colors.textTertiary}>
+                      Cancelar
+                    </Text>
+                  </Pressable>
+                </Row>
               </Stack>
             </Card>
           ))}

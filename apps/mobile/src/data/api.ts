@@ -459,6 +459,44 @@ export const fetchGuestTrials = async (idToken: string): Promise<readonly TrialB
     })
   ).map(reviveTrial);
 
+/**
+ * Mueve una reserva a otra hora.
+ *
+ * Devuelve un `BookTrialDto` y no un `{ moved: true }` porque el resultado es el
+ * mismo que reservar: o la reserva con su hora nueva, o el motivo por el que esa
+ * hora no sirve. La pantalla no tiene que distinguir los dos casos.
+ */
+export const rescheduleTrial = async (input: {
+  readonly bookingId: string;
+  readonly classScheduleId: string;
+  /** `YYYY-MM-DD`. */
+  readonly date: string;
+}): Promise<BookTrialDto> =>
+  reviveBooking(
+    await request<BookTrialDto>(`/me/trials/${input.bookingId}/reschedule`, {
+      method: 'POST',
+      body: { classScheduleId: input.classScheduleId, date: input.date },
+    }),
+  );
+
+export const rescheduleGuestTrial = async (input: {
+  readonly bookingId: string;
+  readonly idToken: string;
+  readonly classScheduleId: string;
+  readonly date: string;
+}): Promise<BookTrialDto> =>
+  reviveBooking(
+    await request<BookTrialDto>(`/gyms/trials/${input.bookingId}/reschedule`, {
+      method: 'POST',
+      anonymous: true,
+      body: {
+        idToken: input.idToken,
+        classScheduleId: input.classScheduleId,
+        date: input.date,
+      },
+    }),
+  );
+
 export const cancelTrial = (bookingId: string): Promise<{ readonly canceled: true }> =>
   request(`/me/trials/${bookingId}/cancel`, { method: 'POST' });
 

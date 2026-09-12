@@ -42,6 +42,7 @@ import { CargandoSeccion } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import { useGym, useMisClasesGratis, useToday, useWallet } from '../../src/data/hooks';
 import {
+  cambiarHoraDeClaseGratis,
   cuentaParaReservar,
   necesitaDatos,
   reservarClaseGratis,
@@ -68,6 +69,15 @@ export default function GymScreen() {
   const [celular, setCelular] = useState('+51');
   const [reservando, setReservando] = useState(false);
   const [salida, setSalida] = useState<BookTrialDto | null>(null);
+  /**
+   * Está eligiendo una hora nueva para la reserva que ya tiene.
+   *
+   * Es un modo de esta misma pantalla y no otra: el horario ya está aquí, las
+   * filas ya se tocan, y lo único que cambia es a qué llama el botón. Mandarle a
+   * una pantalla aparte a elegir entre las mismas catorce filas sería contar lo
+   * mismo dos veces.
+   */
+  const [cambiando, setCambiando] = useState(false);
 
   const cuenta = cuentaParaReservar();
   // Solo si de verdad no sabemos quién es. Con identidad Sinchi los datos están
@@ -128,6 +138,53 @@ export default function GymScreen() {
    */
   const puedeOfrecer =
     puedeReservar && !esAlumno && yaReservada === undefined && !(salida?.booked ?? false);
+
+  /**
+   * Y se ofrece MOVER a quien ya tiene la suya y lo pidió.
+   *
+   * Las filas se vuelven a tocar, pero por otra razón y con otro botón. Hasta
+   * ahora la única salida era cancelar y reservar otra vez: dos pantallas, un
+   * aviso que amenaza con que el gimnasio «dejará de esperarte», y el cupo en el
+   * aire entre una cosa y la otra. Quien solo quería venir el jueves en vez del
+   * martes no debería jugarse nada.
+   */
+  const puedeCambiar = cambiando && yaReservada !== undefined && puedeReservar && !esAlumno;
+  /** Quien puede tocar las filas del horario, por cualquiera de los dos motivos. */
+  const eligiendo = puedeOfrecer || puedeCambiar;
+
+  /**
+   * Mueve la que ya tiene. Mismo botón, misma salida, otra llamada.
+   *
+   * El resultado se lee igual que una reserva —o la reserva con su hora nueva, o
+   * el motivo por el que esa hora no sirve— para que la pantalla no tenga que
+   * distinguir dos casos que para quien la usa son uno.
+   */
+  const confirmarCambio = (): void => {
+    if (slot === null || yaReservada === undefined) return;
+    setReservando(true);
+    setSalida(null);
+
+    void cambiarHoraDeClaseGratis({ bookingId: yaReservada.id, slot })
+      .then((resultado) => {
+        setSalida(resultado);
+        if (resultado.booked) {
+          setSlot(null);
+          setCambiando(false);
+          reservas.recargar();
+        }
+      })
+      .catch((causa: unknown) => {
+        setSalida({
+          booked: false,
+          reason: { code: 'slot_not_available' },
+          message: {
+            title: 'No se pudo cambiar la hora',
+            detail: causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+          },
+        });
+      })
+      .finally(() => setReservando(false));
+  };
 
   const confirmar = (): void => {
     if (slot === null) return;
@@ -233,6 +290,25 @@ export default function GymScreen() {
                 ? ''
                 : ` Se paga en el local: ${formatPEN(cents(yaReservada.priceCents))}.`}
             </Text>
+            {/* La salida que faltaba. Antes, desde aquí, lo único que se podía
+                hacer con una reserva hecha era cancelarla — y quien solo quería
+                otra hora acababa soltando el cupo para volver a pedirlo. */}
+            {puedeReservar && !esAlumno ? (
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={10}
+                style={{ alignSelf: 'flex-start', paddingTop: 4 }}
+                onPress={() => {
+                  setCambiando((puesto) => !puesto);
+                  setSlot(null);
+                  setSalida(null);
+                }}
+              >
+                <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+                  {cambiando ? 'Dejarlo como está' : 'Cambiar la hora'}
+                </Text>
+              </Pressable>
+            ) : null}
           </Stack>
         </Card>
       ) : salida !== null && salida.booked ? (
@@ -272,14 +348,21 @@ export default function GymScreen() {
             puede prometerlo: debajo solo va el aviso de que este local todavía
             no publicó su horario. */}
         <Eyebrow>
-          {!gym.trialClassEnabled || gym.schedules.length === 0
-            ? 'Horarios'
-            : gratis
-              ? 'Tu primera clase, gratis'
-              : 'Reserva tu clase de prueba'}
+          {puedeCambiar
+            ? 'Elige tu hora nueva'
+            : !gym.trialClassEnabled || gym.schedules.length === 0
+              ? 'Horarios'
+              : gratis
+                ? 'Tu primera clase, gratis'
+                : 'Reserva tu clase de prueba'}
         </Eyebrow>
 
-        {!gym.trialClassEnabled ? (
+        {puedeCambiar ? (
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            Tu sitio no se pierde: se mueve. El gimnasio recibe el aviso con la hora
+            nueva.
+          </Text>
+        ) : !gym.trialClassEnabled ? (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
             Este gimnasio no toma reservas por la app. Puedes acercarte al local en
             cualquiera de estos horarios.
@@ -294,7 +377,7 @@ export default function GymScreen() {
 
         <Horario
           schedules={gym.schedules}
-          slots={puedeOfrecer ? gym.slots : []}
+          slots={eligiendo ? gym.slots : []}
           elegida={slot}
           onElegir={setSlot}
           hoy={hoy}
@@ -310,6 +393,35 @@ export default function GymScreen() {
             </Card>
             <Button label="Entrar y reservar" onPress={() => router.push('/login')} />
           </Stack>
+        ) : null}
+
+        {/* Cambiar la hora no pide nada más: el nombre y el celular ya están en
+            la reserva que se mueve, y la cuenta es la misma que la hizo. */}
+        {puedeCambiar ? (
+          <>
+            {salida !== null && !salida.booked ? (
+              <Card
+                accent={theme.semaphore.alert}
+                borderColor={withAlpha(theme.semaphore.alert, 0.28)}
+                radius={theme.radii.lg}
+              >
+                <Stack gap={4}>
+                  <Text variant="bodySmall" weight="semibold">
+                    {salida.message.title}
+                  </Text>
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    {salida.message.detail}
+                  </Text>
+                </Stack>
+              </Card>
+            ) : null}
+
+            <Button
+              label={reservando ? 'Cambiando…' : 'Cambiar mi hora'}
+              disabled={slot === null || reservando}
+              onPress={confirmarCambio}
+            />
+          </>
         ) : null}
 
         {puedeOfrecer && cuenta.kind !== 'none' ? (

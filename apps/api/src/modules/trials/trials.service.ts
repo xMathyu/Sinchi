@@ -22,6 +22,7 @@ import {
   parsePlainDate,
   upcomingClassSlots,
   validateTrialBooking,
+  validateTrialReschedule,
   trialMessage,
   weekdayName,
   isoWeekday,
@@ -581,6 +582,7 @@ export class TrialsService {
   private async notify(
     gym: { readonly id: string; readonly name: string; readonly timezone: string },
     booking: TrialBookingView,
+    cambioDeHora = false,
   ): Promise<void> {
     try {
       const destinatarios = await withTenant(this.db, gym.id, async (tx) =>
@@ -603,6 +605,7 @@ export class TrialsService {
         cuando: describeDate(booking.date),
         hora: booking.startTime,
         precioCents: booking.priceCents,
+        cambioDeHora,
       });
 
       if (enviado.enviado) {
@@ -752,6 +755,129 @@ export class TrialsService {
   }
 
   /**
+   * Mueve su propia reserva a otra hora.
+   *
+   * Antes esto no existia y la unica salida era cancelar y reservar de nuevo, lo
+   * que en la practica significa: un aviso que dice que el gimnasio «dejara de
+   * esperarte», el cupo suelto, y volver a empezar en la ficha del local. Quien
+   * solo queria venir el jueves en vez del martes se la jugaba en el camino — y
+   * al gimnasio le llegaba una cancelacion, que es lo que no queria.
+   *
+   * Se escribe sobre la MISMA fila, no se cancela una y se crea otra. Importa
+   * por tres cosas: el indice unico de «una por gimnasio» nunca ve dos vivas a
+   * la vez; el `priceCents` congelado en la reserva se conserva —si el local
+   * subio la tarifa entre la reserva y hoy, se respeta lo que se le prometio—; y
+   * la lista del mostrador ensena una persona esperada, no una que cancelo y
+   * otra nueva.
+   *
+   * La comprobacion de propiedad es la misma de `cancelOwn`, palabra por
+   * palabra, y por la misma razon: con sesion vale tambien lo que reservo antes
+   * de tener ficha, porque es la misma persona.
+   */
+  async rescheduleOwn(
+    account: TrialAccount,
+    bookingId: string,
+    nuevo: { readonly classScheduleId: string; readonly date: string },
+  ): Promise<BookOutcome> {
+    const uid =
+      account.kind === 'user' ? await this.firebaseUidOf(account.userId) : account.uid;
+
+    const suya =
+      account.kind === 'user'
+        ? uid === null
+          ? eq(schema.trialBookings.userId, account.userId)
+          : or(
+              eq(schema.trialBookings.userId, account.userId),
+              eq(schema.trialBookings.firebaseUid, uid),
+            )!
+        : eq(schema.trialBookings.firebaseUid, account.uid);
+
+    /**
+     * La reserva vive bajo la identidad de quien pide; el gimnasio se busca
+     * despues por su id. Se lee fuera de la transaccion de escritura porque
+     * `stateFor` y `findGym` no pueden correr con el gimnasio ya adoptado.
+     */
+    const [reserva] = await withContext(
+      this.db,
+      account.kind === 'user'
+        ? uid === null
+          ? { userId: account.userId }
+          : { userId: account.userId, trialAccount: uid }
+        : { trialAccount: account.uid },
+      (tx) =>
+        tx
+          .select({
+            id: schema.trialBookings.id,
+            tenantId: schema.trialBookings.tenantId,
+          })
+          .from(schema.trialBookings)
+          .where(
+            and(
+              eq(schema.trialBookings.id, bookingId),
+              // Solo una reserva EN PIE se mueve. Una cancelada se vuelve a
+              // reservar por el camino normal, y una ya atendida es historia.
+              eq(schema.trialBookings.status, 'booked'),
+              suya,
+            ),
+          )
+          .limit(1),
+    );
+
+    if (reserva === undefined) throw new NotFoundException('Esa reserva no existe.');
+
+    const gym = await this.findGymById(reserva.tenantId);
+    if (gym === null) throw new NotFoundException('Ese gimnasio no existe.');
+    const listed = (await this.saas.stateFor(gym.id)).listed;
+
+    const outcome = await withTenant(this.db, gym.id, async (tx): Promise<BookOutcome> => {
+      const schedules = (
+        await tx
+          .select()
+          .from(schema.classSchedules)
+          .where(eq(schema.classSchedules.active, true))
+      ).map(toClassSchedule);
+
+      const verdict = validateTrialReschedule({
+        gymActive: gym.status === 'active' && listed,
+        slots: this.slotsFor(schedules, gym.timezone),
+        scheduleId: nuevo.classScheduleId,
+        date: parsePlainDate(nuevo.date),
+      });
+
+      if (!verdict.allowed) {
+        return { booked: false, reason: verdict.reason, message: trialMessage(verdict.reason) };
+      }
+
+      const [row] = await tx
+        .update(schema.trialBookings)
+        .set({
+          classScheduleId: verdict.slot.scheduleId,
+          className: verdict.slot.name,
+          localDate: formatPlainDate(verdict.slot.date),
+          startTime: verdict.slot.startTime,
+          endTime: verdict.slot.endTime,
+          // `notified_at` tiene que decir cuando se aviso de ESTA hora, no de la
+          // vieja. Se limpia y lo vuelve a poner `notify` si el correo sale: si
+          // no, la columna afirmaria que el gimnasio sabe algo que no sabe.
+          notifiedAt: null,
+        })
+        .where(eq(schema.trialBookings.id, reserva.id))
+        .returning();
+
+      return {
+        booked: true,
+        booking: { ...toTrialBooking(row!), gymName: gym.name, gymSlug: gym.slug },
+      };
+    });
+
+    // Se avisa SIEMPRE, y dicho como lo que es. El gimnasio tiene apuntada la
+    // hora vieja, y una reserva movida de la que no se entera es peor que
+    // ninguna: prepara sitio un martes para alguien que viene el jueves.
+    if (outcome.booked) await this.notify(gym, outcome.booking, true);
+    return outcome;
+  }
+
+  /**
    * Cancela su propia reserva.
    *
    * Se lee con la identidad de quien pide y se escribe con la del gimnasio: la
@@ -826,6 +952,22 @@ export class TrialsService {
 
   /** El gimnasio por su slug. `tenants` es global: no lleva RLS. */
   private async findGym(slug: string) {
+    return this.findGymWhere(eq(schema.tenants.slug, slug));
+  }
+
+  /**
+   * El mismo gimnasio, buscado por id.
+   *
+   * Lo pide mover una reserva: ahi no llega un slug, llega el `tenant_id` que la
+   * propia reserva lleva dentro. Va por la misma funcion para que las dos
+   * entradas devuelvan exactamente las mismas columnas — si una se olvidara de
+   * `trial_class_price_cents`, la reserva movida perderia su precio congelado.
+   */
+  private async findGymById(tenantId: string) {
+    return this.findGymWhere(eq(schema.tenants.id, tenantId));
+  }
+
+  private async findGymWhere(condition: SQL) {
     return withoutTenantIsolation(this.db, async (tx) => {
       const [row] = await tx
         .select({
@@ -840,7 +982,7 @@ export class TrialsService {
           dropInPriceCents: schema.tenants.dropInPriceCents,
         })
         .from(schema.tenants)
-        .where(eq(schema.tenants.slug, slug))
+        .where(condition)
         .limit(1);
       return row ?? null;
     });

@@ -130,3 +130,48 @@ export function trialMessage(reason: TrialDenialReason): TrialMessage {
       };
   }
 }
+
+/**
+ * Cambiar la hora de una reserva que ya existe.
+ *
+ * Lo pidieron los primeros que usaron el directorio, y hasta ahora la unica
+ * salida era CANCELAR y volver a reservar: dos pantallas, un aviso que amenaza
+ * con perder el cupo y, si entre una cosa y otra alguien mira mal, la reserva
+ * perdida de verdad. Nadie que solo queria venir el jueves en vez del martes
+ * merece esa escalera — y el gimnasio prefiere mil veces mover la hora a que le
+ * cancelen.
+ *
+ * No es reservar otra vez, y por eso no reutiliza `validateTrialBooking`:
+ *
+ *  · `existing` no aplica. Esa reserva es justamente la que se esta moviendo, y
+ *    la regla de "una por gimnasio" la seguiria cumpliendo porque sigue siendo
+ *    UNA;
+ *  · `alreadyMember` tampoco. Quien se inscribio entre la reserva y hoy ya no
+ *    necesita la clase gratis, pero prohibirle mover la que tiene no le quita
+ *    nada a nadie: la alternativa que le queda es no venir;
+ *  · `trialOffered` tampoco, por lo mismo que apagarla no cancela lo ya
+ *    reservado. El gimnasio ya le prometio una clase; dejar de ofrecerla a los
+ *    nuevos no deshace esa promesa, solo decide quien mas la recibe.
+ *
+ * Lo que SI se comprueba es que el gimnasio siga en pie y que la hora nueva sea
+ * una de verdad. Elegir la que ya tiene se permite y no hace nada: es la
+ * respuesta correcta a tocar dos veces el mismo boton.
+ */
+export interface TrialRescheduleContext {
+  /** `false` cuando el gimnasio esta suspendido o fuera del directorio. */
+  readonly gymActive: boolean;
+  /** Las opciones reales, de `upcomingClassSlots`. */
+  readonly slots: readonly TrialSlot[];
+  /** La hora nueva. */
+  readonly scheduleId: string;
+  readonly date: PlainDate;
+}
+
+export function validateTrialReschedule(context: TrialRescheduleContext): TrialBookingResult {
+  if (!context.gymActive) return { allowed: false, reason: { code: 'gym_unavailable' } };
+
+  const slot = findSlot(context.slots, context.scheduleId, context.date);
+  if (slot === null) return { allowed: false, reason: { code: 'slot_not_available' } };
+
+  return { allowed: true, slot };
+}
