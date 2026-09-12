@@ -7,7 +7,15 @@
  *    recurso de la puerta: el resultado se lee de lejos, antes de leer texto.
  */
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { screenPadding, WATERMARK_TILES, WORDMARK_TRACKING_RATIO } from '@sinchi/ui';
@@ -48,6 +56,7 @@ export function Screen({
           showsVerticalScrollIndicator={false}
           // El rebote de iOS se mantiene; en Android el overscroll nativo
           // tampoco se toca. Los patrones de plataforma se respetan (MD 3).
+          {...tecladoEnScroll}
         >
           {children}
         </ScrollView>
@@ -55,8 +64,45 @@ export function Screen({
     );
   }
 
-  return <View style={[frame, inner]}>{children}</View>;
+  // Sin scroll el contenido no se puede correr, asi que el hueco lo abre el
+  // propio contenedor. `height` y no `padding`: aqui dentro hay pantallas cuyo
+  // hijo es un `FlatList` con `flex: 1` —el padron— y con `padding` la lista se
+  // queda del alto de siempre y el teclado le tapa las ultimas filas.
+  return (
+    <KeyboardAvoidingView
+      style={[frame, inner]}
+      behavior={Platform.OS === 'ios' ? 'height' : undefined}
+    >
+      {children}
+    </KeyboardAvoidingView>
+  );
 }
+
+/**
+ * Que el teclado no tape lo que se esta escribiendo.
+ *
+ * Era el mismo fallo en TODA la app —el celular y el codigo de promocion del
+ * alta, la hora de una clase, el monto de un cobro— porque todas esas pantallas
+ * son este `ScrollView`, y un `ScrollView` pelado no sabe que el teclado existe:
+ * ocupa media pantalla por encima y el campo enfocado se queda debajo.
+ *
+ *  · `automaticallyAdjustKeyboardInsets` es la pieza de iOS: mete el alto del
+ *    teclado como inset del scroll, y UIKit sube solo el campo enfocado. En
+ *    Android no hace nada y no hace falta —`adjustResize`, que es lo que Expo
+ *    deja puesto, encoge la ventana entera;
+ *  · `keyboardShouldPersistTaps` arregla el segundo medio bug, el que se
+ *    confunde con "el boton no responde": con el teclado abierto, el primer
+ *    toque en «Crear mi gimnasio» solo lo cerraba y habia que tocar dos veces.
+ *    `handled` deja que el boton se lleve el toque y cierra el teclado si el
+ *    toque no era de nadie;
+ *  · `interactive` es el gesto de iOS de bajar el teclado arrastrandolo, que es
+ *    como se espera salir de un formulario largo.
+ */
+const tecladoEnScroll = {
+  automaticallyAdjustKeyboardInsets: true,
+  keyboardShouldPersistTaps: 'handled',
+  keyboardDismissMode: Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+} as const;
 
 /**
  * Pantalla tenida con el degradado del estado, con la marca de agua "SINCHI"
