@@ -167,37 +167,63 @@ export default function GymSignUpScreen() {
           priceCents: monthlyCents,
         });
 
-  const problems: Readonly<Partial<Record<SignUpField, string>>> = {
-    ...(name.trim().length === 0
-      ? { name: 'Escribe el nombre de tu gimnasio.' }
-      : name.trim().length < 3
-        ? { name: 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.' }
-        : {}),
-    ...(ruc.trim().length === 0
-      ? { ruc: 'Falta tu RUC. Es el de la boleta que le das a tus alumnos.' }
-      : taxIdDigits < 11
-        ? { ruc: 'El RUC tiene 11 dígitos.' }
-        : taxIdDenial !== null
-          ? { ruc: rucDenialMessage(taxIdDenial) }
-          : {}),
-    ...(documentId.trim().length === 0
-      ? { documentId: 'Falta tu documento: es lo que te identifica en la red.' }
-      : documentId.trim().length < 6
-        ? { documentId: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
-        : {}),
-    ...(address.trim().length === 0
-      ? { address: 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.' }
-      : address.trim().length < ADDRESS_MIN
-        ? { address: 'Un poco más: calle, número y distrito.' }
-        : {}),
-    ...(monthlyPrice.trim().length === 0
-      ? { monthlyPrice: 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.' }
-      : monthlyCents === null
-        ? { monthlyPrice: 'Escríbelo en soles, con números: 120 o 120.50.' }
-        : planDenial !== null
-          ? { monthlyPrice: planDenialMessage(planDenial) }
-          : {}),
+  /**
+   * Se construye con `complain` y no con spreads condicionales, y la diferencia
+   * no es de estilo: un spread NO comprueba las claves contra el tipo. Escrito
+   * con spreads, `{ ruc: … }` dentro de un `Partial<Record<SignUpField, …>>`
+   * compilaba aunque el campo se llamara `taxId`, y el efecto era que el RUC
+   * nunca se ponía en rojo — el bug que esto mismo venía a arreglar. Un
+   * parámetro sí se comprueba.
+   */
+  const problems: Partial<Record<SignUpField, string>> = {};
+  const complain = (field: SignUpField, message: string | null): void => {
+    if (message !== null) problems[field] = message;
   };
+
+  complain(
+    'name',
+    name.trim().length === 0
+      ? 'Escribe el nombre de tu gimnasio.'
+      : name.trim().length < 3
+        ? 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.'
+        : null,
+  );
+  complain(
+    'taxId',
+    ruc.trim().length === 0
+      ? 'Falta tu RUC. Es el de la boleta que le das a tus alumnos.'
+      : taxIdDigits < 11
+        ? 'El RUC tiene 11 dígitos.'
+        : taxIdDenial !== null
+          ? rucDenialMessage(taxIdDenial)
+          : null,
+  );
+  complain(
+    'documentId',
+    documentId.trim().length === 0
+      ? 'Falta tu documento: es lo que te identifica en la red.'
+      : documentId.trim().length < 6
+        ? 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.'
+        : null,
+  );
+  complain(
+    'address',
+    address.trim().length === 0
+      ? 'Escribe dónde queda tu gimnasio. Es lo primero que mira quien te busca.'
+      : address.trim().length < ADDRESS_MIN
+        ? 'Un poco más: calle, número y distrito.'
+        : null,
+  );
+  complain(
+    'monthlyPrice',
+    monthlyPrice.trim().length === 0
+      ? 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.'
+      : monthlyCents === null
+        ? 'Escríbelo en soles, con números: 120 o 120.50.'
+        : planDenial !== null
+          ? planDenialMessage(planDenial)
+          : null,
+  );
   const ready = Object.keys(problems).length === 0;
 
   /**
@@ -223,22 +249,34 @@ export default function GymSignUpScreen() {
     attempted || liveDenial(field) ? problems[field] : undefined;
 
   /** Lo mismo para el formulario de la cuenta, que falla por otras razones. */
-  const accountProblems: Readonly<Partial<Record<AccountField, string>>> = {
-    ...(ownerName.trim().length < 2 ? { ownerName: 'Escribe tu nombre.' } : {}),
-    ...(correo.trim().length === 0
-      ? { correo: 'Falta tu correo.' }
-      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())
-        ? { correo: 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.' }
-        : {}),
-    ...(password.length === 0
-      ? { password: 'Falta la contraseña.' }
-      : password.length < 6
-        ? { password: 'La contraseña va de 6 caracteres para arriba.' }
-        : {}),
-    ...(phone.trim().length < 8
-      ? { phone: 'Falta tu celular, con el código del país: +51987654321.' }
-      : {}),
+  const accountProblems: Partial<Record<AccountField, string>> = {};
+  const complainAccount = (field: AccountField, message: string | null): void => {
+    if (message !== null) accountProblems[field] = message;
   };
+
+  complainAccount('ownerName', ownerName.trim().length < 2 ? 'Escribe tu nombre.' : null);
+  complainAccount(
+    'email',
+    correo.trim().length === 0
+      ? 'Falta tu correo.'
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())
+        ? 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.'
+        : null,
+  );
+  complainAccount(
+    'password',
+    password.length === 0
+      ? 'Falta la contraseña.'
+      : password.length < 6
+        ? 'La contraseña va de 6 caracteres para arriba.'
+        : null,
+  );
+  complainAccount(
+    'phone',
+    phone.trim().length < 8
+      ? 'Falta tu celular, con el código del país: +51987654321.'
+      : null,
+  );
   const accountReady = Object.keys(accountProblems).length === 0;
   const accountDenialFor = (field: AccountField): string | undefined =>
     attempted ? accountProblems[field] : undefined;
