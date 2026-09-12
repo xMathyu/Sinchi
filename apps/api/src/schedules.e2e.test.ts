@@ -133,7 +133,7 @@ async function frontDeskToken(tenantId: string): Promise<string> {
  * Lo que se manda al CREAR, con los dias en plural.
  *
  * `POST /staff/schedules` escribe un bloque por dia marcado, asi que la
- * respuesta es siempre una LISTA — tambien con un solo dia. `publicar` la
+ * respuesta es siempre una LISTA — tambien con un solo dia. `publish` la
  * deshace para las pruebas que solo miran el bloque.
  */
 const baseBlock = {

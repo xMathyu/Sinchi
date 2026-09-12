@@ -124,6 +124,31 @@ export default function InviteScreen() {
   }
 
   const canSubmit = email.trim().length > 3 && password.length >= 6 && !working;
+
+  /**
+   * Que le falta, por campo.
+   *
+   * Es la ultima pantalla de una invitacion: quien llega aqui ya decidio
+   * entrar, y perderlo porque un boton gris no explica que su contrasena tiene
+   * cinco caracteres es perder un alumno que el gimnasio ya dio por suyo.
+   */
+  const emailDenial =
+    email.trim().length === 0
+      ? 'Falta tu correo.'
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        ? 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.'
+        : null;
+  const passwordDenial =
+    password.length === 0
+      ? 'Falta la contraseña.'
+      : password.length < 6
+        ? 'La contraseña va de 6 caracteres para arriba.'
+        : null;
+
+  // No se pinta mientras escribe: se pinta al tocar el boton apagado.
+  const [attempted, setAttempted] = useState(false);
+  const showEmailDenial = attempted ? emailDenial : null;
+  const showPasswordDenial = attempted ? passwordDenial : null;
   const total = invite.priceCents + invite.enrollmentFeeCents;
 
   return (
@@ -213,9 +238,15 @@ export default function InviteScreen() {
                   fontSize: 16,
                   paddingVertical: 10,
                   borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.hairline,
+                  borderBottomColor:
+                    showEmailDenial === null ? theme.colors.hairline : theme.semaphore.bad,
                 }}
               />
+              {showEmailDenial === null ? null : (
+                <Text variant="micro" color={theme.semaphore.bad}>
+                  {showEmailDenial}
+                </Text>
+              )}
             </Stack>
 
             <Stack gap={4}>
@@ -241,15 +272,22 @@ export default function InviteScreen() {
                   fontSize: 16,
                   paddingVertical: 10,
                   borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.hairline,
+                  borderBottomColor:
+                    showPasswordDenial === null ? theme.colors.hairline : theme.semaphore.bad,
                 }}
               />
+              {showPasswordDenial === null ? null : (
+                <Text variant="micro" color={theme.semaphore.bad}>
+                  {showPasswordDenial}
+                </Text>
+              )}
             </Stack>
 
             <Button
               label={working ? 'Aceptando…' : 'Aceptar e inscribirme'}
               disabled={!canSubmit}
               onPress={accept}
+              onBlockedPress={working ? undefined : () => setAttempted(true)}
             />
           </Stack>
         ) : (

@@ -16,7 +16,7 @@
  *  · **hasta cinco locales por persona**. El profesor que lleva la escuela de
  *    una universidad y ademas cobra sus clases aparte son DOS padrones, y el
  *    alta lo permite; el tope existe solo porque cada local nuevo estrena su
- *    mes gratis (ver `assertLocalesDisponibles`).
+ *    mes gratis (ver `assertGymsAvailable`).
  *
  * El codigo de promocion es lo ULTIMO y no puede tumbar el alta: si esta mal
  * escrito, el gimnasio queda creado igual y la app dice por que no se aplico.
@@ -52,7 +52,7 @@ import { AccountLinkService } from '../../auth/account-link.service';
 import { SaasService } from '../saas/saas.service';
 
 /**
- * Tope de locales por persona. Ver `assertLocalesDisponibles`.
+ * Tope de locales por persona. Ver `assertGymsAvailable`.
  *
  * Es un tope de ABUSO, no un escalon comercial: lo que se cobra sigue saliendo
  * del padron de cada local, uno por uno.

@@ -6,7 +6,7 @@
  * ejercicio de navegación. El atajo de verdad es el botón de GPS de la pantalla
  * de al lado; esto es para quien escribe la dirección desde su casa.
  *
- * Igual que `DondeQueda`, carga `react-native-maps` en diferido: es una
+ * Igual que `GymLocationBlock`, carga `react-native-maps` en diferido: es una
  * dependencia nativa y un binario que no la trae no puede reventar la pantalla
  * entera. Sin ella se ven las coordenadas en texto, que no sirve para elegir
  * pero sí para comprobar que el botón de GPS hizo algo.

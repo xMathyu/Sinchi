@@ -195,7 +195,7 @@ export class TrialsService {
    * adoptando cada gimnasio por turno: son N viajes por UNA conexion, no N
    * conexiones.
    *
-   * Con los locales que caben en `LIMITE` esto es barato. El dia que el
+   * Con los locales que caben en `LIMIT` esto es barato. El dia que el
    * directorio crezca de verdad, lo que toca no es paralelizarlo sino
    * mantener los agregados en `tenants` — no abrir un hueco en el aislamiento.
    */

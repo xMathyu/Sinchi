@@ -14,7 +14,7 @@
  * selector es una dependencia nativa —otro `prebuild`, otro binario— para
  * escribir cuatro dígitos que el dueño ya se sabe de memoria. Lo que sí hace
  * falta es que «1900» y «19.00» acaben valiendo `19:00`, y eso lo hace
- * `normalizaHora` al salir del campo.
+ * `normalizeTime` al salir del campo.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';

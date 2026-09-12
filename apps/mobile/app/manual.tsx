@@ -55,7 +55,7 @@ export default function ManualCheckInScreen() {
   /**
    * Marca, y ATIENDE la respuesta.
    *
-   * `marcarAsistencia` resuelve TAMBIEN cuando el servidor dice que no
+   * `markAttendance` resuelve TAMBIEN cuando el servidor dice que no
    * —`registrada: false`, sin fila y sin error— y esta pantalla cerraba en ese
    * caso como si hubiera funcionado: el recepcionista volvia a la puerta, no
    * veia el marcado y no tenia forma de saber por que. El motivo llegaba y se

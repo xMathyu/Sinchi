@@ -172,7 +172,7 @@ function GymMiniMap({ place }: { readonly place: GymPlace }) {
 /**
  * `react-native-maps`, si este binario la trae.
  *
- * Un `require` en un try y no un import estático: ver `MapaDelLocal`. El
+ * Un `require` en un try y no un import estático: ver `GymMiniMap`. El
  * resultado se guarda porque este componente se monta en cada ficha de gimnasio
  * que se abre, y un `require` que falla no es gratis.
  */

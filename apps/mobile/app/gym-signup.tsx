@@ -17,7 +17,7 @@
  *
  * El orden importa: primero se vende y despues se pide. La vista de la oferta se
  * ve sin cuenta —es lo unico de este flujo que se puede mirar sin dar nada— y la
- * cuenta se crea recien al tocar «Empezar gratis», porque `registrarGimnasio`
+ * cuenta se crea recien al tocar «Empezar gratis», porque `registerGym`
  * necesita una credencial de Firebase para firmar el alta.
  *
  * El escalon se ELIGE aqui solo para que sepa cuanto le va a costar. Lo que se
@@ -72,7 +72,7 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 /**
  * Las cuatro vistas.
  *
- * `cuenta` solo aparece para quien llega sin sesion. Por eso no entra en el
+ * `account` solo aparece para quien llega sin sesion. Por eso no entra en el
  * contador: los pasos del ALTA son dos, y crear la cuenta es el peaje de
  * entrada, no una parte del alta.
  */
@@ -140,7 +140,7 @@ export default function GymSignUpScreen() {
   /**
    * Que le falta a cada campo, por su nombre.
    *
-   * Antes esto era un solo booleano —`listo`— y por eso el boton se apagaba sin
+   * Antes esto era un solo booleano —`ready`— y por eso el boton se apagaba sin
    * decir nada: la pantalla sabia que el formulario no valia pero no por cual de
    * los cinco campos, asi que no tenia como pintar ninguno en rojo. Un mapa por
    * campo cuesta lo mismo de calcular y es lo que deja marcar el que falla.

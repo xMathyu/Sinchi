@@ -17,7 +17,7 @@ import * as SecureStore from 'expo-secure-store';
 const KEY = 'sinchi.bienvenida.v1';
 
 /**
- * `cargando` no es un detalle: hasta saberlo no se puede enrutar. Mandar al
+ * `loading` no es un detalle: hasta saberlo no se puede enrutar. Mandar al
  * login y corregir un instante después es justo el parpadeo que la portada
  * existe para evitar.
  */

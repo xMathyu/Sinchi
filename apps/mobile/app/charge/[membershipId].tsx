@@ -61,6 +61,7 @@ export default function ChargeScreen() {
   const [rail, setRail] = useState<PaymentRail>('cash');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [periods, setPeriods] = useState(Math.max(1, entry.receivable.periodsOwed));
   /**
    * Prellenado de la clase suelta: el precio DEL PLAN si el alumno paga por
@@ -189,6 +190,14 @@ export default function ChargeScreen() {
                   }}
                 />
               </Row>
+              {/* Un monto en blanco o en cero apaga «Confirmar», y sin esto el
+                  mostrador ve un botón muerto con el alumno delante. Se dice
+                  aquí, pegado al número, que es donde está el problema. */}
+              {attempted && !customValid ? (
+                <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
+                  Escribe cuánto se está cobrando: tiene que ser más de cero.
+                </Text>
+              ) : null}
               <Text variant="captionSmall" color={theme.colors.textSecondary}>
                 {concept === 'drop_in'
                   ? 'No extiende la mensualidad: habilita una sola sesión.'
@@ -261,6 +270,7 @@ export default function ChargeScreen() {
           accentColor={theme.semaphore.ok}
           accentInk={theme.semaphoreInk.ok}
           disabled={!canConfirm || enviando}
+          onBlockedPress={enviando ? undefined : () => setAttempted(true)}
           onPress={() => {
             if (enviando) return;
             setEnviando(true);

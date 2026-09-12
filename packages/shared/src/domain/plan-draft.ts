@@ -128,7 +128,7 @@ export function planDenialMessage(reason: PlanDenial): string {
  *
  * Vive aqui y no en la pantalla porque lo dicen tres sitios —la lista del dueno,
  * el alta de un alumno y el cambio de plan— y en los tres tiene que significar
- * lo mismo. `precio` se pasa hecho para no meter el formato de moneda en el
+ * lo mismo. `price` se pasa hecho para no meter el formato de moneda en el
  * dominio.
  */
 export function planShape(plan: {

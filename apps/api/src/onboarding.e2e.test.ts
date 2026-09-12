@@ -243,7 +243,7 @@ suite('dar de alta un gimnasio desde la app', () => {
    * escalón lo calcula `tierFor` por local contra su padrón real. Lo único que
    * cada local nuevo regala es su mes gratis, y para eso está el tope.
    *
-   * Van por `alta` y no por `http.post` a pelo para que el `afterAll` los
+   * Van por `signUp` y no por `http.post` a pelo para que el `afterAll` los
    * borre: un tenant de prueba que sobrevive deja una fila de `staff` que la
    * semilla de la siguiente corrida no sabe quitar.
    */

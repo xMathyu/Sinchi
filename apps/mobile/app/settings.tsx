@@ -154,7 +154,7 @@ export default function SettingsScreen() {
           La api sabía hacerlo desde el principio —`switch-to-student`— pero
           nadie lo llamaba, y el rol lo decide la api al mirar si esa persona
           tiene fila en `staff`: quien la tenía no veía nunca su propia
-          billetera. Ver `otroModo` para por qué la ida no pide condiciones y
+          billetera. Ver `otherMode` para por qué la ida no pide condiciones y
           la vuelta sí. */}
       {otherMode !== null && (
         <Stack gap={10} style={{ marginTop: 20 }}>

@@ -591,14 +591,14 @@ export function useOwnerSummary(): SummaryDto | null {
 /**
  * Los planes del dueño, con lo que hace falta para decidir sobre ellos.
  *
- * `recargar` no es opcional aquí: esta pantalla es la única desde la que se
+ * `reload` no es opcional aquí: esta pantalla es la única desde la que se
  * escriben, así que después de guardar hay que volver a pedirlos o la lista
  * enseña lo de antes justo donde el dueño acaba de cambiar algo.
  */
 /**
  * Los horarios del local, con sus avisos.
  *
- * Mismo molde que `usePlanesDelDueno`, y por la misma razon: se abre desde un
+ * Mismo molde que `useOwnerPlans`, y por la misma razon: se abre desde un
  * enlace y no viene con el padron, asi que se pide al montar y se recarga
  * despues de cada escritura.
  */

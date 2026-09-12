@@ -190,7 +190,7 @@ export default function DoorScreen() {
       {/* El vacío se lleva la región entera y no una línea suelta arriba: con la
           cámara fuera, en la puerta recién abierta quedaban 460px de aire debajo
           de «Todavía no hay marcados» — que es exactamente la pantalla rota que
-          `EstadoVacio` existe para evitar. Y es el estado de CADA mañana. */}
+          `EmptyState` existe para evitar. Y es el estado de CADA mañana. */}
       <View style={{ marginTop: 22, flex: 1 }}>
         {recent.length === 0 ? (
           <EmptyState

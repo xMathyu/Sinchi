@@ -160,7 +160,7 @@ export default function RootLayout() {
  *
  * Mientras no responda, las pantallas siguen mostrando lo que hubiera en el
  * store — que en un arranque limpio es la demostracion. Por eso se marca
- * `hidratando` y las pantallas lo pueden usar para no ensenar datos falsos como
+ * `hydrating` y las pantallas lo pueden usar para no ensenar datos falsos como
  * si fueran del servidor.
  */
 function DataLoader() {
@@ -212,7 +212,7 @@ function DataLoader() {
     // El rol entro con el cambio de modo. Hasta entonces no podia cambiar dentro
     // de una sesion, asi que bastaba con la persona; ahora el dueno que pasa a
     // alumno es el mismo `userId` y sigue `signed_in`, y sin esta dependencia el
-    // efecto NO se volvia a disparar: `cambiarDeModo` vacia el store y nadie lo
+    // efecto NO se volvia a disparar: `switchMode` vacia el store y nadie lo
     // volvia a llenar. La billetera quedaba en blanco y la cabecera de ajustes
     // mostraba «· identidad Sinchi» sin nombre.
     //
@@ -224,7 +224,7 @@ function DataLoader() {
     // mismo un escalon mas abajo: el dueno que salta de un gimnasio suyo al otro
     // es el mismo `userId`, el mismo `role` y sigue `signed_in` — solo cambia el
     // gimnasio. Sin esta dependencia el efecto no se disparaba, y como
-    // `cambiarDeLocal` vacia el store, el padron se quedaba en «Trayendo el
+    // `switchGym` vacia el store, el padron se quedaba en «Trayendo el
     // padron...» para siempre. La sesion nueva ya era la correcta; lo que
     // faltaba era ir a buscar los datos.
   }, [
@@ -317,7 +317,7 @@ function Portada() {
   // se puede saltar: hasta que no se sabe el rol no se sabe QUE barra de
   // pestanas toca, y montar la del alumno para cambiarla por la del staff se
   // ve como un fallo. La espera larga —la de la red— ya no se tapa: ocurre
-  // dentro de la app, en `CargandoSeccion`.
+  // dentro de la app, en `SectionLoader`.
   // También mientras se resuelve si toca la bienvenida: son dos lecturas del
   // mismo llavero, lanzadas a la vez, y decidir con una sola manda al login a
   // quien iba a ver la bienvenida y lo saca un instante después.
@@ -390,7 +390,7 @@ function SessionRouter() {
        * tiene cuenta. Exigirsela antes de ensenarle nada es pedirle el correo a
        * quien acaba de entrar a mirar el escaparate. La cuenta se crea DENTRO
        * del flujo, en el paso siguiente, que es donde de verdad hace falta:
-       * `registrarGimnasio` firma el alta con la credencial de Firebase.
+       * `registerGym` firma el alta con la credencial de Firebase.
        */
       if (
         !enLogin &&

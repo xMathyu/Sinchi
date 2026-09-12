@@ -335,7 +335,7 @@ suite('las dos formas de coger plaza', () => {
     const event = await createEvent(local);
     const uid = `dos-celulares-${runId}-${++contador}`;
 
-    // `reservaDeFuera` manda un celular distinto en cada llamada.
+    // `outsideBooking` manda un celular distinto en cada llamada.
     expect((await outsideBooking(local, event.id, uid)).body.booked).toBe(true);
     const segunda = await outsideBooking(local, event.id, uid);
     expect(segunda.body.booked).toBe(false);

@@ -158,7 +158,7 @@ const NO_SHIFT: Staff = {
  *
  * Antes salia de `buildDemoData()`, y esa era la causa de que al abrir la app se
  * viera la billetera de un alumno inventado hasta que respondia `/me`. Los datos
- * de demostracion ahora se cargan cuando alguien los pide (`cargarDemostracion`),
+ * de demostracion ahora se cargan cuando alguien los pide (`loadDemo`),
  * que es lo unico que los hace honestos: se ven porque se eligieron.
  */
 function initialState(): State {

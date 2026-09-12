@@ -738,7 +738,7 @@ function SelectorDeLocal({
               setSwitching(local.tenantId);
               setError(null);
               /**
-               * No hay `then` de éxito, y es a propósito: `cambiarDeLocal`
+               * No hay `then` de éxito, y es a propósito: `switchGym`
                * vacía el store y guarda la sesión nueva, y esta pantalla se
                * vuelve a montar con el padrón del otro local. Apagar el
                * indicador después sería tocar el estado de un componente que

@@ -139,7 +139,7 @@ const hoyISO = (): string => new Date().toISOString().slice(0, 10);
 /**
  * `true` cuando hay una sesión real, del rol que sea.
  *
- * `conServidor` no sirve para las escrituras del alumno: descarta el rol
+ * `withServer` no sirve para las escrituras del alumno: descarta el rol
  * `student` a propósito, porque distingue quién puede escribir en el padrón.
  * Cambiar de plan y cancelar son del alumno, y usar aquel guardia las mandaba al
  * store —a memoria— con sesión real.
@@ -401,7 +401,7 @@ export async function changePlan(membershipId: string, planId: string): Promise<
   await hydrate();
 }
 
-/** Cancela la suscripción. Misma historia que `cambiarPlan`: escribía en memoria. */
+/** Cancela la suscripción. Misma historia que `changePlan`: escribía en memoria. */
 export async function cancelSubscription(membershipId: string): Promise<void> {
   if (!hasSession()) {
     cancelSubscriptionLocal(membershipId);
@@ -545,7 +545,7 @@ export async function fijarMiPin(pin: string): Promise<void> {
  * su teléfono, o si otra recepcionista cobraba desde otro equipo, el mostrador
  * seguía viendo el estado del momento en que entró — sin nada que lo dijera.
  *
- * Las escrituras propias sí recargaban (`refrescarPadron`), y eso disimulaba el
+ * Las escrituras propias sí recargaban (`refreshRoster`), y eso disimulaba el
  * agujero: todo lo que hacía el mostrador se veía al instante, y solo lo que
  * pasaba fuera se quedaba viejo.
  */
@@ -902,7 +902,7 @@ export async function saveGymPricing(
 /**
  * Quienes cancelaron y siguen con ficha en el local.
  *
- * Son las unicas personas para las que `reactivarSuscripcion` tiene sentido, y
+ * Son las unicas personas para las que `reactivateSubscription` tiene sentido, y
  * hasta ahora no habia forma de llegar a ellas: cancelar las sacaba del padron y
  * su `membershipId` dejaba de aparecer en ninguna respuesta.
  */

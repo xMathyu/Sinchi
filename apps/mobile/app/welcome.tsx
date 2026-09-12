@@ -122,7 +122,7 @@ export default function WelcomeScreen() {
   const last = index === SLIDES.length - 1;
 
   const leave = (): void => {
-    // No se espera al llavero: `marcarBienvenidaVista` emite el estado antes de
+    // No se espera al llavero: `markWelcomeSeen` emite el estado antes de
     // escribir, así que el enrutado ya sabe que no tiene que volver aquí.
     void markWelcomeSeen();
     router.replace('/login');

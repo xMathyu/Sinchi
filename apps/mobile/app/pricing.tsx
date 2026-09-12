@@ -49,6 +49,7 @@ export default function PricingScreen() {
   const [pruebaActiva, setPruebaActiva] = useState(true);
   const [trialPrice, setTrialPrice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -216,12 +217,29 @@ export default function PricingScreen() {
       )}
 
       {isOwner && (
-        <Button
-          label={saving ? 'Guardando…' : 'Guardar'}
-          disabled={saving || priceMissing}
-          style={{ marginTop: 20 }}
-          onPress={() => void save()}
-        />
+        <>
+          <Button
+            label={saving ? 'Guardando…' : 'Guardar'}
+            disabled={saving || priceMissing}
+            style={{ marginTop: 20 }}
+            onPress={() => void save()}
+            onBlockedPress={saving ? undefined : () => setAttempted(true)}
+          />
+          {/* El campo que falta ya está en rojo, pero a media pantalla de
+              distancia: quien llega hasta aquí abajo y toca «Guardar» ve un
+              botón que no hace nada y no tiene por qué saber que la razón está
+              arriba. */}
+          {attempted && priceMissing ? (
+            <Text
+              variant="caption"
+              color={theme.semaphore.bad}
+              align="center"
+              style={{ marginTop: 10 }}
+            >
+              Falta el precio de la clase suelta, marcado arriba en rojo.
+            </Text>
+          ) : null}
+        </>
       )}
 
       <View style={{ height: 32 }} />

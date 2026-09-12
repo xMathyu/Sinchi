@@ -44,6 +44,9 @@ import { useTheme } from '../src/design/theme';
 import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
 
+/** Los campos del formulario de correo, para marcarlos de uno en uno. */
+type LoginField = 'name' | 'email' | 'password' | 'phone';
+
 export default function LoginScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -139,6 +142,37 @@ export default function LoginScreen() {
   const canSubmit =
     email.trim().length > 3 && password.length >= 6 && (!creating || completeDetails) && !working;
 
+  /**
+   * Que le falta a cada campo, por su nombre.
+   *
+   * Sin esto el boton se apagaba y no decia nada: quien escribe una contrasena
+   * de cinco caracteres ve el mismo boton gris que quien no escribio nada, y la
+   * unica salida es ir tocando campos a ver cual lo despierta.
+   */
+  const problems: Readonly<Partial<Record<LoginField, string>>> = {
+    ...(creating && name.trim().length < 2 ? { name: 'Escribe tu nombre.' } : {}),
+    ...(email.trim().length === 0
+      ? { email: 'Falta tu correo.' }
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        ? { email: 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.' }
+        : {}),
+    ...(password.length === 0
+      ? { password: 'Falta la contraseña.' }
+      : password.length < 6
+        ? { password: 'La contraseña va de 6 caracteres para arriba.' }
+        : {}),
+    ...(creating && phone.trim().length < 8
+      ? { phone: 'Falta tu celular, con el código del país: +51987654321.' }
+      : {}),
+  };
+
+  // Los rojos NO salen mientras escribe: marcar un campo vacio que todavia no ha
+  // tocado es reganarle por ir en orden. Salen al tocar el boton apagado, que es
+  // justo cuando necesita saber por que no pasa nada.
+  const [attempted, setAttempted] = useState(false);
+  const denial = (field: LoginField): string | undefined =>
+    attempted ? problems[field] : undefined;
+
   const errorNotice =
     error === null ? null : (
       <Card accent={theme.semaphore.bad} borderColor={withAlpha(theme.semaphore.bad, 0.28)}>
@@ -221,6 +255,7 @@ export default function LoginScreen() {
                   autoCapitalize="words"
                   autoComplete="name"
                   editable={!working}
+                  error={denial('name')}
                 />
                 <Field
                   label="Correo"
@@ -231,6 +266,7 @@ export default function LoginScreen() {
                   autoComplete="email"
                   keyboardType="email-address"
                   editable={!working}
+                  error={denial('email')}
                 />
                 <Field
                   label="Contraseña"
@@ -241,6 +277,7 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   autoComplete="new-password"
                   editable={!working}
+                  error={denial('password')}
                 />
                 <Field
                   label="Tu celular"
@@ -251,6 +288,7 @@ export default function LoginScreen() {
                   autoComplete="tel"
                   editable={!working}
                   hint="Es con lo que el gimnasio te reconoce cuando llegas a probar."
+                  error={denial('phone')}
                   returnKeyType="go"
                   onSubmitEditing={() => {
                     if (canSubmit) submitEmail();
@@ -263,6 +301,7 @@ export default function LoginScreen() {
                   label={working ? 'Creando…' : 'Crear cuenta'}
                   disabled={!canSubmit}
                   onPress={submitEmail}
+                  onBlockedPress={working ? undefined : () => setAttempted(true)}
                 />
               </View>
             </>

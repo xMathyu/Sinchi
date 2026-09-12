@@ -28,6 +28,22 @@ import { useTheme } from '../src/design/theme';
 import { useGymPlans } from '../src/data/hooks';
 import { existeIdentidad, enrollStudent, AlreadyInRoster } from '../src/data/actions';
 
+/**
+ * Lo que dice el pie del botón cuando no se puede inscribir.
+ *
+ * Con un solo problema, repite su motivo: leerlo debajo del botón que acabas de
+ * tocar es más rápido que buscar cuál de los cuatro se puso rojo. Con varios,
+ * los cuenta.
+ */
+function missingSummary(problems: Readonly<Record<string, string | undefined>>): string {
+  const reasons = Object.values(problems).filter((r): r is string => r !== undefined);
+  if (reasons.length === 1) return reasons[0]!;
+  return `Faltan ${reasons.length} datos, marcados arriba en rojo.`;
+}
+
+/** Los campos del alta, para marcarlos de uno en uno. */
+type EnrollField = 'name' | 'documentId' | 'phone' | 'plan';
+
 export default function EnrollScreen() {
   const theme = useTheme();
   const plans = useGymPlans();
@@ -57,6 +73,34 @@ export default function EnrollScreen() {
     plan !== null &&
     documentId.trim().length >= 6 &&
     (alreadyExists === true || (name.trim().length >= 2 && phone.trim().length >= 7));
+
+  /**
+   * Que le falta a cada campo.
+   *
+   * El boton se apagaba sin decir nada, y esta pantalla se opera con el alumno
+   * delante del mostrador: quien la usa no puede ponerse a tocar campos a ver
+   * cual despierta el boton mientras alguien espera.
+   */
+  const problems: Readonly<Partial<Record<EnrollField, string>>> = {
+    ...(documentId.trim().length === 0
+      ? { documentId: 'Falta su documento.' }
+      : documentId.trim().length < 6
+        ? { documentId: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
+        : {}),
+    ...(alreadyExists === true
+      ? {}
+      : {
+          ...(name.trim().length < 2 ? { name: 'Falta su nombre completo.' } : {}),
+          ...(phone.trim().length < 7
+            ? { phone: 'Falta su celular: es su llave única en toda la red.' }
+            : {}),
+        }),
+    ...(plan === null ? { plan: 'Elige con qué plan entra.' } : {}),
+  };
+
+  const [attempted, setAttempted] = useState(false);
+  const denial = (field: EnrollField): string | undefined =>
+    attempted ? problems[field] : undefined;
 
   return (
     <Screen scroll>
@@ -141,6 +185,7 @@ export default function EnrollScreen() {
                   onChange={setName}
                   placeholder="Como figura en su documento"
                   autoCapitalize="words"
+                  error={denial('name')}
                 />
               )}
               <LabeledInput
@@ -154,6 +199,7 @@ export default function EnrollScreen() {
                     ? 'Compáralo con su carné: es lo que decide a qué identidad se suma este gimnasio.'
                     : undefined
                 }
+                error={denial('documentId')}
               />
               {alreadyExists ? null : (
                 <LabeledInput
@@ -163,6 +209,7 @@ export default function EnrollScreen() {
                   placeholder="+51 987 654 321"
                   keyboardType="phone-pad"
                   pie="Es su llave única en toda la red: con este número entra a su app."
+                  error={denial('phone')}
                 />
               )}
             </Stack>
@@ -224,9 +271,19 @@ export default function EnrollScreen() {
       </View>
 
       <Stack gap={8} style={{ marginTop: 20 }}>
+        {/* El plan se elige de una lista, no de un campo, así que su motivo no
+            tiene dónde pintarse en rojo: se dice aquí, junto al botón que no
+            responde. Con varios campos mal, los cuenta — los rojos ya están
+            puestos arriba y repetirlos tapa la pantalla. */}
+        {attempted && !ready ? (
+          <Text variant="caption" color={theme.semaphore.bad} align="center">
+            {missingSummary(problems)}
+          </Text>
+        ) : null}
         <Button
           label={saving ? 'Inscribiendo…' : 'Inscribir'}
           disabled={!ready || saving}
+          onBlockedPress={saving ? undefined : () => setAttempted(true)}
           onPress={() => {
             if (!ready || plan === null || saving) return;
             setSaving(true);
@@ -284,6 +341,7 @@ function LabeledInput({
   onChange,
   placeholder,
   pie,
+  error,
   keyboardType,
   autoCapitalize = 'sentences',
 }: {
@@ -292,6 +350,8 @@ function LabeledInput({
   readonly onChange: (text: string) => void;
   readonly placeholder: string;
   readonly pie?: string;
+  /** Qué le falta a este campo. Lo pinta en rojo y lo dice debajo, como `Field`. */
+  readonly error?: string | undefined;
   readonly keyboardType?: 'number-pad' | 'phone-pad' | 'email-address';
   readonly autoCapitalize?: 'none' | 'sentences' | 'words';
 }) {
@@ -315,10 +375,15 @@ function LabeledInput({
           fontSize: 16,
           paddingVertical: 8,
           borderBottomWidth: 1,
-          borderBottomColor: theme.colors.hairline,
+          borderBottomColor:
+            error === undefined ? theme.colors.hairline : theme.semaphore.bad,
         }}
       />
-      {pie === undefined ? null : (
+      {error !== undefined ? (
+        <Text variant="micro" color={theme.semaphore.bad}>
+          {error}
+        </Text>
+      ) : pie === undefined ? null : (
         <Text variant="micro" color={theme.colors.textFaint}>
           {pie}
         </Text>
