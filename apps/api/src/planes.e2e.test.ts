@@ -166,15 +166,24 @@ afterAll(async () => {
   await app?.close();
 });
 
-suite('un gimnasio nuevo nace con tarifas', () => {
-  it('trae planes de arranque, uno de ellos de clase suelta', async () => {
+suite('un gimnasio nuevo nace con SU tarifa', () => {
+  /**
+   * Una, la que escribio el dueno en el alta, y ninguna mas.
+   *
+   * Antes eran cuatro precios de ejemplo, y el problema no era tenerlos sino que
+   * el directorio los anunciaba como si el local los hubiera decidido. Lo que
+   * sigue haciendo falta —y esta prueba fija— es que `plans` NO quede vacia:
+   * inscribir exige `planId`, y sin tarifa el local no puede dar de alta a
+   * nadie el dia que se registra.
+   */
+  it('trae exactamente la mensualidad del alta, sin inventar ninguna otra', async () => {
     const local = await nuevoGimnasio();
     const { body } = await http.get('/v1/staff/plans').set(auth(local.dueno)).expect(200);
 
-    // Sin esto el alta dejaba el local inutilizable: inscribir exige `planId`.
-    expect(body.length).toBeGreaterThan(0);
-    expect(body.some((p: { type: string }) => p.type === 'drop_in')).toBe(true);
-    expect(body.every((p: { active: boolean }) => p.active)).toBe(true);
+    expect(body).toHaveLength(1);
+    expect(body[0].type).toBe('unlimited');
+    expect(body[0].priceCents).toBe(12_000);
+    expect(body[0].active).toBe(true);
   });
 
   it('y se puede inscribir a alguien el mismo dia, sin que nadie siembre nada', async () => {
@@ -458,10 +467,25 @@ suite('lo que el local cobra aparte', () => {
 });
 
 suite('la clase suelta en la puerta', () => {
-  /** Inscribe a alguien en el plan de clase suelta que trae el gimnasio nuevo. */
+  /**
+   * Inscribe a alguien en un plan de clase suelta.
+   *
+   * La escribe la propia prueba: el alta ya no siembra tarifas, así que el plan
+   * `drop_in` es lo que haría el dueño desde su pantalla de planes al aparecer
+   * el primero que quiere entrenar un sábado sin amarrarse a un mes.
+   */
   async function alumnoDeClaseSuelta(local: Local) {
-    const { body: planes } = await http.get('/v1/staff/plans').set(auth(local.dueno));
-    const plan = planes.find((p: { type: string }) => p.type === 'drop_in');
+    const { body: plan } = await http
+      .post('/v1/staff/plans')
+      .set(auth(local.dueno))
+      .send({
+        name: 'Clase suelta',
+        type: 'drop_in',
+        sessionsPerWeek: null,
+        allowedDays: null,
+        priceCents: 2_500,
+      })
+      .expect(201);
 
     const { body } = await http
       .post('/v1/staff/members')
