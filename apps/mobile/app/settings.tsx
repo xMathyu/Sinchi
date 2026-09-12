@@ -82,17 +82,26 @@ export default function SettingsScreen() {
     };
   }, [session.status]);
 
-  // Lo que se ofrece es SIEMPRE el otro lado, y solo si existe de verdad.
+  /**
+   * El otro lado de esta persona, que siempre es el contrario del que trae.
+   *
+   * De staff a alumno se ofrece SIN CONDICIONES, y esa es la corrección: antes
+   * hacía falta `modos.student` —tener ficha activa en algún padrón— y el dueño
+   * que acaba de registrar su gimnasio no la tiene. Nadie tiene ficha en su
+   * propio dojo el primer día, así que el único camino de vuelta a su billetera
+   * era cerrar sesión y volver a entrar.
+   *
+   * El argumento para exigirla era que sin ficha llega a una billetera vacía. Ya
+   * no lo es: esa billetera vacía lleva al directorio y a reservar una clase de
+   * prueba, que es exactamente lo que un dueño querría mirar desde el otro lado.
+   * Lo que cambia con la ficha es el TEXTO, no si se ofrece.
+   *
+   * La vuelta sí depende de los hechos: `switch-to-staff` relee `staff` y
+   * rechaza a quien no trabaja en ningún gimnasio, así que ofrecérselo sería
+   * ofrecer un botón que la api contesta que no.
+   */
   const otroModo: 'student' | 'staff' | null =
-    modos === null
-      ? null
-      : esTurno
-        ? modos.student
-          ? 'student'
-          : null
-        : modos.staff.length > 0
-          ? 'staff'
-          : null;
+    modos === null ? null : esTurno ? 'student' : modos.staff.length > 0 ? 'staff' : null;
 
   /** El puesto al que lleva «volver»: el de siempre, como hace la api. */
   const puestoPorDefecto = modos?.staff[0] ?? null;
@@ -141,12 +150,12 @@ export default function SettingsScreen() {
 
       {esTurno && <PinDeTurno />}
 
-      {/* El dueño de un dojo también entrena en él.
+      {/* Las dos caras de la misma persona, a un toque.
           La api sabía hacerlo desde el principio —`switch-to-student`— pero
           nadie lo llamaba, y el rol lo decide la api al mirar si esa persona
           tiene fila en `staff`: quien la tenía no veía nunca su propia
-          billetera. Solo aparece si el otro lado EXISTE; ofrecerle el modo
-          alumno a un recepcionista sin ficha lleva a una billetera vacía. */}
+          billetera. Ver `otroModo` para por qué la ida no pide condiciones y
+          la vuelta sí. */}
       {otroModo !== null && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>Modo</Eyebrow>
@@ -183,7 +192,11 @@ export default function SettingsScreen() {
                   </Text>
                   <Text variant="captionSmall" color={theme.colors.textSecondary}>
                     {otroModo === 'student'
-                      ? 'Tu plan, tu QR y tu historial en este gimnasio'
+                      ? // Sin ficha la billetera está vacía, y decir «tu plan y
+                        // tu QR» prometería algo que esa pantalla no tiene.
+                        (modos?.student ?? false)
+                        ? 'Tu plan, tu QR y tu historial en este gimnasio'
+                        : 'Tu billetera y el directorio de gimnasios de la red'
                       : puestoPorDefecto?.role === 'owner'
                         ? 'El padrón, los planes y los reportes del local'
                         : 'Escanear, marcar manual y cobrar'}

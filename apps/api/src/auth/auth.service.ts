@@ -621,10 +621,15 @@ export class AuthService {
   /**
    * Qué otros modos tiene esta persona.
    *
-   * Lo pregunta la pantalla de ajustes para decidir si enseña el cambio de modo,
-   * y la respuesta NO se puede deducir del token: el rol firmado dice con qué
-   * entró, no qué más es. Un dueño con ficha en su propio dojo y uno sin ella
-   * llevan sesiones idénticas.
+   * Lo pregunta la pantalla de ajustes, y la respuesta NO se puede deducir del
+   * token: el rol firmado dice con qué entró, no qué más es. Un dueño con ficha
+   * en su propio dojo y uno sin ella llevan sesiones idénticas.
+   *
+   * `student` dice si tiene ficha activa en algún padrón, y eso ya NO decide si
+   * se le ofrece el modo alumno —eso se ofrece siempre, porque cualquiera puede
+   * mirar su billetera y el directorio— sino qué se le promete al ofrecerlo. La
+   * lista `staff` sí decide: `switch-to-staff` relee `staff` y rechaza a quien
+   * no trabaja en ningún gimnasio.
    *
    * Se consulta en vivo y no se guarda en el JWT a propósito. Un dueño que se
    * inscribe hoy vería el botón recién la semana que viene, cuando caducara su
