@@ -32,6 +32,7 @@ import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { usePlanesDelDueno } from '../../src/data/hooks';
 import { archivarOReactivarPlan, eliminarPlan, guardarPlan } from '../../src/data/actions';
+import { aCentimos } from '../../src/lib/format';
 
 const TIPOS: readonly { readonly value: PlanType; readonly label: string; readonly hint: string }[] =
   [
@@ -56,15 +57,6 @@ const TIPOS: readonly { readonly value: PlanType; readonly label: string; readon
       hint: 'Paga cada vez que entrena. No debe mensualidad y la puerta le pide el pago del día.',
     },
   ];
-
-/** Soles escritos a mano → céntimos enteros. Nunca se guarda un decimal. */
-function aCentimos(texto: string): number | null {
-  const limpio = texto.trim().replace(',', '.');
-  if (limpio.length === 0) return null;
-  const valor = Number(limpio);
-  if (!Number.isFinite(valor) || valor < 0) return null;
-  return Math.round(valor * 100);
-}
 
 export default function EditorDePlanScreen() {
   const theme = useTheme();

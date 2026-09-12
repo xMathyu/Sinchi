@@ -2,9 +2,9 @@
  * Los horarios del gimnasio, escritos por su dueno.
  *
  * Era el ultimo agujero del alta desde la app, y era el peor porque no daba la
- * cara: el gimnasio que se registraba nacia con sus planes —eso ya lo arreglo
- * `PLANES_DE_ARRANQUE`— pero con CERO bloques de horario, y `class_schedules`
- * solo la sabia llenar un script nuestro. Sin bloques:
+ * cara: el gimnasio que se registraba nacia con su mensualidad —la escribe el
+ * dueno en el alta— pero con CERO bloques de horario, y `class_schedules` solo
+ * la sabia llenar un script nuestro. Sin bloques:
  *
  *  · la ficha publica no tiene ni una hora que reservar, asi que la tarjeta del
  *    directorio ofrece "1 clase gratis" y la pantalla de dentro contesta "este

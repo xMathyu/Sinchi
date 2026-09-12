@@ -226,11 +226,13 @@ export class TrialsService {
    *
    * `from_price_cents` deja fuera los planes `drop_in` A PROPOSITO: la tarjeta lo
    * lee "desde S/ X al mes", y la clase suelta es el precio de UNA clase. Un
-   * local que arranca con las tarifas de `PLANES_DE_ARRANQUE` salia anunciado
-   * como "desde S/ 25 al mes" teniendo la mensualidad mas barata en S/ 120 —
-   * cinco veces menos, y en la pantalla donde la gente compara dojos. Si el
-   * local solo vende por clase, queda `null` y la tarjeta dice "precios en el
-   * local", que es verdad.
+   * local con la mensualidad en S/ 120 y la clase suelta en S/ 25 salia
+   * anunciado como "desde S/ 25 al mes" — cinco veces menos, y en la pantalla
+   * donde la gente compara dojos. Si el local solo vende por clase, queda `null`
+   * y la tarjeta dice "precios en el local", que es verdad.
+   *
+   * Lo que sale de aqui son SIEMPRE precios que escribio el dueno: el alta ya no
+   * siembra tarifas de ejemplo, justo para que esta columna no invente nada.
    */
   private async aggregates(
     tx: Tx,

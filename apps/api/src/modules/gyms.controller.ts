@@ -41,6 +41,10 @@ const signUpSchema = idTokenSchema.extend({
   gymName: z.string().min(3).max(120),
   taxId: z.string().min(8).max(20),
   saasTier: z.enum(['free', 'up_to_60', 'up_to_150', 'unlimited']),
+  // La mensualidad con la que nace el local. El rango exacto lo decide
+  // `checkPlanDraft` en el servicio, con el mismo mensaje que ve el formulario;
+  // aqui solo se comprueba que sea un entero de centimos y no un texto.
+  monthlyPriceCents: z.number().int().min(0),
   ownerName: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
   phone: z.string().min(6).max(20).optional(),
@@ -103,6 +107,7 @@ export class GymsController {
       gymName: body.gymName,
       taxId: body.taxId,
       saasTier: body.saasTier,
+      monthlyPriceCents: body.monthlyPriceCents,
       ownerName: body.ownerName,
       documentId: body.documentId,
       phone: body.phone,

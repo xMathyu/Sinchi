@@ -80,6 +80,7 @@ async function nuevoGimnasio(): Promise<Local> {
     gymName: `Dojo Horarios ${runId} ${contador}`,
     taxId: RUC[indiceRuc++ % RUC.length]!,
     saasTier: 'up_to_60',
+    monthlyPriceCents: 12_000,
     ownerName: `Dueño ${uid}`,
     documentId: siguiente(),
     phone: celular(),
@@ -428,14 +429,27 @@ suite('lo que el dueño necesita saber antes de tocarlo', () => {
 
 suite('el directorio no anuncia una clase suelta como mensualidad', () => {
   /**
-   * `PLANES_DE_ARRANQUE` incluye una clase suelta de S/ 25, y la tarjeta lee
-   * `fromPriceCents` como "desde X al mes". Un local con la mensualidad mas
-   * barata en S/ 120 salia anunciado como "desde S/ 25 al mes" — cinco veces
-   * menos, y en la pantalla donde la gente compara dojos.
+   * La tarjeta lee `fromPriceCents` como "desde X al mes", y una clase suelta no
+   * es un mes. Un local con la mensualidad en S/ 120 y la clase suelta en S/ 25
+   * salia anunciado como "desde S/ 25 al mes" — cinco veces menos, y en la
+   * pantalla donde la gente compara dojos.
    */
   it('el «desde» sale de la mensualidad más barata, no del drop_in', async () => {
     const local = await nuevoGimnasio();
     await http.post('/v1/staff/schedules').set(auth(local.dueno)).send(bloqueBase).expect(201);
+
+    // La clase suelta la escribe el dueño: el alta solo crea la mensualidad.
+    await http
+      .post('/v1/staff/plans')
+      .set(auth(local.dueno))
+      .send({
+        name: 'Clase suelta',
+        type: 'drop_in',
+        sessionsPerWeek: null,
+        allowedDays: null,
+        priceCents: 2_500,
+      })
+      .expect(201);
 
     const { body: planes } = await http.get('/v1/staff/plans').set(auth(local.dueno)).expect(200);
     const suelta = planes.find((p: { type: string }) => p.type === 'drop_in');
@@ -482,6 +496,7 @@ suite('el alta no revienta con un celular ya registrado', () => {
       gymName: `Dojo Choque ${runId} ${contador}`,
       taxId: RUC[indiceRuc++ % RUC.length]!,
       saasTier: 'free',
+      monthlyPriceCents: 12_000,
       ownerName: 'Dueño con celular repetido',
       // Documento DISTINTO: si coincidiera, el alta adoptaria esa identidad y no
       // llegaria nunca al indice.

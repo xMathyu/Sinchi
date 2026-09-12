@@ -263,7 +263,7 @@ export default function PadronScreen() {
           Por ROL y no por `resumen === null`: ese llega tarde y la fila
           aparecía y se esfumaba sola al cargar el resumen. */}
       {/* El primero de los cuatro, y no por orden alfabético: un local recién
-          dado de alta nace con sus planes —`PLANES_DE_ARRANQUE` los siembra— y
+          dado de alta nace con su mensualidad —la escribe el dueño en el alta— y
           con el horario EN BLANCO, y el horario vacío es lo que lo deja
           anunciado como «0 clases por semana» y sin una sola hora que alguien
           pueda reservar. Debajo de eventos y rutinas quedaba fuera de pantalla,

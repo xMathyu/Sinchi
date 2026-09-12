@@ -84,6 +84,8 @@ interface AltaInput {
   readonly taxId: string;
   readonly saasTier?: string;
   readonly promoCode?: string;
+  /** Lo que el dueño escribe como mensualidad. `null` lo omite del cuerpo. */
+  readonly monthlyPriceCents?: number | null;
 }
 
 const alta = async (input: AltaInput) => {
@@ -92,6 +94,9 @@ const alta = async (input: AltaInput) => {
     gymName: input.gymName,
     taxId: input.taxId,
     saasTier: input.saasTier ?? 'up_to_60',
+    ...(input.monthlyPriceCents === null
+      ? {}
+      : { monthlyPriceCents: input.monthlyPriceCents ?? 12_000 }),
     ownerName: `Dueño ${input.uid}`,
     documentId: siguiente(),
     phone: `+519${siguiente().slice(0, 8)}`,
@@ -274,6 +279,53 @@ suite('dar de alta un gimnasio desde la app', () => {
     });
     expect(status).toBe(409);
     expect(JSON.stringify(body)).toMatch(/máximo por cuenta/i);
+  });
+});
+
+/**
+ * Lo que el directorio dice que cuesta un local es lo que su dueño escribió.
+ *
+ * Antes el alta sembraba cuatro tarifas de ejemplo —S/ 120, 150, 180 y una
+ * clase suelta de 25— para que el local pudiera inscribir desde el primer día.
+ * El efecto fue peor que el problema: un gimnasio que se registraba SIN tocar
+ * un precio aparecía en el directorio como «desde S/ 120 al mes», y esa cifra
+ * no la había decidido nadie de ese gimnasio. Lo reportó el primer dueño real
+ * que lo vio en la lista.
+ */
+suite('el precio del directorio es el que escribió el dueño', () => {
+  it('la tarjeta dice exactamente la mensualidad del alta, y es la única tarifa', async () => {
+    const { body, status } = await alta({
+      uid: `dueno-${runId}-precio`,
+      gymName: `Dojo Del Precio Suyo ${runId}`,
+      taxId: RUC[2]!,
+      monthlyPriceCents: 8_000,
+    });
+    expect(status).toBe(201);
+
+    const { body: planes } = await http
+      .get('/v1/staff/plans')
+      .set(auth(body.session.accessToken))
+      .expect(200);
+    expect(planes).toHaveLength(1);
+    expect(planes[0].priceCents).toBe(8_000);
+    expect(planes[0].type).toBe('unlimited');
+
+    const { body: directorio } = await http.get('/v1/gyms').expect(200);
+    const tarjeta = directorio.find((gym: { slug: string }) => gym.slug === body.slug);
+    expect(tarjeta.fromPriceCents).toBe(8_000);
+  });
+
+  it('sin mensualidad no hay alta', async () => {
+    // Que no se pueda omitir es el punto: `plans` vacía deja el local sin poder
+    // inscribir a nadie, y rellenarla por él es lo que causó el fallo.
+    const { status } = await alta({
+      uid: `dueno-${runId}-sin-precio`,
+      gymName: `Dojo Sin Precio ${runId}`,
+      taxId: RUC[3]!,
+      monthlyPriceCents: null,
+    });
+
+    expect(status).toBe(400);
   });
 });
 

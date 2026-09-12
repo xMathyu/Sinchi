@@ -129,3 +129,19 @@ export function formatIsoDay(iso: string): string {
   if (Number.isNaN(fecha.getTime())) return '';
   return formatShortDate(plainDateInZone(fecha, TZ_LIMA));
 }
+
+/**
+ * Soles escritos a mano → centimos enteros. Nunca se guarda un decimal.
+ *
+ * Vive aqui desde que lo piden dos pantallas: el editor de planes y el alta del
+ * gimnasio, que escribe su primera mensualidad. Las dos tienen que leer «120»,
+ * «120.50» y «120,50» igual, porque es el mismo numero escrito por la misma
+ * persona en el mismo teclado.
+ */
+export function aCentimos(texto: string): number | null {
+  const limpio = texto.trim().replace(',', '.');
+  if (limpio.length === 0) return null;
+  const valor = Number(limpio);
+  if (!Number.isFinite(valor) || valor < 0) return null;
+  return Math.round(valor * 100);
+}

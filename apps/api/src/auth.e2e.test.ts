@@ -593,6 +593,7 @@ suite('el dueño con dos locales', () => {
         gymName: 'Selección UPC',
         taxId: RUC_SEGUNDO,
         saasTier: 'free',
+        monthlyPriceCents: 12_000,
         documentId: SERGIO_DNI,
       })
       .expect(201);

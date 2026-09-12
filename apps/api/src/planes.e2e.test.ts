@@ -76,6 +76,7 @@ async function nuevoGimnasio(): Promise<Local> {
     gymName: `Dojo Planes ${runId} ${contador}`,
     taxId: RUC[indiceRuc++ % RUC.length]!,
     saasTier: 'up_to_60',
+    monthlyPriceCents: 12_000,
     ownerName: `Dueño ${uid}`,
     documentId: siguiente(),
     phone: celular(),

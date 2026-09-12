@@ -25,10 +25,12 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import {
+  checkPlanDraft,
   checkRuc,
   formatPlainDate,
   freeUntilFrom,
   normalizeRuc,
+  planDenialMessage,
   plainDateInZone,
   rucDenialMessage,
   TZ_LIMA,
@@ -58,58 +60,14 @@ import { SaasService } from '../saas/saas.service';
 const MAX_LOCALES_POR_PERSONA = 5;
 
 /**
- * Con que tarifas nace un gimnasio.
+ * Como se llama la tarifa con la que nace el gimnasio.
  *
- * Sin esto el alta dejaba el local INUTILIZABLE: `plans` quedaba vacia y el alta
- * de un alumno exige `plan_id`, asi que el dueno que se registraba un martes no
- * podia inscribir a nadie hasta que alguien de aqui le sembrara una tarifa a
- * mano. Nadie descubria el producto; descubria una pantalla que no dejaba pasar.
- *
- * Son una PROPUESTA, no una decision nuestra: se crean editables y el dueno las
- * cambia, las archiva o las borra desde su pantalla de planes. Empezar con tres
- * precios que hay que corregir es infinitamente mejor que empezar con cero, que
- * es lo que hay que inventar.
- *
- * Los importes son los corrientes de un dojo de barrio en Lima (2026). La clase
- * suelta va incluida a proposito: es la unica forma de cobrarle al que aparece
- * un sabado sin querer amarrarse a un mes, y hasta ahora no se podia ni
- * escribir.
+ * Se escribe aqui y no la pide el formulario porque no es una decision: es el
+ * nombre corriente de lo que todo gimnasio cobra, y el dueno lo cambia de un
+ * toque desde su pantalla de planes. Pedirselo en el alta seria un campo mas
+ * para escribir la palabra que ya estaba puesta.
  */
-const PLANES_DE_ARRANQUE = [
-  {
-    name: '2 veces por semana',
-    type: 'sessions_per_week' as const,
-    sessionsPerWeek: 2,
-    allowedDays: null,
-    priceCents: 12_000,
-    active: true,
-  },
-  {
-    name: '3 veces por semana',
-    type: 'sessions_per_week' as const,
-    sessionsPerWeek: 3,
-    allowedDays: null,
-    priceCents: 15_000,
-    active: true,
-  },
-  {
-    name: 'Ilimitado',
-    type: 'unlimited' as const,
-    sessionsPerWeek: null,
-    allowedDays: null,
-    priceCents: 18_000,
-    active: true,
-  },
-  {
-    name: 'Clase suelta',
-    type: 'drop_in' as const,
-    sessionsPerWeek: null,
-    allowedDays: null,
-    // De UNA clase, no de un mes.
-    priceCents: 2_500,
-    active: true,
-  },
-];
+const PRIMERA_TARIFA = 'Mensualidad';
 
 export interface SignUpGymInput {
   readonly firebaseUid: string;
@@ -126,6 +84,18 @@ export interface SignUpGymInput {
    * dinero y declarar de menos no se lo ahorra.
    */
   readonly saasTier: SaasTier;
+  /**
+   * Lo que el gimnasio le cobra al mes a un alumno.
+   *
+   * Es OBLIGATORIO y por eso vive en el alta: `plans` vacia deja el local
+   * inutilizable —dar de alta a un alumno exige `plan_id`— y lo que se hacia
+   * antes, sembrarle cuatro tarifas de ejemplo, era peor que no tener ninguna.
+   * El local se registraba sin escribir un precio y el directorio lo anunciaba
+   * «desde S/ 120 al mes», que es una cifra que nadie de ese gimnasio decidio,
+   * puesta en la pantalla donde la gente compara dojos. Un precio inventado no
+   * es un punto de partida: es una mentira con nuestra letra.
+   */
+  readonly monthlyPriceCents: number;
   /** Del dueno. */
   readonly ownerName?: string | undefined;
   readonly documentId: string;
@@ -217,6 +187,17 @@ export class OnboardingService {
       throw new BadRequestException('Ese nombre no da una dirección válida. Usa letras y números.');
     }
 
+    // La misma funcion que corre el formulario, para que el boton se apague por
+    // el motivo exacto por el que este POST responderia 400.
+    const tarifaFalla = checkPlanDraft({
+      name: PRIMERA_TARIFA,
+      type: 'unlimited',
+      sessionsPerWeek: null,
+      allowedDays: null,
+      priceCents: input.monthlyPriceCents,
+    });
+    if (tarifaFalla !== null) throw new BadRequestException(planDenialMessage(tarifaFalla));
+
     const persona = await this.resolveOwner(input);
 
     await this.assertLocalesDisponibles(persona.userId);
@@ -259,9 +240,24 @@ export class OnboardingService {
         nextBillingDate: formatPlainDate(freeUntil),
       });
 
-      await tx.insert(schema.plans).values(
-        PLANES_DE_ARRANQUE.map((plan) => ({ ...plan, tenantId })),
-      );
+      /**
+       * UNA tarifa, la que el dueno acaba de escribir.
+       *
+       * `unlimited` y no un cupo semanal porque es lo unico que no hay que
+       * preguntarle: sin limite de sesiones la puerta nunca le corta a un alumno
+       * al dia, y el cupo es una decision que se toma despues, con el tatami
+       * lleno. Las demas tarifas —dos veces por semana, la clase suelta— las
+       * escribe el mismo desde Padron -> Planes, ya sabiendo lo que cobra.
+       */
+      await tx.insert(schema.plans).values({
+        tenantId,
+        name: PRIMERA_TARIFA,
+        type: 'unlimited',
+        sessionsPerWeek: null,
+        allowedDays: null,
+        priceCents: input.monthlyPriceCents,
+        active: true,
+      });
 
       return { tenantId, slug };
     });

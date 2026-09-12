@@ -40,8 +40,10 @@ import {
   SAAS_GRACE_DAYS,
   SAAS_TIER_LABELS,
   SAAS_TIER_PRICES,
+  checkPlanDraft,
   checkRuc,
   formatPEN,
+  planDenialMessage,
   isFreeTier,
   rucDenialMessage,
   type SaasTier,
@@ -54,6 +56,7 @@ import { registrarGimnasio } from '../src/data/actions';
 import { completeEmailSignIn } from '../src/data/auth';
 import { firebaseConfigured } from '../src/data/firebase';
 import { currentAccountDetails } from '../src/data/session';
+import { aCentimos } from '../src/lib/format';
 import { useSession } from '../src/data/session-hooks';
 
 const ESCALONES: readonly SaasTier[] = ['free', 'up_to_60', 'up_to_150', 'unlimited'];
@@ -76,7 +79,7 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 type Paso = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type CampoDelAlta = 'nombre' | 'ruc' | 'documento';
+type CampoDelAlta = 'nombre' | 'ruc' | 'documento' | 'mensualidad';
 
 /** Los de la cuenta, que es otro formulario y falla por otras razones. */
 type CampoDeLaCuenta = 'duenoNombre' | 'correo' | 'clave' | 'celular';
@@ -94,6 +97,7 @@ export default function GymSignUpScreen() {
   const [celular, setCelular] = useState('+51');
   const [escalon, setEscalon] = useState<SaasTier>('free');
   const [codigo, setCodigo] = useState('');
+  const [mensualidad, setMensualidad] = useState('');
 
   // Solo para crear la cuenta, cuando hace falta. El nombre y el celular NO se
   // repiten aqui: son los mismos campos que pide el ultimo paso.
@@ -140,6 +144,25 @@ export default function GymSignUpScreen() {
   const digitosDelRuc = ruc.replace(/\D/g, '').length;
   const rucFalla = digitosDelRuc >= 11 ? checkRuc(ruc) : null;
 
+  /**
+   * La mensualidad, comprobada con la MISMA funcion que la api.
+   *
+   * `checkPlanDraft` es lo que corre `POST /gyms/signup` antes de escribir la
+   * tarifa, asi que el campo se pone rojo por el motivo exacto por el que el
+   * alta habria respondido 400 — y no despues de haber llenado seis campos.
+   */
+  const centimosDeLaMensualidad = aCentimos(mensualidad);
+  const planFalla =
+    centimosDeLaMensualidad === null
+      ? null
+      : checkPlanDraft({
+          name: 'Mensualidad',
+          type: 'unlimited',
+          sessionsPerWeek: null,
+          allowedDays: null,
+          priceCents: centimosDeLaMensualidad,
+        });
+
   const problemas: Readonly<Partial<Record<CampoDelAlta, string>>> = {
     ...(nombre.trim().length === 0
       ? { nombre: 'Escribe el nombre de tu gimnasio.' }
@@ -158,6 +181,13 @@ export default function GymSignUpScreen() {
       : documento.trim().length < 6
         ? { documento: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
         : {}),
+    ...(mensualidad.trim().length === 0
+      ? { mensualidad: 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.' }
+      : centimosDeLaMensualidad === null
+        ? { mensualidad: 'Escríbelo en soles, con números: 120 o 120.50.' }
+        : planFalla !== null
+          ? { mensualidad: planDenialMessage(planFalla) }
+          : {}),
   };
   const listo = Object.keys(problemas).length === 0;
 
@@ -242,6 +272,7 @@ export default function GymSignUpScreen() {
         gymName: nombre.trim(),
         taxId: ruc.trim(),
         saasTier: escalon,
+        monthlyPriceCents: centimosDeLaMensualidad ?? 0,
         ownerName: duenoNombre.trim().length >= 2 ? duenoNombre.trim() : undefined,
         documentId: documento.trim(),
         phone: celular.trim().length >= 6 ? celular.trim() : undefined,
@@ -602,6 +633,29 @@ export default function GymSignUpScreen() {
             editable={!guardando}
             hint="El de la boleta que le das a tus alumnos."
             error={falla('ruc')}
+          />
+        </Stack>
+
+        {/* La tarifa se pide AQUI, en el alta, y no se propone.
+            El local nacia con cuatro tarifas de ejemplo para que pudiera
+            inscribir desde el primer dia, y el efecto fue peor que el problema:
+            el directorio anunciaba «desde S/ 120 al mes» a gimnasios que no
+            habian escrito un precio. Un precio inventado, puesto donde la gente
+            compara dojos, es una mentira con nuestra letra. Es UNA sola —lo
+            justo para que el local funcione— y las demas se escriben despues,
+            ya sabiendo lo que se cobra. */}
+        <Eyebrow style={{ marginTop: 20 }}>Tu mensualidad</Eyebrow>
+
+        <Stack gap={14} style={{ marginTop: 10 }}>
+          <Field
+            label="Cuánto cobras al mes, en soles"
+            value={mensualidad}
+            onChangeText={setMensualidad}
+            placeholder="120"
+            keyboardType="decimal-pad"
+            editable={!guardando}
+            hint="Se crea como «Mensualidad», sin límite de sesiones. Puedes cambiarla y añadir más tarifas —dos veces por semana, clase suelta— desde Padrón → Planes."
+            error={falla('mensualidad')}
           />
         </Stack>
 

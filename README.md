@@ -103,17 +103,23 @@ el video no cobra nada. La baja sí. Ver
 ### El gimnasio se da de alta solo
 
 Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —con dígito
-verificador comprobado—, escalón, sus datos y, si lo tiene, un código de
-promoción. Al terminar entra como dueño, con su mes gratis corriendo.
+verificador comprobado—, escalón, **su mensualidad**, sus datos y, si lo tiene,
+un código de promoción. Al terminar entra como dueño, con su mes gratis
+corriendo.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
 verificada y **un gimnasio por persona**.
 
 **Nace usable, y eso costó dos huecos.** El primero eran las tarifas: `plans`
 quedaba vacía y el alta de un alumno exige `plan_id`, así que el local se
-registraba un martes y no podía inscribir a nadie. Lo tapa `PLANES_DE_ARRANQUE`,
-cuatro precios corrientes de Lima que se crean editables — una propuesta, no una
-decisión nuestra.
+registraba un martes y no podía inscribir a nadie. La primera solución fue
+sembrarle cuatro precios corrientes de Lima, y salió mal: un gimnasio que se
+registraba sin tocar un precio aparecía en el directorio como «desde S/ 120 al
+mes», una cifra que nadie de ese local había decidido, en la pantalla donde la
+gente compara dojos. Ahora **la mensualidad se pide en el alta** —un campo, y
+obligatorio— y el local nace con esa tarifa y solo con esa. Las demás —dos veces
+por semana, la clase suelta— las escribe el dueño desde Padrón → Planes, ya
+sabiendo lo que cobra.
 
 El segundo era el **horario**, y no daba la cara: el gimnasio nacía con cero
 bloques y `class_schedules` solo la sabía llenar un script nuestro. Sin bloques
