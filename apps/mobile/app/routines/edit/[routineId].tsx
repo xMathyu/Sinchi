@@ -136,6 +136,17 @@ export default function EditorDeRutinaScreen() {
   const motivo = useMemo(() => checkRoutineDraft(borrador), [borrador]);
   const listo = motivo === null && !guardando;
 
+  /**
+   * Si ya intento guardar.
+   *
+   * El motivo estaba calculado desde siempre, pero solo se ensenaba con el
+   * nombre ya escrito: el formulario recien abierto tenia el boton apagado y ni
+   * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
+   * enciende, que es justo cuando hace falta.
+   */
+  const [intentado, setIntentado] = useState(false);
+
+
   async function guardar(): Promise<void> {
     if (!listo) return;
     setGuardando(true);
@@ -285,7 +296,7 @@ export default function EditorDeRutinaScreen() {
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && titulo.trim().length > 0)) && (
+      {(error !== null || (motivo !== null && intentado)) && (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 16 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
             {error ?? (motivo === null ? '' : routineDenialMessage(motivo))}
@@ -298,6 +309,7 @@ export default function EditorDeRutinaScreen() {
         disabled={!listo}
         style={{ marginTop: 20 }}
         onPress={() => void guardar()}
+        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
       />
 
       {!esNueva && rutina?.unlocked === true && (

@@ -75,6 +75,12 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
  */
 type Paso = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
+/** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
+type CampoDelAlta = 'nombre' | 'ruc' | 'documento';
+
+/** Los de la cuenta, que es otro formulario y falla por otras razones. */
+type CampoDeLaCuenta = 'duenoNombre' | 'correo' | 'clave' | 'celular';
+
 export default function GymSignUpScreen() {
   const theme = useTheme();
   const sesion = useSession();
@@ -123,11 +129,86 @@ export default function GymSignUpScreen() {
     setCelular((previo) => (previo.trim().length > 3 ? previo : (datos.phone ?? '+51')));
   }, [paso]);
 
-  // Se comprueba mientras escribe y solo cuando ya tiene los once digitos: decir
-  // «RUC invalido» al tercer digito es reganar a alguien que va bien.
-  const rucFalla = ruc.replace(/\D/g, '').length >= 11 ? checkRuc(ruc) : null;
-  const listo =
-    nombre.trim().length >= 3 && rucFalla === null && ruc.trim().length > 0 && documento.trim().length >= 6;
+  /**
+   * Que le falta a cada campo, por su nombre.
+   *
+   * Antes esto era un solo booleano —`listo`— y por eso el boton se apagaba sin
+   * decir nada: la pantalla sabia que el formulario no valia pero no por cual de
+   * los cinco campos, asi que no tenia como pintar ninguno en rojo. Un mapa por
+   * campo cuesta lo mismo de calcular y es lo que deja marcar el que falla.
+   */
+  const digitosDelRuc = ruc.replace(/\D/g, '').length;
+  const rucFalla = digitosDelRuc >= 11 ? checkRuc(ruc) : null;
+
+  const problemas: Readonly<Partial<Record<CampoDelAlta, string>>> = {
+    ...(nombre.trim().length === 0
+      ? { nombre: 'Escribe el nombre de tu gimnasio.' }
+      : nombre.trim().length < 3
+        ? { nombre: 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.' }
+        : {}),
+    ...(ruc.trim().length === 0
+      ? { ruc: 'Falta tu RUC. Es el de la boleta que le das a tus alumnos.' }
+      : digitosDelRuc < 11
+        ? { ruc: 'El RUC tiene 11 dígitos.' }
+        : rucFalla !== null
+          ? { ruc: rucDenialMessage(rucFalla) }
+          : {}),
+    ...(documento.trim().length === 0
+      ? { documento: 'Falta tu documento: es lo que te identifica en la red.' }
+      : documento.trim().length < 6
+        ? { documento: 'Un DNI tiene 8 dígitos; un carné de extranjería, 9.' }
+        : {}),
+  };
+  const listo = Object.keys(problemas).length === 0;
+
+  /**
+   * Si ya intento guardar.
+   *
+   * Los errores no se pintan mientras escribe —marcar en rojo un campo vacio que
+   * todavia no ha tocado es reganarle por ir en orden— sino cuando toca el boton
+   * y el boton no hace nada. Ese es justo el momento en que necesita saber por
+   * que.
+   */
+  const [intentado, setIntentado] = useState(false);
+
+  /**
+   * Lo que SI se dice mientras escribe: un dato completo y equivocado.
+   *
+   * Un RUC de once digitos con el verificador mal no esta a medias, esta mal, y
+   * callarlo hasta el boton obliga a volver a un campo que ya se dio por hecho.
+   * Vacio es otra cosa: eso es ir en orden.
+   */
+  const enVivo = (campo: CampoDelAlta): boolean => campo === 'ruc' && digitosDelRuc >= 11;
+
+  const falla = (campo: CampoDelAlta): string | undefined =>
+    intentado || enVivo(campo) ? problemas[campo] : undefined;
+
+  /** Lo mismo para el formulario de la cuenta, que falla por otras razones. */
+  const problemasDeCuenta: Readonly<Partial<Record<CampoDeLaCuenta, string>>> = {
+    ...(duenoNombre.trim().length < 2 ? { duenoNombre: 'Escribe tu nombre.' } : {}),
+    ...(correo.trim().length === 0
+      ? { correo: 'Falta tu correo.' }
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())
+        ? { correo: 'Ese correo no tiene forma de correo. Revisa la arroba y el punto.' }
+        : {}),
+    ...(clave.length === 0
+      ? { clave: 'Falta la contraseña.' }
+      : clave.length < 6
+        ? { clave: 'La contraseña va de 6 caracteres para arriba.' }
+        : {}),
+    ...(celular.trim().length < 8
+      ? { celular: 'Falta tu celular, con el código del país: +51987654321.' }
+      : {}),
+  };
+  const cuentaLista = Object.keys(problemasDeCuenta).length === 0;
+  const fallaDeCuenta = (campo: CampoDeLaCuenta): string | undefined =>
+    intentado ? problemasDeCuenta[campo] : undefined;
+
+  // Cada paso es un formulario distinto: entrar al siguiente con los rojos del
+  // anterior ya puestos marca campos que esta persona no ha llegado a tocar.
+  useEffect(() => {
+    setIntentado(false);
+  }, [paso]);
 
   const irADatos = (): void => {
     setError(null);
@@ -278,12 +359,6 @@ export default function GymSignUpScreen() {
   // -------------------------------------------------------------------------
 
   if (paso === 'cuenta') {
-    const cuentaLista =
-      duenoNombre.trim().length >= 2 &&
-      correo.trim().length > 3 &&
-      clave.length >= 6 &&
-      celular.trim().length >= 8;
-
     return (
       <Screen scroll style={{ flexGrow: 1 }}>
         <Stack gap={0} style={{ flex: 1, paddingBottom: 8 }}>
@@ -310,6 +385,7 @@ export default function GymSignUpScreen() {
                   autoCapitalize="words"
                   autoComplete="name"
                   editable={!guardando}
+                  error={fallaDeCuenta('duenoNombre')}
                 />
                 <Field
                   label="Correo"
@@ -320,6 +396,7 @@ export default function GymSignUpScreen() {
                   autoComplete="email"
                   keyboardType="email-address"
                   editable={!guardando}
+                  error={fallaDeCuenta('correo')}
                 />
                 <Field
                   label="Contraseña"
@@ -330,6 +407,7 @@ export default function GymSignUpScreen() {
                   autoCapitalize="none"
                   autoComplete="new-password"
                   editable={!guardando}
+                  error={fallaDeCuenta('clave')}
                 />
                 <Field
                   label="Tu celular"
@@ -340,6 +418,7 @@ export default function GymSignUpScreen() {
                   autoComplete="tel"
                   editable={!guardando}
                   hint="Es con lo que te ubicamos si algo pasa con tu cuenta."
+                  error={fallaDeCuenta('celular')}
                 />
               </Stack>
 
@@ -348,7 +427,18 @@ export default function GymSignUpScreen() {
                   label={guardando ? 'Creando…' : 'Crear cuenta y seguir'}
                   disabled={!cuentaLista || guardando}
                   onPress={crearCuenta}
+                  onBlockedPress={guardando ? undefined : () => setIntentado(true)}
                 />
+                {intentado && !cuentaLista ? (
+                  <Text
+                    variant="caption"
+                    color={theme.semaphore.bad}
+                    align="center"
+                    style={{ marginTop: 10 }}
+                  >
+                    {resumenDeFaltantes(problemasDeCuenta)}
+                  </Text>
+                ) : null}
               </View>
             </>
           ) : (
@@ -501,6 +591,7 @@ export default function GymSignUpScreen() {
             placeholder="Dojo Shotokan Miraflores"
             autoCapitalize="words"
             editable={!guardando}
+            error={falla('nombre')}
           />
           <Field
             label="RUC"
@@ -510,7 +601,7 @@ export default function GymSignUpScreen() {
             keyboardType="number-pad"
             editable={!guardando}
             hint="El de la boleta que le das a tus alumnos."
-            error={rucFalla === null ? undefined : rucDenialMessage(rucFalla)}
+            error={falla('ruc')}
           />
         </Stack>
 
@@ -532,6 +623,7 @@ export default function GymSignUpScreen() {
             placeholder="DNI o carné de extranjería"
             keyboardType="number-pad"
             editable={!guardando}
+            error={falla('documento')}
           />
           <Field
             label="Tu celular"
@@ -548,7 +640,13 @@ export default function GymSignUpScreen() {
             label={guardando ? 'Creando…' : 'Crear mi gimnasio'}
             onPress={() => void crear()}
             disabled={!listo || guardando}
+            onBlockedPress={guardando ? undefined : () => setIntentado(true)}
           />
+          {intentado && !listo ? (
+            <Text variant="caption" color={theme.semaphore.bad} align="center">
+              {resumenDeFaltantes(problemas)}
+            </Text>
+          ) : null}
           <Text variant="caption" color={theme.colors.textFaint} align="center">
             Sin tarjeta. Si un mes te atrasas tienes {SAAS_GRACE_DAYS} días de gracia y
             la puerta de tus alumnos nunca se cierra.
@@ -557,6 +655,22 @@ export default function GymSignUpScreen() {
       </Stack>
     </Screen>
   );
+}
+
+/**
+ * Lo que dice el pie del boton cuando no se puede guardar.
+ *
+ * Con un solo campo mal, repite su motivo: leerlo debajo del boton que acabas de
+ * tocar es mas rapido que buscar cual de los cinco se puso rojo. Con varios, los
+ * cuenta — repetir tres frases ahi abajo tapa la pantalla, y los rojos ya estan
+ * puestos arriba.
+ */
+function resumenDeFaltantes(problemas: Readonly<Record<string, string | undefined>>): string {
+  const motivos = Object.values(problemas).filter(
+    (motivo): motivo is string => motivo !== undefined,
+  );
+  if (motivos.length === 1) return motivos[0]!;
+  return `Faltan ${motivos.length} campos, marcados arriba en rojo.`;
 }
 
 /** Fila de vuelta, con los 44px que exige un objetivo tactil. */

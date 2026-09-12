@@ -140,6 +140,38 @@ export default function EditorDeHorarioScreen() {
   };
   const motivo = checkScheduleDraft(borrador);
   const listo = motivo === null && !guardando;
+
+  /**
+   * Si ya intento guardar.
+   *
+   * El motivo estaba calculado desde siempre, pero solo se ensenaba con el
+   * nombre ya escrito: el formulario recien abierto tenia el boton apagado y ni
+   * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
+   * enciende, que es justo cuando hace falta.
+   */
+  const [intentado, setIntentado] = useState(false);
+
+  /**
+   * El motivo, puesto en el campo del que habla.
+   *
+   * `ScheduleDenial` ya dice CUAL de los cinco campos esta mal —para eso
+   * devuelve un motivo y no un booleano— asi que el mensaje puede ir debajo del
+   * campo en vez de en un aviso al final que obliga a adivinar a que se refiere.
+   */
+  const fallaDe = (campo: 'nombre' | 'horas' | 'aforo' | 'profesor'): string | undefined => {
+    if (!intentado || motivo === null) return undefined;
+    const suyo: Record<typeof campo, boolean> = {
+      nombre: motivo === 'name_too_short' || motivo === 'name_too_long',
+      horas:
+        motivo === 'time_malformed' ||
+        motivo === 'ends_before_start' ||
+        motivo === 'too_short',
+      aforo: motivo === 'capacity_not_integer' || motivo === 'capacity_out_of_range',
+      profesor: motivo === 'instructor_too_long',
+    };
+    return suyo[campo] ? scheduleDenialMessage(motivo) : undefined;
+  };
+
   const duracion = duracionLegible(inicio, fin);
 
   async function guardar(): Promise<void> {
@@ -187,6 +219,7 @@ export default function EditorDeHorarioScreen() {
             onChangeText={setNombre}
             placeholder="Muay Thai principiantes"
             hint="Sale en tu ficha del directorio. Es lo que alguien lee para saber si esta clase es para él."
+            error={fallaDe('nombre')}
           />
         </Card>
       </Stack>
@@ -248,6 +281,7 @@ export default function EditorDeHorarioScreen() {
                 onBlur={() => setInicio((actual) => normalizaHora(actual))}
                 placeholder="19:00"
                 keyboardType="numbers-and-punctuation"
+                error={fallaDe('horas')}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -258,6 +292,7 @@ export default function EditorDeHorarioScreen() {
                 onBlur={() => setFin((actual) => normalizaHora(actual))}
                 placeholder="20:30"
                 keyboardType="numbers-and-punctuation"
+                error={fallaDe('horas')}
               />
             </View>
           </Row>
@@ -280,6 +315,7 @@ export default function EditorDeHorarioScreen() {
               placeholder="Sin límite"
               keyboardType="number-pad"
               hint="Déjalo vacío si no limitas el cupo. Es lo que corta las reservas de clase de prueba cuando se llena."
+              error={fallaDe('aforo')}
             />
             <Field
               label="Quién la da"
@@ -287,12 +323,13 @@ export default function EditorDeHorarioScreen() {
               onChangeText={setProfesor}
               placeholder="Opcional"
               autoCapitalize="words"
+              error={fallaDe('profesor')}
             />
           </Stack>
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && nombre.trim().length > 0)) && (
+      {(error !== null || (motivo !== null && intentado)) && (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 16 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
             {error ?? (motivo === null ? '' : scheduleDenialMessage(motivo))}
@@ -305,6 +342,7 @@ export default function EditorDeHorarioScreen() {
         disabled={!listo}
         style={{ marginTop: 20 }}
         onPress={() => void guardar()}
+        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
       />
 
       {existente !== null && (

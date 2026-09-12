@@ -311,6 +311,18 @@ export interface ButtonProps {
   readonly accentColor?: string;
   readonly accentInk?: string;
   readonly disabled?: boolean;
+  /**
+   * Que hacer cuando lo tocan y todavia no se puede.
+   *
+   * Un boton apagado es un callejon sin salida: dice «no» y no dice por que, y
+   * quien lo mira no sabe si le falta un campo, si escribio mal un numero o si
+   * la app se colgo. Pasarle esto lo deja TOCABLE aunque se vea apagado, y el
+   * toque es lo que enciende los campos en rojo con su motivo.
+   *
+   * Se ignora mientras `onPress` este vivo: cuando el formulario ya vale, el
+   * toque es la accion y no una explicacion.
+   */
+  readonly onBlockedPress?: () => void;
   readonly style?: StyleProp<ViewStyle>;
 }
 
@@ -321,6 +333,7 @@ export function Button({
   accentColor,
   accentInk,
   disabled = false,
+  onBlockedPress,
   style,
 }: ButtonProps) {
   const theme = useTheme();
@@ -343,11 +356,16 @@ export function Button({
           ? theme.colors.textTertiary
           : theme.colors.ink;
 
+  // Apagado y con explicacion NO es `disabled` para el sistema: un boton que
+  // el lector de pantalla anuncia como deshabilitado tampoco se puede tocar con
+  // VoiceOver, y entonces la explicacion no llega justo a quien mas la necesita.
+  const explicable = disabled && onBlockedPress !== undefined;
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      onPress={disabled ? undefined : onPress}
+      accessibilityState={{ disabled: disabled && !explicable }}
+      onPress={explicable ? onBlockedPress : disabled ? undefined : onPress}
       style={({ pressed }) => [
         {
           backgroundColor: background,

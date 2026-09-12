@@ -111,6 +111,33 @@ export default function EditorDePlanScreen() {
   const motivo = centimos === null ? 'price_negative' : checkPlanDraft(borrador);
   const listo = motivo === null && !guardando;
 
+  /**
+   * Si ya intento guardar.
+   *
+   * El motivo estaba calculado desde siempre, pero solo se ensenaba con el
+   * nombre ya escrito: el formulario recien abierto tenia el boton apagado y ni
+   * una palabra de por que. Ahora el toque en el boton apagado es lo que lo
+   * enciende, que es justo cuando hace falta.
+   */
+  const [intentado, setIntentado] = useState(false);
+
+  /** El motivo, puesto en el campo del que habla. */
+  const fallaDe = (campo: 'nombre' | 'precio'): string | undefined => {
+    if (!intentado || motivo === null) return undefined;
+    // Los motivos de `sessions_*` y `days_*` no salen aqui: los eligen dos
+    // selectores, no campos de texto, y un selector no tiene donde pintarse en
+    // rojo. Para esos sigue hablando el aviso de abajo, con el mismo mensaje.
+    const suyo: Record<typeof campo, boolean> = {
+      nombre: motivo === 'name_too_short' || motivo === 'name_too_long',
+      precio:
+        motivo === 'price_negative' ||
+        motivo === 'price_not_integer' ||
+        motivo === 'price_too_high',
+    };
+    return suyo[campo] ? planDenialMessage(motivo) : undefined;
+  };
+
+
   async function guardar(): Promise<void> {
     if (!listo || centimos === null) return;
     setGuardando(true);
@@ -168,6 +195,7 @@ export default function EditorDePlanScreen() {
             onChangeText={setNombre}
             placeholder="3 veces por semana"
             hint="Es lo que ve el alumno en su plan y lo que lee recepción al inscribirlo."
+            error={fallaDe('nombre')}
           />
         </Card>
       </Stack>
@@ -315,11 +343,12 @@ export default function EditorDePlanScreen() {
                 ? 'Lo que cuesta UNA clase. No es una mensualidad: la puerta se lo pide cada día que viene.'
                 : 'Lo que se le cobra cada periodo.'
             }
+            error={fallaDe('precio')}
           />
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && nombre.trim().length > 0)) && (
+      {(error !== null || (motivo !== null && intentado)) && (
         <Card
           tone="sunken"
           borderColor={theme.semaphore.bad}
@@ -336,6 +365,7 @@ export default function EditorDePlanScreen() {
         disabled={!listo}
         style={{ marginTop: 20 }}
         onPress={() => void guardar()}
+        onBlockedPress={guardando ? undefined : () => setIntentado(true)}
       />
 
       {existente !== null && (
