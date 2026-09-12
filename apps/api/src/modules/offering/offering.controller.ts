@@ -58,6 +58,16 @@ const scheduleSchema = z.object({
   active: z.boolean().default(true),
 });
 
+/**
+ * Crear acepta VARIOS dias; editar sigue siendo de uno.
+ *
+ * Ver `ScheduleCreateInput`: al editar, «marca tres dias» no tiene un
+ * significado unico —¿mover el bloque o clonarlo?— y ninguno se adivina.
+ */
+const scheduleCreateSchema = scheduleSchema.omit({ weekday: true }).extend({
+  weekdays: z.array(z.number().int()).min(1).max(7),
+});
+
 const pricingSchema = z.object({
   enrollmentFeeCents: z.number().int(),
   dropInPriceCents: z.number().int().nullable(),
@@ -165,11 +175,18 @@ export class OfferingController {
     return this.schedules.listForOwner(assertStaffSession(session).tenantId);
   }
 
+  /**
+   * Publica la misma clase en uno o varios dias, de golpe y en una transaccion.
+   *
+   * Devuelve una LISTA aunque se haya pedido un solo dia: que la forma de la
+   * respuesta dependa de cuantos dias se mandaron es la clase de detalle que la
+   * app acaba comprobando en dos sitios y olvidando en un tercero.
+   */
   @OwnerOnly()
   @Post('schedules')
   createSchedule(
     @CurrentSession() session: Session,
-    @Body(parseWith(scheduleSchema)) body: z.infer<typeof scheduleSchema>,
+    @Body(parseWith(scheduleCreateSchema)) body: z.infer<typeof scheduleCreateSchema>,
   ) {
     return this.schedules.create(assertStaffSession(session).tenantId, body);
   }

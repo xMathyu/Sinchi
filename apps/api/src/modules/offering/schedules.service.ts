@@ -58,6 +58,20 @@ export interface ScheduleInput {
 }
 
 /**
+ * Lo mismo, con los dias en plural: solo al CREAR.
+ *
+ * Editar sigue siendo de un dia y eso no es una omision. Un bloque es de un dia
+ * —asi se le cambia la hora al jueves sin tocar la del martes— y dejar que al
+ * editar se marquen tres dias obligaria a decidir que significa: ¿mover este
+ * bloque, o clonarlo en otros dos? Las dos respuestas son defendibles, y por eso
+ * ninguna se adivina desde un selector.
+ */
+export interface ScheduleCreateInput extends Omit<ScheduleInput, 'weekday'> {
+  /** Dias ISO: 1 = lunes .. 7 = domingo. Al menos uno. */
+  readonly weekdays: readonly number[];
+}
+
+/**
  * Un bloque con lo que el dueno necesita saber ANTES de tocarlo.
  *
  * `upcomingTrials` es el equivalente de `activeMembers` en un plan: la
@@ -114,15 +128,45 @@ export class SchedulesService {
     });
   }
 
-  async create(tenantId: string, input: ScheduleInput): Promise<ClassSchedule> {
-    this.assertValid(input);
+  /**
+   * Escribe la misma clase en UNO O VARIOS dias.
+   *
+   * Un bloque sigue siendo de un solo dia —es lo que permite cambiarle la hora
+   * al jueves sin tocar la del martes— pero escribirlos de uno en uno era un
+   * peaje absurdo: el dojo que da muay thai lunes, miercoles y viernes a las
+   * 19:00 tenia que teclear seis campos tres veces, y el tercero se abandona.
+   * Lo pidieron los primeros duenos: «que se puedan elegir varios dias».
+   *
+   * Va en UNA transaccion y no en tres peticiones desde la app a proposito. Con
+   * tres, la segunda puede fallar —la red del celular en un sotano es lo
+   * normal— y el horario queda a medias sin que nadie lo haya decidido: el
+   * lunes publicado, el miercoles no, y el dueno mirando una lista que no sabe
+   * si esta incompleta o si se equivoco al tocar. O entran los tres o no entra
+   * ninguno.
+   *
+   * Los dias repetidos se ignoran: dos veces el martes es el mismo martes, y
+   * salen dos bloques identicos que el directorio cuenta como dos clases.
+   */
+  async create(
+    tenantId: string,
+    input: ScheduleCreateInput,
+  ): Promise<readonly ClassSchedule[]> {
+    const dias = [...new Set(input.weekdays)];
+    if (dias.length === 0) {
+      throw new BadRequestException('Elige al menos un día de la semana.');
+    }
+
+    // Cada dia se comprueba por separado porque `weekday_invalid` es un motivo
+    // por dia: con un 8 en la lista, decir «elige un dia de lunes a domingo» sin
+    // mas deja al dueno buscando cual de los cinco que marco esta mal.
+    for (const weekday of dias) this.assertValid({ ...input, weekday });
 
     return withTenant(this.db, tenantId, async (tx) => {
-      const [row] = await tx
+      const rows = await tx
         .insert(schema.classSchedules)
-        .values(this.toColumns(tenantId, input))
+        .values(dias.map((weekday) => this.toColumns(tenantId, { ...input, weekday })))
         .returning();
-      return toClassSchedule(row!);
+      return rows.map(toClassSchedule);
     });
   }
 

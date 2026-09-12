@@ -856,7 +856,19 @@ export interface HorarioEscrito {
 export const fetchHorariosDelDueno = (): Promise<readonly HorarioConUso[]> =>
   request('/staff/schedules/all');
 
-export const crearHorario = (horario: HorarioEscrito): Promise<ClassSchedule> =>
+/**
+ * Lo que se manda al CREAR: la misma clase en uno o varios días.
+ *
+ * Editar sigue siendo de un día, y no es una omisión: un bloque es de un día
+ * —así se le cambia la hora al jueves sin tocar la del martes— y «marca tres
+ * días» al editar no tiene un significado único.
+ */
+export interface HorarioNuevo extends Omit<HorarioEscrito, 'weekday'> {
+  readonly weekdays: readonly number[];
+}
+
+/** Devuelve TODOS los bloques creados: uno por día marcado, en una transacción. */
+export const crearHorario = (horario: HorarioNuevo): Promise<readonly ClassSchedule[]> =>
   request('/staff/schedules', { method: 'POST', body: horario });
 
 export const editarHorario = (

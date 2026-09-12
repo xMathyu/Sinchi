@@ -78,6 +78,7 @@ import {
   type PlanEscrito,
   type HorarioConUso,
   type HorarioEscrito,
+  type HorarioNuevo,
   type PreciosDelLocal,
   markManual,
   recordPayment,
@@ -633,14 +634,20 @@ export async function horariosDelDueno(): Promise<readonly HorarioConUso[]> {
   return await fetchHorariosDelDueno();
 }
 
+/** Publica la misma clase en los días marcados. Uno o siete, una sola petición. */
+export async function crearHorarios(
+  horario: HorarioNuevo,
+): Promise<readonly ClassSchedule[]> {
+  exigeServidor('Guardar un horario');
+  return await crearHorario(horario);
+}
+
 export async function guardarHorario(
-  scheduleId: string | null,
+  scheduleId: string,
   horario: HorarioEscrito,
 ): Promise<ClassSchedule> {
   exigeServidor('Guardar un horario');
-  return scheduleId === null
-    ? await crearHorario(horario)
-    : await editarHorario(scheduleId, horario);
+  return await editarHorario(scheduleId, horario);
 }
 
 export async function archivarOReactivarHorario(

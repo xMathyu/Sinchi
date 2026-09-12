@@ -128,9 +128,16 @@ async function recepcion(tenantId: string): Promise<string> {
   return body.accessToken as string;
 }
 
+/**
+ * Lo que se manda al CREAR, con los dias en plural.
+ *
+ * `POST /staff/schedules` escribe un bloque por dia marcado, asi que la
+ * respuesta es siempre una LISTA — tambien con un solo dia. `publicar` la
+ * deshace para las pruebas que solo miran el bloque.
+ */
 const bloqueBase = {
   name: 'Muay Thai principiantes',
-  weekday: 1,
+  weekdays: [1],
   startTime: '19:00',
   endTime: '20:30',
   capacity: 20,
@@ -138,13 +145,29 @@ const bloqueBase = {
   active: true,
 };
 
+/** Lo mismo en singular, que es lo que acepta EDITAR un bloque. */
+const bloqueEditado = (extra: Record<string, unknown> = {}) => {
+  const { weekdays, ...resto } = bloqueBase;
+  return { ...resto, weekday: weekdays[0], ...extra };
+};
+
+/** Publica marcando un solo dia y devuelve ese bloque. */
+async function publicar(local: Local, extra: Record<string, unknown> = {}) {
+  const { body } = await http
+    .post('/v1/staff/schedules')
+    .set(auth(local.dueno))
+    .send({ ...bloqueBase, ...extra })
+    .expect(201);
+  return body[0];
+}
+
 /** Un bloque en cada dia de la semana: garantiza que siempre haya cupo cercano. */
 async function publicarSemanaEntera(local: Local): Promise<void> {
   for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
     await http
       .post('/v1/staff/schedules')
       .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekday })
+      .send({ ...bloqueBase, weekdays: [weekday] })
       .expect(201);
   }
 }
@@ -211,11 +234,7 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
   it('el dueño publica uno y sale en su ficha y en el directorio', async () => {
     const local = await nuevoGimnasio();
 
-    const { body: creado } = await http
-      .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send(bloqueBase)
-      .expect(201);
+    const creado = await publicar(local);
 
     expect(creado.name).toBe(bloqueBase.name);
     expect(creado.weekday).toBe(1);
@@ -234,11 +253,7 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
 
   it('la lista del mostrador solo trae los activos; la del dueño, todos', async () => {
     const local = await nuevoGimnasio();
-    const { body: creado } = await http
-      .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send(bloqueBase)
-      .expect(201);
+    const creado = await publicar(local);
 
     await http
       .post(`/v1/staff/schedules/${creado.id}/active`)
@@ -268,11 +283,7 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
 
   it('reactivar lo devuelve al horario sin volver a teclearlo', async () => {
     const local = await nuevoGimnasio();
-    const { body: creado } = await http
-      .post('/v1/staff/schedules')
-      .set(auth(local.dueno))
-      .send(bloqueBase)
-      .expect(201);
+    const creado = await publicar(local);
 
     await http
       .post(`/v1/staff/schedules/${creado.id}/active`)
@@ -290,18 +301,97 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
     expect(ficha.schedules[0].name).toBe(bloqueBase.name);
   });
 
-  it('editar cambia lo que se ofrece de aquí en adelante', async () => {
+  /**
+   * Lo pidieron los primeros duenos: «que se puedan elegir varios dias».
+   *
+   * El dojo que da muay thai lunes, miercoles y viernes a las 19:00 tenia que
+   * teclear seis campos tres veces, y el tercero se abandona: el horario queda
+   * a medias y el directorio anuncia una clase por semana donde hay tres.
+   */
+  it('publica la misma clase en varios días de una vez', async () => {
     const local = await nuevoGimnasio();
-    const { body: creado } = await http
+
+    const { body: creados } = await http
       .post('/v1/staff/schedules')
       .set(auth(local.dueno))
-      .send(bloqueBase)
+      .send({ ...bloqueBase, weekdays: [1, 3, 5] })
       .expect(201);
+
+    expect(creados).toHaveLength(3);
+    expect(creados.map((b: { weekday: number }) => b.weekday).sort()).toEqual([1, 3, 5]);
+    // Misma hora, mismo nombre, mismo aforo: lo unico que cambia es el dia.
+    expect(new Set(creados.map((b: { startTime: string }) => b.startTime)).size).toBe(1);
+
+    const tarjeta = await tarjetaDe(local.slug);
+    expect(tarjeta.weeklyClasses).toBe(3);
+    // Tres bloques de la misma clase son UNA disciplina, no tres.
+    expect(tarjeta.disciplines).toEqual([bloqueBase.name]);
+  });
+
+  /**
+   * Son tres bloques y no uno con tres dias, y eso es lo que hace posible la
+   * otra mitad de lo que se pidio: «puede variar la hora».
+   */
+  it('cada día queda por separado: cambiarle la hora a uno no toca los otros', async () => {
+    const local = await nuevoGimnasio();
+    const { body: creados } = await http
+      .post('/v1/staff/schedules')
+      .set(auth(local.dueno))
+      .send({ ...bloqueBase, weekdays: [1, 5] })
+      .expect(201);
+
+    const viernes = creados.find((b: { weekday: number }) => b.weekday === 5);
+    await http
+      .post(`/v1/staff/schedules/${viernes.id}`)
+      .set(auth(local.dueno))
+      .send(bloqueEditado({ weekday: 5, startTime: '18:00', endTime: '19:30' }))
+      .expect(201);
+
+    const { body: todos } = await http
+      .get('/v1/staff/schedules/all')
+      .set(auth(local.dueno))
+      .expect(200);
+
+    const porDia = new Map(
+      todos.map((h: { schedule: { weekday: number; startTime: string } }) => [
+        h.schedule.weekday,
+        h.schedule.startTime,
+      ]),
+    );
+    expect(porDia.get(5)).toBe('18:00');
+    expect(porDia.get(1)).toBe('19:00');
+  });
+
+  it('el día repetido no duplica el bloque', async () => {
+    // Dos veces el martes es el mismo martes, y dos bloques idénticos salen en
+    // el directorio como dos clases distintas.
+    const local = await nuevoGimnasio();
+    const { body: creados } = await http
+      .post('/v1/staff/schedules')
+      .set(auth(local.dueno))
+      .send({ ...bloqueBase, weekdays: [2, 2, 2] })
+      .expect(201);
+
+    expect(creados).toHaveLength(1);
+  });
+
+  it('sin ningún día no publica nada', async () => {
+    const local = await nuevoGimnasio();
+    await http
+      .post('/v1/staff/schedules')
+      .set(auth(local.dueno))
+      .send({ ...bloqueBase, weekdays: [] })
+      .expect(400);
+  });
+
+  it('editar cambia lo que se ofrece de aquí en adelante', async () => {
+    const local = await nuevoGimnasio();
+    const creado = await publicar(local);
 
     const { body: editado } = await http
       .post(`/v1/staff/schedules/${creado.id}`)
       .set(auth(local.dueno))
-      .send({ ...bloqueBase, name: 'Muay Thai avanzados', startTime: '20:00', endTime: '21:30' })
+      .send(bloqueEditado({ name: 'Muay Thai avanzados', startTime: '20:00', endTime: '21:30' }))
       .expect(201);
 
     expect(editado.id).toBe(creado.id);
@@ -338,7 +428,7 @@ suite('lo que el horario no acepta', () => {
     await http
       .post('/v1/staff/schedules')
       .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekday: 8 })
+      .send({ ...bloqueBase, weekdays: [8] })
       .expect(400);
   });
 
@@ -354,17 +444,13 @@ suite('lo que el horario no acepta', () => {
   it('no encuentra el bloque de otro gimnasio', async () => {
     const uno = await nuevoGimnasio();
     const otro = await nuevoGimnasio();
-    const { body: creado } = await http
-      .post('/v1/staff/schedules')
-      .set(auth(uno.dueno))
-      .send(bloqueBase)
-      .expect(201);
+    const creado = await publicar(uno);
 
     // Aislamiento por tenant: para el otro local ese bloque no existe.
     await http
       .post(`/v1/staff/schedules/${creado.id}`)
       .set(auth(otro.dueno))
-      .send(bloqueBase)
+      .send(bloqueEditado())
       .expect(404);
   });
 });
@@ -413,7 +499,7 @@ suite('lo que el dueño necesita saber antes de tocarlo', () => {
     await http
       .post('/v1/staff/schedules')
       .set(auth(local.dueno))
-      .send({ ...bloqueBase, weekday: 2 })
+      .send({ ...bloqueBase, weekdays: [2] })
       .expect(201);
     // Empieza justo cuando la del lunes acaba: horario seguido, no choque.
     await http

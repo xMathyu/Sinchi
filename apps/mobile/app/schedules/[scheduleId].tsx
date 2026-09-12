@@ -34,6 +34,7 @@ import { useTheme } from '../../src/design/theme';
 import { useHorariosDelDueno } from '../../src/data/hooks';
 import {
   archivarOReactivarHorario,
+  crearHorarios,
   eliminarHorario,
   guardarHorario,
 } from '../../src/data/actions';
@@ -102,11 +103,23 @@ export default function EditorDeHorarioScreen() {
 
   const diaSugerido = Number(weekday);
   const [nombre, setNombre] = useState('');
-  const [dia, setDia] = useState<IsoWeekday>(
+  /**
+   * Los dias marcados. Al crear pueden ser varios; al editar es siempre uno.
+   *
+   * Un conjunto y no un dia suelto porque la clase que se da lunes, miercoles y
+   * viernes a las 19:00 es lo normal en un dojo, y escribir seis campos tres
+   * veces para eso es un peaje que el tercero no paga: se abandona a medias y el
+   * horario publicado queda incompleto. Lo pidieron los primeros duenos.
+   *
+   * Siguen siendo TRES BLOQUES en la base, no uno con tres dias. Es lo que
+   * permite lo otro que pidieron en la misma frase —«puede variar la hora»—:
+   * creados de golpe, al viernes se le baja la hora sin tocar el lunes.
+   */
+  const [dias, setDias] = useState<readonly IsoWeekday[]>([
     Number.isInteger(diaSugerido) && diaSugerido >= 1 && diaSugerido <= 7
       ? (diaSugerido as IsoWeekday)
       : 1,
-  );
+  ]);
   const [inicio, setInicio] = useState('19:00');
   const [fin, setFin] = useState('20:30');
   const [aforo, setAforo] = useState('');
@@ -120,7 +133,7 @@ export default function EditorDeHorarioScreen() {
     if (existente === null) return;
     const { schedule } = existente;
     setNombre(schedule.name);
-    setDia(schedule.weekday);
+    setDias([schedule.weekday]);
     setInicio(schedule.startTime);
     setFin(schedule.endTime);
     setAforo(schedule.capacity === null ? '' : String(schedule.capacity));
@@ -132,14 +145,17 @@ export default function EditorDeHorarioScreen() {
 
   const borrador = {
     name: nombre,
-    weekday: dia,
+    // Para validar da igual cual: lo unico que `checkScheduleDraft` mira del dia
+    // es que sea de lunes a domingo, y todos los marcados lo son. El caso que
+    // importa —ninguno marcado— se comprueba aparte, abajo.
+    weekday: dias[0] ?? 1,
     startTime: inicio,
     endTime: fin,
     capacity: capacidad,
     instructor: profesor.trim().length === 0 ? null : profesor,
   };
   const motivo = checkScheduleDraft(borrador);
-  const listo = motivo === null && !guardando;
+  const listo = motivo === null && dias.length > 0 && !guardando;
 
   /**
    * Si ya intento guardar.
@@ -178,16 +194,24 @@ export default function EditorDeHorarioScreen() {
     if (!listo) return;
     setGuardando(true);
     setError(null);
+    const comun = {
+      name: nombre.trim(),
+      startTime: inicio,
+      endTime: fin,
+      capacity: capacidad,
+      instructor: profesor.trim().length === 0 ? null : profesor.trim(),
+      active: existente?.active ?? true,
+    };
     try {
-      await guardarHorario(esNuevo ? null : scheduleId, {
-        name: nombre.trim(),
-        weekday: dia,
-        startTime: inicio,
-        endTime: fin,
-        capacity: capacidad,
-        instructor: profesor.trim().length === 0 ? null : profesor.trim(),
-        active: existente?.active ?? true,
-      });
+      if (esNuevo) {
+        // Una sola petición aunque sean cinco días: la api los escribe en una
+        // transacción. Con cinco peticiones, la tercera puede fallar —la red de
+        // un celular en un sótano es lo normal— y el horario queda a medias sin
+        // que nadie lo haya decidido.
+        await crearHorarios({ ...comun, weekdays: dias });
+      } else {
+        await guardarHorario(scheduleId, { ...comun, weekday: dias[0]! });
+      }
       recargar();
       router.back();
     } catch (e: unknown) {
@@ -225,17 +249,31 @@ export default function EditorDeHorarioScreen() {
       </Stack>
 
       <Stack gap={10} style={{ marginTop: 20 }}>
-        <Eyebrow>Qué día</Eyebrow>
+        <Eyebrow>{esNuevo ? 'Qué días' : 'Qué día'}</Eyebrow>
         <Row gap={8} justify="flex-start">
           {allWeekdays().map((opcion) => {
-            const activo = opcion === dia;
+            const activo = dias.includes(opcion);
             return (
               <Pressable
                 key={opcion}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: activo }}
+                // Al crear son casillas —se marcan varias— y al editar una
+                // opción única. El rol lo dice de verdad: un lector de pantalla
+                // que anuncia «radio» sobre algo que acepta cinco marcas está
+                // describiendo otra pantalla.
+                accessibilityRole={esNuevo ? 'checkbox' : 'radio'}
+                accessibilityState={esNuevo ? { checked: activo } : { selected: activo }}
                 accessibilityLabel={weekdayName(opcion)}
-                onPress={() => setDia(opcion)}
+                onPress={() => {
+                  if (!esNuevo) {
+                    setDias([opcion]);
+                    return;
+                  }
+                  setDias((puestos) =>
+                    puestos.includes(opcion)
+                      ? puestos.filter((d) => d !== opcion)
+                      : [...puestos, opcion].sort((a, b) => a - b),
+                  );
+                }}
                 style={{
                   width: 38,
                   height: 38,
@@ -260,12 +298,18 @@ export default function EditorDeHorarioScreen() {
             );
           })}
         </Row>
-        {/* Un bloque es de UN día. La clase que se repite martes y jueves son dos
-            bloques, y así es como se puede cambiar la hora del jueves sin tocar
-            la del martes. */}
+        {/* Que salgan varios bloques y no uno con varios días no es un detalle
+            de implementación: es lo que hace posible lo otro que se pidió en la
+            misma frase —«puede variar la hora»—. Creados de golpe, al viernes se
+            le baja la hora sin tocar el lunes. */}
         <Text variant="micro" color={theme.colors.textFaint}>
-          Una clase por día. Si la das martes y jueves, escríbela dos veces: así puedes
-          cambiarle la hora a una sin tocar la otra.
+          {!esNuevo
+            ? 'Cada bloque es de un día. Para darla otro día más, créala de nuevo marcando ese día.'
+            : dias.length === 0
+              ? 'Marca al menos un día.'
+              : dias.length === 1
+                ? 'Puedes marcar varios: se publica la misma clase en cada uno.'
+                : `Se publican ${dias.length} clases, una por día, todas a las ${inicio}. Después puedes cambiarle la hora a una sin tocar las otras.`}
         </Text>
       </Stack>
 
@@ -329,16 +373,29 @@ export default function EditorDeHorarioScreen() {
         </Card>
       </Stack>
 
-      {(error !== null || (motivo !== null && intentado)) && (
+      {(error !== null || ((motivo !== null || dias.length === 0) && intentado)) && (
         <Card tone="sunken" borderColor={theme.semaphore.bad} style={{ marginTop: 16 }}>
           <Text variant="bodySmall" color={theme.semaphore.bad}>
-            {error ?? (motivo === null ? '' : scheduleDenialMessage(motivo))}
+            {error ??
+              (dias.length === 0
+                ? 'Marca al menos un día de la semana.'
+                : motivo === null
+                  ? ''
+                  : scheduleDenialMessage(motivo))}
           </Text>
         </Card>
       )}
 
       <Button
-        label={guardando ? 'Guardando…' : esNuevo ? 'Publicar clase' : 'Guardar cambios'}
+        label={
+          guardando
+            ? 'Guardando…'
+            : !esNuevo
+              ? 'Guardar cambios'
+              : dias.length > 1
+                ? `Publicar ${dias.length} clases`
+                : 'Publicar clase'
+        }
         disabled={!listo}
         style={{ marginTop: 20 }}
         onPress={() => void guardar()}
