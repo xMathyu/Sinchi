@@ -53,6 +53,25 @@ export interface CredentialProvider {
   readonly getToken: () => string | null;
   /** Token del equipo del mostrador. */
   readonly getDeviceToken: () => Promise<string | null>;
+  /**
+   * El servidor rechazó la sesión. Hay que soltarla.
+   *
+   * `ApiError.isUnauthorized` existía desde el principio, documentado como «hay
+   * que volver al login», y no lo llamaba NADIE. El resultado lo reportó el
+   * primer dueño que lo vivió: la app se cree con sesión —la carcasa de dentro,
+   * el avatar, las pestañas— y ninguna pantalla trae datos. `restoreSession`
+   * solo mira si el `expiresAt` guardado ya pasó, así que un token todavía
+   * fresco para el teléfono pero rechazado por el servidor deja la app en un
+   * callejón: «No se pudieron traer tus datos», reintentar falla igual, y la
+   * única salida es adivinar que el remedio está en Ajustes → cerrar sesión.
+   *
+   * Pasa de verdad sin que nadie se equivoque: el servidor rota su secreto, o el
+   * gimnasio al que apunta el token deja de existir.
+   *
+   * Va aquí y no importando el módulo de sesión por lo mismo que `getToken`: la
+   * capa de red no tiene por qué saber que los tokens viven en el llavero.
+   */
+  readonly onUnauthorized?: () => void;
 }
 
 let credentials: CredentialProvider = {
@@ -185,6 +204,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload: unknown = text.length === 0 ? null : safeParse(text);
 
   if (!response.ok) {
+    /**
+     * Un 401 del SERVIDOR suelta la sesión; uno de una ruta pública, no.
+     *
+     * La distinción no es cosmética. `/gyms/:slug/trial`, `/invites/:token` y
+     * las reservas de invitado viajan con un ID token de Firebase y su 401
+     * significa «esa credencial no vale», no «tu sesión de Sinchi murió».
+     * Borrarla ahí echaría del turno a una recepcionista porque falló la
+     * reserva de alguien que pasaba por la calle.
+     *
+     * Tampoco entra el 401 de más arriba —el de «no hay sesión activa»— porque
+     * se lanza ANTES de pedir nada: ahí ya no hay sesión que soltar.
+     */
+    if (response.status === 401 && options.anonymous !== true) {
+      credentials.onUnauthorized?.();
+    }
     throw new ApiError(response.status, messageFrom(payload) ?? response.statusText, payload);
   }
   return payload as T;

@@ -23,7 +23,12 @@ import { DISPLAY_FONTS } from '../src/design/fonts';
 import { ThemeProvider } from '../src/design/theme';
 import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
-import { currentToken, getDeviceToken, restoreSession } from '../src/data/session';
+import {
+  clearSession,
+  currentToken,
+  getDeviceToken,
+  restoreSession,
+} from '../src/data/session';
 import { restoreFirebaseAccount } from '../src/data/auth';
 import { useWelcomeState, useSession } from '../src/data/session-hooks';
 import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
@@ -39,7 +44,16 @@ import { SectionLoader } from '../src/design/loading';
  * no tiene por que saber que los tokens viven en el llavero— y este es el punto
  * donde las dos mitades se unen.
  */
-setCredentialProvider({ getToken: currentToken, getDeviceToken });
+setCredentialProvider({
+  getToken: currentToken,
+  getDeviceToken,
+  // Y la vuelta: si el servidor rechaza la sesión, se suelta aquí mismo.
+  // `SessionRouter` reacciona al `signed_out` y lleva al login, que es la salida
+  // que antes había que adivinar en Ajustes. Ver `onUnauthorized` en `api.ts`.
+  onUnauthorized: () => {
+    void clearSession();
+  },
+});
 
 /**
  * `EXPO_PUBLIC_API_URL=auto`: la api local de la maquina que sirve el bundle.
