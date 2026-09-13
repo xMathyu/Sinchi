@@ -27,6 +27,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
+import * as Google from 'expo-auth-session/providers/google';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import Check from 'lucide-react-native/icons/check';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -53,8 +54,8 @@ import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/pr
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { registerGym } from '../src/data/actions';
-import { completeEmailSignIn } from '../src/data/auth';
-import { firebaseConfigured } from '../src/data/firebase';
+import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
+import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
 import { currentAccountDetails } from '../src/data/session';
 import { aCentimos } from '../src/lib/format';
 import { useSession } from '../src/data/session-hooks';
@@ -125,6 +126,90 @@ export default function GymSignUpScreen() {
    * arranque y en el modo de demostracion, donde no significa nada.
    */
   const alreadyStudent = session.status === 'signed_in';
+
+  /**
+   * Entrar con Google, que es exactamente el mismo camino y dos campos menos.
+   *
+   * El alta necesita UNA credencial de Firebase para firmarse, y da igual de
+   * donde salga: `completeGoogleSignIn` y `completeEmailSignIn` comparten
+   * `exchangeForSinchiSession`, así que de aquí para adelante no hay ninguna
+   * diferencia. Pedirle correo y contraseña a alguien que ya tiene cuenta de
+   * Google era inventarse una credencial nueva para el mismo fin — y encima la
+   * que va a usar después, cuando entre como alumno a otro gimnasio, es la de
+   * Google.
+   *
+   * `useIdTokenAuthRequest` y no el flujo de código, por lo mismo que en el
+   * login: el de código exige un secreto de cliente, y un secreto dentro de una
+   * app móvil no es un secreto.
+   */
+  const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    clientId: googleClientIds.web ?? '',
+    iosClientId: googleClientIds.ios,
+    androidClientId: googleClientIds.android,
+  });
+
+  useEffect(() => {
+    if (googleResponse === null) return;
+
+    if (googleResponse.type === 'dismiss' || googleResponse.type === 'cancel') {
+      // Cancelar no es un error y no merece un mensaje en rojo.
+      setSaving(false);
+      return;
+    }
+    if (googleResponse.type !== 'success') {
+      setSaving(false);
+      setError('No se pudo completar el acceso con Google.');
+      return;
+    }
+
+    const idToken = googleResponse.params.id_token;
+    if (typeof idToken !== 'string') {
+      setSaving(false);
+      setError('Google no devolvió un token válido.');
+      return;
+    }
+
+    let cancelled = false;
+    // El nombre y el celular se mandan solo si ya los escribió: con Google casi
+    // nunca los ha escrito todavía, y mandarlos vacíos tapa lo que la api puede
+    // sacar de la propia cuenta.
+    void completeGoogleSignIn(idToken, {
+      ...(ownerName.trim().length >= 2 ? { fullName: ownerName.trim() } : {}),
+      ...(phone.trim().length >= 8 ? { phone: phone.trim() } : {}),
+    }).then((outcome) => {
+      if (cancelled) return;
+      setSaving(false);
+
+      if (outcome.kind === 'error') {
+        setError(outcome.message);
+        return;
+      }
+      /**
+       * `signed_in` es el callejón, y hay que decirlo en vez de avanzar.
+       *
+       * Significa que esa cuenta de Google YA tiene ficha en un padrón, y
+       * `registerGym` firma con `currentFirebaseToken()`, que solo existe en el
+       * estado `unlinked`. Dejarla pasar al paso siguiente la llevaría a llenar
+       * cinco campos para que el alta fallara al final.
+       */
+      if (outcome.kind === 'signed_in') {
+        setError(
+          'Esa cuenta de Google ya está vinculada a un gimnasio como alumno. Para registrar el tuyo, entra con otra cuenta.',
+        );
+        return;
+      }
+      // `needs_link` es el resultado ESPERADO, igual que por correo.
+      setStep('plan');
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // Solo reacciona a la respuesta de Google. El nombre y el celular se leen en
+    // ese instante a propósito: meterlos en las dependencias relanzaría el
+    // intercambio con cada letra que se teclee.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleResponse]);
 
   // Si llego con la cuenta ya hecha, lo que dio al registrarse se reusa. Volver
   // a preguntar el nombre y el celular a quien acaba de escribirlos es la queja
@@ -455,6 +540,36 @@ export default function GymSignUpScreen() {
 
           {firebaseConfigured() ? (
             <>
+              {/* Google PRIMERO: es la cuenta que esta persona ya tiene, y la
+                  misma con la que entrará como alumno a otros gimnasios. El
+                  correo y la contraseña se quedan debajo porque siempre
+                  funcionan — Google depende de un cliente OAuth que puede no
+                  estar configurado en este build. */}
+              {googleAuthReady() ? (
+                <Stack gap={12} style={{ marginTop: 24 }}>
+                  <Button
+                    label="Continuar con Google"
+                    variant="secondary"
+                    disabled={googleRequest === null || saving}
+                    onPress={() => {
+                      setError(null);
+                      setSaving(true);
+                      void promptGoogle();
+                    }}
+                  />
+                  <Text variant="captionSmall" color={theme.colors.textFaint} align="center">
+                    La misma cuenta te sirve como dueño y como alumno.
+                  </Text>
+                  <Row align="center" gap={10}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+                    <Text variant="captionSmall" color={theme.colors.textFaint}>
+                      o con tu correo
+                    </Text>
+                    <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.hairline }} />
+                  </Row>
+                </Stack>
+              ) : null}
+
               <Stack gap={14} style={{ marginTop: 24 }}>
                 <Field
                   label="Tu nombre"
