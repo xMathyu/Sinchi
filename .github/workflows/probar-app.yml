@@ -109,6 +109,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+
+      # `npm ci` SI hace falta, aunque el binario lo compile EAS en su maquina.
+      # `eas` lee app.json aqui, en el runner, y resuelve sus config plugins
+      # (`expo-router`, `expo-camera`...) desde node_modules. Sin ellos `eas
+      # submit` muere con «Failed to resolve plugin for module "expo-router"» y un
+      # «submit command failed» que no dice nada mas. Paso el 2026-09-13, en el
+      # primer envio desde Actions: hasta entonces todo salia de la Mac, que tiene
+      # node_modules, y el comentario que decia «sin npm ci» nunca se puso a prueba.
+      - run: npm ci
 
       - uses: google-github-actions/auth@v2
         with:
@@ -127,9 +137,6 @@ jobs:
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-
-      # Igual que en `publicar-ios.yml`: sin `npm ci`. Las dependencias del
-      # workspace las compila EAS con el hook `eas-build-post-install`.
 
       - name: Compilar
         id: compilar

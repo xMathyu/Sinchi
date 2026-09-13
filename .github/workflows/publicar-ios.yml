@@ -51,6 +51,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
+
+      # `npm ci` SI hace falta, aunque el binario lo compile EAS en su maquina.
+      # `eas` lee app.json aqui, en el runner, y resuelve sus config plugins
+      # (`expo-router`, `expo-camera`...) desde node_modules. Sin ellos `eas
+      # submit` muere con «Failed to resolve plugin for module "expo-router"» y un
+      # «submit command failed» que no dice nada mas. Paso el 2026-09-13, en el
+      # primer envio desde Actions: hasta entonces todo salia de la Mac, que tiene
+      # node_modules, y el comentario que decia «sin npm ci» nunca se puso a prueba.
+      - run: npm ci
 
       - name: El tag y app.json dicen la misma version
         # Sin esto el binario sube con una version que no es la del tag, y a los
@@ -84,11 +94,9 @@ jobs:
         with:
           eas-version: latest
 
-      # Sin `npm ci` a proposito. Las dependencias del workspace las instala y
-      # compila EAS en su maquina: `apps/mobile/package.json` ya trae el hook
-      # `eas-build-post-install`, que construye @sinchi/shared y @sinchi/ui antes
-      # del bundle. Instalarlas aqui seria trabajo tirado — este runner no
-      # empaqueta nada.
+      # El `npm ci` de arriba no es para empaquetar: el bundle lo arma EAS en su
+      # maquina, y el hook `eas-build-post-install` construye alli @sinchi/shared
+      # y @sinchi/ui. Es para que `eas` pueda leer app.json en el runner.
 
       - name: Compilar
         working-directory: apps/mobile
