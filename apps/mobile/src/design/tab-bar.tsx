@@ -18,6 +18,7 @@ import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CalendarCheck from 'lucide-react-native/icons/calendar-check';
 // `History` es un alias: el archivo se llama por su forma, no por su uso.
 import History from 'lucide-react-native/icons/rotate-ccw-clock';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
 import QrCode from 'lucide-react-native/icons/qr-code';
 import ScanLine from 'lucide-react-native/icons/scan-line';
 import Smartphone from 'lucide-react-native/icons/smartphone';
@@ -52,6 +53,7 @@ export type TabIconShape =
   | 'qr'
   | 'plan'
   | 'history'
+  | 'messages'
   | 'door'
   | 'roster'
   | 'trials'
@@ -63,6 +65,7 @@ const ICONS: Readonly<Record<TabIconShape, LucideIcon>> = {
   trials: CalendarCheck,
   plan: CalendarDays,
   history: History,
+  messages: MessageCircle,
   door: ScanLine,
   roster: Users,
   device: Smartphone,
@@ -122,6 +125,11 @@ export interface TabButtonProps {
   readonly isFocused?: boolean;
   readonly onPress?: PressableProps['onPress'];
   readonly href?: string;
+  /**
+   * Cuántas cosas esperan en esa pestaña. Hoy solo la usa Mensajes: sin push, la
+   * insignia es el único aviso de que el gimnasio —o un alumno— contestó.
+   */
+  readonly badge?: number;
 }
 
 /**
@@ -129,7 +137,7 @@ export interface TabButtonProps {
  * envuelve, por eso va como `forwardRef`.
  */
 export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
-  { icon, label, isFocused, onPress },
+  { icon, label, isFocused, onPress, badge },
   ref,
 ) {
   const theme = useTheme();
@@ -141,10 +149,29 @@ export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused === true }}
-      accessibilityLabel={label}
+      accessibilityLabel={badge !== undefined && badge > 0 ? `${label}, ${badge} sin leer` : label}
       style={styles.tab}
     >
-      <TabIcon shape={icon} color={color} />
+      <View>
+        <TabIcon shape={icon} color={color} />
+        {badge !== undefined && badge > 0 ? (
+          <View
+            style={[
+              styles.badge,
+              { backgroundColor: theme.semaphore.ok, borderColor: 'rgba(14,14,17,1)' },
+            ]}
+          >
+            <Text
+              variant="eyebrow"
+              weight="bold"
+              color={theme.semaphoreInk.ok}
+              style={styles.badgeText}
+            >
+              {badge > 9 ? '9+' : String(badge)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text
         variant="eyebrow"
         weight={isFocused === true ? 'semibold' : 'medium'}
@@ -160,4 +187,17 @@ export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
 const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 5 },
   tabLabel: { letterSpacing: 0, fontSize: 10.5 },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { letterSpacing: 0, fontSize: 10, lineHeight: 12 },
 });

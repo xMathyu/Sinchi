@@ -24,12 +24,15 @@
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';
 import { TabBarShell, TabButton, TabContent } from '../../src/design/tab-bar';
 import { SectionLoader } from '../../src/design/loading';
-import { useStore } from '../../src/data/hooks';
+import { useStore, useUnreadConversations } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 
 export default function StaffLayout() {
   const session = useSession();
   const cargado = useStore((state) => state.cargado);
+  // La bandeja es pestana, y con insignia, por lo mismo que en el modo alumno:
+  // sin push, es lo unico que le dice al mostrador que alguien escribio.
+  const unread = useUnreadConversations('staff');
   // Solo con sesión real: en demostración el store ya viene lleno, y sin sesión
   // no hay nada que esperar.
   const esperando = session.status === 'signed_in' && !cargado;
@@ -49,6 +52,9 @@ export default function StaffLayout() {
           </TabTrigger>
           <TabTrigger name="roster" href="/staff/roster" asChild>
             <TabButton icon="roster" label="Padrón" />
+          </TabTrigger>
+          <TabTrigger name="messages" href="/staff/messages" asChild>
+            <TabButton icon="messages" label="Mensajes" badge={unread} />
           </TabTrigger>
           <TabTrigger name="trials" href="/staff/trials" asChild>
             <TabButton icon="trials" label="Prueba" />

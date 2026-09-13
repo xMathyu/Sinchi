@@ -19,8 +19,12 @@ import type {
   Charge,
   CheckInResult,
   ClassSchedule,
+  Conversation,
+  ConversationStatus,
+  ConversationTopic,
   DelinquencyState,
   Membership,
+  Message,
   PlainDate,
   Plan,
   PromoDenial,
@@ -1662,3 +1666,204 @@ export const fetchAccountDeletion = (): Promise<{ request: DeletionRequestDto | 
 
 export const cancelAccountDeletion = (): Promise<{ canceled: boolean }> =>
   request('/me/account/deletion-request', { method: 'DELETE' });
+
+// ---------------------------------------------------------------------------
+// Mensajes
+// ---------------------------------------------------------------------------
+
+/** Un hilo con lo no leído DESDE EL LADO DE QUIEN MIRA y lo último que se dijo. */
+export interface ConversationSummaryDto extends Conversation {
+  readonly unread: number;
+  readonly lastMessage: Message;
+}
+
+/** En la lista de la persona: con qué gimnasio es. */
+export interface PersonConversationDto extends ConversationSummaryDto {
+  readonly gymName: string;
+  readonly gymSlug: string;
+}
+
+/** En la bandeja del mostrador: su ficha, si HOY es alumno. */
+export interface InboxEntryDto extends ConversationSummaryDto {
+  readonly membershipId: string | null;
+}
+
+/**
+ * El hilo con un gimnasio, visto por la persona.
+ *
+ * `conversation` es `null` mientras no se han escrito nunca. `gymOpen` y
+ * `alreadyMember` son los hechos con los que la pantalla corre
+ * `checkMessageDraft` antes de dejar enviar: el mismo motivo por el que la api
+ * diría que no.
+ */
+export interface PersonThreadDto {
+  readonly gymName: string;
+  readonly gymSlug: string;
+  readonly conversation: Conversation | null;
+  readonly messages: readonly Message[];
+  readonly gymOpen: boolean;
+  readonly alreadyMember: boolean;
+}
+
+export interface GymThreadDto {
+  readonly conversation: Conversation;
+  readonly membershipId: string | null;
+  readonly messages: readonly Message[];
+}
+
+export interface SentMessageDto {
+  readonly conversation: Conversation;
+  readonly message: Message;
+}
+
+const reviveMessage = (message: Message): Message => ({ ...message, sentAt: date(message.sentAt) });
+
+const reviveConversation = <T extends Conversation>(conversation: T): T => ({
+  ...conversation,
+  lastMessageAt: date(conversation.lastMessageAt),
+  createdAt: date(conversation.createdAt),
+});
+
+const reviveSummary = <T extends ConversationSummaryDto>(summary: T): T => ({
+  ...reviveConversation(summary),
+  lastMessage: reviveMessage(summary.lastMessage),
+});
+
+const revivePersonThread = (thread: PersonThreadDto): PersonThreadDto => ({
+  ...thread,
+  conversation: thread.conversation === null ? null : reviveConversation(thread.conversation),
+  messages: thread.messages.map(reviveMessage),
+});
+
+const reviveSent = (out: SentMessageDto): SentMessageDto => ({
+  conversation: reviveConversation(out.conversation),
+  message: reviveMessage(out.message),
+});
+
+/** Sus hilos con sesión: ya sabe quién es. */
+export const fetchMyConversations = async (): Promise<readonly PersonConversationDto[]> =>
+  (await request<readonly PersonConversationDto[]>('/me/conversations')).map(reviveSummary);
+
+/** Los de quien todavía es solo una cuenta. POST: el ID token no viaja en la URL. */
+export const fetchGuestConversations = async (
+  idToken: string,
+): Promise<readonly PersonConversationDto[]> =>
+  (
+    await request<readonly PersonConversationDto[]>('/gyms/conversations/mine', {
+      method: 'POST',
+      anonymous: true,
+      body: { idToken },
+    })
+  ).map(reviveSummary);
+
+export const fetchMyUnreadConversations = (): Promise<{ readonly unread: number }> =>
+  request('/me/conversations/unread');
+
+/** El hilo con un gimnasio. Abrirlo lo marca leído. */
+export const fetchThread = async (slug: string): Promise<PersonThreadDto> =>
+  revivePersonThread(
+    await request<PersonThreadDto>(`/me/conversations/${encodeURIComponent(slug)}`),
+  );
+
+export const fetchGuestThread = async (slug: string, idToken: string): Promise<PersonThreadDto> =>
+  revivePersonThread(
+    await request<PersonThreadDto>(`/gyms/${encodeURIComponent(slug)}/conversation`, {
+      method: 'POST',
+      anonymous: true,
+      body: { idToken },
+    }),
+  );
+
+export const sendMessage = async (input: {
+  readonly slug: string;
+  readonly body: string;
+  readonly topic?: ConversationTopic;
+}): Promise<SentMessageDto> =>
+  reviveSent(
+    await request<SentMessageDto>(`/me/conversations/${encodeURIComponent(input.slug)}/messages`, {
+      method: 'POST',
+      body: { body: input.body, ...(input.topic === undefined ? {} : { topic: input.topic }) },
+    }),
+  );
+
+/**
+ * Escribe sin ficha en ningún padrón.
+ *
+ * Nombre y celular solo viajan si la pantalla los tiene: la api los necesita
+ * para ABRIR el hilo, y los resuelve por su cuenta con lo que la persona dio al
+ * registrarse si no llegan.
+ */
+export const sendGuestMessage = async (input: {
+  readonly slug: string;
+  readonly idToken: string;
+  readonly body: string;
+  readonly topic?: ConversationTopic;
+  readonly fullName?: string;
+  readonly phone?: string;
+}): Promise<SentMessageDto> =>
+  reviveSent(
+    await request<SentMessageDto>(`/gyms/${encodeURIComponent(input.slug)}/messages`, {
+      method: 'POST',
+      anonymous: true,
+      body: {
+        idToken: input.idToken,
+        body: input.body,
+        ...(input.topic === undefined ? {} : { topic: input.topic }),
+        ...(input.fullName === undefined ? {} : { fullName: input.fullName }),
+        ...(input.phone === undefined ? {} : { phone: input.phone }),
+      },
+    }),
+  );
+
+/** La bandeja del mostrador: lo abierto, o lo archivado. */
+export const fetchInbox = async (
+  status: ConversationStatus = 'open',
+): Promise<readonly InboxEntryDto[]> =>
+  (await request<readonly InboxEntryDto[]>(`/staff/conversations?status=${status}`)).map(
+    reviveSummary,
+  );
+
+export const fetchInboxUnread = (): Promise<{ readonly unread: number }> =>
+  request('/staff/conversations/unread');
+
+export const fetchGymThread = async (conversationId: string): Promise<GymThreadDto> => {
+  const thread = await request<GymThreadDto>(`/staff/conversations/${conversationId}`);
+  return {
+    ...thread,
+    conversation: reviveConversation(thread.conversation),
+    messages: thread.messages.map(reviveMessage),
+  };
+};
+
+export const replyToConversation = async (
+  conversationId: string,
+  body: string,
+): Promise<{ readonly message: Message }> => {
+  const out = await request<{ readonly message: Message }>(
+    `/staff/conversations/${conversationId}/messages`,
+    { method: 'POST', body: { body } },
+  );
+  return { message: reviveMessage(out.message) };
+};
+
+export const setConversationStatus = async (
+  conversationId: string,
+  status: ConversationStatus,
+): Promise<Conversation> =>
+  reviveConversation(
+    await request<Conversation>(`/staff/conversations/${conversationId}/status`, {
+      method: 'POST',
+      body: { status },
+    }),
+  );
+
+/** Abre —o encuentra— el hilo con quien reservó. Es lo que reemplaza a WhatsApp. */
+export const openTrialConversation = (
+  bookingId: string,
+): Promise<{ readonly conversationId: string }> =>
+  request(`/staff/trials/${bookingId}/conversation`, { method: 'POST' });
+
+export const openMemberConversation = (
+  membershipId: string,
+): Promise<{ readonly conversationId: string }> =>
+  request(`/staff/members/${membershipId}/conversation`, { method: 'POST' });

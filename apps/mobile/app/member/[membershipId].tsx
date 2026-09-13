@@ -34,6 +34,7 @@ import { useTheme } from '../../src/design/theme';
 import { useGymPlans, useStaffMember } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { markAttendance, reactivateSubscription } from '../../src/data/actions';
+import { openMemberConversation } from '../../src/data/api';
 import { formatCheckInMoment, formatLongDate, formatShortDate } from '../../src/lib/format';
 
 type Pestana = 'attendance' | 'payments';
@@ -315,6 +316,8 @@ function Record({
           )}
         </Stack>
       )}
+
+      <WriteToMember membershipId={view.membership.id} name={user.name} />
 
       <View style={{ marginTop: 22 }}>
         <SegmentedControl<Pestana>
@@ -599,6 +602,56 @@ function Reactivar({
       {error === null ? null : (
         <Text variant="captionSmall" color={theme.semaphore.bad} align="center">
           {error}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+/**
+ * Escribirle desde su ficha.
+ *
+ * Por el chat de Sinchi y no por su celular: lo que el mostrador le dice a un
+ * alumno —que su pago llegó, que el sábado no hay clase— queda en la misma app
+ * donde ve su plan (decisiones §12). Vale también para una baja: escribirle a
+ * quien dejó de venir es como se le pregunta si vuelve.
+ */
+function WriteToMember({
+  membershipId,
+  name,
+}: {
+  readonly membershipId: string;
+  readonly name: string;
+}) {
+  const theme = useTheme();
+  const [opening, setOpening] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const firstName = name.trim().split(/\s+/)[0] ?? name;
+
+  return (
+    <Stack gap={6} style={{ marginTop: 10 }}>
+      <Button
+        label={opening ? 'Abriendo…' : `Escribirle a ${firstName}`}
+        variant="secondary"
+        disabled={opening}
+        onPress={() => {
+          setOpening(true);
+          setFailure(null);
+          void openMemberConversation(membershipId)
+            .then(({ conversationId }) =>
+              router.push({ pathname: '/inbox/[conversationId]', params: { conversationId } }),
+            )
+            .catch((causa: unknown) =>
+              setFailure(
+                causa instanceof Error ? causa.message : 'No se pudo abrir la conversación.',
+              ),
+            )
+            .finally(() => setOpening(false));
+        }}
+      />
+      {failure === null ? null : (
+        <Text variant="micro" color={theme.semaphore.alert} align="center">
+          {failure}
         </Text>
       )}
     </Stack>

@@ -24,16 +24,19 @@ import {
   formatPEN,
   formatPENShort,
   formatPlainDate,
+  isDropInPlan,
   isoWeekday,
   weekdayInitial,
   weekdayName,
   type ClassSchedule,
+  type ConversationTopic,
   type IsoWeekday,
   type PlainDate,
   type TrialSlot,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import Lock from 'lucide-react-native/icons/lock';
+import MessageCircle from 'lucide-react-native/icons/message-circle';
 import { Badge, Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { Screen } from '../../src/design/screen';
@@ -154,6 +157,24 @@ export default function GymScreen() {
   const eligiendo = puedeOfrecer || canReschedule;
 
   /**
+   * De qué va a preguntar, deducido de quién es aquí: el alumno de casa pregunta
+   * por su mensualidad —o por su clase suelta, si paga por clase—, quien reservó
+   * pregunta por su prueba y el resto es una consulta. Solo cuenta si abre el
+   * hilo, y es lo que le dice al mostrador con quién habla antes de leer.
+   */
+  const membershipHere = wallet.find(
+    (entry) => entry.tenant.id === gym.id && entry.subscription.status !== 'canceled',
+  );
+  const chatTopic: ConversationTopic =
+    membershipHere !== undefined
+      ? isDropInPlan(membershipHere.plan)
+        ? 'drop_in'
+        : 'membership'
+      : existingBooking !== undefined
+        ? 'trial'
+        : 'general';
+
+  /**
    * Mueve la que ya tiene. Mismo botón, misma salida, otra llamada.
    *
    * El resultado se lee igual que una reserva —o la reserva con su hora nueva, o
@@ -259,6 +280,13 @@ export default function GymScreen() {
           ))}
         </Row>
       ) : null}
+
+      {/* --- Preguntar -------------------------------------------------------
+          Antes de reservar y no al final: la pregunta —«¿hay clase para
+          principiantes?», «¿puedo pagar solo por clase?»— es muchas veces lo que
+          decide si se reserva. Y va por el chat de Sinchi, no por WhatsApp: lo
+          que se habla aquí se queda en la app (decisiones §12). */}
+      <AskTheGym slug={gym.slug} gymName={gym.name} topic={chatTopic} />
 
       {/* --- Reservar, si toca ---------------------------------------------- */}
       {isStudent ? (
@@ -983,6 +1011,50 @@ const isTheSame = (picked: TrialSlot | null, option: TrialSlot): boolean =>
   picked.date.year === option.date.year &&
   picked.date.month === option.date.month &&
   picked.date.day === option.date.day;
+
+function AskTheGym({
+  slug,
+  gymName,
+  topic,
+}: {
+  readonly slug: string;
+  readonly gymName: string;
+  readonly topic: ConversationTopic;
+}) {
+  const theme = useTheme();
+  const blurb =
+    topic === 'membership' || topic === 'drop_in'
+      ? 'Tu plan, tus clases o tus pagos: pregúntaselo directo al gimnasio.'
+      : topic === 'trial'
+        ? 'Sobre tu clase de prueba: qué traer, cómo llegar, si puedes ir con alguien.'
+        : 'Horarios, precios, si hay clase para principiantes o si se puede pagar por clase. Sin inscribirte a nada.';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Escribirle a ${gymName}`}
+      onPress={() => router.push({ pathname: '/chat/[slug]', params: { slug, topic } })}
+      style={{ marginTop: 18 }}
+    >
+      <Card radius={theme.radii.xl}>
+        <Row style={{ gap: 12 }}>
+          <MessageCircle size={22} color={theme.semaphore.ok} strokeWidth={2} />
+          <Stack gap={3} style={{ flex: 1 }}>
+            <Text variant="bodySmall" weight="semibold">
+              Escríbeles
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {blurb}
+            </Text>
+          </Stack>
+          <Text variant="body" color={theme.colors.textTertiary}>
+            ›
+          </Text>
+        </Row>
+      </Card>
+    </Pressable>
+  );
+}
 
 function BackRow() {
   const theme = useTheme();

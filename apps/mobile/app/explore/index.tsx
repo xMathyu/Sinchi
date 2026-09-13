@@ -14,14 +14,15 @@
 import { Alert, Pressable, View } from 'react-native';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
-import { cents, formatPENShort } from '@sinchi/shared';
+import { cents, conversationTopicLabel, formatPENShort } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Badge, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Badge, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { ConversationRow } from '../../src/design/chat';
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGyms, useMyTrialClasses } from '../../src/data/hooks';
+import { useGyms, useMyConversations, useMyTrialClasses } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { signOut } from '../../src/data/auth';
 import { cancelTrialClass } from '../../src/data/trials';
@@ -33,6 +34,7 @@ export default function ExploreScreen() {
   const { details: gyms, loading, error, reload } = useGyms();
   const bookings = useMyTrialClasses();
   const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
+  const conversations = useMyConversations();
   // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
   // app: hay que dejarle a mano las dos únicas cosas que puede necesitar y que
   // no están aquí — su código para el mostrador, y salir de la cuenta.
@@ -150,6 +152,36 @@ export default function ExploreScreen() {
               </Stack>
             </Card>
           ))}
+        </Stack>
+      ) : null}
+
+      {/* Sus conversaciones, para quien todavía no tiene ficha. Con sesión de
+          alumno viven en su pestaña de Mensajes; la cuenta sin ficha no tiene
+          pestañas, y sin esto la respuesta del gimnasio llegaba a un hilo que no
+          sabía cómo volver a abrir. */}
+      {unlinked && conversations.details.length > 0 ? (
+        <Stack gap={10} style={{ marginTop: 22 }}>
+          <Eyebrow>Tus mensajes</Eyebrow>
+          <Card radius={theme.radii.xl} style={{ paddingVertical: 2 }}>
+            {conversations.details.map((conversation, index) => (
+              <View key={conversation.id}>
+                {index > 0 ? <Divider /> : null}
+                <ConversationRow
+                  title={conversation.gymName}
+                  detail={conversationTopicLabel(conversation.topic)}
+                  lastMessage={conversation.lastMessage}
+                  me="person"
+                  unread={conversation.unread}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/chat/[slug]',
+                      params: { slug: conversation.gymSlug },
+                    })
+                  }
+                />
+              </View>
+            ))}
+          </Card>
         </Stack>
       ) : null}
 

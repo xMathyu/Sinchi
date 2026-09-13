@@ -14,7 +14,8 @@
  * también.
  */
 import { useState } from 'react';
-import { Alert, Linking, Pressable, Switch, View } from 'react-native';
+import { Alert, Pressable, Switch, View } from 'react-native';
+import { router } from 'expo-router';
 import {
   formatPENShort,
   isAfter,
@@ -42,7 +43,7 @@ import {
   useStore,
   useToday,
 } from '../../src/data/hooks';
-import { setTrialClassEnabled, setTrialStatus } from '../../src/data/api';
+import { openTrialConversation, setTrialClassEnabled, setTrialStatus } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
 
 type Vista = 'proximas' | 'pasadas';
@@ -97,7 +98,7 @@ export default function TrialsScreen() {
             title={vista === 'proximas' ? 'Nadie viene a probar todavía' : 'Sin historial'}
             body={
               vista === 'proximas'
-                ? 'Cuando alguien reserve su clase de prueba desde la app, aparecerá aquí con el día, la hora y su WhatsApp.'
+                ? 'Cuando alguien reserve su clase de prueba desde la app, aparecerá aquí con el día, la hora y su celular. Puedes escribirle desde aquí mismo.'
                 : 'Aquí quedan las clases de prueba que ya pasaron, con quién vino y quién no.'
             }
             pie="Tu gimnasio sale en la lista de la app mientras la clase gratis esté activa."
@@ -261,26 +262,9 @@ function TrialCard({
             <Text variant="heading" weight="bold" numberOfLines={1}>
               {booking.fullName}
             </Text>
-            {/* El celular ABRE WhatsApp. Es por donde se coordina de verdad en
-                este mercado —confirmar, mover la hora, decir cómo llegar— y sin
-                esto había que copiar el número a mano justo cuando el mostrador
-                quiere responder rápido. */}
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={`Escribir por WhatsApp a ${booking.fullName}`}
-              hitSlop={8}
-              onPress={() => {
-                const digitos = booking.phone.replace(/\D/g, '');
-                if (digitos.length < 9) return;
-                void Linking.openURL(`https://wa.me/${digitos}`).catch(() => {
-                  Alert.alert('No se pudo abrir WhatsApp', booking.phone);
-                });
-              }}
-            >
-              <Text variant="captionSmall" color={theme.semaphore.ok}>
-                {booking.phone} · WhatsApp
-              </Text>
-            </Pressable>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {booking.phone}
+            </Text>
           </Stack>
           {booking.status === 'booked' ? null : (
             <Badge
@@ -304,6 +288,12 @@ function TrialCard({
             </Text>
           ) : null}
         </Row>
+
+        {/* Escribirle, dentro de Sinchi. Aquí el celular abría WhatsApp, y con eso
+            el mostrador coordinaba FUERA de la app justo con quien llegó por la
+            app (decisiones §12). El celular sigue a la vista: es un dato de la
+            persona, no la forma de hablarle. */}
+        <WriteButton bookingId={booking.id} name={booking.fullName} />
 
         {/* Marcar quién vino es lo que convierte la lista en un dato: sin esto,
             el gimnasio no sabe si la clase gratis le trae alumnos o curiosos. */}
@@ -338,5 +328,44 @@ function TrialCard({
         ) : null}
       </Stack>
     </Card>
+  );
+}
+
+/**
+ * Abre —o encuentra— el hilo con quien reservó y lo lleva ahí.
+ *
+ * La conversación no existe hasta que alguien escribe, así que tocar y volver
+ * sin mandar nada no deja un hilo vacío en ninguna bandeja.
+ */
+function WriteButton({ bookingId, name }: { readonly bookingId: string; readonly name: string }) {
+  const theme = useTheme();
+  const [opening, setOpening] = useState(false);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Escribirle a ${name}`}
+      hitSlop={8}
+      disabled={opening}
+      style={{ alignSelf: 'flex-start' }}
+      onPress={() => {
+        setOpening(true);
+        void openTrialConversation(bookingId)
+          .then(({ conversationId }) =>
+            router.push({ pathname: '/inbox/[conversationId]', params: { conversationId } }),
+          )
+          .catch((causa: unknown) => {
+            Alert.alert(
+              'No se pudo abrir la conversación',
+              causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+            );
+          })
+          .finally(() => setOpening(false));
+      }}
+    >
+      <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+        {opening ? 'Abriendo…' : 'Escribirle'}
+      </Text>
+    </Pressable>
   );
 }

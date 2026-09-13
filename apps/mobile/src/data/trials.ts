@@ -82,7 +82,7 @@ export function askForDetails(): boolean {
  * «nombre demasiado corto», y de paso dejó guardado un celular de tres
  * caracteres encima del bueno.
  */
-const present = (value: string | null | undefined): string | null => {
+export const present = (value: string | null | undefined): string | null => {
   const trimmed = (value ?? '').trim();
   return trimmed.length === 0 ? null : trimmed;
 };

@@ -16,6 +16,7 @@ import {
   weekdayInitial,
   weekdayName,
   type IsoWeekday,
+  isDropInPlan,
 } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
@@ -189,6 +190,40 @@ export default function PlanScreen() {
                 </Text>
                 <Text variant="captionSmall" color={theme.colors.textSecondary}>
                   Los videos que publica tu gimnasio, para entrenar o repasar en casa.
+                </Text>
+              </Stack>
+              <Text variant="body" color={theme.colors.textTertiary}>
+                ›
+              </Text>
+            </Row>
+          </Card>
+        </Pressable>
+
+        {/* Escribirle a SU gimnasio, desde el plan de ese gimnasio. Es donde
+            nacen las dudas —«¿por qué me cobran esto?», «¿puedo cambiar de
+            horario?»— y la respuesta llega a esta misma app, no al WhatsApp del
+            profesor (decisiones §12). */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Escribirle a ${entry.tenant.name}`}
+          onPress={() =>
+            router.push({
+              pathname: '/chat/[slug]',
+              params: {
+                slug: entry.tenant.slug,
+                topic: isDropInPlan(entry.plan) ? 'drop_in' : 'membership',
+              },
+            })
+          }
+        >
+          <Card radius={theme.radii.lg} tone="sunken">
+            <Row>
+              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodySmall" weight="semibold">
+                  Escribir al gimnasio
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Una duda con tu plan, tus clases o tus pagos. Te responden en Mensajes.
                 </Text>
               </Stack>
               <Text variant="body" color={theme.colors.textTertiary}>

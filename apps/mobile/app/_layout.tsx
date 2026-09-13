@@ -113,6 +113,8 @@ export default function RootLayout() {
           <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
           <Stack.Screen name="explore/index" />
           <Stack.Screen name="explore/[slug]" />
+          <Stack.Screen name="chat/[slug]" />
+          <Stack.Screen name="inbox/[conversationId]" />
           <Stack.Screen name="student" />
           <Stack.Screen name="staff" />
           <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
@@ -275,8 +277,13 @@ function DataLoader() {
  * que la abre desde su gimnasio y quien todavia no entrena en ningun sitio y
  * llega desde el directorio. Quien ve que NO lo decide esta lista sino la api,
  * que a quien no le toca le devuelve el titulo y ni un video.
+ *
+ * `chat` es la segunda con los tres publicos, y por lo mismo: le escribe al
+ * gimnasio el alumno con sesion, la cuenta sin ficha que acaba de llegar al
+ * directorio y —para que el boton no rebote en silencio— quien todavia no entro,
+ * que ve ahi mismo la invitacion a hacerlo.
  */
-const SHARED_ROUTES = new Set(['settings', 'explore', 'gym-signup', 'routines']);
+const SHARED_ROUTES = new Set(['settings', 'explore', 'gym-signup', 'routines', 'chat']);
 
 const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set([
@@ -299,6 +306,9 @@ const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     // Donde queda el local. Del staff: recepcion la LEE —se la preguntan por
     // telefono tanto como el precio— y dentro se apaga para que no la escriba.
     'location',
+    // Un hilo de la bandeja. La lista es pestana (`staff/messages`); el hilo se
+    // presenta encima, y sin esto rebotaba a la puerta al tocar una conversacion.
+    'inbox',
   ]),
   student: new Set(['pay', 'plan-change']),
 };
@@ -370,6 +380,9 @@ function SessionRouter() {
      * mostrar nada, y el fallo era mudo: ni error, ni ruta desconocida, nada.
      */
     const onGymSignUp = first === 'gym-signup';
+    // Escribirle a un gimnasio nace en el directorio, que se mira sin cuenta: la
+    // pantalla del chat es la que invita a entrar, no este efecto el que rebota.
+    const onChat = first === 'chat';
 
     if (state.status === 'signed_out') {
       /**
@@ -396,7 +409,15 @@ function SessionRouter() {
        * del flujo, en el paso siguiente, que es donde de verdad hace falta:
        * `registerGym` firma el alta con la credencial de Firebase.
        */
-      if (!enLogin && !enDev && !onInvite && !enDirectorio && !onGymSignUp && !onWelcome) {
+      if (
+        !enLogin &&
+        !enDev &&
+        !onInvite &&
+        !enDirectorio &&
+        !onGymSignUp &&
+        !onChat &&
+        !onWelcome
+      ) {
         router.replace('/login');
       }
       return;
@@ -418,7 +439,7 @@ function SessionRouter() {
        * ficha llegue a su app — el auto-vinculo por correo solo existe para el
        * dueno (`tryLinkOwnerByEmail`).
        */
-      if (first !== 'link' && !enDirectorio && !onGymSignUp) router.replace('/explore');
+      if (first !== 'link' && !enDirectorio && !onGymSignUp && !onChat) router.replace('/explore');
       return;
     }
 

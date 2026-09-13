@@ -6,8 +6,9 @@
  * peticiones reales contenido en un archivo.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import type { TrialBooking } from '@sinchi/shared';
+import type { ConversationStatus, TrialBooking } from '@sinchi/shared';
 import {
   TZ_LIMA,
   encodeQrPayload,
@@ -21,6 +22,10 @@ import {
 import { hmacSha256, loadSecret } from './crypto';
 import {
   fetchCheckInPreview,
+  fetchGymThread,
+  fetchInbox,
+  fetchInboxUnread,
+  fetchMyUnreadConversations,
   fetchGym,
   fetchGyms,
   fetchModes,
@@ -30,6 +35,10 @@ import {
   type CheckInPreviewDto,
   type GymCardDto,
   type GymDetailDto,
+  type GymThreadDto,
+  type InboxEntryDto,
+  type PersonConversationDto,
+  type PersonThreadDto,
   type BibliotecaDto,
   type EventWithSeats,
   type PlanWithUsage,
@@ -44,6 +53,7 @@ import {
   type TrialBookingDto,
 } from './api';
 import { myTrialClasses } from './trials';
+import { myConversations, threadWith } from './chat';
 import {
   gymDeletions,
   loadStudentDetail,
@@ -1239,4 +1249,110 @@ function useCargaRemota<T>(
   );
 
   return { details, loading, error, reload };
+}
+
+// ---------------------------------------------------------------------------
+// Mensajes
+// ---------------------------------------------------------------------------
+
+/** Los hilos de la persona con gimnasios de toda la red, con o sin ficha. */
+export function useMyConversations(): Carga<readonly PersonConversationDto[]> {
+  return useCargaRemota<readonly PersonConversationDto[]>(
+    myConversations,
+    [],
+    'No se pudieron traer tus mensajes.',
+  );
+}
+
+/** El hilo con un gimnasio. `null` mientras carga, o sin cuenta. */
+export function useThread(slug: string): Carga<PersonThreadDto | null> {
+  const request = useCallback(() => threadWith(slug), [slug]);
+  return useCargaRemota<PersonThreadDto | null>(
+    request,
+    null,
+    'No se pudo abrir la conversación.',
+  );
+}
+
+/** La bandeja del mostrador: lo abierto, o lo archivado. */
+export function useInbox(status: ConversationStatus): Carga<readonly InboxEntryDto[]> {
+  const request = useCallback(() => fetchInbox(status), [status]);
+  return useCargaRemota<readonly InboxEntryDto[]>(request, [], 'No se pudo traer la bandeja.');
+}
+
+export function useGymThread(conversationId: string): Carga<GymThreadDto | null> {
+  const request = useCallback(() => fetchGymThread(conversationId), [conversationId]);
+  return useCargaRemota<GymThreadDto | null>(request, null, 'No se pudo abrir la conversación.');
+}
+
+/**
+ * Vuelve a pedir mientras la pantalla está enfocada.
+ *
+ * El chat no tiene push (decisiones §12): con el hilo abierto, esto es lo que
+ * hace que la respuesta aparezca sin tocar nada. Solo con la pantalla ENFOCADA —
+ * un intervalo vivo detrás de otra pantalla gasta batería y datos preguntando
+ * por algo que nadie está mirando.
+ */
+export function usePolling(reload: () => void, everyMs: number): void {
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(reload, everyMs);
+      return () => clearInterval(timer);
+    }, [reload, everyMs]),
+  );
+}
+
+const unreadListeners = new Set<() => void>();
+
+/**
+ * Pide otra vez la insignia de mensajes.
+ *
+ * La llaman las pantallas que acaban de cambiar la cuenta —abrir un hilo lo marca
+ * leído en el servidor—. Sin esto la insignia seguía encendida hasta la siguiente
+ * vuelta del intervalo sobre una conversación que se acababa de leer.
+ */
+export function refreshUnreadBadge(): void {
+  for (const listener of unreadListeners) listener();
+}
+
+/**
+ * Cuántos hilos tienen algo sin leer, para la insignia de la pestaña.
+ *
+ * Al alumno se le pregunta por los suyos y al mostrador por los del local. Se
+ * vuelve a pedir cada minuto, al volver a la app y cuando una pantalla avisa con
+ * `refreshUnreadBadge`: sin push, es lo único que la enciende sola. En
+ * demostración no pregunta nada — no hay api al otro lado.
+ */
+export function useUnreadConversations(side: 'student' | 'staff'): number {
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    if (getSessionState().status !== 'signed_in') return;
+    let cancelado = false;
+
+    const pedir = (): void => {
+      void (side === 'staff' ? fetchInboxUnread() : fetchMyUnreadConversations())
+        .then((out) => {
+          if (!cancelado) setUnread(out.unread);
+        })
+        // Sin red, la insignia se queda con lo último que supo.
+        .catch(() => {});
+    };
+
+    pedir();
+    unreadListeners.add(pedir);
+    const timer = setInterval(pedir, 60_000);
+    const vuelta = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') pedir();
+    });
+
+    return () => {
+      cancelado = true;
+      unreadListeners.delete(pedir);
+      clearInterval(timer);
+      vuelta.remove();
+    };
+  }, [side]);
+
+  return unread;
 }
