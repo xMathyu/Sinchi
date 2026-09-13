@@ -9,12 +9,13 @@ name: Publicar app iOS
 # versionar el directorio nativo y a regenerarlo a mano cada vez que cambie un
 # plugin de Expo. EAS corre el prebuild dentro del build, en sus maquinas macOS.
 #
-# ESTE WORKFLOW SI USA UN SECRETO, a diferencia de `deploy-api.yml`. No es
-# descuido: EAS no habla OIDC, y la unica forma de autenticar a un runner es un
-# token de acceso de Expo. Se mitiga por alcance, no por rotacion — el token
-# solo puede disparar builds del proyecto. Las credenciales de firma de Apple no
-# pasan por aqui: viven en los servidores de EAS y se administran con
-# `eas credentials`, que es justamente lo que evita tener un .p12 en el repo.
+# SIN SECRETOS EN GITHUB, como `deploy-api.yml`. EAS no habla OIDC y necesita un
+# token de acceso de Expo, pero ese token no vive en GitHub: el runner entra a
+# Google Cloud por federacion de identidad y lo lee de Secret Manager
+# (`sinchi-expo-token`, del robot «GitHub Actions (Sinchi)», rol Developer). Antes
+# lo pedia como `secrets.EXPO_TOKEN`, que nunca se creo. Las credenciales de firma
+# de Apple tampoco pasan por aqui: viven en los servidores de EAS y se administran
+# con `eas credentials`, que es justamente lo que evita tener un .p12 en el repo.
 
 on:
   push:
@@ -38,6 +39,10 @@ concurrency:
 jobs:
   publicar:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Para pedir el token OIDC con el que se entra a Secret Manager.
+      id-token: write
     # Ubuntu y no macOS a proposito: aqui no se compila nada. El binario lo hace
     # EAS en sus maquinas; este runner orquesta y espera.
     steps:
@@ -61,10 +66,23 @@ jobs:
           fi
           echo "Version $app"
 
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/961173851857/locations/global/workloadIdentityPools/github/providers/github
+          service_account: sinchi-deployer@sinchi-a95913.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Token de Expo desde Secret Manager
+        run: |
+          token=$(gcloud secrets versions access latest --secret=sinchi-expo-token --project=sinchi-a95913)
+          echo "::add-mask::$token"
+          echo "EXPO_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # Sin `token:` aqui: `eas` lo toma de EXPO_TOKEN, que ya esta en el entorno.
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
 
       # Sin `npm ci` a proposito. Las dependencias del workspace las instala y
       # compila EAS en su maquina: `apps/mobile/package.json` ya trae el hook

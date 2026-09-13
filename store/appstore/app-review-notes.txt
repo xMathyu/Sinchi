@@ -16,4 +16,10 @@ The camera is used only to scan students' QR codes at the door. If you prefer no
 PAYMENTS
 There are no in-app purchases or subscriptions. Payments are recorded by hand by gym staff at the counter (cash, Yape or bank transfer); the app does not process any transaction.
 
+MESSAGES (new)
+Members can now write to their gym inside the app, and staff reply from an inbox. The demo account is both owner and member of "Sinchi Demo", so both sides can be tried with one login:
+1. Member mode (gear icon > "Modo" > "Ver como alumno"): open the "Mensajes" tab and write to "Sinchi Demo".
+2. Staff mode: open the "Mensajes" tab, open the conversation and reply.
+The reply shows up in the member's chat within a few seconds. The app does not link to any external messaging app.
+
 Support: soporte@sinchi.fit

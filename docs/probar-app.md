@@ -1,13 +1,34 @@
 # Enviar la app a testers
 
-`.github/workflows/probar-app.yml`, a mano desde Actions → **Enviar a testers**.
+`.github/workflows/probar-app.yml`, a mano desde Actions → **Enviar a testers**,
+o desde la terminal:
+
+    gh workflow run probar-app.yml -f plataforma=ios
+
 Eliges plataforma (`ambas`, `ios` o `android`), compila en EAS con el perfil
 `production` y sube:
 
-- **iOS → TestFlight.** Los testers internos (hasta 100 usuarios de tu App Store
-  Connect) lo ven sin revision de Apple, en cuanto Apple termina de procesar el
-  binario. Los testers externos si pasan por Beta App Review.
+- **iOS → TestFlight, internos y externos.** Los internos (usuarios de tu App
+  Store Connect) lo ven en cuanto Apple procesa el binario. Con `externos`
+  marcado —por defecto sí— el workflow espera ese procesado, le pone las notas
+  de `store/appstore/testflight-whats-new.txt`, lo agrega al grupo externo
+  **«Testers abiertos»** (el del enlace público
+  https://testflight.apple.com/join/kJydEX5K) y lo envía a Beta App Review. Los
+  externos lo reciben cuando Apple lo aprueba.
 - **Android → pista cerrada Alpha.** La misma que ya tiene la release 5.
+
+**Antes de disparar, actualiza `store/appstore/testflight-whats-new.txt`**, en el
+mismo commit que la función nueva: es lo que los testers leen en «Qué probar», y
+Beta App Review lo exige para externos.
+
+**Reenviar un build que ya compiló** —porque falló la subida, o para llevarlo a
+externos después— sin gastar otro crédito: `build_id` con el ID del build de EAS
+y la plataforma de ese build (`ios` o `android`, no `ambas`).
+
+    gh workflow run probar-app.yml -f plataforma=ios -f build_id=<id de EAS>
+
+El paso de externos es idempotente: correrlo otra vez sobre el mismo build no lo
+agrega dos veces al grupo ni pide dos revisiones.
 
 ## Por que Alpha y no el canal interno de Play
 
@@ -37,6 +58,13 @@ credito — y dejar los builds completos solo para cuando cambie algo nativo.
 ### iOS
 Lo mismo que para publicar: llave de la App Store Connect API y credenciales de
 firma en EAS. Esta en `docs/publicar-ios.md`.
+
+El runner no tiene secretos de GitHub: entra a Google Cloud por federación de
+identidad como `sinchi-deployer` y lee de Secret Manager `sinchi-expo-token` (el
+robot de Expo) y `sinchi-asc-api-key` (la llave `.p8` de la App Store Connect
+API, Key ID `Z5299M485J`). La segunda es la que usa
+`.github/scripts/testflight-external.mjs`: `eas submit --groups` no sirve para
+externos, solo conoce grupos internos.
 
 Ademas, en App Store Connect → **TestFlight** → **Internal Testing**, crea un
 grupo y agrega a la gente. Tienen que ser usuarios de tu cuenta de App Store

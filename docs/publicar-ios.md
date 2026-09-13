@@ -31,12 +31,24 @@ Quedan guardados en EAS; el repositorio no ve ninguno.
 Sin este paso el workflow falla en el primer intento: `--non-interactive` no
 puede crear credenciales, solo usarlas.
 
-### 3. Token de Expo para el runner
+### 3. Token de Expo para el runner — hecho el 2026-09-13
 
-1. https://expo.dev/accounts/mathyus-team/settings/access-tokens → **Create token**.
-   Usa la cuenta de la organizacion, no la personal.
-2. GitHub → repo → Settings → Secrets and variables → Actions → **New repository secret**.
-   Nombre: `EXPO_TOKEN`. Valor: el token.
+No vive en GitHub. Es el token del robot **«GitHub Actions (Sinchi)»** de
+`mathyus-team` —rol Developer: compila y envía, no administra la cuenta— y está
+en Secret Manager como `sinchi-expo-token`, con lectura solo para
+`sinchi-deployer`. El runner lo lee por federación de identidad, igual que la
+api lee sus secretos.
+
+Hasta esa fecha el workflow pedía `secrets.EXPO_TOKEN`, que nunca se creó, y
+fallaba a los 37 segundos: todos los builds anteriores salieron de la Mac.
+
+Para rotarlo, crea un token nuevo para ese robot en
+https://expo.dev/accounts/mathyus-team/settings/robots y súbelo como versión
+nueva:
+
+    printf %s "$TOKEN" | gcloud secrets versions add sinchi-expo-token --data-file=- --project=sinchi-a95913
+
+Para cortarlo del todo, revócalo en Expo: el runner falla al instante.
 
 ## Publicar una version
 

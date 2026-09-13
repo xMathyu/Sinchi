@@ -1,11 +1,13 @@
 name: Enviar a testers
 
-# Builds de prueba: TestFlight (iOS) y la pista cerrada Alpha de Play (Android).
+# Builds de prueba: TestFlight (iOS, internos y externos) y la pista cerrada
+# Alpha de Play (Android).
 #
 # NO HAY DISPARADOR AUTOMATICO, a proposito. Sin expo-updates cada envio es un
 # binario completo — veinte a cuarenta minutos y un credito de EAS por
 # plataforma. Un merge cualquiera no vale eso; una tanda de pruebas si. Se
-# dispara desde Actions cuando hay algo que probar.
+# dispara desde Actions, o con `gh workflow run probar-app.yml`, cuando hay algo
+# que probar.
 #
 # POR QUE ALPHA Y NO EL CANAL INTERNO DE PLAY. El interno llega en segundos,
 # pero el requisito de la cuenta personal —12 testers durante 14 dias seguidos
@@ -17,6 +19,20 @@ name: Enviar a testers
 # Play exigen binarios firmados para tienda; los de `preview` son
 # `distribution: internal`, que es otra cosa — se instalan por enlace y no
 # pasan por ninguna tienda.
+#
+# SIN SECRETOS EN GITHUB, igual que `deploy-api.yml`. EAS no habla OIDC, pero
+# Google si: el runner entra a Google Cloud por federacion de identidad como
+# `sinchi-deployer` y lee de Secret Manager el token del robot de Expo
+# (`sinchi-expo-token`, «GitHub Actions (Sinchi)», rol Developer) y la llave de la
+# App Store Connect API (`sinchi-asc-api-key`). Hasta el 2026-09-13 esto pedia
+# `secrets.EXPO_TOKEN`, que nunca se creo: el workflow moria a los 37 segundos y
+# todos los builds salian de la Mac.
+#
+# TESTERS EXTERNOS. `eas submit --groups` solo conoce grupos INTERNOS. Llevar el
+# build al grupo externo «Testers abiertos» —el del enlace publico— y pedir Beta
+# App Review lo hace `.github/scripts/testflight-external.mjs`. Las notas de «Que
+# probar» salen de `store/appstore/testflight-whats-new.txt`, que se escribe en el
+# mismo commit que la funcion que describe.
 
 on:
   workflow_dispatch:
@@ -29,6 +45,15 @@ on:
           - ios
           - android
         default: ambas
+      externos:
+        description: 'iOS: llevarlo tambien a los testers externos (grupo «Testers abiertos» y Beta App Review)'
+        type: boolean
+        default: true
+      build_id:
+        description: 'ID de un build de EAS ya compilado para enviarlo sin compilar otra vez. Vacio = compilar.'
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   # Comparte contador de build number con `publicar-ios.yml`: dos envios a la
@@ -45,8 +70,17 @@ jobs:
       plataformas: ${{ steps.lista.outputs.plataformas }}
     steps:
       - id: lista
+        env:
+          PLATAFORMA: ${{ inputs.plataforma }}
+          BUILD_ID: ${{ inputs.build_id }}
         run: |
-          case "${{ inputs.plataforma }}" in
+          # Un build de EAS es de UNA plataforma: reenviarlo a las dos subiria un
+          # .ipa a Play, y eso se descubre despues de media hora de cola.
+          if [ -n "$BUILD_ID" ] && [ "$PLATAFORMA" = "ambas" ]; then
+            echo "::error::build_id es de una sola plataforma: elige ios o android."
+            exit 1
+          fi
+          case "$PLATAFORMA" in
             ios)     echo 'plataformas=["ios"]'           >> "$GITHUB_OUTPUT" ;;
             android) echo 'plataformas=["android"]'       >> "$GITHUB_OUTPUT" ;;
             *)       echo 'plataformas=["ios","android"]' >> "$GITHUB_OUTPUT" ;;
@@ -55,6 +89,11 @@ jobs:
   enviar:
     needs: elegir
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Para pedir el token OIDC con el que se entra a Secret Manager. Sin esto la
+      # federacion responde un 403 que no explica nada.
+      id-token: write
     strategy:
       # Sin fail-fast: que iOS falle no es razon para tirar el build de Android
       # que ya lleva media hora en la cola de EAS.
@@ -62,6 +101,8 @@ jobs:
       matrix:
         plataforma: ${{ fromJson(needs.elegir.outputs.plataformas) }}
     name: ${{ matrix.plataforma }}
+    env:
+      PROJECT_ID: sinchi-a95913
     steps:
       - uses: actions/checkout@v4
 
@@ -69,20 +110,61 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/961173851857/locations/global/workloadIdentityPools/github/providers/github
+          service_account: sinchi-deployer@sinchi-a95913.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Token de Expo desde Secret Manager
+        run: |
+          token=$(gcloud secrets versions access latest --secret=sinchi-expo-token --project="$PROJECT_ID")
+          echo "::add-mask::$token"
+          echo "EXPO_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # Sin `token:` aqui: `eas` lo toma de EXPO_TOKEN, que ya esta en el entorno.
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
 
       # Igual que en `publicar-ios.yml`: sin `npm ci`. Las dependencias del
       # workspace las compila EAS con el hook `eas-build-post-install`.
 
       - name: Compilar
+        id: compilar
+        if: inputs.build_id == ''
         working-directory: apps/mobile
-        run: eas build --platform ${{ matrix.plataforma }} --profile production --non-interactive --wait
+        env:
+          PLATAFORMA: ${{ matrix.plataforma }}
+        run: |
+          eas build --platform "$PLATAFORMA" --profile production --non-interactive --wait --json > build.json
+          echo "id=$(node -p "require('./build.json')[0].id")" >> "$GITHUB_OUTPUT"
 
       - name: Enviar
+        id: enviar
         working-directory: apps/mobile
-        # iOS aterriza en TestFlight y los testers internos lo ven sin revision
-        # de Apple. Android va a la pista que diga eas.json.
-        run: eas submit --platform ${{ matrix.plataforma }} --latest --non-interactive
+        env:
+          PLATAFORMA: ${{ matrix.plataforma }}
+          BUILD_ID: ${{ inputs.build_id || steps.compilar.outputs.id }}
+        # `--id` y no `--latest`: con dos builds en vuelo, «el ultimo» puede ser el
+        # de otra plataforma o el de otra corrida. iOS aterriza en TestFlight y los
+        # internos lo ven sin revision; Android va a la pista que diga eas.json.
+        run: |
+          eas submit --platform "$PLATAFORMA" --id "$BUILD_ID" --non-interactive --wait
+          numero=$(eas build:view "$BUILD_ID" --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s.slice(s.indexOf("{"))).appBuildVersion))')
+          echo "Build $numero"
+          echo "build_number=$numero" >> "$GITHUB_OUTPUT"
+
+      - name: Testers externos
+        if: matrix.plataforma == 'ios' && inputs.externos
+        env:
+          ASC_KEY_ID: Z5299M485J
+          ASC_ISSUER_ID: b214adce-26ba-4066-a67d-46485b40652e
+          ASC_APP_ID: '6809297841'
+          ASC_EXTERNAL_GROUP: Testers abiertos
+          BUILD_NUMBER: ${{ steps.enviar.outputs.build_number }}
+          WHATS_NEW_PATH: store/appstore/testflight-whats-new.txt
+        run: |
+          gcloud secrets versions access latest --secret=sinchi-asc-api-key --project="$PROJECT_ID" > "$RUNNER_TEMP/asc.p8"
+          ASC_KEY_PATH="$RUNNER_TEMP/asc.p8" node .github/scripts/testflight-external.mjs
