@@ -41,10 +41,8 @@ import {
   SAAS_GRACE_DAYS,
   SAAS_TIER_LABELS,
   SAAS_TIER_PRICES,
-  checkPlanDraft,
   checkRuc,
   formatPEN,
-  planDenialMessage,
   isFreeTier,
   rucDenialMessage,
   type SaasTier,
@@ -57,7 +55,6 @@ import { registerGym } from '../src/data/actions';
 import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
 import { currentAccountDetails, currentFirebaseToken } from '../src/data/session';
-import { aCentimos } from '../src/lib/format';
 import { useDebounced } from '../src/lib/debounce';
 import { GpsButton, MapPicker, type MapPoint } from '../src/design/map-picker';
 import { fetchPlaceDetail, suggestPlaces, type PlaceSuggestionDto } from '../src/data/api';
@@ -83,7 +80,7 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 type Step = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type SignUpField = 'name' | 'taxId' | 'documentId' | 'monthlyPrice' | 'address';
+type SignUpField = 'name' | 'taxId' | 'documentId' | 'address';
 
 /** Lo mínimo que se acepta como dirección. «Lima» son cuatro y no lleva a nadie. */
 const ADDRESS_MIN = 10;
@@ -104,7 +101,6 @@ export default function GymSignUpScreen() {
   const [phone, setPhone] = useState('+51');
   const [escalon, setEscalon] = useState<SaasTier>('free');
   const [code, setCode] = useState('');
-  const [monthlyPrice, setMonthlyPrice] = useState('');
   const [address, setAddress] = useState('');
   /**
    * El punto del local. Opcional, y por eso `null` no bloquea el alta.
@@ -361,25 +357,6 @@ export default function GymSignUpScreen() {
   const taxIdDenial = taxIdDigits >= 11 ? checkRuc(ruc) : null;
 
   /**
-   * La mensualidad, comprobada con la MISMA funcion que la api.
-   *
-   * `checkPlanDraft` es lo que corre `POST /gyms/signup` antes de escribir la
-   * tarifa, asi que el campo se pone rojo por el motivo exacto por el que el
-   * alta habria respondido 400 — y no despues de haber llenado seis campos.
-   */
-  const monthlyCents = aCentimos(monthlyPrice);
-  const planDenial =
-    monthlyCents === null
-      ? null
-      : checkPlanDraft({
-          name: 'Mensualidad',
-          type: 'unlimited',
-          sessionsPerWeek: null,
-          allowedDays: null,
-          priceCents: monthlyCents,
-        });
-
-  /**
    * Se construye con `complain` y no con spreads condicionales, y la diferencia
    * no es de estilo: un spread NO comprueba las claves contra el tipo. Escrito
    * con spreads, `{ ruc: … }` dentro de un `Partial<Record<SignUpField, …>>`
@@ -437,16 +414,6 @@ export default function GymSignUpScreen() {
       : address.trim().length < ADDRESS_MIN
         ? 'Un poco más: calle, número y distrito.'
         : null,
-  );
-  complain(
-    'monthlyPrice',
-    monthlyPrice.trim().length === 0
-      ? 'Escribe cuánto cobras al mes: sin una tarifa no puedes inscribir a nadie.'
-      : monthlyCents === null
-        ? 'Escríbelo en soles, con números: 120 o 120.50.'
-        : planDenial !== null
-          ? planDenialMessage(planDenial)
-          : null,
   );
   const ready = Object.keys(problems).length === 0;
 
@@ -545,7 +512,6 @@ export default function GymSignUpScreen() {
         // es "no tiene". Una cadena vacia seria "tiene uno que es nada".
         taxId: ruc.trim().length > 0 ? ruc.trim() : undefined,
         saasTier: escalon,
-        monthlyPriceCents: monthlyCents ?? 0,
         address: address.trim(),
         ...(pin === null ? {} : { latitude: pin.lat, longitude: pin.lng }),
         ownerName: ownerName.trim().length >= 2 ? ownerName.trim() : undefined,
@@ -555,13 +521,24 @@ export default function GymSignUpScreen() {
       });
 
       /**
-       * El alta deja la sesión de dueño puesta, así que se entra directo al
-       * padrón: es donde está la cuenta atrás del mes gratis y el botón de
-       * inscribir, que es lo único que un gimnasio recién creado puede hacer.
-       * La puerta, vacía, no le dice nada todavía.
+       * Se entra directo —el alta deja la sesión de dueño puesta— pero a
+       * PLANES, y encima del padrón.
+       *
+       * El local nace SIN tarifas, a propósito: un gimnasio cobra distinto por
+       * 2 y por 3 veces por semana, y a menudo distinto por modalidad, así que
+       * ninguna cifra que le pidiéramos en el alta sería su precio. Lo que no
+       * puede pasar es que se quede sin ninguna sin enterarse: inscribir a un
+       * alumno pide en qué plan lo pone, y el padrón vacío no dice que lo que
+       * falta está en otra pantalla.
+       *
+       * Las DOS navegaciones y en este orden: Planes es un modal, así que se
+       * presenta ENCIMA del padrón. Escribe su primera tarifa, cierra, y queda
+       * en su padrón con el local ya usable. Un `replace('/plans')` a secas
+       * dejaría un modal sin nada debajo y su «Cerrar» no tendría a dónde ir.
        */
       void signUp;
       router.replace('/staff/roster');
+      router.push('/plans');
     } catch (causa: unknown) {
       setError(causa instanceof Error ? causa.message : 'No se pudo crear el gimnasio.');
     } finally {
@@ -1034,29 +1011,6 @@ export default function GymSignUpScreen() {
               ? 'Toca el mapa para marcar tu puerta. Es opcional: sin punto, «cómo llegar» busca tu dirección.'
               : 'Ese es el punto que abrirá el navegador de tus alumnos. Tócalo o arrástralo para corregirlo.'}
           </Text>
-        </Stack>
-
-        {/* La tarifa se pide AQUI, en el alta, y no se propone.
-            El local nacia con cuatro tarifas de ejemplo para que pudiera
-            inscribir desde el primer dia, y el efecto fue peor que el problema:
-            el directorio anunciaba «desde S/ 120 al mes» a gimnasios que no
-            habian escrito un precio. Un precio inventado, puesto donde la gente
-            compara dojos, es una mentira con nuestra letra. Es UNA sola —lo
-            justo para que el local funcione— y las demas se escriben despues,
-            ya sabiendo lo que se cobra. */}
-        <Eyebrow style={{ marginTop: 20 }}>Tu mensualidad</Eyebrow>
-
-        <Stack gap={14} style={{ marginTop: 10 }}>
-          <Field
-            label="Cuánto cobras al mes, en soles"
-            value={monthlyPrice}
-            onChangeText={setMonthlyPrice}
-            placeholder="120"
-            keyboardType="decimal-pad"
-            editable={!saving}
-            hint="Se crea como «Mensualidad», sin límite de sesiones. Puedes cambiarla y añadir más tarifas —dos veces por semana, clase suelta— desde Padrón → Planes."
-            error={denial('monthlyPrice')}
-          />
         </Stack>
 
         <Eyebrow style={{ marginTop: 20 }}>Sobre ti</Eyebrow>

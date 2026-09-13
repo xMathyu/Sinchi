@@ -103,23 +103,31 @@ el video no cobra nada. La baja sí. Ver
 ### El gimnasio se da de alta solo
 
 Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —opcional,
-y comprobado con dígito verificador si lo da—, escalón, **su dirección**, **su
-mensualidad**, sus datos y, si lo tiene, un código de promoción. Al terminar entra como dueño, con su mes gratis
-corriendo.
+y comprobado con dígito verificador si lo da—, escalón, **su dirección**, sus
+datos y, si lo tiene, un código de promoción. Al terminar entra como dueño, con
+su mes gratis corriendo, y aterriza en **Planes y precios** para escribir su
+primera tarifa.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
 verificada y **un gimnasio por persona**.
 
 **Nace usable, y eso costó dos huecos.** El primero eran las tarifas: `plans`
 quedaba vacía y el alta de un alumno exige `plan_id`, así que el local se
-registraba un martes y no podía inscribir a nadie. La primera solución fue
-sembrarle cuatro precios corrientes de Lima, y salió mal: un gimnasio que se
-registraba sin tocar un precio aparecía en el directorio como «desde S/ 120 al
-mes», una cifra que nadie de ese local había decidido, en la pantalla donde la
-gente compara dojos. Ahora **la mensualidad se pide en el alta** —un campo, y
-obligatorio— y el local nace con esa tarifa y solo con esa. Las demás —dos veces
-por semana, la clase suelta— las escribe el dueño desde Padrón → Planes, ya
-sabiendo lo que cobra.
+registraba un martes y no podía inscribir a nadie. Se intentó dos veces antes de
+acertar. Primero **sembrándole cuatro precios** corrientes de Lima: un gimnasio
+que se registraba sin tocar un precio aparecía en el directorio como «desde
+S/ 120 al mes», una cifra que nadie de ese local había decidido, en la pantalla
+donde la gente compara dojos. Después **pidiendo una mensualidad en el alta**: la
+cifra ya era suya, pero seguía siendo falsa para casi todos, porque un gimnasio
+cobra distinto por 2 y por 3 veces por semana y a menudo distinto por modalidad
+—tai chi, sanda, lucha—, y resumir eso en un número es lo que acababa publicado.
+
+Ahora **el alta no escribe ninguna tarifa** y la primera pantalla del dueño es
+Planes y precios, con el botón de escribir la primera. Es un paso más y a cambio
+nada de lo que se publica lo escribimos nosotros: la tarjeta de un local sin
+tarifas dice «Precios en el local», que es verdad. Las dos pantallas que dependen
+de que haya alguna —el directorio y el alta de un alumno— dicen que faltan y
+dónde se ponen, en vez de enseñar un precio inventado o un «cargando» eterno.
 
 El tercero era **dónde queda**. El directorio listaba dojos con su precio, su
 horario y sus disciplinas y callaba la primera pregunta de quien busca dónde

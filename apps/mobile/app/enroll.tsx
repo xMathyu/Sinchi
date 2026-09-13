@@ -26,6 +26,7 @@ import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitive
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { useGymPlans } from '../src/data/hooks';
+import { useRole } from '../src/data/session-hooks';
 import { existeIdentidad, enrollStudent, AlreadyInRoster } from '../src/data/actions';
 
 /**
@@ -46,7 +47,10 @@ type EnrollField = 'name' | 'documentId' | 'phone' | 'plan';
 
 export default function EnrollScreen() {
   const theme = useTheme();
-  const plans = useGymPlans();
+  const { plans, loading: loadingPlans } = useGymPlans();
+  // Quien puede ARREGLAR la falta de tarifas: los precios los escribe el dueño,
+  // y a recepción un botón que la api le va a responder 403 no le sirve de nada.
+  const isOwner = useRole() === 'owner';
 
   const [correo, setCorreo] = useState('');
   // `null` = todavia no se ha comprobado el correo.
@@ -95,7 +99,22 @@ export default function EnrollScreen() {
             ? { phone: 'Falta su celular: es su llave única en toda la red.' }
             : {}),
         }),
-    ...(plan === null ? { plan: 'Elige con qué plan entra.' } : {}),
+    /**
+     * Sin NINGUNA tarifa el motivo es otro, y decir «elige» seria mandar a
+     * elegir de una lista vacia.
+     *
+     * Desde que el gimnasio nace sin tarifas —se escriben en Planes, ya sabiendo
+     * lo que se cobra— este es el estado del PRIMER dia de todo local, no un
+     * caso raro.
+     */
+    ...(plan === null
+      ? {
+          plan:
+            !loadingPlans && plans.length === 0
+              ? 'Este gimnasio todavía no tiene tarifas: se escriben en Planes y precios.'
+              : 'Elige con qué plan entra.',
+        }
+      : {}),
   };
 
   const [attempted, setAttempted] = useState(false);
@@ -220,10 +239,32 @@ export default function EnrollScreen() {
       {alreadyExists === null ? null : (
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Con qué plan empieza</Eyebrow>
-        {plans.length === 0 ? (
+        {/* TRES estados y no dos. Antes cero planes se pintaba «Trayendo los
+            planes del gimnasio…», asi que un local sin tarifas se leia como un
+            cargando eterno: la pantalla no distinguia «todavia no ha llegado» de
+            «no hay ninguna», porque el hook devolvia `[]` en los dos casos. Y
+            desde que el gimnasio nace sin tarifas eso dejo de ser raro para ser
+            el primer dia de todos. */}
+        {loadingPlans ? (
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
             Trayendo los planes del gimnasio…
           </Text>
+        ) : plans.length === 0 ? (
+          <Card tone="sunken">
+            <Stack gap={12}>
+              <Text variant="bodySmall" color={theme.colors.textSecondary}>
+                Este gimnasio todavía no tiene ninguna tarifa, y para inscribir hace falta
+                decir en cuál entra.
+              </Text>
+              {isOwner ? (
+                <Button label="Escribir la primera" onPress={() => router.push('/plans')} />
+              ) : (
+                <Text variant="captionSmall" color={theme.colors.textFaint}>
+                  Los precios los escribe el dueño, desde Planes y precios.
+                </Text>
+              )}
+            </Stack>
+          </Card>
         ) : (
           plans.map((option) => {
             const active = option.id === planId;

@@ -490,7 +490,7 @@ function Reactivar({
   readonly name: string;
 }) {
   const theme = useTheme();
-  const plans = useGymPlans();
+  const { plans, loading: loadingPlans } = useGymPlans();
   const [planId, setPlanId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -524,10 +524,29 @@ function Reactivar({
   return (
     <Stack gap={10} style={{ marginTop: 18 }}>
       <Eyebrow>Volver a inscribir</Eyebrow>
-      {plans.length === 0 ? (
+      {/* Cargando y vacio decian lo mismo —«Trayendo los planes…»— porque el
+          hook devolvia `[]` en los dos casos. Aqui el local tuvo tarifas alguna
+          vez (hay una ficha que reinscribir), asi que cero significa que estan
+          TODAS archivadas: es como se sube un precio, y sin decirlo el boton se
+          queda apagado sin motivo a la vista. */}
+      {loadingPlans ? (
         <Text variant="captionSmall" color={theme.colors.textSecondary}>
           Trayendo los planes del gimnasio…
         </Text>
+      ) : plans.length === 0 ? (
+        <Card tone="sunken">
+          <Stack gap={12}>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              No hay ningún plan activo para ponerle. Si archivaste los de antes, escribe el
+              nuevo y vuelve aquí.
+            </Text>
+            <Button
+              label="Ir a Planes y precios"
+              variant="secondary"
+              onPress={() => router.push('/plans')}
+            />
+          </Stack>
+        </Card>
       ) : (
         plans.map((plan) => {
           const active = plan.id === planId;

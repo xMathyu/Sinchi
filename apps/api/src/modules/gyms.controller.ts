@@ -45,10 +45,6 @@ const signUpSchema = idTokenSchema.extend({
   // que responde con el mismo mensaje de siempre.
   taxId: z.string().max(20).optional(),
   saasTier: z.enum(['free', 'up_to_60', 'up_to_150', 'unlimited']),
-  // La mensualidad con la que nace el local. El rango exacto lo decide
-  // `checkPlanDraft` en el servicio, con el mismo mensaje que ve el formulario;
-  // aqui solo se comprueba que sea un entero de centimos y no un texto.
-  monthlyPriceCents: z.number().int().min(0),
   // Donde queda. El minimo real lo pone el servicio, con su mensaje.
   address: z.string().min(1).max(240),
   // El pin del mapa del alta, si lo marco. El rango se acota aqui, en el
@@ -124,7 +120,6 @@ export class GymsController {
       gymName: body.gymName,
       taxId: body.taxId,
       saasTier: body.saasTier,
-      monthlyPriceCents: body.monthlyPriceCents,
       address: body.address,
       latitude: body.latitude,
       longitude: body.longitude,

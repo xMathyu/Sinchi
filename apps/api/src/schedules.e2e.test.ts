@@ -80,7 +80,6 @@ async function newGym(): Promise<Local> {
     gymName: `Dojo Horarios ${runId} ${contador}`,
     taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
-    monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
     documentId: nextValue(),
@@ -525,7 +524,19 @@ suite('el directorio no anuncia una clase suelta como mensualidad', () => {
     const local = await newGym();
     await http.post('/v1/staff/schedules').set(auth(local.owner)).send(baseBlock).expect(201);
 
-    // La clase suelta la escribe el dueño: el alta solo crea la mensualidad.
+    // Las DOS las escribe el dueño: el alta ya no crea ninguna tarifa.
+    await http
+      .post('/v1/staff/plans')
+      .set(auth(local.owner))
+      .send({
+        name: 'Mensualidad',
+        type: 'unlimited',
+        sessionsPerWeek: null,
+        allowedDays: null,
+        priceCents: 12_000,
+      })
+      .expect(201);
+
     await http
       .post('/v1/staff/plans')
       .set(auth(local.owner))
@@ -583,7 +594,6 @@ suite('el alta no revienta con un celular ya registrado', () => {
       gymName: `Dojo Choque ${runId} ${contador}`,
       taxId: RUC[taxIdIndex++ % RUC.length]!,
       saasTier: 'free',
-      monthlyPriceCents: 12_000,
       address: 'Av. Primavera 120, Surco',
       ownerName: 'Dueño con celular repetido',
       // Documento DISTINTO: si coincidiera, el alta adoptaria esa identidad y no

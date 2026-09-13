@@ -1523,8 +1523,6 @@ export interface SignUpGymInput {
   /** RUC, si lo tiene. Muchos dojos empiezan sin uno. */
   readonly taxId?: string;
   readonly saasTier: SaasTier;
-  /** La mensualidad con la que nace el local. Sin ella no puede inscribir. */
-  readonly monthlyPriceCents: number;
   /** Dónde queda. Sin ella el local es un nombre en una lista. */
   readonly address: string;
   /**

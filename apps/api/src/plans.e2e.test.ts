@@ -76,7 +76,6 @@ async function newGym(): Promise<Local> {
     gymName: `Dojo Planes ${runId} ${contador}`,
     taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
-    monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
     documentId: nextValue(),
@@ -167,29 +166,38 @@ afterAll(async () => {
   await app?.close();
 });
 
-suite('un gimnasio nuevo nace con SU tarifa', () => {
+suite('un gimnasio nuevo nace SIN tarifas, y las escribe el dueno', () => {
   /**
-   * Una, la que escribio el dueno en el alta, y ninguna mas.
+   * Ninguna, y es deliberado. Van dos intentos antes de este.
    *
-   * Antes eran cuatro precios de ejemplo, y el problema no era tenerlos sino que
-   * el directorio los anunciaba como si el local los hubiera decidido. Lo que
-   * sigue haciendo falta —y esta prueba fija— es que `plans` NO quede vacia:
-   * inscribir exige `planId`, y sin tarifa el local no puede dar de alta a
-   * nadie el dia que se registra.
+   * Primero fueron cuatro precios de ejemplo, y el directorio los anunciaba como
+   * si el local los hubiera decidido. Despues, UNA mensualidad pedida en el
+   * formulario del alta: la cifra ya era suya, pero un gimnasio cobra distinto
+   * por 2 y por 3 veces por semana y a menudo distinto por modalidad —tai chi,
+   * sanda, lucha—, asi que obligarle a resumirlo en un numero producia un precio
+   * publicado que tampoco era su precio.
+   *
+   * Lo que hay que sostener sigue siendo lo mismo: que el local no se quede
+   * inutilizable SIN ENTERARSE. Eso ya no lo arregla sembrar una tarifa, lo
+   * arregla que su primera pantalla despues del alta sea esta, y que las dos que
+   * dependen de que haya tarifas —el directorio y el alta de un alumno— digan
+   * que faltan en vez de ensenar un precio inventado o un cargando eterno.
    */
-  it('trae exactamente la mensualidad del alta, sin inventar ninguna otra', async () => {
+  it('trae la lista vacia: ni una tarifa que no haya escrito el', async () => {
     const local = await newGym();
     const { body } = await http.get('/v1/staff/plans').set(auth(local.owner)).expect(200);
 
-    expect(body).toHaveLength(1);
-    expect(body[0].type).toBe('unlimited');
-    expect(body[0].priceCents).toBe(12_000);
-    expect(body[0].active).toBe(true);
+    expect(body).toEqual([]);
   });
 
-  it('y se puede inscribir a alguien el mismo dia, sin que nadie siembre nada', async () => {
+  it('escribe la primera y ya puede inscribir, el mismo dia y sin que nadie siembre nada', async () => {
     const local = await newGym();
-    const { body: plans } = await http.get('/v1/staff/plans').set(auth(local.owner));
+
+    const { body: plan } = await http
+      .post('/v1/staff/plans')
+      .set(auth(local.owner))
+      .send(planBase)
+      .expect(201);
 
     const { status } = await http
       .post('/v1/staff/members')
@@ -198,10 +206,32 @@ suite('un gimnasio nuevo nace con SU tarifa', () => {
         name: 'Alumna del primer día',
         documentId: nextValue(),
         phone: nextPhone(),
-        planId: plans[0].id,
+        planId: plan.id,
       });
 
     expect(status).toBe(201);
+  });
+
+  /**
+   * El camino que NO puede existir: inscribir sin tarifas.
+   *
+   * La app apaga el boton y dice por que, pero la api es la autoridad y tiene
+   * que negarse igual — es lo que separa una pantalla prudente de una regla.
+   */
+  it('sin ninguna tarifa no se puede inscribir a nadie', async () => {
+    const local = await newGym();
+
+    const { status } = await http
+      .post('/v1/staff/members')
+      .set(auth(local.owner))
+      .send({
+        name: 'Alumna sin plan',
+        documentId: nextValue(),
+        phone: nextPhone(),
+        planId: '00000000-0000-4000-8000-000000000000',
+      });
+
+    expect(status).toBeGreaterThanOrEqual(400);
   });
 });
 

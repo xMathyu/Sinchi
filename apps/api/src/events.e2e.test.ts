@@ -73,7 +73,6 @@ async function newGym(): Promise<Local> {
     gymName: `Dojo Eventos ${runId} ${contador}`,
     taxId: RUC[taxIdIndex++ % RUC.length]!,
     saasTier: 'up_to_60',
-    monthlyPriceCents: 12_000,
     address: 'Av. Primavera 120, Surco',
     ownerName: `Dueño ${uid}`,
     documentId: nextValue(),
@@ -81,6 +80,28 @@ async function newGym(): Promise<Local> {
   });
   if (status !== 201) throw new Error(`No se pudo crear el gimnasio: ${JSON.stringify(body)}`);
   created.push(body.tenantId as string);
+
+  /**
+   * Su primera tarifa, escrita a mano porque el alta ya no escribe ninguna.
+   *
+   * El local nace con `plans` vacia a proposito —un gimnasio cobra distinto por
+   * 2 y por 3 veces por semana, y a menudo distinto por modalidad, asi que
+   * ninguna cifra puesta por nosotros seria la suya— y su primera pantalla
+   * despues de registrarse es Planes. Esto es ese paso: sin el no hay `planId`
+   * con el que inscribir, que es lo que estas pruebas necesitan.
+   */
+  await http
+    .post('/v1/staff/plans')
+    .set(auth(body.session.accessToken as string))
+    .send({
+      name: 'Mensualidad',
+      type: 'unlimited',
+      sessionsPerWeek: null,
+      allowedDays: null,
+      priceCents: 12_000,
+    })
+    .expect(201);
+
   return {
     tenantId: body.tenantId as string,
     slug: body.slug as string,

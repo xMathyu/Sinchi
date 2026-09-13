@@ -593,7 +593,6 @@ suite('el dueño con dos locales', () => {
         gymName: 'Selección UPC',
         taxId: SECOND_TAX_ID,
         saasTier: 'free',
-        monthlyPriceCents: 12_000,
         address: 'Av. Primavera 120, Surco',
         documentId: SERGIO_DNI,
       })

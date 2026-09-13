@@ -387,13 +387,29 @@ cortado canjearía un código y seguiría cortado, que es justo lo que el códig
 venía a arreglar. Por eso `POST /staff/promo` sigue abierta en solo lectura: que
 el corte bloqueara la forma de levantarlo sería una trampa.
 
-### Lo que falta para que el alta sirva de verdad
+### Un gimnasio nace sin tarifas, y eso es la respuesta, no el problema
 
-**Un gimnasio recién creado no tiene planes ni horarios**, y sin planes no puede
-inscribir a un solo alumno: `POST /staff/members` exige `planId` y no hay ninguna
-ruta que cree planes — hasta ahora los ponía el script de siembra. El alta deja
-al dueño dentro, con su mes gratis corriendo y su padrón vacío, pero el local no
-es operable hasta que alguien le cree los planes. Es lo siguiente.
+**Un gimnasio recién creado no tiene planes**, y sin planes no puede inscribir a
+nadie: `POST /staff/members` exige `planId`. Durante un tiempo eso fue un agujero
+de verdad —los planes solo los ponía el script de siembra— y se intentó tapar dos
+veces por el lado equivocado, sembrando precios que el local no había decidido.
+
+Las dos salieron mal por la misma razón: **un gimnasio no tiene UN precio.** Cobra
+distinto por 2 y por 3 veces por semana, y a menudo distinto por modalidad —tai
+chi, sanda, lucha—. Cualquier cifra que pusiéramos nosotros, o que le
+obligáramos a resumir en el formulario del alta, acababa publicada en el
+directorio con su nombre encima.
+
+Lo que faltaba no era una tarifa por defecto, era la pantalla: `/plans` con su
+caso vacío («no tienes ningún plan activo; sin planes no puedes inscribir a
+nadie») y el botón de escribir la primera. Con ella, `plans` vacía es un estado
+honesto y de un solo paso, y el alta aterriza ahí en vez de en el padrón.
+
+Lo que sí hubo que arreglar es lo que ese estado rompía en silencio: el alta de
+un alumno pintaba cero tarifas como «Trayendo los planes del gimnasio…» —porque
+`useGymPlans` devolvía `[]` mientras cargaba Y cuando no había ninguna—, así que
+un local nuevo se leía como un cargando eterno. Es el mismo defecto que el botón
+mudo: una pantalla que no dice por qué no puede seguir.
 
 ### Y lo que no se puede hacer con Apple Pay
 

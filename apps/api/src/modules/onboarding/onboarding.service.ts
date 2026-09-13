@@ -24,16 +24,35 @@
  * El codigo de promocion es lo ULTIMO y no puede tumbar el alta: si esta mal
  * escrito, el gimnasio queda creado igual y la app dice por que no se aplico.
  * Perder un alta por un tipeo en un codigo opcional seria absurdo.
+ *
+ * ## El alta NO escribe ninguna tarifa, y eso costo dos intentos
+ *
+ * Primero se le sembraban cuatro precios corrientes de Lima, y el resultado fue
+ * un local que se registraba sin tocar un precio y aparecia en el directorio
+ * como «desde S/ 120 al mes» — una cifra que nadie de ese gimnasio habia
+ * decidido, en la pantalla donde la gente compara dojos. Lo reporto el primer
+ * dueno real que lo vio.
+ *
+ * Despues se pidio UNA mensualidad en el formulario. Mejor, porque la cifra ya
+ * era suya, pero seguia siendo una respuesta falsa para casi todos: un gimnasio
+ * cobra 2 veces por semana y 3 veces por semana a precios distintos, y a menudo
+ * distinto por modalidad —tai chi, sanda, lucha—. Obligar a elegir UNA en el
+ * alta es pedirle que resuma en un numero algo que no es un numero, y ese
+ * resumen es lo que despues sale publicado.
+ *
+ * Asi que el local nace con `plans` VACIA y su primera pantalla es Planes, con
+ * el boton de escribir la primera. Es un paso mas y a cambio nada de lo que se
+ * publica lo escribimos nosotros. Las dos pantallas que dependen de que haya
+ * tarifas —el directorio y el alta de un alumno— dicen que faltan y donde se
+ * ponen, en vez de ensenar un precio inventado o un «cargando» eterno.
  */
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import {
-  checkPlanDraft,
   checkRuc,
   formatPlainDate,
   freeUntilFrom,
   normalizeRuc,
-  planDenialMessage,
   plainDateInZone,
   rucDenialMessage,
   TZ_LIMA,
@@ -61,16 +80,6 @@ import { SaasService } from '../saas/saas.service';
  * del padron de cada local, uno por uno.
  */
 const MAX_GYMS_PER_PERSON = 5;
-
-/**
- * Como se llama la tarifa con la que nace el gimnasio.
- *
- * Se escribe aqui y no la pide el formulario porque no es una decision: es el
- * nombre corriente de lo que todo gimnasio cobra, y el dueno lo cambia de un
- * toque desde su pantalla de planes. Pedirselo en el alta seria un campo mas
- * para escribir la palabra que ya estaba puesta.
- */
-const FIRST_RATE_NAME = 'Mensualidad';
 
 /**
  * Lo minimo que se acepta como direccion: diez caracteres.
@@ -104,24 +113,14 @@ export interface SignUpGymInput {
    */
   readonly saasTier: SaasTier;
   /**
-   * Lo que el gimnasio le cobra al mes a un alumno.
-   *
-   * Es OBLIGATORIO y por eso vive en el alta: `plans` vacia deja el local
-   * inutilizable —dar de alta a un alumno exige `plan_id`— y lo que se hacia
-   * antes, sembrarle cuatro tarifas de ejemplo, era peor que no tener ninguna.
-   * El local se registraba sin escribir un precio y el directorio lo anunciaba
-   * «desde S/ 120 al mes», que es una cifra que nadie de ese gimnasio decidio,
-   * puesta en la pantalla donde la gente compara dojos. Un precio inventado no
-   * es un punto de partida: es una mentira con nuestra letra.
-   */
-  readonly monthlyPriceCents: number;
-  /**
    * Donde queda el local, escrito como se lo dirias a un taxista.
    *
-   * Obligatoria en el alta por lo mismo que la mensualidad: el directorio la
-   * ensena, y un gimnasio sin direccion es un nombre en una lista. La columna es
-   * nullable para los locales que ya existen —no se les puede inventar una— pero
-   * los nuevos nacen con ella.
+   * Obligatoria en el alta —el directorio la ensena, y un gimnasio sin
+   * direccion es un nombre en una lista— y es el unico dato del formulario que
+   * lo es sin tener alternativa: la tarifa se escribe despues en Planes y el
+   * RUC puede no existir, pero la direccion la sabe el dueno hoy y no hay otra
+   * pantalla donde vaya a ponerla. La columna es nullable para los locales que
+   * ya existen (no se les puede inventar una) y los nuevos nacen con ella.
    */
   readonly address: string;
   /**
@@ -240,17 +239,6 @@ export class OnboardingService {
       throw new BadRequestException('Ese nombre no da una dirección válida. Usa letras y números.');
     }
 
-    // La misma funcion que corre el formulario, para que el boton se apague por
-    // el motivo exacto por el que este POST responderia 400.
-    const rateDenial = checkPlanDraft({
-      name: FIRST_RATE_NAME,
-      type: 'unlimited',
-      sessionsPerWeek: null,
-      allowedDays: null,
-      priceCents: input.monthlyPriceCents,
-    });
-    if (rateDenial !== null) throw new BadRequestException(planDenialMessage(rateDenial));
-
     const address = input.address.trim();
     if (address.length < ADDRESS_MIN) {
       throw new BadRequestException(
@@ -322,23 +310,15 @@ export class OnboardingService {
       });
 
       /**
-       * UNA tarifa, la que el dueno acaba de escribir.
+       * NINGUNA tarifa, y es deliberado. Ver la cabecera.
        *
-       * `unlimited` y no un cupo semanal porque es lo unico que no hay que
-       * preguntarle: sin limite de sesiones la puerta nunca le corta a un alumno
-       * al dia, y el cupo es una decision que se toma despues, con el tatami
-       * lleno. Las demas tarifas —dos veces por semana, la clase suelta— las
-       * escribe el mismo desde Padron -> Planes, ya sabiendo lo que cobra.
+       * Un gimnasio cobra distinto por 2 y por 3 veces por semana, y a menudo
+       * distinto por modalidad. Cualquier tarifa que escribieramos aqui —una de
+       * ejemplo, o la unica que le cupo en el formulario— sale publicada en el
+       * directorio con su nombre encima. `plans` vacia es un estado honesto y
+       * las pantallas que dependen de el saben decirlo; un precio que no decidio
+       * nadie de ese local, no.
        */
-      await tx.insert(schema.plans).values({
-        tenantId,
-        name: FIRST_RATE_NAME,
-        type: 'unlimited',
-        sessionsPerWeek: null,
-        allowedDays: null,
-        priceCents: input.monthlyPriceCents,
-        active: true,
-      });
 
       return { tenantId, slug };
     });

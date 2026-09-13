@@ -1025,22 +1025,41 @@ export function useBajas(active: boolean): {
 }
 
 /** Planes activos del local, para el mostrador. */
-export function useGymPlans(): readonly Plan[] {
-  const [ownerPlanList, setOwnerPlanList] = useState<readonly Plan[]>([]);
+export function useGymPlans(): {
+  readonly plans: readonly Plan[];
+  readonly loading: boolean;
+} {
+  /**
+   * `null` hasta que contesta, y ese es el arreglo.
+   *
+   * Arrancaba en `[]` y devolvia solo la lista, asi que la pantalla no tenia
+   * como distinguir «todavia no ha llegado» de «este gimnasio no tiene
+   * tarifas»: las dos eran cero. El alta de un alumno lo pintaba como «Trayendo
+   * los planes del gimnasio…», de modo que un local sin ninguna se leia como un
+   * cargando eterno — y desde que el gimnasio nace sin tarifas, eso dejo de ser
+   * un caso raro para ser el PRIMER dia de todos.
+   *
+   * Un fallo tambien termina el cargando: se deja de esperar y la pantalla
+   * pinta el caso vacio, que al menos dice donde se escriben. Quedarse girando
+   * para siempre es la unica salida que no sirve para nada.
+   */
+  const [fetched, setFetched] = useState<readonly Plan[] | null>(null);
 
   useEffect(() => {
     let cancelado = false;
     void gymPlans()
       .then((list) => {
-        if (!cancelado) setOwnerPlanList(list);
+        if (!cancelado) setFetched(list);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelado) setFetched([]);
+      });
     return () => {
       cancelado = true;
     };
   }, []);
 
-  return ownerPlanList;
+  return { plans: fetched ?? [], loading: fetched === null };
 }
 
 /**
