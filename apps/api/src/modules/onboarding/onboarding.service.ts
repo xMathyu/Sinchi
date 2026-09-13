@@ -113,6 +113,19 @@ export interface SignUpGymInput {
    * los nuevos nacen con ella.
    */
   readonly address: string;
+  /**
+   * El pin que el dueno marco en el mapa del alta. OPCIONAL, y los dos o ninguno.
+   *
+   * Media coordenada no es medio dato: es un punto en el ecuador o en Greenwich,
+   * y el mapa lo dibujaria sin dudar. Sin pin, «como llegar» busca la direccion
+   * escrita —lo que haria cualquiera a mano—; con pin, lleva a la puerta.
+   *
+   * No se deriva de `address` y eso es deliberado: geocodificar un texto escrito
+   * a mano acierta casi siempre y falla justo donde importa, en la cuadra sin
+   * numero y el pasaje que el mapa no conoce.
+   */
+  readonly latitude?: number | undefined;
+  readonly longitude?: number | undefined;
   /** Del dueno. */
   readonly ownerName?: string | undefined;
   readonly documentId: string;
@@ -222,6 +235,23 @@ export class OnboardingService {
       );
     }
 
+    /**
+     * El pin: los DOS numeros o ninguno, y dentro del mapa.
+     *
+     * Mismas reglas que `writeLocation`, y por eso los mismos mensajes: el
+     * dueno puede marcar su punto en el alta o mas tarde desde Padron, y que la
+     * misma equivocacion se lea distinta segun por donde entro no lo entiende
+     * nadie. El rango se comprueba tambien aqui —ya lo hacen el esquema y el
+     * CHECK de la base— porque teclear «-77.0» sin el punto da 770.
+     */
+    const hasPin = input.latitude !== undefined && input.longitude !== undefined;
+    if (!hasPin && (input.latitude !== undefined || input.longitude !== undefined)) {
+      throw new BadRequestException('El punto del mapa necesita latitud y longitud.');
+    }
+    if (hasPin && (Math.abs(input.latitude!) > 90 || Math.abs(input.longitude!) > 180)) {
+      throw new BadRequestException('Ese punto no está en el mapa.');
+    }
+
     const persona = await this.resolveOwner(input);
 
     await this.assertGymsAvailable(persona.userId);
@@ -237,6 +267,9 @@ export class OnboardingService {
           timezone: TZ_LIMA,
           saasTier: input.saasTier,
           address,
+          // Sin pin se dejan nulas, que es lo que la columna espera: el local
+          // sale igual en el directorio y «como llegar» busca su direccion.
+          ...(hasPin ? { latitude: input.latitude, longitude: input.longitude } : {}),
         })
         .returning({ id: schema.tenants.id });
 

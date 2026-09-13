@@ -48,6 +48,8 @@ import { RoutinesController } from './modules/routines/routines.controller';
 import { RoutinesService } from './modules/routines/routines.service';
 import { videoStorageProvider } from './modules/routines/video-storage';
 import { VisitorService } from './modules/identity/visitor.service';
+import { PlacesController } from './modules/places/places.controller';
+import { PlacesService } from './modules/places/places.service';
 import { SaasGuard } from './modules/saas/saas.guard';
 
 @Module({
@@ -61,6 +63,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     EventsController,
     RoutinesController,
     GymsController,
+    PlacesController,
     AccountsController,
     InvitesController,
     JobsController,
@@ -86,6 +89,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     EventsService,
     EventRegistrationsService,
     RoutinesService,
+    PlacesService,
     videoStorageProvider,
     VisitorService,
     RefreshDelinquencyJob,

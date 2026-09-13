@@ -391,6 +391,49 @@ const reviveBooking = (out: BookTrialDto): BookTrialDto =>
 export const fetchGyms = (): Promise<readonly GymCardDto[]> =>
   request('/gyms', { anonymous: true });
 
+/**
+ * Sugerencias de direccion mientras el dueno escribe, y el punto de la elegida.
+ *
+ * `anonymous: true` porque en el alta todavia NO hay sesion de Sinchi —eso es lo
+ * que el alta produce— pero si hay credencial de Firebase, y es la que estas dos
+ * rutas verifican antes de gastar. La clave de Places no viaja en la app: vive
+ * en la api, que es la unica forma de exponer un buscador que se factura sin
+ * regalar la factura. Ver `places.service.ts`.
+ */
+export interface PlaceSuggestionDto {
+  readonly placeId: string;
+  readonly mainText: string;
+  readonly secondaryText: string | null;
+}
+
+export interface PlaceDetailDto {
+  readonly address: string;
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+export const suggestPlaces = async (input: {
+  readonly idToken: string;
+  readonly query: string;
+}): Promise<readonly PlaceSuggestionDto[]> =>
+  (
+    await request<{ readonly suggestions: readonly PlaceSuggestionDto[] }>('/places/suggest', {
+      method: 'POST',
+      anonymous: true,
+      body: { idToken: input.idToken, query: input.query },
+    })
+  ).suggestions;
+
+export const fetchPlaceDetail = (input: {
+  readonly idToken: string;
+  readonly placeId: string;
+}): Promise<PlaceDetailDto> =>
+  request('/places/detail', {
+    method: 'POST',
+    anonymous: true,
+    body: { idToken: input.idToken, placeId: input.placeId },
+  });
+
 export const fetchGym = async (slug: string): Promise<GymDetailDto> => {
   const record = await request<GymDetailDto>(`/gyms/${encodeURIComponent(slug)}`, {
     anonymous: true,
@@ -1483,6 +1526,16 @@ export interface SignUpGymInput {
   readonly monthlyPriceCents: number;
   /** Dónde queda. Sin ella el local es un nombre en una lista. */
   readonly address: string;
+  /**
+   * El pin, si el dueño lo marcó en el mapa del alta. Los dos, o ninguno.
+   *
+   * Van declarados aunque sean opcionales: se mandaban con un spread, y un
+   * spread NO comprueba las claves contra el tipo, así que el pin viajaba y se
+   * perdía sin que nada se quejara. Es la misma trampa que dejó al RUC sin
+   * ponerse en rojo.
+   */
+  readonly latitude?: number;
+  readonly longitude?: number;
   readonly ownerName?: string;
   readonly documentId: string;
   readonly phone?: string;

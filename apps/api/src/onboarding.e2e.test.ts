@@ -88,6 +88,9 @@ interface SignUpInput {
   readonly monthlyPriceCents?: number | null;
   /** Dónde queda. `null` lo omite del cuerpo. */
   readonly address?: string | null;
+  /** El pin del mapa del alta, si se marca. */
+  readonly latitude?: number;
+  readonly longitude?: number;
 }
 
 const signUp = async (input: SignUpInput) => {
@@ -102,6 +105,8 @@ const signUp = async (input: SignUpInput) => {
     ...(input.address === null
       ? {}
       : { address: input.address ?? 'Av. Primavera 120, Surco' }),
+    ...(input.latitude === undefined ? {} : { latitude: input.latitude }),
+    ...(input.longitude === undefined ? {} : { longitude: input.longitude }),
     ownerName: `Dueño ${input.uid}`,
     documentId: nextValue(),
     phone: `+519${nextValue().slice(0, 8)}`,
@@ -382,6 +387,45 @@ suite('el gimnasio dice dónde queda', () => {
     });
     expect(status).toBe(400);
     expect(body.message).toContain('dónde queda');
+  });
+
+  /**
+   * El alta ya trae el mapa, así que el pin puede llegar desde el registro y no
+   * solo después desde Padrón.
+   *
+   * Esta prueba existe por un fallo concreto: la app mandaba `latitude` y
+   * `longitude` con un spread condicional, y un spread NO comprueba las claves
+   * contra el tipo. Compilaba, viajaba, y la api las descartaba en silencio — el
+   * dueño marcaba su puerta en el mapa y el pin no llegaba a ninguna parte. Sin
+   * una prueba que lo fije, vuelve a pasar en el siguiente campo que se añada.
+   */
+  it('el pin marcado en el alta se guarda y sale en la ficha', async () => {
+    const { body, status } = await signUp({
+      uid: `dueno-${runId}-pin-en-el-alta`,
+      gymName: `Dojo Con Pin ${runId}`,
+      taxId: RUC[2]!,
+      address: 'Av. Arequipa 3150, Lince',
+      latitude: -12.0889,
+      longitude: -77.0356,
+    });
+    expect(status).toBe(201);
+
+    const { body: ficha } = await http.get(`/v1/gyms/${body.slug}`).expect(200);
+    expect(ficha.latitude).toBeCloseTo(-12.0889, 4);
+    expect(ficha.longitude).toBeCloseTo(-77.0356, 4);
+  });
+
+  it('media coordenada en el alta no entra', async () => {
+    // Un punto en el ecuador no es medio dato: es un pin equivocado, y el mapa
+    // lo dibujaría sin dudar.
+    const { status } = await signUp({
+      uid: `dueno-${runId}-pin-a-medias`,
+      gymName: `Dojo Pin A Medias ${runId}`,
+      taxId: RUC[3]!,
+      address: 'Av. Arequipa 3150, Lince',
+      latitude: -12.0889,
+    });
+    expect(status).toBe(400);
   });
 
   it('el dueño la corrige, y puede poner su punto en el mapa', async () => {

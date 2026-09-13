@@ -168,6 +168,22 @@ const schema = z.object({
   VIDEO_BUCKET: emptyMeansAbsent(z.string().min(3).optional()),
 
   /**
+   * Clave de Places, para sugerir direcciones mientras el dueno escribe.
+   *
+   * OPCIONAL como `VIDEO_BUCKET`, y por lo mismo: sin ella el buscador queda
+   * apagado y el alta sigue funcionando entera — se escribe la direccion a mano
+   * y se mueve el pin en el mapa, que es la red de seguridad que hace falta de
+   * todas formas. Un despliegue sin configurar degrada en vez de romper.
+   *
+   * Vive en el SERVIDOR y no en la app, y no es purismo: las restricciones por
+   * aplicacion (bundle id, huella SHA-1) solo valen para los SDK nativos. El
+   * servicio REST de Places solo admite restriccion por IP, asi que una clave
+   * dentro del binario queda de hecho abierta — y esta se factura por uso. Desde
+   * aqui la clave no sale nunca: la app pide `/v1/places/...` y la api consulta.
+   */
+  GOOGLE_PLACES_API_KEY: emptyMeansAbsent(z.string().min(20).optional()),
+
+  /**
    * Cuenta de servicio con la que se FIRMAN las URLs de los videos.
    *
    * Sin ella se firma igual, pero por la api de IAM: una llamada de red por cada

@@ -47,6 +47,11 @@ const signUpSchema = idTokenSchema.extend({
   monthlyPriceCents: z.number().int().min(0),
   // Donde queda. El minimo real lo pone el servicio, con su mensaje.
   address: z.string().min(1).max(240),
+  // El pin del mapa del alta, si lo marco. El rango se acota aqui, en el
+  // servicio y en la base (`tenants_coords_range`): teclear «-77.0» sin el punto
+  // da 770, y un pin en un sitio que no existe manda a alguien a la calle.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   ownerName: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
   phone: z.string().min(6).max(20).optional(),
@@ -117,6 +122,8 @@ export class GymsController {
       saasTier: body.saasTier,
       monthlyPriceCents: body.monthlyPriceCents,
       address: body.address,
+      latitude: body.latitude,
+      longitude: body.longitude,
       ownerName: body.ownerName,
       documentId: body.documentId,
       phone: body.phone,

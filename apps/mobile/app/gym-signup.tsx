@@ -56,8 +56,11 @@ import { useTheme } from '../src/design/theme';
 import { registerGym } from '../src/data/actions';
 import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
-import { currentAccountDetails } from '../src/data/session';
+import { currentAccountDetails, currentFirebaseToken } from '../src/data/session';
 import { aCentimos } from '../src/lib/format';
+import { useDebounced } from '../src/lib/debounce';
+import { GpsButton, MapPicker, type MapPoint } from '../src/design/map-picker';
+import { fetchPlaceDetail, suggestPlaces, type PlaceSuggestionDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
 
 const ESCALONES: readonly SaasTier[] = ['free', 'up_to_60', 'up_to_150', 'unlimited'];
@@ -103,6 +106,95 @@ export default function GymSignUpScreen() {
   const [code, setCode] = useState('');
   const [monthlyPrice, setMonthlyPrice] = useState('');
   const [address, setAddress] = useState('');
+  /**
+   * El punto del local. Opcional, y por eso `null` no bloquea el alta.
+   *
+   * Sin pin, «como llegar» busca la direccion escrita en el mapa de quien la
+   * lee. Con pin, lleva a la puerta. Lo segundo es mejor y lo primero basta, asi
+   * que no se exige — lo que se hace es ponerlo facil.
+   */
+  const [pin, setPin] = useState<MapPoint | null>(null);
+  /**
+   * El punto al que llevar la cámara, cuando no lo puso el dedo.
+   *
+   * Separado de `pin` a propósito: si la cámara siguiera cualquier cambio del
+   * pin, tocar o arrastrar el mapa le arrancaría la vista al dueño en medio del
+   * gesto. Se llena al elegir una sugerencia o al usar el GPS, que es cuando no
+   * está mirando el mapa. Ver `focus` en `MapPicker`.
+   */
+  const [focus, setFocus] = useState<MapPoint | null>(null);
+  /** Si el dueno ya eligio de la lista, no se le vuelve a ofrecer. */
+  const [addressPicked, setAddressPicked] = useState(false);
+  const [suggestions, setSuggestions] = useState<readonly PlaceSuggestionDto[]>([]);
+
+  /**
+   * La direccion, esperando a que deje de teclear.
+   *
+   * Cada busqueda es una llamada a Places, y Places se factura: sin el debounce,
+   * escribir «Av. Primavera 120» son diecinueve busquedas para una direccion.
+   */
+  const debouncedAddress = useDebounced(address);
+
+  useEffect(() => {
+    // Ya eligio de la lista: seguir sugiriendo sobre su propia eleccion es
+    // ofrecerle corregir lo que acaba de confirmar.
+    if (addressPicked) return;
+
+    const query = debouncedAddress.trim();
+    if (query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    // El buscador exige la credencial de Firebase. Todavia no hay sesion de
+    // Sinchi —eso lo produce el alta— pero la cuenta ya existe en este punto.
+    const idToken = currentFirebaseToken();
+    if (idToken === null) {
+      setSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    void suggestPlaces({ idToken, query })
+      .then((found) => {
+        if (!cancelled) setSuggestions(found);
+      })
+      .catch(() => {
+        // El buscador es una AYUDA: si se cae, se escribe a mano y se mueve el
+        // pin. No se pinta un error por una funcion opcional.
+        if (!cancelled) setSuggestions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedAddress, addressPicked]);
+
+  /** Toca una sugerencia: se rellena la direccion y el pin se va a su sitio. */
+  const pickSuggestion = (suggestion: PlaceSuggestionDto): void => {
+    const idToken = currentFirebaseToken();
+    setSuggestions([]);
+    setAddressPicked(true);
+    // Se escribe ya lo que se ve, sin esperar al detalle: el campo no puede
+    // quedarse con el texto a medias mientras viaja una peticion.
+    setAddress(
+      suggestion.secondaryText === null
+        ? suggestion.mainText
+        : `${suggestion.mainText}, ${suggestion.secondaryText}`,
+    );
+    if (idToken === null) return;
+
+    void fetchPlaceDetail({ idToken, placeId: suggestion.placeId })
+      .then((detail) => {
+        setAddress(detail.address);
+        const point = { lat: detail.latitude, lng: detail.longitude };
+        setPin(point);
+        // Sin esto el marcador aparecía y la cámara se quedaba mirando Lima
+        // entera: el mapa dejaba de servir para corroborar nada.
+        setFocus(point);
+      })
+      .catch(() => {
+        // Se queda lo que ya se escribio y el pin a mano. Ver `places.service`.
+      });
+  };
 
   // Solo para crear la cuenta, cuando hace falta. El nombre y el celular NO se
   // repiten aqui: son los mismos campos que pide el ultimo paso.
@@ -406,6 +498,7 @@ export default function GymSignUpScreen() {
         saasTier: escalon,
         monthlyPriceCents: monthlyCents ?? 0,
         address: address.trim(),
+        ...(pin === null ? {} : { latitude: pin.lat, longitude: pin.lng }),
         ownerName: ownerName.trim().length >= 2 ? ownerName.trim() : undefined,
         documentId: documentId.trim(),
         phone: phone.trim().length >= 6 ? phone.trim() : undefined,
@@ -808,13 +901,78 @@ export default function GymSignUpScreen() {
           <Field
             label="Dirección del local"
             value={address}
-            onChangeText={setAddress}
+            onChangeText={(text) => {
+              setAddress(text);
+              // Volver a escribir descarta la eleccion anterior: el pin dejaria
+              // de corresponder al texto, y un pin que no es la direccion es
+              // peor que ninguno.
+              setAddressPicked(false);
+            }}
             placeholder="Av. Primavera 120, Surco"
             autoCapitalize="words"
             editable={!saving}
-            hint="Como se la dirías a un taxista. Sale en tu ficha, con el mapa y el botón de cómo llegar."
+            hint="Escribe y elige de la lista. Si no aparece, escríbela igual y mueve el pin."
             error={denial('address')}
           />
+
+          {/* Las sugerencias, si hay. Van pegadas al campo y no en un modal: lo
+              que se compara es lo escrito con lo ofrecido, y un modal tapa
+              justo el texto que hay que comparar. */}
+          {suggestions.length > 0 ? (
+            <Card padded={false} radius={theme.radii.md}>
+              {suggestions.map((suggestion, index) => (
+                <Pressable
+                  key={suggestion.placeId}
+                  accessibilityRole="button"
+                  accessibilityLabel={suggestion.mainText}
+                  onPress={() => pickSuggestion(suggestion)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: theme.colors.hairline,
+                  }}
+                >
+                  <Text variant="bodySmall" weight="semibold" numberOfLines={1}>
+                    {suggestion.mainText}
+                  </Text>
+                  {suggestion.secondaryText === null ? null : (
+                    <Text
+                      variant="captionSmall"
+                      color={theme.colors.textSecondary}
+                      numberOfLines={1}
+                    >
+                      {suggestion.secondaryText}
+                    </Text>
+                  )}
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
+
+          {/* El mapa para CORROBORAR, que es lo que no hacia el campo de texto:
+              se ve si lo escrito cae donde el dueno cree. Y se toca para
+              corregirlo, porque en Lima el pasaje sin nombre y la cuadra sin
+              numero no los encuentra ningun buscador. */}
+          <MapPicker pin={pin} onPick={setPin} focus={focus} />
+
+          {/* El atajo, y aquí casi obligatorio: el mapa abre a escala de ciudad,
+              así que sin esto la única forma de apuntar a una puerta es hacer
+              pinch-zoom desde una vista de Lima entera. Quien se registra suele
+              estar dentro de su local. */}
+          <Row gap={10} align="stretch">
+            <GpsButton
+              onReady={(point) => {
+                setPin(point);
+                setFocus(point);
+              }}
+            />
+          </Row>
+          <Text variant="micro" color={theme.colors.textFaint}>
+            {pin === null
+              ? 'Toca el mapa para marcar tu puerta. Es opcional: sin punto, «cómo llegar» busca tu dirección.'
+              : 'Ese es el punto que abrirá el navegador de tus alumnos. Tócalo o arrástralo para corregirlo.'}
+          </Text>
         </Stack>
 
         {/* La tarifa se pide AQUI, en el alta, y no se propone.
