@@ -31,7 +31,7 @@ export type ChargeId = Id<'charge'>;
 export type PaymentMethodId = Id<'payment_method'>;
 export type ClassScheduleId = Id<'class_schedule'>;
 export type AttendanceId = Id<'attendance'>;
-export type TrialBookingId = Id<'trial_booking'>;
+export type ClassBookingId = Id<'class_booking'>;
 export type GymEventId = Id<'gym_event'>;
 export type EventRegistrationId = Id<'event_registration'>;
 export type RoutineId = Id<'routine'>;
@@ -468,16 +468,16 @@ export interface ClassSchedule {
 }
 
 /**
- * Estado de una clase gratis reservada.
+ * Estado de una clase reservada desde el directorio.
  *
  * `no_show` existe separado de `canceled` porque no son lo mismo para el
  * gimnasio: quien avisa que no viene sigue siendo un interesado; quien no
  * aparece sin avisar es un dato distinto sobre el mismo lead.
  */
-export type TrialBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
+export type ClassBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
 
 /**
- * La clase de prueba que alguien reservo desde la app.
+ * Una clase con fecha que alguien reservo desde la app.
  *
  * No hay `membershipId` ni `userId` obligatorio a proposito: quien reserva
  * todavia NO es alumno de este gimnasio, y muchas veces todavia no es nadie en
@@ -490,8 +490,8 @@ export type TrialBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
  * el dia de la clase, y la lista del mostrador tiene que seguir diciendo lo que
  * se le prometio a la persona.
  */
-export interface TrialBooking {
-  readonly id: TrialBookingId;
+export interface ClassBooking {
+  readonly id: ClassBookingId;
   readonly tenantId: TenantId;
   readonly classScheduleId: ClassScheduleId | null;
   /** Identidad Sinchi, cuando ya la tiene. `null` mientras solo es una cuenta. */
@@ -505,7 +505,7 @@ export interface TrialBooking {
   readonly endTime: LocalTime;
   /** Lo que cuesta esa clase, congelado al reservar. 0 = gratis. */
   readonly priceCents: Cents;
-  readonly status: TrialBookingStatus;
+  readonly status: ClassBookingStatus;
   readonly createdAt: Date;
 }
 
@@ -604,7 +604,7 @@ export interface Message {
  * ya piensa en sus alumnos. El `topic` cuenta por donde empezo; el hilo sigue
  * siendo el mismo cuando esa persona vuelva a preguntar otra cosa.
  *
- * `fullName` y `phone` viajan en la fila por lo mismo que en `TrialBooking`:
+ * `fullName` y `phone` viajan en la fila por lo mismo que en `ClassBooking`:
  * quien escribe puede no ser nadie en Sinchi todavia, y son lo unico con lo que
  * el gimnasio puede reconocerlo y llamarlo si el hilo se queda corto.
  */

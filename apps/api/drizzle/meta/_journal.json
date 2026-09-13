@@ -148,6 +148,13 @@
       "when": 1788566393119,
       "tag": "0020_hablar_con_el_gimnasio",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788566394119,
+      "tag": "0021_la_reserva_no_es_solo_de_prueba",
+      "breakpoints": true
     }
   ]
 }

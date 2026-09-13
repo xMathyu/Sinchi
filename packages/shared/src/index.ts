@@ -49,9 +49,9 @@ export * from './location/maps.js';
 export * from './messaging/draft.js';
 export * from './messaging/thread.js';
 
-// Clase gratis
-export * from './trial/slots.js';
-export * from './trial/validate.js';
+// Reservar una clase con fecha desde el directorio
+export * from './booking/slots.js';
+export * from './booking/validate.js';
 
 // Seguridad
 export * from './security/totp.js';

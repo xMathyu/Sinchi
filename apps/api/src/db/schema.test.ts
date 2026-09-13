@@ -683,7 +683,7 @@ describe('clase gratis', () => {
     overrides: { readonly userId?: string; readonly uid?: string; readonly date?: string } = {},
   ) =>
     db.query<{ id: string }>(
-      `insert into trial_bookings
+      `insert into class_bookings
          (tenant_id, user_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time)
        values ($1, $2, $3, 'Interesado', $4, 'Fundamentos', $5, '19:00', '20:30') returning id`,
       [
@@ -703,14 +703,14 @@ describe('clase gratis', () => {
     // pasan el `select` previo del servicio y solo el índice las separa.
     await expectRejection(
       () => reservar(TENANT, '+51900000001'),
-      /trial_bookings_one_per_phone/,
+      /class_bookings_one_per_phone/,
     );
   });
 
   it('cancelar libera el cupo', async () => {
     await setContext(TENANT, null);
     await db.query(
-      `update trial_bookings set status = 'canceled', canceled_at = now() where phone = $1`,
+      `update class_bookings set status = 'canceled', canceled_at = now() where phone = $1`,
       ['+51900000001'],
     );
 
@@ -732,12 +732,12 @@ describe('clase gratis', () => {
     await expectRejection(
       () =>
         db.query(
-          `insert into trial_bookings
+          `insert into class_bookings
              (tenant_id, full_name, phone, class_name, local_date, start_time, end_time)
            values ($1, 'Fantasma', '+51900000009', 'Fundamentos', '2026-09-01', '19:00', '20:30')`,
           [TENANT],
         ),
-      /trial_bookings_has_account/,
+      /class_bookings_has_account/,
     );
   });
 
@@ -746,12 +746,12 @@ describe('clase gratis', () => {
     await expectRejection(
       () =>
         db.query(
-          `insert into trial_bookings
+          `insert into class_bookings
              (tenant_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time, status)
            values ($1, 'uid-x', 'Sin Fecha', '+51900000010', 'Fundamentos', '2026-09-01', '19:00', '20:30', 'canceled')`,
           [TENANT],
         ),
-      /trial_bookings_canceled_has_date/,
+      /class_bookings_canceled_has_date/,
     );
   });
 
@@ -770,7 +770,7 @@ describe('clase gratis', () => {
     const { rows } = await db.query<{ qual: string; withcheck: string | null }>(
       `select pg_get_expr(polqual, polrelid) as qual,
               pg_get_expr(polwithcheck, polrelid) as withcheck
-         from pg_policy where polrelid = 'trial_bookings'::regclass`,
+         from pg_policy where polrelid = 'class_bookings'::regclass`,
     );
 
     expect(rows).toHaveLength(1);
@@ -992,7 +992,7 @@ describe('aislamiento por tenant', () => {
       'class_schedules',
       'attendance',
       'tenant_gateway',
-      'trial_bookings',
+      'class_bookings',
       'gym_events',
       'event_registrations',
       'routines',
@@ -1117,7 +1117,7 @@ describe('conversaciones', () => {
   /**
    * CASCADE y no SET NULL. Con SET NULL, borrar a quien escribio con sesion y sin
    * cuenta de Firebase violaba `conversations_has_account` y el borrado entero
-   * fallaba — que es lo que le pasa a `trial_bookings` al resetear la siembra.
+   * fallaba — que es lo que le pasa a `class_bookings` al resetear la siembra.
    */
   it('borrar a la persona se lleva sus hilos y sus mensajes', async () => {
     const persona = '44444444-4444-4444-4444-444444444444';
@@ -1138,7 +1138,7 @@ describe('conversaciones', () => {
     expect(quedan.rows[0]!.count).toBe(0);
   });
 
-  /** Como en `trial_bookings`: PGlite es superusuario, asi que se comprueban las puertas. */
+  /** Como en `class_bookings`: PGlite es superusuario, asi que se comprueban las puertas. */
   it('el hilo abre tres puertas y el mensaje se ve con su hilo', async () => {
     const { rows } = await db.query<{ table: string; qual: string; withcheck: string }>(
       `select polrelid::regclass::text as table,

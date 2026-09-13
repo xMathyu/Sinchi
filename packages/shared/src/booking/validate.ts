@@ -11,7 +11,7 @@
  */
 import { weekdayName } from '../checkin/messages.js';
 import { isoWeekday, type PlainDate } from '../time/plain-date.js';
-import type { TrialSlot } from './slots.js';
+import type { ClassSlot } from './slots.js';
 import { findSlot } from './slots.js';
 
 export type TrialDenialCode =
@@ -35,7 +35,7 @@ export type TrialDenialReason =
   | { readonly code: 'slot_not_available' };
 
 export type TrialBookingResult =
-  | { readonly allowed: true; readonly slot: TrialSlot }
+  | { readonly allowed: true; readonly slot: ClassSlot }
   | { readonly allowed: false; readonly reason: TrialDenialReason };
 
 /** La reserva que ya existe, mirada desde aqui. */
@@ -55,7 +55,7 @@ export interface TrialBookingContext {
   /** Reserva vigente en ESTE gimnasio, si la hay. Una por persona y local. */
   readonly existing: ExistingTrial | null;
   /** Las opciones reales, de `upcomingClassSlots`. */
-  readonly slots: readonly TrialSlot[];
+  readonly slots: readonly ClassSlot[];
   /** Lo que el alumno eligio. */
   readonly scheduleId: string;
   readonly date: PlainDate;
@@ -161,7 +161,7 @@ export interface TrialRescheduleContext {
   /** `false` cuando el gimnasio esta suspendido o fuera del directorio. */
   readonly gymActive: boolean;
   /** Las opciones reales, de `upcomingClassSlots`. */
-  readonly slots: readonly TrialSlot[];
+  readonly slots: readonly ClassSlot[];
   /** La hora nueva. */
   readonly scheduleId: string;
   readonly date: PlainDate;

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import type { ConversationStatus, TrialBooking } from '@sinchi/shared';
+import type { ConversationStatus, ClassBooking } from '@sinchi/shared';
 import {
   TZ_LIMA,
   encodeQrPayload,
@@ -50,7 +50,7 @@ import {
   type SaasSubscriptionDto,
   type StaffPostDto,
   type SummaryDto,
-  type TrialBookingDto,
+  type ClassBookingDto,
 } from './api';
 import { myTrialClasses } from './trials';
 import { myConversations, threadWith } from './chat';
@@ -1153,8 +1153,8 @@ export function useGym(slug: string): Carga<GymDetailDto | null> {
 }
 
 /** Las clases gratis que la persona tiene reservadas, con o sin ficha. */
-export function useMyTrialClasses(): Carga<readonly TrialBookingDto[]> {
-  return useCargaRemota<readonly TrialBookingDto[]>(
+export function useMyTrialClasses(): Carga<readonly ClassBookingDto[]> {
+  return useCargaRemota<readonly ClassBookingDto[]>(
     myTrialClasses,
     [],
     'No se pudieron traer tus clases gratis.',
@@ -1162,9 +1162,9 @@ export function useMyTrialClasses(): Carga<readonly TrialBookingDto[]> {
 }
 
 /** Quién viene a probar. La lista del mostrador: o lo que falta, o lo que pasó. */
-export function useGymTrialClasses(pastOnly = false): Carga<readonly TrialBooking[]> {
+export function useGymTrialClasses(pastOnly = false): Carga<readonly ClassBooking[]> {
   const request = useCallback(() => fetchTrials(pastOnly), [pastOnly]);
-  return useCargaRemota<readonly TrialBooking[]>(
+  return useCargaRemota<readonly ClassBooking[]>(
     request,
     [],
     'No se pudo traer la lista de clases gratis.',

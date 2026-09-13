@@ -17,7 +17,7 @@
  * Tres reglas que ordenan lo de abajo:
  *
  *  1. **Se archiva Y se borra.** Al reves que los planes: `attendance` y
- *     `trial_bookings` apuntan al bloque con ON DELETE **set null** y los dos se
+ *     `class_bookings` apuntan al bloque con ON DELETE **set null** y los dos se
  *     guardan copiado lo que importa —`class_name`, `start_time`—, asi que
  *     borrar un bloque no deja ningun historial sin explicacion. Archivar sigue
  *     existiendo para el bloque de temporada: el local que quita la clase de
@@ -221,7 +221,7 @@ export class SchedulesService {
    * Borra el bloque de verdad.
    *
    * Se permite siempre, al reves que un plan: las dos tablas que lo apuntan
-   * —`attendance` y `trial_bookings`— son ON DELETE set null y las dos llevan
+   * —`attendance` y `class_bookings`— son ON DELETE set null y las dos llevan
    * copiado lo que hace falta para leerlas despues. Lo que se pierde es el
    * enlace, no el dato, y a cambio el dueno puede limpiar el bloque que escribio
    * con el dedo torpe hace dos minutos.
@@ -261,19 +261,19 @@ export class SchedulesService {
 
     const rows = await tx
       .select({
-        scheduleId: schema.trialBookings.classScheduleId,
+        scheduleId: schema.classBookings.classScheduleId,
         count: sql<number>`count(*)::int`,
       })
-      .from(schema.trialBookings)
-      // Sin filtro de tenant: `trial_bookings` va bajo RLS y `withTenant` ya
+      .from(schema.classBookings)
+      // Sin filtro de tenant: `class_bookings` va bajo RLS y `withTenant` ya
       // puso el contexto. Repetirlo aqui solo invita a creer que hace falta.
       .where(
         and(
-          gte(schema.trialBookings.localDate, since),
-          ne(schema.trialBookings.status, 'canceled'),
+          gte(schema.classBookings.localDate, since),
+          ne(schema.classBookings.status, 'canceled'),
         ),
       )
-      .groupBy(schema.trialBookings.classScheduleId);
+      .groupBy(schema.classBookings.classScheduleId);
 
     return new Map(
       rows

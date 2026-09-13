@@ -240,7 +240,7 @@ export class OfferingController {
    * Borra el bloque de verdad, y siempre.
    *
    * Al reves que un plan: las dos tablas que lo apuntan —`attendance` y
-   * `trial_bookings`— son ON DELETE set null y llevan copiado lo que hace falta
+   * `class_bookings`— son ON DELETE set null y llevan copiado lo que hace falta
    * para leerlas despues, asi que borrar no deja ningun historial sin explicar.
    */
   @OwnerOnly()

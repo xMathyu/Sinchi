@@ -32,7 +32,7 @@ import {
   type ConversationTopic,
   type IsoWeekday,
   type PlainDate,
-  type TrialSlot,
+  type ClassSlot,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import Lock from 'lucide-react-native/icons/lock';
@@ -68,7 +68,7 @@ export default function GymScreen() {
   const wallet = useWallet();
   const hoy = useToday();
 
-  const [slot, setSlot] = useState<TrialSlot | null>(null);
+  const [slot, setSlot] = useState<ClassSlot | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('+51');
   const [submitting, setBooking] = useState(false);
@@ -831,9 +831,9 @@ function Timetable({
   /** El horario semanal del gimnasio, completo. */
   readonly schedules: readonly ClassSchedule[];
   /** Las clases que además se pueden reservar, con fecha. Vacío = no se reserva. */
-  readonly slots: readonly TrialSlot[];
-  readonly picked: TrialSlot | null;
-  readonly onPick: (slot: TrialSlot) => void;
+  readonly slots: readonly ClassSlot[];
+  readonly picked: ClassSlot | null;
+  readonly onPick: (slot: ClassSlot) => void;
   readonly hoy: PlainDate;
 }) {
   const theme = useTheme();
@@ -876,7 +876,7 @@ function Timetable({
   const date = day === null ? null : addDays(hoy, (day - isoWeekday(hoy) + 7) % 7);
 
   /** La misma clase, en esa fecha, si además se puede reservar. */
-  const reservable = (klass: ClassSchedule): TrialSlot | null => {
+  const reservable = (klass: ClassSchedule): ClassSlot | null => {
     if (date === null) return null;
     const iso = formatPlainDate(date);
     return (
@@ -1005,7 +1005,7 @@ function Timetable({
  * El `scheduleId` solo no basta —un horario se repite cada semana— y la fecha
  * sola tampoco: un día puede tener varias clases.
  */
-const isTheSame = (picked: TrialSlot | null, option: TrialSlot): boolean =>
+const isTheSame = (picked: ClassSlot | null, option: ClassSlot): boolean =>
   picked !== null &&
   picked.scheduleId === option.scheduleId &&
   picked.date.year === option.date.year &&
@@ -1087,7 +1087,7 @@ function ClassRow({
   onPress,
 }: {
   readonly klass: ClassSchedule;
-  readonly slot: TrialSlot | null;
+  readonly slot: ClassSlot | null;
   readonly selected: boolean;
   readonly onPress?: (() => void) | undefined;
 }) {

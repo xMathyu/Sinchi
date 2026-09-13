@@ -2,7 +2,7 @@
  * La suscripcion del GIMNASIO a Sinchi.
  *
  * Ojo con el nombre: `trial` en este repo es la clase gratis del ALUMNO
- * (`TrialBooking`, `trial_bookings`, `trialClassEnabled`). Esto es otra cosa —el
+ * (`kind = 'trial'` en `class_bookings`, `trialClassEnabled`). Esto es otra cosa —el
  * mes gratis del gimnasio— y por eso no reusa esa palabra. Ver `docs/glosario.md`.
  *
  * Reglas (MD 3, MD 11 fase 5):

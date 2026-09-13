@@ -103,7 +103,7 @@ export const paymentRailEnum = pgEnum('payment_rail', [
 export const checkInMethodEnum = pgEnum('check_in_method', ['qr', 'manual']);
 export const gymEventStatusEnum = pgEnum('gym_event_status', ['draft', 'published', 'canceled']);
 /**
- * Mismos valores que `trial_booking_status` y tipo propio a proposito: son dos
+ * Mismos valores que `class_booking_status` y tipo propio a proposito: son dos
  * ciclos que se parecen hoy y no tienen por que seguir pareciendose. Compartir
  * el enum ata el dia que uno de los dos necesite un estado mas.
  */
@@ -139,7 +139,7 @@ export const accountDeletionStatusEnum = pgEnum('account_deletion_status', [
   'done',
   'canceled',
 ]);
-export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
+export const classBookingStatusEnum = pgEnum('class_booking_status', [
   'booked',
   'attended',
   'no_show',
@@ -229,7 +229,7 @@ export const accountClaims = pgTable(
      * Sin unicidad a proposito: `users.phone` es la llave del alumno en el
      * padron, pero esto todavia no es un alumno — es una cuenta a medio camino.
      * Lo unico que tiene que ser unico es la reserva por gimnasio, y de eso se
-     * encarga `trial_bookings_one_per_phone`.
+     * encarga `class_bookings_one_per_phone`.
      */
     phone: text('phone'),
     /** 6 digitos: se dicta en voz alta en el mostrador. */
@@ -760,7 +760,7 @@ export const gymEvents = pgTable(
  * `attendance_once_per_day` deja una asistencia por alumno y dia, asi que quien
  * entreno el sabado por la manana no podria marcar en el seminario de esa tarde.
  *
- * Copia el nombre y el celular como `trial_bookings`, y por lo mismo: quien
+ * Copia el nombre y el celular como `class_bookings`, y por lo mismo: quien
  * reserva puede no tener ficha en ningun padron todavia.
  */
 export const eventRegistrations = pgTable(
@@ -1085,7 +1085,7 @@ export const TENANT_SCOPED_TABLES = [
   'class_schedules',
   'attendance',
   'tenant_gateway',
-  'trial_bookings',
+  'class_bookings',
   'gym_events',
   'event_registrations',
   'routines',
@@ -1145,15 +1145,16 @@ export const invites = pgTable(
 );
 
 /**
- * Clase gratis reservada desde la app.
+ * Clase con fecha reservada desde la app.
  *
  * Es el unico camino de alta que empieza FUERA del gimnasio: quien lo descubre
  * en el directorio reserva una clase, y el local se entera de que existe. Las
  * razones de que `user_id` sea opcional —y de que el nombre de la clase viaje
- * copiado— estan en la migracion 0006.
+ * copiado— estan en la migracion 0006; por que dejo de llamarse
+ * `trial_bookings`, en la 0021.
  */
-export const trialBookings = pgTable(
-  'trial_bookings',
+export const classBookings = pgTable(
+  'class_bookings',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id')
@@ -1177,7 +1178,7 @@ export const trialBookings = pgTable(
     endTime: text('end_time').notNull(),
     /** Congelado al reservar: se respeta lo que se le prometio a la persona. */
     priceCents: integer('price_cents').notNull().default(0),
-    status: trialBookingStatusEnum('status').notNull().default('booked'),
+    status: classBookingStatusEnum('status').notNull().default('booked'),
     /** Cuando se le aviso al gimnasio. Sin esto no se sabe si el correo salio. */
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
     canceledAt: timestamp('canceled_at', { withTimezone: true }),
@@ -1191,15 +1192,15 @@ export const trialBookings = pgTable(
      * telefonos a la vez es justo la carrera que un `select` previo no atrapa.
      * Parcial sobre las vigentes — cancelar libera el cupo.
      */
-    uniqueIndex('trial_bookings_one_per_phone')
+    uniqueIndex('class_bookings_one_per_phone')
       .on(t.tenantId, t.phone)
       .where(sql`status <> 'canceled'`),
-    uniqueIndex('trial_bookings_one_per_user')
+    uniqueIndex('class_bookings_one_per_user')
       .on(t.tenantId, t.userId)
       .where(sql`user_id is not null and status <> 'canceled'`),
     // "Quien viene esta semana": la consulta del mostrador.
-    index('trial_bookings_tenant_date_idx').on(t.tenantId, t.localDate),
-    index('trial_bookings_account_idx')
+    index('class_bookings_tenant_date_idx').on(t.tenantId, t.localDate),
+    index('class_bookings_account_idx')
       .on(t.firebaseUid)
       .where(sql`firebase_uid is not null`),
   ],
@@ -1258,7 +1259,7 @@ export const accountDeletionRequests = pgTable(
 /**
  * Un hilo entre una persona y un gimnasio. UNO por persona y por local.
  *
- * Misma forma que `trial_bookings` y por las mismas razones —`user_id` opcional,
+ * Misma forma que `class_bookings` y por las mismas razones —`user_id` opcional,
  * nombre y celular copiados—, porque escribe la misma gente: quien todavia no es
  * nadie en Sinchi. Por que existe y por que reemplaza al enlace de WhatsApp esta
  * en la migracion 0020.

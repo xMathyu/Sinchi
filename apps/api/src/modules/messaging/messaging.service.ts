@@ -595,8 +595,8 @@ export class MessagingService {
       withTenant(this.db, tenantId, async (tx) => {
         const [booking] = await tx
           .select()
-          .from(schema.trialBookings)
-          .where(eq(schema.trialBookings.id, bookingId))
+          .from(schema.classBookings)
+          .where(eq(schema.classBookings.id, bookingId))
           .limit(1);
         if (booking === undefined) throw new NotFoundException('No encontramos esa reserva.');
 

@@ -35,10 +35,10 @@ import type {
   SaasTier,
   Subscription,
   Tenant,
-  TrialBooking,
-  TrialBookingStatus,
+  ClassBooking,
+  ClassBookingStatus,
   TrialDenialReason,
-  TrialSlot,
+  ClassSlot,
   User,
 } from '@sinchi/shared';
 /**
@@ -340,7 +340,7 @@ export interface GymDetailDto extends GymCardDto {
   readonly plans: readonly Plan[];
   readonly schedules: readonly ClassSchedule[];
   /** Las clases concretas que se pueden reservar, ya con fecha. */
-  readonly slots: readonly TrialSlot[];
+  readonly slots: readonly ClassSlot[];
   /** Seminarios y talleres publicados que todavía no han pasado. */
   readonly events: readonly EventWithSeats[];
   /** Las rutinas PÚBLICAS: el escaparate. */
@@ -349,7 +349,7 @@ export interface GymDetailDto extends GymCardDto {
   readonly membersOnlyRoutines: number;
 }
 
-export interface TrialBookingDto extends TrialBooking {
+export interface ClassBookingDto extends ClassBooking {
   readonly gymName: string;
   readonly gymSlug: string;
 }
@@ -362,14 +362,14 @@ export interface TrialBookingDto extends TrialBooking {
  * necesita el motivo para decir si elegir otra hora o si ya la habia usado.
  */
 export type BookTrialDto =
-  | { readonly booked: true; readonly booking: TrialBookingDto }
+  | { readonly booked: true; readonly booking: ClassBookingDto }
   | {
       readonly booked: false;
       readonly reason: TrialDenialReason;
       readonly message: { readonly title: string; readonly detail: string };
     };
 
-const reviveTrial = <T extends TrialBooking>(b: T): T => ({ ...b, createdAt: date(b.createdAt) });
+const reviveTrial = <T extends ClassBooking>(b: T): T => ({ ...b, createdAt: date(b.createdAt) });
 
 const reviveBooking = (out: BookTrialDto): BookTrialDto =>
   out.booked ? { ...out, booking: reviveTrial(out.booking) } : out;
@@ -509,8 +509,8 @@ export const bookTrial = async (input: {
 }): Promise<BookTrialDto> =>
   reviveBooking(await request<BookTrialDto>('/me/trials', { method: 'POST', body: input }));
 
-export const fetchMyTrials = async (): Promise<readonly TrialBookingDto[]> =>
-  (await request<readonly TrialBookingDto[]>('/me/trials')).map(reviveTrial);
+export const fetchMyTrials = async (): Promise<readonly ClassBookingDto[]> =>
+  (await request<readonly ClassBookingDto[]>('/me/trials')).map(reviveTrial);
 
 /**
  * Las reservas de quien todavia es solo una cuenta.
@@ -518,9 +518,9 @@ export const fetchMyTrials = async (): Promise<readonly TrialBookingDto[]> =>
  * Va POST con el token en el cuerpo y no GET con el token en la URL: un ID token
  * en la query string acaba en los logs del balanceador.
  */
-export const fetchGuestTrials = async (idToken: string): Promise<readonly TrialBookingDto[]> =>
+export const fetchGuestTrials = async (idToken: string): Promise<readonly ClassBookingDto[]> =>
   (
-    await request<readonly TrialBookingDto[]>('/gyms/trials/mine', {
+    await request<readonly ClassBookingDto[]>('/gyms/trials/mine', {
       method: 'POST',
       anonymous: true,
       body: { idToken },
@@ -1551,9 +1551,9 @@ export const confirmClaim = (code: string, membershipId: string): Promise<unknow
  * no para leer el historial. `pastOnly` pide la otra mitad, y son mitades de
  * verdad: ninguna reserva sale en las dos.
  */
-export const fetchTrials = async (pastOnly = false): Promise<readonly TrialBooking[]> =>
+export const fetchTrials = async (pastOnly = false): Promise<readonly ClassBooking[]> =>
   (
-    await request<readonly TrialBooking[]>(
+    await request<readonly ClassBooking[]>(
       pastOnly ? '/staff/trials?onlyPast=true' : '/staff/trials',
     )
   ).map(reviveTrial);
@@ -1594,10 +1594,10 @@ export const setTrialClassEnabled = (
 /** Vino, no vino, o canceló. Es lo que convierte la lista en un dato. */
 export const setTrialStatus = async (
   bookingId: string,
-  status: TrialBookingStatus,
-): Promise<TrialBooking> =>
+  status: ClassBookingStatus,
+): Promise<ClassBooking> =>
   reviveTrial(
-    await request<TrialBooking>(`/staff/trials/${bookingId}/status`, {
+    await request<ClassBooking>(`/staff/trials/${bookingId}/status`, {
       method: 'POST',
       body: { status },
     }),

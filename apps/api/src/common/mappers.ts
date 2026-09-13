@@ -28,7 +28,7 @@ import {
   type Staff,
   type Subscription,
   type Tenant,
-  type TrialBooking,
+  type ClassBooking,
   type User,
 } from '@sinchi/shared';
 import type { InferSelectModel } from 'drizzle-orm';
@@ -43,7 +43,7 @@ type SubscriptionRow = InferSelectModel<typeof schema.subscriptions>;
 type ChargeRow = InferSelectModel<typeof schema.charges>;
 type ClassScheduleRow = InferSelectModel<typeof schema.classSchedules>;
 type AttendanceRow = InferSelectModel<typeof schema.attendance>;
-type TrialBookingRow = InferSelectModel<typeof schema.trialBookings>;
+type ClassBookingRow = InferSelectModel<typeof schema.classBookings>;
 type GymEventRow = InferSelectModel<typeof schema.gymEvents>;
 type RoutineRow = InferSelectModel<typeof schema.routines>;
 type RoutineItemRow = InferSelectModel<typeof schema.routineItems>;
@@ -244,7 +244,7 @@ export function toEventRegistration(row: EventRegistrationRow): EventRegistratio
   };
 }
 
-export function toTrialBooking(row: TrialBookingRow): TrialBooking {
+export function toClassBooking(row: ClassBookingRow): ClassBooking {
   return {
     id: asId(row.id),
     tenantId: asId(row.tenantId),

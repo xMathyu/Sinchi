@@ -16,7 +16,7 @@
  * ninguna salida. Es exactamente la persona que este producto quiere: la que
  * todavía no entrena en ningún sitio.
  */
-import { formatPlainDate, type TrialSlot } from '@sinchi/shared';
+import { formatPlainDate, type ClassSlot } from '@sinchi/shared';
 import {
   bookEvent,
   bookEventAsGuest,
@@ -30,7 +30,7 @@ import {
   rescheduleTrial,
   type BookEventDto,
   type BookTrialDto,
-  type TrialBookingDto,
+  type ClassBookingDto,
 } from './api';
 import {
   currentAccountDetails,
@@ -96,7 +96,7 @@ export class NoAccountError extends Error {
 
 export async function bookTrialClass(input: {
   readonly slug: string;
-  readonly slot: TrialSlot;
+  readonly slot: ClassSlot;
   /** Solo se usan como invitado. Con sesión se ignoran: ya los sabemos. */
   readonly fullName?: string;
   readonly phone?: string;
@@ -172,7 +172,7 @@ export async function bookEventSeat(input: {
 }
 
 /** Las clases gratis que tiene reservadas, vengan por donde vengan. */
-export async function myTrialClasses(): Promise<readonly TrialBookingDto[]> {
+export async function myTrialClasses(): Promise<readonly ClassBookingDto[]> {
   const credential = bookingCredential();
   if (credential.kind === 'session') return fetchMyTrials();
   if (credential.kind === 'none') return [];
@@ -188,7 +188,7 @@ export async function myTrialClasses(): Promise<readonly TrialBookingDto[]> {
  */
 export async function rescheduleTrialClass(input: {
   readonly bookingId: string;
-  readonly slot: TrialSlot;
+  readonly slot: ClassSlot;
 }): Promise<BookTrialDto> {
   const credential = bookingCredential();
   const date = formatPlainDate(input.slot.date);

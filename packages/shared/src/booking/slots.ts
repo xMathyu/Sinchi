@@ -24,7 +24,7 @@ import {
 } from '../time/plain-date.js';
 
 /** Una clase concreta, con fecha. Es lo que el alumno elige y lo que se guarda. */
-export interface TrialSlot {
+export interface ClassSlot {
   readonly scheduleId: ClassScheduleId;
   readonly name: string;
   readonly instructor: string | null;
@@ -68,12 +68,12 @@ export interface UpcomingSlotsInput {
  * Ordenadas por fecha y hora y no agrupadas por dia de la semana: quien no
  * conoce el gimnasio piensa en "el martes que viene", no en "los martes".
  */
-export function upcomingClassSlots(input: UpcomingSlotsInput): readonly TrialSlot[] {
+export function upcomingClassSlots(input: UpcomingSlotsInput): readonly ClassSlot[] {
   const days = input.days ?? TRIAL_WINDOW_DAYS;
   const lead = input.leadMinutes ?? TRIAL_LEAD_MINUTES;
   const minutesNow = minutesSinceMidnight(input.now);
 
-  const slots: TrialSlot[] = [];
+  const slots: ClassSlot[] = [];
 
   for (let offset = 0; offset < days; offset++) {
     const date = addDays(input.today, offset);
@@ -111,10 +111,10 @@ export function upcomingClassSlots(input: UpcomingSlotsInput): readonly TrialSlo
  * par es lo unico que identifica una clase concreta.
  */
 export function findSlot(
-  slots: readonly TrialSlot[],
+  slots: readonly ClassSlot[],
   scheduleId: string,
   date: PlainDate,
-): TrialSlot | null {
+): ClassSlot | null {
   const iso = formatPlainDate(date);
   return (
     slots.find(

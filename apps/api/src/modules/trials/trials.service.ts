@@ -29,9 +29,9 @@ import {
   type ClassSchedule,
   type Plan,
   type PlainDate,
-  type TrialBooking,
+  type ClassBooking,
   type TrialDenialReason,
-  type TrialSlot,
+  type ClassSlot,
 } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import {
@@ -45,7 +45,7 @@ import {
   type Database,
   type Tx,
 } from '../../db/client';
-import { toClassSchedule, toPlan, toTrialBooking } from '../../common/mappers';
+import { toClassSchedule, toPlan, toClassBooking } from '../../common/mappers';
 import { Clock } from '../../common/clock';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { MailService } from '../mail/mail.service';
@@ -85,7 +85,7 @@ export interface GymDetail extends GymCard {
   readonly plans: readonly Plan[];
   readonly schedules: readonly ClassSchedule[];
   /** Las clases concretas que se pueden reservar, con fecha. */
-  readonly slots: readonly TrialSlot[];
+  readonly slots: readonly ClassSlot[];
 }
 
 /** Quien reserva, ya identificado por el controlador. */
@@ -117,7 +117,7 @@ export interface BookInput {
  * necesita el motivo para saber que hacer. Ver `docs/api.md`.
  */
 export type BookOutcome =
-  | { readonly booked: true; readonly booking: TrialBookingView }
+  | { readonly booked: true; readonly booking: ClassBookingView }
   | {
       readonly booked: false;
       readonly reason: TrialDenialReason;
@@ -125,7 +125,7 @@ export type BookOutcome =
     };
 
 /** Una reserva con el nombre del gimnasio: la app la muestra fuera de contexto. */
-export interface TrialBookingView extends TrialBooking {
+export interface ClassBookingView extends ClassBooking {
   readonly gymName: string;
   readonly gymSlug: string;
 }
@@ -333,7 +333,7 @@ export class TrialsService {
     });
   }
 
-  private slotsFor(schedules: readonly ClassSchedule[], timezone: string): readonly TrialSlot[] {
+  private slotsFor(schedules: readonly ClassSchedule[], timezone: string): readonly ClassSlot[] {
     return upcomingClassSlots({
       schedules,
       today: this.clock.today(timezone),
@@ -412,15 +412,15 @@ export class TrialsService {
 
       const [existing] = await tx
         .select()
-        .from(schema.trialBookings)
+        .from(schema.classBookings)
         .where(
           and(
-            ne(schema.trialBookings.status, 'canceled'),
+            ne(schema.classBookings.status, 'canceled'),
             person.userId === null
-              ? eq(schema.trialBookings.phone, person.phone)
+              ? eq(schema.classBookings.phone, person.phone)
               : or(
-                  eq(schema.trialBookings.phone, person.phone),
-                  eq(schema.trialBookings.userId, person.userId),
+                  eq(schema.classBookings.phone, person.phone),
+                  eq(schema.classBookings.userId, person.userId),
                 ),
           ),
         )
@@ -461,7 +461,7 @@ export class TrialsService {
 
       try {
         const [row] = await tx
-          .insert(schema.trialBookings)
+          .insert(schema.classBookings)
           .values({
             tenantId: gym.id,
             classScheduleId: verdict.slot.scheduleId,
@@ -482,7 +482,7 @@ export class TrialsService {
 
         return {
           booked: true,
-          booking: { ...toTrialBooking(row!), gymName: gym.name, gymSlug: gym.slug },
+          booking: { ...toClassBooking(row!), gymName: gym.name, gymSlug: gym.slug },
         };
       } catch (error) {
         // La otra mitad de la regla. El `select` de arriba no ve la reserva que
@@ -598,7 +598,7 @@ export class TrialsService {
    */
   private async notify(
     gym: { readonly id: string; readonly name: string; readonly timezone: string },
-    booking: TrialBookingView,
+    booking: ClassBookingView,
     rescheduled = false,
   ): Promise<void> {
     try {
@@ -628,9 +628,9 @@ export class TrialsService {
       if (enviado.enviado) {
         await withTenant(this.db, gym.id, (tx) =>
           tx
-            .update(schema.trialBookings)
+            .update(schema.classBookings)
             .set({ notifiedAt: new Date() })
-            .where(eq(schema.trialBookings.id, booking.id)),
+            .where(eq(schema.classBookings.id, booking.id)),
         );
       }
     } catch (error) {
@@ -663,7 +663,7 @@ export class TrialsService {
   async forTenant(
     tenantId: string,
     options: { readonly onlyPast?: boolean } = {},
-  ): Promise<readonly TrialBooking[]> {
+  ): Promise<readonly ClassBooking[]> {
     return withTenant(this.db, tenantId, async (tx) => {
       const [gym] = await tx
         .select({ timezone: schema.tenants.timezone })
@@ -677,18 +677,18 @@ export class TrialsService {
         options.onlyPast === true
           ? await tx
               .select()
-              .from(schema.trialBookings)
-              .where(lt(schema.trialBookings.localDate, hoy))
-              .orderBy(desc(schema.trialBookings.localDate), schema.trialBookings.startTime)
+              .from(schema.classBookings)
+              .where(lt(schema.classBookings.localDate, hoy))
+              .orderBy(desc(schema.classBookings.localDate), schema.classBookings.startTime)
               .limit(200)
           : await tx
               .select()
-              .from(schema.trialBookings)
-              .where(gte(schema.trialBookings.localDate, hoy))
-              .orderBy(schema.trialBookings.localDate, schema.trialBookings.startTime)
+              .from(schema.classBookings)
+              .where(gte(schema.classBookings.localDate, hoy))
+              .orderBy(schema.classBookings.localDate, schema.classBookings.startTime)
               .limit(200);
 
-      return rows.map(toTrialBooking);
+      return rows.map(toClassBooking);
     });
   }
 
@@ -704,14 +704,14 @@ export class TrialsService {
    * de identidad y la de cuenta. La segunda solo se abre si `users` dice que esa
    * cuenta es suya, asi que no alcanza nada ajeno.
    */
-  async forUser(userId: string): Promise<readonly TrialBookingView[]> {
+  async forUser(userId: string): Promise<readonly ClassBookingView[]> {
     const uid = await this.firebaseUidOf(userId);
     const condition =
       uid === null
-        ? eq(schema.trialBookings.userId, userId)
+        ? eq(schema.classBookings.userId, userId)
         : or(
-            eq(schema.trialBookings.userId, userId),
-            eq(schema.trialBookings.firebaseUid, uid),
+            eq(schema.classBookings.userId, userId),
+            eq(schema.classBookings.firebaseUid, uid),
           )!;
 
     return withContext(this.db, uid === null ? { userId } : { userId, trialAccount: uid }, (tx) =>
@@ -720,9 +720,9 @@ export class TrialsService {
   }
 
   /** Las de quien todavia es solo una cuenta de Google. */
-  async forAccount(firebaseUid: string): Promise<readonly TrialBookingView[]> {
+  async forAccount(firebaseUid: string): Promise<readonly ClassBookingView[]> {
     return withTrialAccount(this.db, firebaseUid, (tx) =>
-      this.withGymNames(tx, eq(schema.trialBookings.firebaseUid, firebaseUid)),
+      this.withGymNames(tx, eq(schema.classBookings.firebaseUid, firebaseUid)),
     );
   }
 
@@ -733,17 +733,17 @@ export class TrialsService {
    * el JOIN funciona sin contexto de gimnasio, que es justo lo que no hay aqui:
    * quien mira sus reservas puede tenerlas en tres locales distintos.
    */
-  private async withGymNames(tx: Tx, condition: SQL): Promise<readonly TrialBookingView[]> {
+  private async withGymNames(tx: Tx, condition: SQL): Promise<readonly ClassBookingView[]> {
     const rows = await tx
-      .select({ booking: schema.trialBookings, name: schema.tenants.name, slug: schema.tenants.slug })
-      .from(schema.trialBookings)
-      .innerJoin(schema.tenants, eq(schema.tenants.id, schema.trialBookings.tenantId))
+      .select({ booking: schema.classBookings, name: schema.tenants.name, slug: schema.tenants.slug })
+      .from(schema.classBookings)
+      .innerJoin(schema.tenants, eq(schema.tenants.id, schema.classBookings.tenantId))
       .where(condition)
-      .orderBy(desc(schema.trialBookings.localDate))
+      .orderBy(desc(schema.classBookings.localDate))
       .limit(50);
 
     return rows.map((row) => ({
-      ...toTrialBooking(row.booking),
+      ...toClassBooking(row.booking),
       gymName: row.name,
       gymSlug: row.slug,
     }));
@@ -758,16 +758,16 @@ export class TrialsService {
     tenantId: string,
     bookingId: string,
     status: 'booked' | 'attended' | 'no_show' | 'canceled',
-  ): Promise<TrialBooking> {
+  ): Promise<ClassBooking> {
     return withTenant(this.db, tenantId, async (tx) => {
       const [row] = await tx
-        .update(schema.trialBookings)
+        .update(schema.classBookings)
         .set({ status, canceledAt: status === 'canceled' ? new Date() : null })
-        .where(eq(schema.trialBookings.id, bookingId))
+        .where(eq(schema.classBookings.id, bookingId))
         .returning();
 
       if (row === undefined) throw new NotFoundException('Esa reserva no existe.');
-      return toTrialBooking(row);
+      return toClassBooking(row);
     });
   }
 
@@ -802,12 +802,12 @@ export class TrialsService {
     const suya =
       account.kind === 'user'
         ? uid === null
-          ? eq(schema.trialBookings.userId, account.userId)
+          ? eq(schema.classBookings.userId, account.userId)
           : or(
-              eq(schema.trialBookings.userId, account.userId),
-              eq(schema.trialBookings.firebaseUid, uid),
+              eq(schema.classBookings.userId, account.userId),
+              eq(schema.classBookings.firebaseUid, uid),
             )!
-        : eq(schema.trialBookings.firebaseUid, account.uid);
+        : eq(schema.classBookings.firebaseUid, account.uid);
 
     /**
      * La reserva vive bajo la identidad de quien pide; el gimnasio se busca
@@ -824,16 +824,16 @@ export class TrialsService {
       (tx) =>
         tx
           .select({
-            id: schema.trialBookings.id,
-            tenantId: schema.trialBookings.tenantId,
+            id: schema.classBookings.id,
+            tenantId: schema.classBookings.tenantId,
           })
-          .from(schema.trialBookings)
+          .from(schema.classBookings)
           .where(
             and(
-              eq(schema.trialBookings.id, bookingId),
+              eq(schema.classBookings.id, bookingId),
               // Solo una reserva EN PIE se mueve. Una cancelada se vuelve a
               // reservar por el camino normal, y una ya atendida es historia.
-              eq(schema.trialBookings.status, 'booked'),
+              eq(schema.classBookings.status, 'booked'),
               suya,
             ),
           )
@@ -866,7 +866,7 @@ export class TrialsService {
       }
 
       const [row] = await tx
-        .update(schema.trialBookings)
+        .update(schema.classBookings)
         .set({
           classScheduleId: verdict.slot.scheduleId,
           className: verdict.slot.name,
@@ -878,12 +878,12 @@ export class TrialsService {
           // no, la columna afirmaria que el gimnasio sabe algo que no sabe.
           notifiedAt: null,
         })
-        .where(eq(schema.trialBookings.id, current.id))
+        .where(eq(schema.classBookings.id, current.id))
         .returning();
 
       return {
         booked: true,
-        booking: { ...toTrialBooking(row!), gymName: gym.name, gymSlug: gym.slug },
+        booking: { ...toClassBooking(row!), gymName: gym.name, gymSlug: gym.slug },
       };
     });
 
@@ -918,19 +918,19 @@ export class TrialsService {
     const suya =
       account.kind === 'user'
         ? uid === null
-          ? eq(schema.trialBookings.userId, account.userId)
+          ? eq(schema.classBookings.userId, account.userId)
           : or(
-              eq(schema.trialBookings.userId, account.userId),
-              eq(schema.trialBookings.firebaseUid, uid),
+              eq(schema.classBookings.userId, account.userId),
+              eq(schema.classBookings.firebaseUid, uid),
             )!
-        : eq(schema.trialBookings.firebaseUid, account.uid);
+        : eq(schema.classBookings.firebaseUid, account.uid);
 
     const run = async (tx: Tx): Promise<{ readonly canceled: true }> => {
       const [row] = await tx
-        .select({ id: schema.trialBookings.id, tenantId: schema.trialBookings.tenantId })
-        .from(schema.trialBookings)
+        .select({ id: schema.classBookings.id, tenantId: schema.classBookings.tenantId })
+        .from(schema.classBookings)
         .where(
-          and(eq(schema.trialBookings.id, bookingId), ne(schema.trialBookings.status, 'canceled'), suya),
+          and(eq(schema.classBookings.id, bookingId), ne(schema.classBookings.status, 'canceled'), suya),
         )
         .limit(1);
 
@@ -938,9 +938,9 @@ export class TrialsService {
 
       await adoptTenant(tx, row.tenantId);
       await tx
-        .update(schema.trialBookings)
+        .update(schema.classBookings)
         .set({ status: 'canceled', canceledAt: new Date() })
-        .where(eq(schema.trialBookings.id, row.id));
+        .where(eq(schema.classBookings.id, row.id));
 
       return { canceled: true };
     };

@@ -19,8 +19,8 @@ import { router } from 'expo-router';
 import {
   formatPENShort,
   isAfter,
-  type TrialBooking,
-  type TrialBookingStatus,
+  type ClassBooking,
+  type ClassBookingStatus,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import {
@@ -208,7 +208,7 @@ function TrialCard({
   booking,
   onChange,
 }: {
-  readonly booking: TrialBooking;
+  readonly booking: ClassBooking;
   readonly onChange: () => void;
 }) {
   const theme = useTheme();
@@ -232,7 +232,7 @@ function TrialCard({
    */
   const dueNow = !isAfter(booking.date, hoy) || booking.status !== 'booked';
 
-  const mark = (status: TrialBookingStatus): void => {
+  const mark = (status: ClassBookingStatus): void => {
     // Ya está en ese estado, o hay una petición en vuelo: no se manda otra.
     if (saving || booking.status === status) return;
     setSaving(true);

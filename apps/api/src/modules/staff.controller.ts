@@ -269,7 +269,7 @@ export class StaffController {
    * «por venir» y en «historial» a la vez no es mas informacion, es una duda.
    */
   @Get('trials')
-  trialBookings(@CurrentSession() session: Session, @Query('onlyPast') onlyPast?: string) {
+  classBookings(@CurrentSession() session: Session, @Query('onlyPast') onlyPast?: string) {
     return this.trials.forTenant(assertStaffSession(session).tenantId, {
       onlyPast: onlyPast === 'true',
     });
