@@ -20,6 +20,7 @@ import { OnboardingService } from './onboarding/onboarding.service';
 import { EventsService } from './events/events.service';
 import { EventRegistrationsService } from './events/registrations.service';
 import { RoutinesService } from './routines/routines.service';
+import { MessagingService } from './messaging/messaging.service';
 
 /** El mismo ID token de Firebase que consume `/auth/google`. */
 const idTokenSchema = z.object({ idToken: z.string().min(100) });
@@ -58,6 +59,20 @@ const signUpSchema = idTokenSchema.extend({
   promoCode: z.string().max(40).optional(),
 });
 
+/**
+ * Mensaje de quien todavia no tiene sesion de Sinchi.
+ *
+ * Nombre y celular, como en la reserva, solo hacen falta para ABRIR el hilo y
+ * solo si no tiene ficha: son lo que el gimnasio necesita para saber con quien
+ * habla. El tope del texto lo pone `checkMessageDraft`, con su frase.
+ */
+const guestMessageSchema = idTokenSchema.extend({
+  body: z.string().max(4000),
+  topic: z.enum(['general', 'trial', 'drop_in', 'membership', 'event']).optional(),
+  fullName: z.string().min(2).max(120).optional(),
+  phone: z.string().min(6).max(20).optional(),
+});
+
 /** La hora nueva. El gimnasio no se repite: sale de la reserva que se mueve. */
 const guestRescheduleSchema = idTokenSchema.extend({
   classScheduleId: z.string().uuid(),
@@ -85,6 +100,7 @@ export class GymsController {
     private readonly events: EventsService,
     private readonly registrations: EventRegistrationsService,
     private readonly routines: RoutinesService,
+    private readonly messaging: MessagingService,
   ) {}
 
   /**
@@ -142,6 +158,24 @@ export class GymsController {
   async mine(@Body(parseWith(idTokenSchema)) body: z.infer<typeof idTokenSchema>) {
     const identity = await this.firebase.verify(body.idToken);
     return this.trials.forAccount(identity.uid);
+  }
+
+  /**
+   * Sus conversaciones, para quien todavia no tiene ficha.
+   *
+   * POST por lo mismo que `trials/mine`: el token va en el cuerpo. Se declara
+   * antes que `:slug` para que ningun gimnasio con slug "conversations" la tape.
+   */
+  @Public()
+  @Post('conversations/mine')
+  async myConversations(@Body(parseWith(idTokenSchema)) body: z.infer<typeof idTokenSchema>) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.messaging.mine({
+      kind: 'firebase',
+      uid: identity.uid,
+      email: identity.email,
+      displayName: identity.displayName,
+    });
   }
 
   /**
@@ -313,5 +347,45 @@ export class GymsController {
       classScheduleId: body.classScheduleId,
       date: body.date,
     });
+  }
+
+  /**
+   * El hilo con este gimnasio, para quien solo tiene su cuenta de Google.
+   *
+   * Es la pregunta del curioso del directorio, y es la razon de que el chat
+   * exista: quien todavia no reservo nada no tenia ninguna forma de preguntar si
+   * hay clases de noche. Abrirlo lo marca leido.
+   */
+  @Public()
+  @Post(':slug/conversation')
+  async guestConversation(
+    @Param('slug') slug: string,
+    @Body(parseWith(idTokenSchema)) body: z.infer<typeof idTokenSchema>,
+  ) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.messaging.personThread(
+      { kind: 'firebase', uid: identity.uid, email: identity.email, displayName: identity.displayName },
+      slug,
+    );
+  }
+
+  /**
+   * Le escribe al gimnasio sin haberse inscrito ni reservado nada.
+   *
+   * Se verifica ante Firebase antes de escribir, igual que la reserva: sin una
+   * cuenta detras, la bandeja del mostrador se llena de mensajes de nadie.
+   */
+  @Public()
+  @Post(':slug/messages')
+  async guestMessage(
+    @Param('slug') slug: string,
+    @Body(parseWith(guestMessageSchema)) body: z.infer<typeof guestMessageSchema>,
+  ) {
+    const identity = await this.firebase.verify(body.idToken);
+    return this.messaging.personSend(
+      { kind: 'firebase', uid: identity.uid, email: identity.email, displayName: identity.displayName },
+      slug,
+      { body: body.body, topic: body.topic, fullName: body.fullName, phone: body.phone },
+    );
   }
 }

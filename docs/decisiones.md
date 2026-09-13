@@ -194,6 +194,11 @@ móvil. Un chat propio dentro de la app resolvería lo mismo peor: exige presenc
 notificaciones push (que todavía no existen), moderación y que las dos partes lo
 abran, mientras que WhatsApp ya está abierto en los dos teléfonos.
 
+> **Revertido en §12.** El enlace de WhatsApp salió del correo y de la tarjeta de
+> la reserva: el objetivo pasó a ser que la conversación ocurra dentro de Sinchi.
+> El párrafo de arriba se conserva porque sus objeciones —push y moderación— son
+> justo las que el chat tuvo que responder.
+
 Lo que **no** hace, a propósito: no controla aforo. Una reserva de clase gratis
 no ocupa plaza, así que MD 8.3 sigue abierto igual que antes. Con los números de
 un dojo —una o dos pruebas por semana— cobrar el aforo aquí sería construir el
@@ -606,3 +611,110 @@ el QR del local— y nunca se construyó: su `totp_secret_encrypted` no lo leía
 nadie, el TOTP que la puerta usa de verdad es el de `users`. Si el Modo B se
 construye, nacerá con las columnas que necesite en vez de heredar las que
 sobraron de otra cosa.
+
+---
+
+## 12. El chat de Sinchi: la conversación se queda en la app
+
+§7 eligió WhatsApp para coordinar la clase de prueba. Se revierte por una
+decisión de producto, no técnica: **el objetivo es que el alumno y el gimnasio se
+queden en Sinchi el mayor tiempo posible**, y el enlace `wa.me` los sacaba a los
+dos justo en el momento de más interés —la primera pregunta, la clase de mañana,
+la duda con el cobro—. Lo que se habla fuera no vuelve, y un gimnasio que
+coordina por WhatsApp aprende que Sinchi es la lista y WhatsApp la relación.
+
+Por eso el chat **reemplaza** al enlace y no convive con él: la tarjeta de la
+reserva del mostrador dice «Escribirle» donde antes abría WhatsApp, y el correo
+de la reserva manda a la app. Dos canales para lo mismo es elegir el de fuera.
+
+Y había gente que ni siquiera tenía ese enlace: el curioso del directorio que
+todavía no reservó nada —«¿hay clases de noche?, ¿cuánto cuesta el mes?», que es
+el primer paso de casi toda inscripción— y el alumno de casa con una duda que
+sale de datos que están en Sinchi.
+
+### Un hilo por persona y por gimnasio
+
+No uno por pregunta. Un dojo de sesenta alumnos no tiene a nadie que administre
+una bandeja con hilos duplicados de la misma persona. Lo que cambia según desde
+dónde se escribe —curiosidad, clase de prueba, mensualidad, clase suelta, evento—
+queda en `topic`, que se **congela** con el primer mensaje igual que `class_name`
+en la reserva: quien preguntó de curioso en enero y se inscribió en marzo no
+convierte en «consulta de alumno» lo que escribió entonces. Si es alumno HOY lo
+dice el padrón, y la bandeja lo pinta aparte (`membershipId`).
+
+Quien escribió antes de tener ficha y después se inscribe sigue en el mismo hilo:
+se busca por identidad **y** por cuenta de Firebase, igual que las reservas, y al
+conocerse su identidad se escribe en la fila.
+
+### Escribe cualquiera con cuenta, con dos frenos
+
+- **Cuenta de Google verificada**, como para reservar. Sin cuenta detrás la
+  bandeja se llena de mensajes de nadie. Nombre y celular solo al **abrir** el
+  hilo, y solo si no tiene ficha.
+- **Racha sin respuesta** (`MAX_UNANSWERED = 5`). Al quinto mensaje seguido sin
+  que el gimnasio conteste, se espera. Cinco y no uno porque el saludo, la
+  pregunta y el «ah, y otra cosa» son tres mensajes y una sola consulta.
+  Contestar la pone a cero. Era la objeción de moderación de §7.
+- Un gimnasio **fuera del directorio** no abre canal con desconocidos, pero sí con
+  quien tiene ficha: cortarle el canal a quien pagó por lo que su gimnasio le
+  deba a Sinchi es la misma injusticia que cerrar la puerta.
+
+Las tres viven en `checkMessageDraft`, con su motivo, y la corre la app antes de
+dejar enviar. El rechazo es un 400 con `{ code, message }`.
+
+### Sin push: un correo por tanda
+
+Era la otra objeción de §7, y sigue siendo cierta: un chat del que nadie se
+entera es un buzón que nadie abre. Mientras no haya push, cada mensaje nuevo
+avisa por correo al otro lado —al dueño, o a la persona si dejó correo—, pero
+**uno por tanda**: si ya salió un aviso por el primer mensaje sin leer, los
+siguientes no mandan otro hasta que el hilo se abra. Sin eso, tres mensajes
+seguidos son tres correos idénticos y el dueño aprende a ignorarlos. El correo
+lleva el texto y ningún enlace para contestar fuera: la respuesta se escribe en
+la app.
+
+Con el hilo abierto la app vuelve a preguntar cada pocos segundos. No es tiempo
+real, y para una conversación con un dojo no hace falta: websockets sin push
+resuelven la mitad del problema a cambio de mantener conexiones que el móvil
+cierra en cuanto se bloquea la pantalla.
+
+### Lo no leído se deriva
+
+Como el cupo semanal: se guarda **hasta dónde leyó** cada lado y se cuenta lo que
+llegó después. Un contador se desincroniza y deja un «3» eterno sobre una bandeja
+vacía. La marca se escribe con la hora del último mensaje **visto**, leída de la
+base: Postgres guarda microsegundos y `Date` no, y una marca un pelo anterior al
+mensaje lo dejaba sin leer para siempre (lo encontró el e2e).
+
+### Contestar no se corta en solo lectura
+
+`POST /staff/conversations/:id/messages` lleva `@AllowedWhenReadOnly()`.
+Responderle a un alumno no crea nada que Sinchi cobre, y dejarlo sin respuesta
+porque su gimnasio nos debe castiga a quien no debe nada.
+
+### La base
+
+- `messages` apunta al hilo con una **clave foránea compuesta** `(conversation_id,
+  tenant_id)`: un `tenant_id` mal puesto no puede meter un mensaje en la bandeja de
+  otro gimnasio.
+- La política de `messages` es la excepción a «sin subconsultas» de 0001: un
+  mensaje se ve si se ve su hilo. Copiar `user_id` y `firebase_uid` en cada mensaje
+  eran dos columnas más que mantener sincronizadas el día que la persona se
+  inscribe.
+- `conversations.user_id` es **ON DELETE CASCADE**, no SET NULL: con SET NULL,
+  borrar a quien escribió sin cuenta de Firebase viola `has_account` y el borrado
+  entero falla. Es lo que hoy le pasa a `trial_bookings` al resetear la siembra
+  cuando un usuario sembrado reservó con sesión en un gimnasio que no es de la
+  siembra. Ese caso queda abierto; el de aquí nace bien.
+
+### Lo que no hace
+
+- **No es tiempo real** ni tiene push (arriba).
+- **No adjunta** fotos, audios ni ubicación. Texto.
+- **No hay chat entre alumnos**, ni grupos, ni difusión a todo el padrón. El
+  mostrador escribe primero solo a alguien concreto: desde la reserva de prueba o
+  desde la ficha del alumno.
+- **No pagina** más atrás de los últimos 200 mensajes de un hilo.
+- **«Clase privada» no existe** como producto reservable. Lo que se reserva hoy es
+  la clase de prueba y la plaza de un evento; la conversación sobre una clase
+  particular entra por `drop_in` o `general` hasta que exista.

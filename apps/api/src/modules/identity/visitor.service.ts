@@ -17,7 +17,7 @@ import { schema, withoutTenantIsolation, type Database } from '../../db/client';
 import { AccountLinkService } from '../../auth/account-link.service';
 
 /** Se guarda solo con digitos y el `+`: es la llave con la que se reconoce a alguien. */
-const normalizePhone = (raw: string): string => raw.replace(/[^\d+]/g, '');
+export const normalizePhone = (raw: string): string => raw.replace(/[^\d+]/g, '');
 
 /** Quien reserva, ya identificado por el controlador. */
 export type VisitorAccount =

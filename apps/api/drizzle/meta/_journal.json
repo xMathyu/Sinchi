@@ -141,6 +141,13 @@
       "when": 1788566392119,
       "tag": "0019_fuera_el_turno_del_mostrador",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788566393119,
+      "tag": "0020_hablar_con_el_gimnasio",
+      "breakpoints": true
     }
   ]
 }

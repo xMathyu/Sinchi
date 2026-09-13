@@ -39,6 +39,8 @@ export type RoutineItemId = Id<'routine_item'>;
 export type RoutineVideoId = Id<'routine_video'>;
 export type DeviceId = Id<'device'>;
 export type StaffId = Id<'staff'>;
+export type ConversationId = Id<'conversation'>;
+export type MessageId = Id<'message'>;
 
 /** Cast explicito para bordes de I/O (HTTP, SQL). Deliberadamente feo. */
 export const asId = <T extends string>(raw: string): Id<T> => raw as Id<T>;
@@ -530,4 +532,93 @@ export interface Attendance {
    */
   readonly overrodeDenial: boolean;
   readonly syncedAt: Date | null;
+}
+
+// ---------------------------------------------------------------------------
+// Hablar con el gimnasio
+// ---------------------------------------------------------------------------
+
+/**
+ * Por donde empezo la conversacion.
+ *
+ * No es una carpeta ni una etiqueta que el gimnasio administre: es el CONTEXTO
+ * desde el que se abrio el hilo, congelado como `className` en la reserva. Quien
+ * atiende lee "pregunta desde su clase de prueba" y ya sabe si tiene delante a
+ * alguien que nunca ha pisado el local o a un alumno con una duda de su cobro, y
+ * son dos respuestas distintas escritas con dos tonos distintos.
+ *
+ * Se congela y no se deriva del estado de HOY a proposito: quien pregunto de
+ * curioso y se inscribio en marzo no convierte en "consulta de alumno" lo que
+ * escribio en enero. El estado de hoy la pantalla lo sabe igual, por el padron.
+ *
+ * `drop_in` arrastra la misma ambiguedad que en el resto del producto
+ * (`docs/glosario.md`): tanto quien no tiene mensualidad y paga cada vez, como
+ * el alumno con plan que agoto su cupo de la semana.
+ */
+export type ConversationTopic = 'general' | 'trial' | 'drop_in' | 'membership' | 'event';
+
+/**
+ * Abierta, o archivada por el mostrador.
+ *
+ * `closed` no es un candado: escribir la reabre. Es lo que saca del inbox lo ya
+ * resuelto, que es la unica forma de que un inbox de gimnasio siga siendo util
+ * al tercer mes. Cerrar como prohibicion dejaria a una persona sin canal sin
+ * haberle dicho nunca que se le cerro.
+ */
+export type ConversationStatus = 'open' | 'closed';
+
+/**
+ * De que lado vino el mensaje.
+ *
+ * `person` y no `student`, y no es un matiz de vocabulario: la mitad del valor
+ * de esto es que escriba quien TODAVIA no es alumno de nadie —el que solo
+ * pregunta cuanto cuesta y si hay clases de noche—. Llamar `student` a esa
+ * columna invita a que el dia de manana alguien filtre el inbox por el padron y
+ * haga desaparecer justo los mensajes que traen alumnos nuevos.
+ */
+export type MessageSender = 'person' | 'gym';
+
+export interface Message {
+  readonly id: MessageId;
+  readonly conversationId: ConversationId;
+  readonly sender: MessageSender;
+  /**
+   * Quien del mostrador contesto, copiado de `staff.display_name`. `null` en los
+   * de la persona.
+   *
+   * Copiado y no resuelto por `staffId`: el dojo con dos profesores rota gente,
+   * y el hilo de hace seis meses tiene que seguir diciendo quien respondio
+   * aunque esa fila de `staff` ya no exista.
+   */
+  readonly staffName: string | null;
+  readonly body: string;
+  readonly sentAt: Date;
+}
+
+/**
+ * Un hilo entre una persona y un gimnasio.
+ *
+ * UNO por persona y por gimnasio, no uno por pregunta. Un dojo de sesenta
+ * alumnos no tiene a nadie que administre una bandeja con hilos duplicados: lo
+ * que necesita es un hilo por persona con todo lo que se han dicho, que es como
+ * ya piensa en sus alumnos. El `topic` cuenta por donde empezo; el hilo sigue
+ * siendo el mismo cuando esa persona vuelva a preguntar otra cosa.
+ *
+ * `fullName` y `phone` viajan en la fila por lo mismo que en `TrialBooking`:
+ * quien escribe puede no ser nadie en Sinchi todavia, y son lo unico con lo que
+ * el gimnasio puede reconocerlo y llamarlo si el hilo se queda corto.
+ */
+export interface Conversation {
+  readonly id: ConversationId;
+  readonly tenantId: TenantId;
+  /** Identidad Sinchi, cuando ya la tiene. `null` mientras solo es una cuenta. */
+  readonly userId: UserId | null;
+  readonly fullName: string;
+  readonly phone: string;
+  readonly email: string | null;
+  readonly topic: ConversationTopic;
+  readonly status: ConversationStatus;
+  /** Con que se ordena el inbox: lo ultimo que se dijeron, no cuando se abrio. */
+  readonly lastMessageAt: Date;
+  readonly createdAt: Date;
 }

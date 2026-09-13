@@ -22,6 +22,7 @@ import { MembersService } from './members/members.service';
 import { TrialsService } from './trials/trials.service';
 import { EventRegistrationsService } from './events/registrations.service';
 import { RoutinesService } from './routines/routines.service';
+import { MessagingService } from './messaging/messaging.service';
 
 const planChangeSchema = z.object({ planId: z.string().uuid() });
 const trialSchema = z.object({
@@ -38,6 +39,17 @@ const rescheduleSchema = z.object({
 const eventBookingSchema = z.object({
   slug: z.string().min(2).max(80),
   eventId: z.string().uuid(),
+});
+/**
+ * Un mensaje al gimnasio.
+ *
+ * El tope de verdad —y su frase— lo pone `checkMessageDraft`. Aqui solo se corta
+ * lo absurdo: con el mismo 1000 que la regla, quien se pasa por un caracter
+ * recibiria el error generico de zod en vez del que le dice que acortar.
+ */
+const messageSchema = z.object({
+  body: z.string().max(4000),
+  topic: z.enum(['general', 'trial', 'drop_in', 'membership', 'event']).optional(),
 });
 /** El motivo es opcional: obligar a explicarse para irse es un peaje. */
 const deletionSchema = z.object({ reason: z.string().max(500).optional() });
@@ -59,6 +71,7 @@ export class StudentController {
     private readonly registrations: EventRegistrationsService,
     private readonly routines: RoutinesService,
     private readonly bajas: AccountDeletionService,
+    private readonly messaging: MessagingService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -321,6 +334,54 @@ export class StudentController {
     const tenantId = await this.views.resolveOwnMembership(session.sub, membershipId);
     await this.billing.cancelSubscription(tenantId, membershipId);
     return { canceled: true };
+  }
+
+  // -------------------------------------------------------------------------
+  // Mensajes
+  // -------------------------------------------------------------------------
+
+  /**
+   * Sus conversaciones, en toda la red.
+   *
+   * Sin membresia de por medio, al reves que el horario o la biblioteca: buena
+   * parte de estos hilos son con gimnasios donde NO entrena —el que le pregunto
+   * precios al de al lado— y exigir membresia dejaria fuera justo esos.
+   */
+  @Get('conversations')
+  conversations(@CurrentSession() session: Session) {
+    return this.messaging.mine({ kind: 'user', userId: session.sub });
+  }
+
+  /** La insignia de la pestana. Se declara antes que `:slug` para que no la tape. */
+  @Get('conversations/unread')
+  async unreadConversations(@CurrentSession() session: Session) {
+    return { unread: await this.messaging.unreadCount({ kind: 'user', userId: session.sub }) };
+  }
+
+  /**
+   * El hilo con UN gimnasio, por su slug. Abrirlo lo marca leido.
+   *
+   * Por slug y no por id de conversacion porque hay una por persona y gimnasio:
+   * la pantalla abre «hablar con Nova BJJ» exista o no el hilo, y la primera vez
+   * vuelve vacio con lo necesario para saber si se puede escribir.
+   */
+  @Get('conversations/:slug')
+  conversation(@CurrentSession() session: Session, @Param('slug') slug: string) {
+    return this.messaging.personThread({ kind: 'user', userId: session.sub }, slug);
+  }
+
+  /**
+   * Escribe al gimnasio. La primera vez abre el hilo.
+   *
+   * No pide nombre ni celular: ya los sabemos, igual que al reservar con sesion.
+   */
+  @Post('conversations/:slug/messages')
+  sendMessage(
+    @CurrentSession() session: Session,
+    @Param('slug') slug: string,
+    @Body(parseWith(messageSchema)) body: z.infer<typeof messageSchema>,
+  ) {
+    return this.messaging.personSend({ kind: 'user', userId: session.sub }, slug, body);
   }
 
   // -------------------------------------------------------------------------

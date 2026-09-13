@@ -48,6 +48,7 @@ import { RoutinesController } from './modules/routines/routines.controller';
 import { RoutinesService } from './modules/routines/routines.service';
 import { videoStorageProvider } from './modules/routines/video-storage';
 import { VisitorService } from './modules/identity/visitor.service';
+import { MessagingService } from './modules/messaging/messaging.service';
 import { PlacesController } from './modules/places/places.controller';
 import { PlacesService } from './modules/places/places.service';
 import { SaasGuard } from './modules/saas/saas.guard';
@@ -92,6 +93,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     PlacesService,
     videoStorageProvider,
     VisitorService,
+    MessagingService,
     RefreshDelinquencyJob,
     RefreshSaasJob,
   ],

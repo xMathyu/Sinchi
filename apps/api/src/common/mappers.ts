@@ -15,10 +15,12 @@ import {
   type Cents,
   type Charge,
   type ClassSchedule,
+  type Conversation,
   type EventRegistration,
   type GymEvent,
   type IsoWeekday,
   type Membership,
+  type Message,
   type Plan,
   type PlainDate,
   type Routine,
@@ -46,6 +48,8 @@ type GymEventRow = InferSelectModel<typeof schema.gymEvents>;
 type RoutineRow = InferSelectModel<typeof schema.routines>;
 type RoutineItemRow = InferSelectModel<typeof schema.routineItems>;
 type EventRegistrationRow = InferSelectModel<typeof schema.eventRegistrations>;
+type ConversationRow = InferSelectModel<typeof schema.conversations>;
+type MessageRow = InferSelectModel<typeof schema.messages>;
 
 /** Columnas `date` de Postgres llegan como `YYYY-MM-DD`. */
 const toDate = (value: string): PlainDate => parsePlainDate(value);
@@ -292,5 +296,38 @@ export function toRoutineItem(row: RoutineItemRow): RoutineItem {
     videoUrl: row.videoUrl,
     videoAssetId: row.videoAssetId === null ? null : asId(row.videoAssetId),
     prescription: row.prescription,
+  };
+}
+
+/**
+ * Conversacion y mensaje.
+ *
+ * Las marcas de lectura y de aviso NO salen: son contabilidad del servidor para
+ * derivar lo no leido y no mandar dos correos, y exponerlas invita a que una
+ * pantalla las compare con su propio reloj.
+ */
+export function toConversation(row: ConversationRow): Conversation {
+  return {
+    id: asId(row.id),
+    tenantId: asId(row.tenantId),
+    userId: row.userId === null ? null : asId(row.userId),
+    fullName: row.fullName,
+    phone: row.phone,
+    email: row.email,
+    topic: row.topic,
+    status: row.status,
+    lastMessageAt: row.lastMessageAt,
+    createdAt: row.createdAt,
+  };
+}
+
+export function toMessage(row: MessageRow): Message {
+  return {
+    id: asId(row.id),
+    conversationId: asId(row.conversationId),
+    sender: row.sender,
+    staffName: row.staffName,
+    body: row.body,
+    sentAt: row.createdAt,
   };
 }

@@ -139,6 +139,34 @@ Ojo con `member`: aquí significa **suscripción viva en ese gimnasio, aunque
 deba**. No es `Membership.status`, que existe y engaña —nada en el producto la
 pone en `inactive`—. La baja de un gimnasio es una suscripción cancelada.
 
+## Conceptos del chat
+
+Ojo con `person`: es el lado de quien le escribe al gimnasio, y **no** se llama
+`student` a propósito. Buena parte de quien escribe todavía no es alumno de nadie
+—el curioso del directorio—, y una columna llamada `student` invita a filtrar la
+bandeja por el padrón y perder justo los mensajes que traen alumnos nuevos.
+
+| Negocio | Código |
+|---|---|
+| conversación / chat | `Conversation` / `conversations` |
+| mensaje | `Message` / `messages` |
+| quién lo escribió | `MessageSender` (`person`, `gym`) |
+| quién del mostrador contestó | `staffName` (copiado, no resuelto) |
+| por dónde empezó (se congela) | `ConversationTopic` |
+| una duda sin inscribirse | `topic = 'general'` |
+| su clase de prueba | `topic = 'trial'` |
+| clase suelta / paga por clase | `topic = 'drop_in'` |
+| su mensualidad | `topic = 'membership'` |
+| un evento | `topic = 'event'` |
+| abierta / archivada | `ConversationStatus` (`open`, `closed`) |
+| bandeja del mostrador | `inbox` |
+| hasta dónde leyó cada lado | `personReadAt`, `gymReadAt` |
+| sin leer | `unread` / `countUnread` |
+| mensajes seguidos sin respuesta | `unansweredStreak` / `MAX_UNANSWERED` |
+| toca esperar respuesta | `MessageDenial = 'awaiting_reply'` |
+| el gimnasio no recibe mensajes | `MessageDenial = 'gym_unavailable'` |
+| aviso por correo de la tanda | `gymNotifiedAt`, `personNotifiedAt` |
+
 ## Conceptos de la suscripción del gimnasio a Sinchi
 
 Ojo con `trial`: ya es la clase gratis del **alumno**. El mes gratis del

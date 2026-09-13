@@ -135,6 +135,10 @@ arrancar con esa bandera en producción.
 | `GET` | `/me/memberships/:id/routines/:routineId` | Una rutina con sus pasos y sus videos. |
 | `POST` | `/me/memberships/:id/plan` | Cambio de plan. Devuelve la decisión completa. |
 | `POST` | `/me/memberships/:id/cancel` | Cancela. Sin congelamiento en el MVP. |
+| `GET` | `/me/conversations` | Sus hilos con gimnasios de toda la red —también con los que NO entrena—, con lo no leído y el último mensaje. |
+| `GET` | `/me/conversations/unread` | Cuántos hilos tienen algo sin leer. La insignia de la pestaña. |
+| `GET` | `/me/conversations/:slug` | El hilo con ESE gimnasio, exista o no todavía. Trae `gymOpen` y `alreadyMember` para correr `checkMessageDraft` antes de escribir. Abrirlo lo marca leído. |
+| `POST` | `/me/conversations/:slug/messages` | Escribe. La primera vez abre el hilo; `topic` solo cuenta esa vez. Un rechazo es 400 con `{ code, message }`. |
 
 ### Directorio y clase gratis (`/gyms`)
 
@@ -151,6 +155,9 @@ que es exactamente la persona que la clase gratis quiere convertir en alumno.
 | `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada y tiene un tope de cinco locales por persona. El RUC es opcional —no todo dojo tiene uno— y el que se escribe se comprueba con dígito verificador. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
 | `POST` | `/gyms/trials/:id/cancel` | Cancela la suya. Libera el cupo del gimnasio. |
+| `POST` | `/gyms/:slug/messages` | Le escribe al gimnasio sin haberse inscrito ni reservado nada. ID token de Firebase; nombre y celular solo para abrir el hilo, y solo sin ficha. |
+| `POST` | `/gyms/:slug/conversation` | El hilo con ese gimnasio, para quien solo tiene su cuenta. Abrirlo lo marca leído. |
+| `POST` | `/gyms/conversations/mine` | Sus hilos. POST por lo mismo que `trials/mine`. |
 
 Con sesión de alumno hay dos equivalentes que no vuelven a pedir el nombre ni el
 celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel`.
@@ -181,6 +188,13 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
 | `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
+| `POST` | `/staff/trials/:id/conversation` | Abre —o encuentra— el hilo con quien reservó. Reemplaza al enlace de WhatsApp. Abierta en solo lectura. |
+| `GET` | `/staff/conversations` | La bandeja: lo último hablado arriba, con lo no leído y `membershipId` si hoy es alumno. `?status=closed` trae lo archivado. |
+| `GET` | `/staff/conversations/unread` | Cuántos hilos esperan respuesta. |
+| `GET` | `/staff/conversations/:id` | Un hilo. Abrirlo lo marca leído para el gimnasio. |
+| `POST` | `/staff/conversations/:id/messages` | Contesta, firmado con el nombre de quien escribe. **Abierta en solo lectura**: contestarle a un alumno no crea nada que Sinchi cobre. |
+| `POST` | `/staff/conversations/:id/status` | Archiva (`closed`) o recupera. Cualquier mensaje nuevo lo devuelve a la bandeja. |
+| `POST` | `/staff/members/:id/conversation` | Abre el hilo con un alumno del padrón. |
 | `GET` | `/staff/routines` | La biblioteca del local, borradores incluidos. |
 | `GET` | `/staff/routines/:id` | Una rutina con sus pasos. |
 | `POST` | `/staff/routines` · `/staff/routines/:id` | Solo el dueño: crea o reescribe una rutina entera, pasos incluidos. |

@@ -998,6 +998,8 @@ describe('aislamiento por tenant', () => {
       'routines',
       'routine_items',
       'routine_videos',
+      'conversations',
+      'messages',
     ]) {
       const entry = byTable.get(table);
       expect(entry, `${table} debería tener RLS`).toBeDefined();
@@ -1029,5 +1031,130 @@ describe('aislamiento por tenant', () => {
     );
     expect(rows[0]!.tenant).toBeNull();
     await setContext(TENANT, USER);
+  });
+});
+
+describe('conversaciones', () => {
+  let uidCounter = 0;
+  const nextUid = (): string => `uid-chat-${++uidCounter}`;
+
+  const abrir = (
+    tenant: string,
+    keys: { readonly userId?: string | null; readonly uid?: string | null },
+  ) =>
+    db.query<{ id: string }>(
+      `insert into conversations (tenant_id, user_id, firebase_uid, full_name, phone)
+       values ($1, $2, $3, 'Rosa Curiosa', '+51900000099') returning id`,
+      [tenant, keys.userId ?? null, keys.uid === undefined ? nextUid() : keys.uid],
+    );
+
+  const escribir = (
+    tenant: string,
+    conversationId: string,
+    body: string,
+    firma: { readonly sender?: 'person' | 'gym'; readonly staffName?: string | null } = {},
+  ) =>
+    db.query(
+      `insert into messages (tenant_id, conversation_id, sender, staff_name, body)
+       values ($1, $2, $3, $4, $5)`,
+      [tenant, conversationId, firma.sender ?? 'person', firma.staffName ?? null, body],
+    );
+
+  it('un hilo sin identidad ni cuenta no es de nadie', async () => {
+    await expectRejection(() => abrir(TENANT, { uid: null }), /conversations_has_account/);
+  });
+
+  it('uno por persona y por gimnasio, no uno por pregunta', async () => {
+    await abrir(TENANT, { userId: USER, uid: null });
+    await expectRejection(
+      () => abrir(TENANT, { userId: USER, uid: null }),
+      /conversations_one_per_user/,
+    );
+    // En otro gimnasio es otro hilo.
+    const otro = await abrir(OTHER_TENANT, { userId: USER, uid: null });
+    expect(otro.rows).toHaveLength(1);
+  });
+
+  it('la misma cuenta sin ficha tampoco abre dos', async () => {
+    const uid = nextUid();
+    await abrir(TENANT, { uid });
+    await expectRejection(() => abrir(TENANT, { uid }), /conversations_one_per_account/);
+  });
+
+  /**
+   * La clave foranea compuesta. Con una simple sobre `conversation_id`, un
+   * `tenant_id` mal puesto dejaria el mensaje en la bandeja de otro gimnasio y la
+   * politica —que solo mira esa columna— lo serviria alli.
+   */
+  it('un mensaje no puede caer en la bandeja de otro gimnasio', async () => {
+    const { rows } = await abrir(TENANT, {});
+    await expectRejection(
+      () => escribir(OTHER_TENANT, rows[0]!.id, 'Hola'),
+      /messages_conversation_tenant/,
+    );
+    await escribir(TENANT, rows[0]!.id, 'Hola');
+  });
+
+  it('el mensaje vacio o larguisimo se rechaza, con el mismo tope que la regla', async () => {
+    const { rows } = await abrir(TENANT, {});
+    await expectRejection(() => escribir(TENANT, rows[0]!.id, '   '), /messages_body_length/);
+    await expectRejection(
+      () => escribir(TENANT, rows[0]!.id, 'a'.repeat(1001)),
+      /messages_body_length/,
+    );
+    await escribir(TENANT, rows[0]!.id, 'a'.repeat(1000));
+  });
+
+  it('un mensaje de la persona no va firmado por el mostrador', async () => {
+    const { rows } = await abrir(TENANT, {});
+    await expectRejection(
+      () => escribir(TENANT, rows[0]!.id, 'Hola', { sender: 'person', staffName: 'Carlos' }),
+      /messages_staff_only_from_gym/,
+    );
+    await escribir(TENANT, rows[0]!.id, 'Hola', { sender: 'gym', staffName: 'Carlos' });
+  });
+
+  /**
+   * CASCADE y no SET NULL. Con SET NULL, borrar a quien escribio con sesion y sin
+   * cuenta de Firebase violaba `conversations_has_account` y el borrado entero
+   * fallaba — que es lo que le pasa a `trial_bookings` al resetear la siembra.
+   */
+  it('borrar a la persona se lleva sus hilos y sus mensajes', async () => {
+    const persona = '44444444-4444-4444-4444-444444444444';
+    await db.query(
+      `insert into users (id, name, document_id, phone)
+       values ($1, 'Se Va', '70000001', '+51900000777')`,
+      [persona],
+    );
+    const { rows } = await abrir(TENANT, { userId: persona, uid: null });
+    await escribir(TENANT, rows[0]!.id, 'Me voy');
+
+    await db.query(`delete from users where id = $1`, [persona]);
+
+    const quedan = await db.query<{ count: number }>(
+      `select count(*)::int as count from messages where conversation_id = $1`,
+      [rows[0]!.id],
+    );
+    expect(quedan.rows[0]!.count).toBe(0);
+  });
+
+  /** Como en `trial_bookings`: PGlite es superusuario, asi que se comprueban las puertas. */
+  it('el hilo abre tres puertas y el mensaje se ve con su hilo', async () => {
+    const { rows } = await db.query<{ table: string; qual: string; withcheck: string }>(
+      `select polrelid::regclass::text as table,
+              pg_get_expr(polqual, polrelid) as qual,
+              pg_get_expr(polwithcheck, polrelid) as withcheck
+         from pg_policy where polrelid in ('conversations'::regclass, 'messages'::regclass)`,
+    );
+    const hilo = rows.find((row) => row.table === 'conversations')!;
+    const mensaje = rows.find((row) => row.table === 'messages')!;
+
+    expect(hilo.qual).toContain('app_current_tenant()');
+    expect(hilo.qual).toContain('app_current_user()');
+    expect(hilo.qual).toContain('app_trial_account()');
+    // Escribir exige gimnasio en los dos.
+    expect(hilo.withcheck).not.toContain('app_trial_account()');
+    expect(mensaje.qual).toContain('conversations');
+    expect(mensaje.withcheck).toContain('app_current_tenant()');
   });
 });

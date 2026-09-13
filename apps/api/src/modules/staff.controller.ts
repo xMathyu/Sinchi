@@ -21,6 +21,7 @@ import { MembersService } from './members/members.service';
 import { TrialsService } from './trials/trials.service';
 import { SaasService } from './saas/saas.service';
 import { AllowedWhenReadOnly } from './saas/saas.guard';
+import { MessagingService } from './messaging/messaging.service';
 
 const qrScanSchema = z.object({
   /** Contenido crudo del QR: `SINCHI1:u:<userId>:<code>`. */
@@ -85,6 +86,11 @@ const trialStatusSchema = z.object({
   status: z.enum(['booked', 'attended', 'no_show', 'canceled']),
 });
 
+/** La respuesta del mostrador. El tope y su frase los pone `checkMessageDraft`. */
+const replySchema = z.object({ body: z.string().max(4000) });
+
+const conversationStatusSchema = z.object({ status: z.enum(['open', 'closed']) });
+
 /** El interruptor de la clase gratis. No todos los gimnasios la dan. */
 const trialClassSchema = z.object({ enabled: z.boolean() });
 
@@ -136,6 +142,7 @@ export class StaffController {
     private readonly members: MembersService,
     private readonly trials: TrialsService,
     private readonly saas: SaasService,
+    private readonly messaging: MessagingService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -313,6 +320,97 @@ export class StaffController {
       bookingId,
       body.status,
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Mensajes
+  // -------------------------------------------------------------------------
+
+  /**
+   * La bandeja del local: lo ultimo hablado arriba.
+   *
+   * Lo abierto por defecto; `?status=closed` trae lo archivado. Las abre recepcion
+   * igual que el dueno: quien atiende el mostrador es quien contesta.
+   */
+  @Get('conversations')
+  inbox(@CurrentSession() session: Session, @Query('status') status?: string) {
+    return this.messaging.inbox(
+      assertStaffSession(session).tenantId,
+      status === 'closed' ? 'closed' : 'open',
+    );
+  }
+
+  /** Cuantos hilos esperan respuesta. Antes que `:conversationId`. */
+  @Get('conversations/unread')
+  async inboxUnread(@CurrentSession() session: Session) {
+    return { unread: await this.messaging.inboxUnread(assertStaffSession(session).tenantId) };
+  }
+
+  /** Un hilo. Abrirlo lo marca leido para el gimnasio. */
+  @Get('conversations/:conversationId')
+  conversation(
+    @CurrentSession() session: Session,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+  ) {
+    return this.messaging.gymThread(assertStaffSession(session).tenantId, conversationId);
+  }
+
+  /**
+   * Contesta.
+   *
+   * Abierta en solo lectura, y no por descuido: contestarle a un alumno que
+   * pregunta no crea nada nuevo que Sinchi cobre, y dejarlo sin respuesta porque
+   * su gimnasio nos debe es cortarle el canal a quien no debe nada — la misma
+   * promesa que la puerta.
+   */
+  @AllowedWhenReadOnly()
+  @Post('conversations/:conversationId/messages')
+  reply(
+    @CurrentSession() session: Session,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body(parseWith(replySchema)) body: z.infer<typeof replySchema>,
+  ) {
+    return this.messaging.reply(assertStaffSession(session), conversationId, body.body);
+  }
+
+  /** Archiva o recupera. Ordenar la propia bandeja tampoco se corta. */
+  @AllowedWhenReadOnly()
+  @Post('conversations/:conversationId/status')
+  setConversationStatus(
+    @CurrentSession() session: Session,
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Body(parseWith(conversationStatusSchema)) body: z.infer<typeof conversationStatusSchema>,
+  ) {
+    return this.messaging.setStatus(
+      assertStaffSession(session).tenantId,
+      conversationId,
+      body.status,
+    );
+  }
+
+  /**
+   * Abre el hilo con quien reservo una clase de prueba.
+   *
+   * Reemplaza al celular que abria WhatsApp en la tarjeta de la reserva. Nunca
+   * estuvo cortado en solo lectura, y lo que lo reemplaza tampoco.
+   */
+  @AllowedWhenReadOnly()
+  @Post('trials/:bookingId/conversation')
+  openTrialConversation(
+    @CurrentSession() session: Session,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+  ) {
+    return this.messaging.openForTrialBooking(assertStaffSession(session).tenantId, bookingId);
+  }
+
+  /** Lo mismo desde la ficha de un alumno. */
+  @AllowedWhenReadOnly()
+  @Post('members/:membershipId/conversation')
+  openMemberConversation(
+    @CurrentSession() session: Session,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ) {
+    return this.messaging.openForMember(assertStaffSession(session).tenantId, membershipId);
   }
 
   // -------------------------------------------------------------------------

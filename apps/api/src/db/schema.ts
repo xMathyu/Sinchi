@@ -21,6 +21,7 @@ import {
   boolean,
   date,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -144,6 +145,20 @@ export const trialBookingStatusEnum = pgEnum('trial_booking_status', [
   'no_show',
   'canceled',
 ]);
+/**
+ * Por donde empezo una conversacion. Se congela: ver `ConversationTopic` en
+ * `@sinchi/shared`.
+ */
+export const conversationTopicEnum = pgEnum('conversation_topic', [
+  'general',
+  'trial',
+  'drop_in',
+  'membership',
+  'event',
+]);
+export const conversationStatusEnum = pgEnum('conversation_status', ['open', 'closed']);
+/** `person` y no `student`: escribe tambien quien todavia no es alumno de nadie. */
+export const messageSenderEnum = pgEnum('message_sender', ['person', 'gym']);
 
 // ---------------------------------------------------------------------------
 // Identidad global
@@ -1233,5 +1248,87 @@ export const accountDeletionRequests = pgTable(
       .on(t.userId)
       .where(sql`status = 'pending'`),
     index('account_deletion_requests_status_idx').on(t.status, t.requestedAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Hablar con el gimnasio
+// ---------------------------------------------------------------------------
+
+/**
+ * Un hilo entre una persona y un gimnasio. UNO por persona y por local.
+ *
+ * Misma forma que `trial_bookings` y por las mismas razones —`user_id` opcional,
+ * nombre y celular copiados—, porque escribe la misma gente: quien todavia no es
+ * nadie en Sinchi. Por que existe y por que reemplaza al enlace de WhatsApp esta
+ * en la migracion 0020.
+ */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    /** CASCADE a proposito, no SET NULL: ver 0020. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    firebaseUid: text('firebase_uid'),
+    fullName: text('full_name').notNull(),
+    phone: text('phone').notNull(),
+    email: text('email'),
+    topic: conversationTopicEnum('topic').notNull().default('general'),
+    status: conversationStatusEnum('status').notNull().default('open'),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Hasta donde leyo cada lado. Lo no leido se deriva de aqui, no se cuenta. */
+    personReadAt: timestamp('person_read_at', { withTimezone: true }),
+    gymReadAt: timestamp('gym_read_at', { withTimezone: true }),
+    /** El ultimo correo de aviso a cada lado. Uno por tanda de mensajes sin leer. */
+    gymNotifiedAt: timestamp('gym_notified_at', { withTimezone: true }),
+    personNotifiedAt: timestamp('person_notified_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('conversations_one_per_user')
+      .on(t.tenantId, t.userId)
+      .where(sql`user_id is not null`),
+    uniqueIndex('conversations_one_per_account')
+      .on(t.tenantId, t.firebaseUid)
+      .where(sql`user_id is null and firebase_uid is not null`),
+    index('conversations_tenant_activity_idx').on(t.tenantId, t.lastMessageAt.desc()),
+    index('conversations_user_idx')
+      .on(t.userId)
+      .where(sql`user_id is not null`),
+    index('conversations_account_idx')
+      .on(t.firebaseUid)
+      .where(sql`firebase_uid is not null`),
+    uniqueIndex('conversations_id_tenant_key').on(t.id, t.tenantId),
+  ],
+);
+
+export const messages = pgTable(
+  'messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull(),
+    conversationId: uuid('conversation_id').notNull(),
+    sender: messageSenderEnum('sender').notNull(),
+    /** Quien del mostrador contesto. `null` en los de la persona. */
+    staffId: uuid('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    /** Copiado: el hilo sigue diciendo quien respondio aunque ya no trabaje ahi. */
+    staffName: text('staff_name'),
+    body: text('body').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    /**
+     * Compuesta a proposito: un `tenant_id` mal puesto no puede meter el mensaje
+     * en la bandeja de otro gimnasio. Ver 0020.
+     */
+    foreignKey({
+      name: 'messages_conversation_tenant',
+      columns: [t.conversationId, t.tenantId],
+      foreignColumns: [conversations.id, conversations.tenantId],
+    }).onDelete('cascade'),
+    index('messages_thread_idx').on(t.conversationId, t.createdAt),
   ],
 );

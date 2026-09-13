@@ -143,11 +143,10 @@ export class MailService {
       return { enviado: false, denial: 'El envío por correo no está configurado.' };
     }
 
-    // Enlace de WhatsApp: es por donde se coordina de verdad en este mercado, y
-    // el dueño lee este correo en el móvil. Sin esto tendría que copiar el
-    // número a mano justo cuando quiere responder rápido.
-    const digitsOnly = input.telefono.replace(/\D/g, '');
-    const whatsapp = digitsOnly.length >= 9 ? `https://wa.me/${digitsOnly}` : null;
+    // Sin enlace de WhatsApp, y es a propósito: llevaba al dueño a coordinar
+    // FUERA de Sinchi justo con quien acaba de llegar por Sinchi. La respuesta
+    // va por el chat de la app (migración 0020); el celular sigue en el correo
+    // porque es un dato de la persona, no una invitación a salir.
     const free = input.priceCents === 0;
 
     const change = input.rescheduled === true;
@@ -161,7 +160,6 @@ export class MailService {
       `Cuándo:   ${input.when}, ${input.time}`,
       `Celular:  ${input.telefono}`,
       `Cobro:    ${free ? 'gratis' : `S/ ${(input.priceCents / 100).toFixed(2)} al llegar`}`,
-      ...(whatsapp === null ? [] : ['', `Escríbele: ${whatsapp}`]),
       '',
       ...(change
         ? [
@@ -173,7 +171,8 @@ export class MailService {
             'de Sinchi y eligió este horario.',
           ]),
       '',
-      'La lista completa de quién viene está en la app, en Clases de prueba.',
+      'Escríbele desde la app: en Clases de prueba, toca «Escribirle» en su',
+      'reserva. La lista completa de quién viene también está ahí.',
     ].join('\n');
 
     try {
@@ -210,6 +209,105 @@ export class MailService {
     } catch (error) {
       const denial = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
       this.logger.warn(`No se pudo avisar a ${input.recipient}: ${denial}`);
+      return { enviado: false, denial };
+    }
+  }
+
+  /**
+   * Avisa de un mensaje nuevo en el chat, a quien le toca leerlo.
+   *
+   * Es la mitad que la migración 0020 le debe a la decisión vieja: sin push, un
+   * chat del que nadie se entera es un buzón que nadie abre. El servicio decide
+   * CUÁNDO —uno por tanda de mensajes sin leer—; aquí solo se dice.
+   *
+   * Lleva el texto del mensaje y NO un enlace para contestar por correo ni por
+   * WhatsApp: la respuesta se escribe en la app, que es donde queremos que esté
+   * la conversación entera.
+   */
+  async notifyMessage(input: {
+    readonly recipient: string;
+    /** A quién va: al gimnasio, o a la persona que le escribió. */
+    readonly audience: 'gym' | 'person';
+    readonly gym: string;
+    readonly personName: string;
+    /** «Clase de prueba», «Consulta»…: por dónde empezó, ya en palabras. */
+    readonly topic: string;
+    /** Quién del mostrador contestó, cuando va a la persona. */
+    readonly staffName: string | null;
+    readonly body: string;
+  }): Promise<SendOutcome> {
+    // Lo justo para decidir si abrir la app ya. El mensaje entero está allí.
+    const preview =
+      input.body.length > 280 ? `${input.body.slice(0, 277).trimEnd()}…` : input.body;
+    const firstName = input.personName.trim().split(/\s+/)[0] ?? input.personName;
+
+    const toGym = input.audience === 'gym';
+    const subject = toGym
+      ? `Mensaje de ${input.personName} en Sinchi`
+      : `${input.gym} te respondió en Sinchi`;
+    const text = toGym
+      ? [
+          `${input.personName} te escribió en Sinchi.`,
+          '',
+          `Sobre:  ${input.topic}`,
+          '',
+          `«${preview}»`,
+          '',
+          'Respóndele desde la app, en Mensajes. La conversación está entera allí,',
+          'y no te llegará otro correo por lo que siga escribiendo hasta que la abras.',
+        ].join('\n')
+      : [
+          `Hola ${firstName},`,
+          '',
+          `${input.gym} te respondió en Sinchi:`,
+          '',
+          `«${preview}»`,
+          ...(input.staffName === null ? [] : [`— ${input.staffName}`]),
+          '',
+          'Abre Sinchi para seguir la conversación: está en Mensajes.',
+        ].join('\n');
+
+    return this.deliver(input.recipient, subject, text);
+  }
+
+  /**
+   * Un correo en texto plano, sin poder lanzar.
+   *
+   * Solo lo usa el aviso de mensajes. Las dos de arriba llevan su propia copia
+   * del mismo `fetch`, y juntarlas no es parte de este cambio: son correos que ya
+   * salen bien y que no hay por qué tocar para añadir uno.
+   */
+  private async deliver(recipient: string, subject: string, text: string): Promise<SendOutcome> {
+    const env = loadEnv();
+    if (env.RESEND_API_KEY === undefined) {
+      return { enviado: false, denial: 'El envío por correo no está configurado.' };
+    }
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from: env.MAIL_FROM, to: [recipient], subject, text }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        const denial =
+          typeof body === 'object' && body !== null && 'message' in body
+            ? String((body as { message: unknown }).message)
+            : `Resend respondió ${response.status}.`;
+        this.logger.warn(`No se pudo avisar a ${recipient}: ${denial}`);
+        return { enviado: false, denial };
+      }
+
+      return { enviado: true, denial: null };
+    } catch (error) {
+      const denial = error instanceof Error ? error.message : 'No se pudo llegar a Resend.';
+      this.logger.warn(`No se pudo avisar a ${recipient}: ${denial}`);
       return { enviado: false, denial };
     }
   }
