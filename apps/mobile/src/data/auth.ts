@@ -33,6 +33,7 @@ import {
 } from './firebase';
 import {
   clearSession,
+  currentFirebaseToken,
   forgetDeviceToken,
   loadAccountDetails,
   loadFirebaseCredential,
@@ -44,6 +45,46 @@ import {
 } from './session';
 import { forgetSecret, loadSecret, storeSecret } from './crypto';
 import { resetState } from './store';
+
+/**
+ * Una credencial de Firebase FRESCA, tenga ficha esta persona o no.
+ *
+ * Existe por un callejon con nombre propio: el dueno de un gimnasio TAMBIEN
+ * puede ser alumno de otro. `currentFirebaseToken()` solo devuelve algo en el
+ * estado `unlinked` —el de quien acaba de crear la cuenta y no tiene ficha en
+ * ningun padron— asi que quien ya entrenaba en algun sitio no podia firmar el
+ * alta de su propio local: llenaba el formulario entero y el POST respondia
+ * 401 al final. Y el mismo null apagaba en silencio el buscador de direcciones.
+ *
+ * La credencial estaba ahi todo el tiempo. `exchangeForSinchiSession` guarda el
+ * refresh token de Firebase ANTES de saber si hay ficha, precisamente porque
+ * sirve en los dos casos, asi que se acuna un idToken nuevo con el. Acunar y no
+ * guardar el viejo: el idToken dura una hora y quien abrio la app el martes
+ * tendria uno vencido, que la api rechaza igual que si no hubiera ninguno.
+ *
+ * La api ya sabia recibirlo — `resolveOwner` engancha la cuenta a la identidad
+ * que ya existe en vez de duplicarla, con su comentario diciendo «ya tenia ficha
+ * en algun gimnasio y ahora abre el suyo».
+ *
+ * `null` cuando no hay ninguna via: entro por el codigo de 6 digitos o por el
+ * mostrador, y de esos caminos no sale una credencial de Firebase. Quien lo
+ * llama tiene que saber seguir sin ella.
+ */
+export async function firebaseSigningToken(): Promise<string | null> {
+  // Con la sesion en `unlinked` esta a mano y es reciente: no hay nada que pedir.
+  const atHand = currentFirebaseToken();
+  if (atHand !== null) return atHand;
+
+  const refreshToken = await loadFirebaseCredential();
+  if (refreshToken === null) return null;
+
+  try {
+    return await refreshIdToken(refreshToken);
+  } catch {
+    // Sin red, o con la credencial revocada. Es una ayuda, no un camino unico.
+    return null;
+  }
+}
 
 export type SignInOutcome =
   | { readonly kind: 'signed_in' }

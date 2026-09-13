@@ -327,7 +327,15 @@ es gratis» en un dojo el martes tiene que poder empezar el martes.
 Es la única ruta pública que crea un tenant, así que la fricción no es
 burocracia: es lo único que separa un padrón real de una tabla de pruebas.
 
-- **Cuenta de Google verificada**, igual que para reservar una clase gratis.
+- **Cuenta de Google verificada**, igual que para reservar una clase gratis. Vale
+  también la de quien ya entrena en otro gimnasio: el dueño de un dojo puede ser
+  alumno de otro, y `resolveOwner` engancha el local a la identidad que ya existe
+  en vez de duplicarla. La app tardó en permitirlo —firmaba el alta con una
+  credencial que solo existe para quien no tiene ficha en ningún padrón, así que
+  esa persona llenaba el formulario entero para chocar con un 401 en el último
+  toque—; ahora la acuña del refresh token de Firebase, que se guarda en los dos
+  casos. La única vía sin salida es entrar por el código de 6 dígitos, que no
+  deja ninguna credencial, y eso se dice en la primera pantalla.
 - **RUC opcional, y comprobado de verdad si lo dan.** Empezó siendo obligatorio
   con la columna en `NOT NULL`, y lo que produjo fue lo contrario de lo que
   buscaba: este mismo repo se lo saltó tres veces —Kaizen y Fa Meng Chuen con

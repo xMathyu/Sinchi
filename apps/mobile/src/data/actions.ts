@@ -96,6 +96,7 @@ import {
   type SummaryDto,
 } from './api';
 import { currentFirebaseToken, getSessionState, saveSession } from './session';
+import { firebaseSigningToken } from './auth';
 import {
   cancelSubscription as cancelSubscriptionLocal,
   changePlan as changePlanLocal,
@@ -499,9 +500,22 @@ export const redeemCode = (code: string): Promise<RedeemPromoDto> => redeemPromo
 export async function registerGym(
   input: Omit<SignUpGymInput, 'idToken'>,
 ): Promise<SignUpGymDto> {
-  const idToken = currentFirebaseToken();
+  /**
+   * Vale CUALQUIER credencial de Firebase de esta persona, no solo la de quien
+   * acaba de crear la cuenta.
+   *
+   * Usaba `currentFirebaseToken()`, que solo devuelve algo en `unlinked`, y eso
+   * cerraba la puerta a quien ya entrenaba en otro local: el dueno de un
+   * gimnasio tambien puede ser alumno, y ese caso llenaba el formulario entero
+   * para chocar con un 401 en el ultimo toque. La api nunca lo rechazo — su
+   * `resolveOwner` engancha la cuenta a la identidad que ya existe.
+   */
+  const idToken = await firebaseSigningToken();
   if (idToken === null) {
-    throw new ApiError(401, 'Entra con Google antes de registrar tu gimnasio.');
+    throw new ApiError(
+      401,
+      'Entra con Google o con tu correo antes de registrar tu gimnasio.',
+    );
   }
 
   const signUp = await signUpGym({ ...input, idToken });

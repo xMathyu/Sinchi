@@ -90,6 +90,8 @@ interface SignUpInput {
   /** El pin del mapa del alta, si se marca. */
   readonly latitude?: number;
   readonly longitude?: number;
+  /** Su documento. Se fija cuando la prueba necesita que sea la MISMA persona. */
+  readonly documentId?: string;
 }
 
 const signUp = async (input: SignUpInput) => {
@@ -104,7 +106,7 @@ const signUp = async (input: SignUpInput) => {
     ...(input.latitude === undefined ? {} : { latitude: input.latitude }),
     ...(input.longitude === undefined ? {} : { longitude: input.longitude }),
     ownerName: `Dueño ${input.uid}`,
-    documentId: nextValue(),
+    documentId: input.documentId ?? nextValue(),
     phone: `+519${nextValue().slice(0, 8)}`,
     ...(input.promoCode === undefined ? {} : { promoCode: input.promoCode }),
   });
@@ -278,6 +280,86 @@ suite('dar de alta un gimnasio desde la app', () => {
 
     expect(status).toBe(400);
     expect(body.message).toContain('RUC');
+  });
+
+  /**
+   * El alumno de un gimnasio abre el SUYO, con la misma cuenta.
+   *
+   * Es el caso que Mathyu marcó como requisito: «un dueño de gimnasio también
+   * puede ser alumno y unirse a gimnasios». La api ya lo contemplaba —
+   * `resolveOwner` engancha el local a la identidad que ya existe en vez de
+   * duplicarla— pero no había ninguna prueba que lo fijara, y la app sí lo
+   * impedía: firmaba el alta con una credencial que solo existe para quien no
+   * tiene ficha en ningún padrón, así que esta persona llenaba el formulario
+   * entero para chocar con un 401 en el último toque.
+   *
+   * Lo que se fija aquí es que NO se parta en dos: una sola fila en `users`, su
+   * historial entero, y el local nuevo a su nombre.
+   */
+  it('un alumno de otro gimnasio abre el suyo sin duplicarse como persona', async () => {
+    const { schema, withoutTenantIsolation } = await import('./db/client');
+    const { DATABASE } = await import('./db/db.module');
+    const db = app.get(DATABASE);
+
+    // Un gimnasio que ya existe, con su tarifa escrita por su dueño.
+    const { body: gimnasioAjeno } = await signUp({
+      uid: `dueno-${runId}-anfitrion`,
+      gymName: `Dojo Anfitrión ${runId}`,
+      taxId: RUC[1]!,
+    });
+    const { body: plan } = await http
+      .post('/v1/staff/plans')
+      .set(auth(gimnasioAjeno.session.accessToken))
+      .send({
+        name: 'Mensualidad',
+        type: 'unlimited',
+        sessionsPerWeek: null,
+        allowedDays: null,
+        priceCents: 12_000,
+      })
+      .expect(201);
+
+    // Y una alumna suya, dada de alta por el mostrador: está en `users` sin
+    // cuenta de Google, que es como llega la mayoría.
+    const documentId = nextValue();
+    await http
+      .post('/v1/staff/members')
+      .set(auth(gimnasioAjeno.session.accessToken))
+      .send({
+        name: 'Alumna que enseña aparte',
+        documentId,
+        phone: `+519${nextValue().slice(0, 8)}`,
+        planId: plan.id,
+      })
+      .expect(201);
+
+    const antes = await withoutTenantIsolation(db, (tx) =>
+      tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.documentId, documentId)),
+    );
+    expect(antes).toHaveLength(1);
+
+    // Ahora abre el suyo, con su MISMO documento y su cuenta.
+    const { body, status } = await signUp({
+      uid: `alumna-${runId}-abre-el-suyo`,
+      gymName: `Dojo De La Alumna ${runId}`,
+      taxId: RUC[2]!,
+      documentId,
+    });
+
+    expect(status).toBe(201);
+    expect(body.session.role).toBe('owner');
+
+    // UNA sola persona, la de siempre, ahora con su cuenta enganchada. Dos filas
+    // serían dos historiales y un alumno que no se reconoce a sí mismo.
+    const despues = await withoutTenantIsolation(db, (tx) =>
+      tx
+        .select({ id: schema.users.id, firebaseUid: schema.users.firebaseUid })
+        .from(schema.users)
+        .where(eq(schema.users.documentId, documentId)),
+    );
+    expect(despues).toHaveLength(1);
+    expect(despues[0]!.id).toBe(antes[0]!.id);
+    expect(despues[0]!.firebaseUid).toBe(`alumna-${runId}-abre-el-suyo`);
   });
 
   it('dos gimnasios con el mismo nombre no comparten dirección', async () => {

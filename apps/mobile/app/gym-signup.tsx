@@ -52,9 +52,13 @@ import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/pr
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import { registerGym } from '../src/data/actions';
-import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
+import {
+  completeEmailSignIn,
+  completeGoogleSignIn,
+  firebaseSigningToken,
+} from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
-import { currentAccountDetails, currentFirebaseToken } from '../src/data/session';
+import { currentAccountDetails } from '../src/data/session';
 import { useDebounced } from '../src/lib/debounce';
 import { GpsButton, MapPicker, type MapPoint } from '../src/design/map-picker';
 import { fetchPlaceDetail, suggestPlaces, type PlaceSuggestionDto } from '../src/data/api';
@@ -81,6 +85,15 @@ type Step = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
 type SignUpField = 'name' | 'taxId' | 'documentId' | 'address';
+
+/**
+ * Lo que se dice al tocar el boton apagado.
+ *
+ * Es el mismo texto del aviso de arriba a proposito: quien toca un boton que no
+ * responde mira el boton, no la tarjeta de hace dos parrafos.
+ */
+const SIN_CREDENCIAL =
+  'Entraste con el código que te dio tu gimnasio, y con eso no podemos firmar el registro. Sal de la sesión y vuelve a entrar con Google o con tu correo: es la misma cuenta y no pierdes nada.';
 
 /** Lo mínimo que se acepta como dirección. «Lima» son cuatro y no lleva a nadie. */
 const ADDRESS_MIN = 10;
@@ -155,34 +168,37 @@ export default function GymSignUpScreen() {
     }
 
     /**
-     * El buscador exige la credencial de Firebase, y ahi estaba el fallo.
+     * La credencial de Firebase, ACUNANDOLA si hace falta.
      *
-     * `currentFirebaseToken()` solo devuelve algo con la sesion en `unlinked`, y
-     * ese estado nace UNICAMENTE al crear la cuenta. Quien llega al paso de
-     * datos por otro camino no la tiene, asi que el buscador no podia trabajar —
-     * y se callaba, que es lo que lo hizo indiagnosticable.
+     * Usaba `currentFirebaseToken()`, que solo devuelve algo con la sesion en
+     * `unlinked` —el estado de quien acaba de crear la cuenta—, asi que a quien
+     * llegaba aqui por cualquier otro camino el buscador no le funcionaba nunca
+     * y ademas se callaba. `firebaseSigningToken()` la saca del refresh token
+     * guardado, que existe tambien con ficha: es la misma pieza que dejo firmar
+     * el alta a quien ya entrena en otro local.
      */
-    const idToken = currentFirebaseToken();
-    if (idToken === null) {
-      setSuggestions([]);
-      setSearchDenial(
-        'El buscador necesita tu cuenta. Escribe la dirección y marca tu puerta en el mapa: funciona igual.',
-      );
-      return;
-    }
-
     let cancelled = false;
-    void suggestPlaces({ idToken, query })
-      .then((found) => {
+    void firebaseSigningToken()
+      .then((idToken) => {
         if (cancelled) return;
-        setSuggestions(found);
-        // Cero resultados NO es un fallo: en Lima el pasaje sin nombre no lo
-        // encuentra ningun buscador, y por eso existe el pin a mano.
-        setSearchDenial(
-          found.length === 0
-            ? 'No encontramos esa dirección. Déjala escrita y marca tu puerta en el mapa.'
-            : null,
-        );
+        if (idToken === null) {
+          setSuggestions([]);
+          setSearchDenial(
+            'El buscador necesita tu cuenta. Escribe la dirección y marca tu puerta en el mapa: funciona igual.',
+          );
+          return;
+        }
+        return suggestPlaces({ idToken, query }).then((found) => {
+          if (cancelled) return;
+          setSuggestions(found);
+          // Cero resultados NO es un fallo: en Lima el pasaje sin nombre no lo
+          // encuentra ningun buscador, y por eso existe el pin a mano.
+          setSearchDenial(
+            found.length === 0
+              ? 'No encontramos esa dirección. Déjala escrita y marca tu puerta en el mapa.'
+              : null,
+          );
+        });
       })
       .catch(() => {
         // El buscador es una AYUDA: si se cae, se escribe a mano y se mueve el
@@ -200,7 +216,6 @@ export default function GymSignUpScreen() {
 
   /** Toca una sugerencia: se rellena la direccion y el pin se va a su sitio. */
   const pickSuggestion = (suggestion: PlaceSuggestionDto): void => {
-    const idToken = currentFirebaseToken();
     setSuggestions([]);
     setSearchDenial(null);
     setAddressPicked(true);
@@ -211,16 +226,17 @@ export default function GymSignUpScreen() {
         ? suggestion.mainText
         : `${suggestion.mainText}, ${suggestion.secondaryText}`,
     );
-    if (idToken === null) return;
-
-    void fetchPlaceDetail({ idToken, placeId: suggestion.placeId })
-      .then((detail) => {
-        setAddress(detail.address);
-        const point = { lat: detail.latitude, lng: detail.longitude };
-        setPin(point);
-        // Sin esto el marcador aparecía y la cámara se quedaba mirando Lima
-        // entera: el mapa dejaba de servir para corroborar nada.
-        setFocus(point);
+    void firebaseSigningToken()
+      .then((idToken) => {
+        if (idToken === null) return;
+        return fetchPlaceDetail({ idToken, placeId: suggestion.placeId }).then((detail) => {
+          setAddress(detail.address);
+          const point = { lat: detail.latitude, lng: detail.longitude };
+          setPin(point);
+          // Sin esto el marcador aparecía y la cámara se quedaba mirando Lima
+          // entera: el mapa dejaba de servir para corroborar nada.
+          setFocus(point);
+        });
       })
       .catch(() => {
         // Se queda lo que ya se escribio y el pin a mano. Ver `places.service`.
@@ -235,20 +251,48 @@ export default function GymSignUpScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Quien llega ya vinculado a un padron no puede registrar un gimnasio.
-   *
-   * `currentFirebaseToken` —lo que firma el alta— solo existe en el estado
-   * `unlinked`. No se arregla aqui; se avisa antes de que llene cinco campos
-   * para nada.
-   */
+  /** Sin cuenta de ningun tipo: hay que crearla antes de nada. */
   const needsAccount = session.status === 'signed_out';
   /**
-   * Solo `signed_in` es el callejon: una cuenta con ficha en un padron. Ni
-   * `loading` ni `demo` lo son, y tratarlos como tal pintaba el aviso durante el
-   * arranque y en el modo de demostracion, donde no significa nada.
+   * Ya tiene ficha en algun padron, o sea que ademas es alumno.
+   *
+   * Dejo de ser un callejon: se le acuña la credencial de Firebase y el alta se
+   * firma igual. Se sigue distinguiendo porque a esta persona hay que DECIRLE
+   * que su local queda a nombre de la misma cuenta — si no, la duda razonable es
+   * si tiene que registrarse otra vez con otro correo.
+   *
+   * Solo `signed_in`. Ni `loading` ni `demo` lo son, y tratarlos como tal
+   * pintaba el aviso durante el arranque y en la demostracion.
    */
   const alreadyStudent = session.status === 'signed_in';
+
+  /**
+   * Si esta persona puede FIRMAR el alta con lo que ya tiene. `null` = mirando.
+   *
+   * Ser alumno de otro gimnasio ya no impide registrar el tuyo: la credencial de
+   * Firebase se acuña del refresh token guardado, y `resolveOwner` engancha el
+   * local a la identidad que ya existe en vez de duplicarla. Pero hay una via
+   * que no deja ninguna credencial —entrar por el codigo de 6 digitos o por el
+   * mostrador—, y a esa hay que decirselo AQUI y no seis campos despues, que es
+   * el fallo que este formulario ya tuvo una vez.
+   */
+  const [canSign, setCanSign] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!alreadyStudent) {
+      setCanSign(null);
+      return;
+    }
+    let cancelled = false;
+    void firebaseSigningToken().then((token) => {
+      if (!cancelled) setCanSign(token !== null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [alreadyStudent]);
+
+  /** El callejon de verdad: con ficha y sin ninguna credencial que sirva. */
+  const blocked = alreadyStudent && canSign === false;
 
   /**
    * Entrar con Google, que es exactamente el mismo camino y dos campos menos.
@@ -308,20 +352,16 @@ export default function GymSignUpScreen() {
         return;
       }
       /**
-       * `signed_in` es el callejón, y hay que decirlo en vez de avanzar.
+       * `signed_in` ya NO es un callejón: se sigue igual que `needs_link`.
        *
-       * Significa que esa cuenta de Google YA tiene ficha en un padrón, y
-       * `registerGym` firma con `currentFirebaseToken()`, que solo existe en el
-       * estado `unlinked`. Dejarla pasar al paso siguiente la llevaría a llenar
-       * cinco campos para que el alta fallara al final.
+       * Significa que esa cuenta de Google ya tiene ficha en algún padrón — es
+       * alumna de otro gimnasio. Antes se paraba aquí con «entra con otra
+       * cuenta», porque el alta se firmaba con `currentFirebaseToken()`, que
+       * solo existe en el estado `unlinked`. Ahora la credencial se acuña del
+       * refresh token que `exchangeForSinchiSession` acaba de guardar, así que
+       * la misma persona lleva su dojo y entrena en otro sin partirse en dos
+       * cuentas.
        */
-      if (outcome.kind === 'signed_in') {
-        setError(
-          'Esa cuenta de Google ya está vinculada a un gimnasio como alumno. Para registrar el tuyo, entra con otra cuenta.',
-        );
-        return;
-      }
-      // `needs_link` es el resultado ESPERADO, igual que por correo.
       setStep('plan');
     });
 
@@ -614,11 +654,26 @@ export default function GymSignUpScreen() {
             />
           </Stack>
 
-          {alreadyStudent ? (
+          {/* Ser alumno de otro gimnasio NO es un impedimento, y antes se decia
+              que si: «sal de la sesion y entra con otro correo». Era un mal
+              consejo ademas de falso — la misma persona lleva su dojo y entrena
+              en otro, y partirla en dos cuentas le parte tambien el historial. */}
+          {alreadyStudent && !blocked ? (
+            <Card tone="sunken" style={{ marginTop: 22 }}>
+              <Text variant="bodySmall" color={theme.colors.textSecondary}>
+                Ya entrenas en un gimnasio de la red, y tu local queda a nombre de esta
+                misma cuenta. Después cambias entre tu vista de dueño y la de alumno
+                desde tu perfil.
+              </Text>
+            </Card>
+          ) : null}
+
+          {blocked ? (
             <Card borderColor={withAlpha(theme.semaphore.warn, 0.4)} style={{ marginTop: 22 }}>
               <Text variant="bodySmall" color={theme.semaphore.warn}>
-                Esta cuenta ya está vinculada a un gimnasio como alumno. Para registrar
-                el tuyo, sal de la sesión y entra con otro correo.
+                Entraste con el código que te dio tu gimnasio, y con eso no podemos firmar
+                el registro. Sal de la sesión y vuelve a entrar con Google o con tu correo:
+                es la misma cuenta y no pierdes nada.
               </Text>
             </Card>
           ) : null}
@@ -626,6 +681,11 @@ export default function GymSignUpScreen() {
           <Stack gap={12} style={{ marginTop: 'auto', paddingTop: 26 }}>
             <Button
               label="Empezar gratis"
+              // Apagado SOLO cuando se sabe que no hay credencial. Mientras se
+              // comprueba sigue vivo: apagarlo medio segundo al abrir la
+              // pantalla se lee como que la app no responde.
+              disabled={blocked}
+              onBlockedPress={() => setError(SIN_CREDENCIAL)}
               onPress={() => setStep(needsAccount ? 'cuenta' : 'plan')}
             />
             <Text variant="caption" color={theme.colors.textFaint} align="center">
