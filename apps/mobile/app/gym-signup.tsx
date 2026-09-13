@@ -126,6 +126,17 @@ export default function GymSignUpScreen() {
   /** Si el dueno ya eligio de la lista, no se le vuelve a ofrecer. */
   const [addressPicked, setAddressPicked] = useState(false);
   const [suggestions, setSuggestions] = useState<readonly PlaceSuggestionDto[]>([]);
+  /**
+   * Por que no hay sugerencias, cuando no las hay.
+   *
+   * Nace de un fallo propio: las tres vias por las que el buscador no puede
+   * trabajar —sin credencial de Firebase, sin clave configurada en el servidor,
+   * y la red caida— hacian las tres `setSuggestions([])` y ni una palabra. El
+   * dueno escribe su direccion entera, no aparece nada, y no tiene forma de
+   * saber si el buscador esta roto, si su calle no existe o si debe seguir. Es
+   * el mismo boton mudo que este producto ya se comio una vez.
+   */
+  const [searchDenial, setSearchDenial] = useState<string | null>(null);
 
   /**
    * La direccion, esperando a que deje de teclear.
@@ -143,25 +154,48 @@ export default function GymSignUpScreen() {
     const query = debouncedAddress.trim();
     if (query.length < 3) {
       setSuggestions([]);
+      setSearchDenial(null);
       return;
     }
-    // El buscador exige la credencial de Firebase. Todavia no hay sesion de
-    // Sinchi —eso lo produce el alta— pero la cuenta ya existe en este punto.
+
+    /**
+     * El buscador exige la credencial de Firebase, y ahi estaba el fallo.
+     *
+     * `currentFirebaseToken()` solo devuelve algo con la sesion en `unlinked`, y
+     * ese estado nace UNICAMENTE al crear la cuenta. Quien llega al paso de
+     * datos por otro camino no la tiene, asi que el buscador no podia trabajar —
+     * y se callaba, que es lo que lo hizo indiagnosticable.
+     */
     const idToken = currentFirebaseToken();
     if (idToken === null) {
       setSuggestions([]);
+      setSearchDenial(
+        'El buscador necesita tu cuenta. Escribe la dirección y marca tu puerta en el mapa: funciona igual.',
+      );
       return;
     }
 
     let cancelled = false;
     void suggestPlaces({ idToken, query })
       .then((found) => {
-        if (!cancelled) setSuggestions(found);
+        if (cancelled) return;
+        setSuggestions(found);
+        // Cero resultados NO es un fallo: en Lima el pasaje sin nombre no lo
+        // encuentra ningun buscador, y por eso existe el pin a mano.
+        setSearchDenial(
+          found.length === 0
+            ? 'No encontramos esa dirección. Déjala escrita y marca tu puerta en el mapa.'
+            : null,
+        );
       })
       .catch(() => {
         // El buscador es una AYUDA: si se cae, se escribe a mano y se mueve el
-        // pin. No se pinta un error por una funcion opcional.
-        if (!cancelled) setSuggestions([]);
+        // pin. Pero se DICE, que es lo que faltaba.
+        if (cancelled) return;
+        setSuggestions([]);
+        setSearchDenial(
+          'No se pudo buscar ahora. Escribe la dirección y marca tu puerta en el mapa.',
+        );
       });
     return () => {
       cancelled = true;
@@ -172,6 +206,7 @@ export default function GymSignUpScreen() {
   const pickSuggestion = (suggestion: PlaceSuggestionDto): void => {
     const idToken = currentFirebaseToken();
     setSuggestions([]);
+    setSearchDenial(null);
     setAddressPicked(true);
     // Se escribe ya lo que se ve, sin esperar al detalle: el campo no puede
     // quedarse con el texto a medias mientras viaja una peticion.
@@ -914,6 +949,15 @@ export default function GymSignUpScreen() {
             hint="Escribe y elige de la lista. Si no aparece, escríbela igual y mueve el pin."
             error={denial('address')}
           />
+
+          {/* Por que no hay lista, cuando no hay. Sin esto el dueno no puede
+              distinguir «tu calle no aparece» de «el buscador esta roto», y las
+              dos piden lo mismo: seguir a mano. */}
+          {searchDenial === null ? null : (
+            <Text variant="micro" color={theme.colors.textFaint}>
+              {searchDenial}
+            </Text>
+          )}
 
           {/* Las sugerencias, si hay. Van pegadas al campo y no en un modal: lo
               que se compara es lo escrito con lo ofrecido, y un modal tapa
