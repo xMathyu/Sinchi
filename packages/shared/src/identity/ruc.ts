@@ -1,9 +1,15 @@
 /**
  * RUC peruano.
  *
- * Existe porque `tenants.tax_id` es NOT NULL y el alta del gimnasio es una ruta
- * PUBLICA: sin verificar, cualquiera deja un "11111111111" que nadie corrige
- * despues, y la boleta que ese gimnasio emita sale mal para siempre.
+ * El RUC es OPCIONAL —`tenants.tax_id` es nullable y el profesor que arranca lo
+ * saca cuando empieza a facturar— pero el que SE ESCRIBE se comprueba aqui.
+ * Opcional no es "vale cualquier cosa": vale no darlo, o darlo bien.
+ *
+ * Se comprueba porque el alta del gimnasio es una ruta PUBLICA: sin verificar,
+ * cualquiera deja un "11111111111" que nadie corrige despues, y la boleta que
+ * ese gimnasio emita sale mal para siempre. Quien no lo tiene deja el campo
+ * vacio, que es una respuesta honesta; quien pone un numero cualquiera para
+ * quitarse el campo de encima deja una mentira que parece un dato.
  *
  * Once digitos con digito verificador. Se comprueba de verdad —modulo 11 con
  * los pesos de SUNAT— y no solo la longitud: un tipeo cambia un digito y la

@@ -39,7 +39,11 @@ const bookEventSchema = idTokenSchema.extend({
  */
 const signUpSchema = idTokenSchema.extend({
   gymName: z.string().min(3).max(120),
-  taxId: z.string().min(8).max(20),
+  // OPCIONAL: no todo dojo tiene RUC, y el que arranca lo saca cuando empieza a
+  // facturar. Sin minimo aqui a proposito — el campo vacio es una respuesta
+  // valida y el servicio distingue "no lo dio" de "escribio algo que no sirve",
+  // que responde con el mismo mensaje de siempre.
+  taxId: z.string().max(20).optional(),
   saasTier: z.enum(['free', 'up_to_60', 'up_to_150', 'unlimited']),
   // La mensualidad con la que nace el local. El rango exacto lo decide
   // `checkPlanDraft` en el servicio, con el mismo mensaje que ve el formulario;

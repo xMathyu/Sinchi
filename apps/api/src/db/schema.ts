@@ -242,8 +242,19 @@ export const tenants = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    /** RUC. */
-    taxId: text('tax_id').notNull(),
+    /**
+     * RUC. `null` mientras el gimnasio no tenga uno.
+     *
+     * Nacio NOT NULL y eso obligo a inventarselo: tres siembras escribian
+     * 'PENDIENTE' y una un '20000000000' de relleno. El profesor que arranca
+     * saca el RUC cuando empieza a facturar, y exigirselo para registrar su
+     * dojo era ponerle un tramite de SUNAT delante de su primer alumno. Ver
+     * `0018_el_ruc_puede_esperar`.
+     *
+     * El que se escribe SI se comprueba de verdad, con digito verificador: lo
+     * que entre aqui sale despues en las boletas.
+     */
+    taxId: text('tax_id'),
     slug: text('slug').notNull(),
     timezone: text('timezone').notNull().default('America/Lima'),
     saasTier: saasTierEnum('saas_tier').notNull().default('up_to_60'),

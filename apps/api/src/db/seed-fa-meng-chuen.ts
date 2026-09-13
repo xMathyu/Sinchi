@@ -25,9 +25,9 @@ import { DOM, SAB, seedGym, type GymSpec } from './seed-gym';
 const FA_MENG_CHUEN: GymSpec = {
   slug: 'fa-meng-chuen',
   name: 'Fa Meng Chuen',
-  // PENDIENTE: el RUC real lo tiene que dar el club. Se marca en vez de
-  // inventarlo porque va en los comprobantes.
-  taxId: 'PENDIENTE',
+  // Sin RUC: lo tiene que dar el club. Se deja vacio en vez de inventarlo
+  // porque va en los comprobantes.
+  taxId: null,
   dropInSoles: 40,
   // "Sin matrícula sorpresa", dice su propio flyer.
   enrollmentSoles: 0,

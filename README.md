@@ -102,9 +102,9 @@ el video no cobra nada. La baja sí. Ver
 
 ### El gimnasio se da de alta solo
 
-Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —con dígito
-verificador comprobado—, escalón, **su dirección**, **su mensualidad**, sus datos
-y, si lo tiene, un código de promoción. Al terminar entra como dueño, con su mes gratis
+Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —opcional,
+y comprobado con dígito verificador si lo da—, escalón, **su dirección**, **su
+mensualidad**, sus datos y, si lo tiene, un código de promoción. Al terminar entra como dueño, con su mes gratis
 corriendo.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google

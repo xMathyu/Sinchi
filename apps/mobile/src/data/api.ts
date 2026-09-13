@@ -1520,7 +1520,8 @@ export const redeemPromoCode = (code: string): Promise<RedeemPromoDto> =>
 export interface SignUpGymInput {
   readonly idToken: string;
   readonly gymName: string;
-  readonly taxId: string;
+  /** RUC, si lo tiene. Muchos dojos empiezan sin uno. */
+  readonly taxId?: string;
   readonly saasTier: SaasTier;
   /** La mensualidad con la que nace el local. Sin ella no puede inscribir. */
   readonly monthlyPriceCents: number;

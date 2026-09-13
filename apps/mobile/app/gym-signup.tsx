@@ -400,12 +400,24 @@ export default function GymSignUpScreen() {
         ? 'Al menos 3 letras: es el nombre que van a buscar tus alumnos.'
         : null,
   );
+  /**
+   * El RUC es OPCIONAL, asi que vacio NO es un problema.
+   *
+   * Lo pedia obligatorio y eso dejaba fuera a quien este producto mas quiere: el
+   * profesor que arranca con doce alumnos y saca el RUC cuando empieza a
+   * facturar. Se le exigia un tramite de SUNAT antes de dejarle apuntar a su
+   * primer alumno, por un dato que ese dia no usa nadie.
+   *
+   * Lo que SI se sigue comprobando es lo que escribe: un RUC a medias o con el
+   * verificador mal se guardaria en los comprobantes que le da a sus alumnos.
+   * Opcional no es "vale cualquier cosa".
+   */
   complain(
     'taxId',
     ruc.trim().length === 0
-      ? 'Falta tu RUC. Es el de la boleta que le das a tus alumnos.'
+      ? null
       : taxIdDigits < 11
-        ? 'El RUC tiene 11 dígitos.'
+        ? 'El RUC tiene 11 dígitos. Si todavía no lo tienes, deja el campo vacío.'
         : taxIdDenial !== null
           ? rucDenialMessage(taxIdDenial)
           : null,
@@ -529,7 +541,9 @@ export default function GymSignUpScreen() {
     try {
       const signUp = await registerGym({
         gymName: name.trim(),
-        taxId: ruc.trim(),
+        // Vacio se manda como ausente y no como '': la columna guarda NULL, que
+        // es "no tiene". Una cadena vacia seria "tiene uno que es nada".
+        taxId: ruc.trim().length > 0 ? ruc.trim() : undefined,
         saasTier: escalon,
         monthlyPriceCents: monthlyCents ?? 0,
         address: address.trim(),
@@ -915,14 +929,17 @@ export default function GymSignUpScreen() {
             editable={!saving}
             error={denial('name')}
           />
+          {/* Opcional, y el rotulo lo dice antes de que lo intente: el que
+              arranca saca el RUC cuando empieza a facturar, y un campo que
+              parece obligatorio lo manda a SUNAT o a inventarse once digitos. */}
           <Field
-            label="RUC"
+            label="RUC (opcional)"
             value={ruc}
             onChangeText={setRuc}
             placeholder="20100070970"
             keyboardType="number-pad"
             editable={!saving}
-            hint="El de la boleta que le das a tus alumnos."
+            hint="Si ya lo tienes, va en las boletas de tus alumnos. Si no, déjalo vacío y lo pones después."
             error={denial('taxId')}
           />
         </Stack>

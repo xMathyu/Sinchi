@@ -42,8 +42,15 @@ export interface PlanSpec {
 export interface GymSpec {
   readonly slug: string;
   readonly name: string;
-  /** RUC. `PENDIENTE` mientras el club no lo da: va en los comprobantes. */
-  readonly taxId: string;
+  /**
+   * RUC. `null` mientras el club no lo da: va en los comprobantes y no se
+   * inventa.
+   *
+   * Era `'PENDIENTE'` porque la columna era NOT NULL. Ahora la columna sabe
+   * decir "no tiene", asi que se dice: una cadena que parece un RUC y no lo es
+   * se cuela en cualquier consulta que cuente quien ya lo dio.
+   */
+  readonly taxId: string | null;
   readonly graceDays?: number;
   /**
    * Precio de la clase suelta, para el gimnasio que vende por sesion. `null` si
@@ -170,8 +177,8 @@ export async function seedGym(spec: GymSpec): Promise<{ tenantId: string; create
     } else if ((spec.trialSoles ?? 0) > 0) {
       console.log(`${label} clase de prueba reservable, S/${spec.trialSoles} al llegar`);
     }
-    if (spec.taxId === 'PENDIENTE') {
-      console.log(`${label} AVISO: el RUC quedó como "PENDIENTE"`);
+    if (spec.taxId === null) {
+      console.log(`${label} AVISO: sin RUC. Se pide al club cuando lo tenga.`);
     }
     return { tenantId, created: true };
   } finally {

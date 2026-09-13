@@ -1,0 +1,31 @@
+-- El RUC puede esperar: el profesor que empieza todavia no lo tiene.
+--
+-- Nacio NOT NULL con un razonamiento correcto —lo que entra aqui sale despues
+-- en las boletas, asi que un "11111111111" sin comprobar arruina los
+-- comprobantes de ese gimnasio para siempre— y de esa exigencia salio lo
+-- contrario de lo que buscaba. El codigo mismo lo venia diciendo: TRES siembras
+-- escriben `tax_id = 'PENDIENTE'` y una cuarta un '20000000000' de relleno, con
+-- su comentario explicando que el club no lo ha dado. Un NOT NULL que se
+-- satisface con un placeholder no protege el dato: obliga a falsificarlo, y
+-- deja la columna llena de cadenas que parecen un RUC y no lo son.
+--
+-- Y fuera del repo es peor. Un profesor que arranca con doce alumnos en un
+-- local alquilado saca el RUC cuando empieza a facturar, no antes. Pedirselo
+-- para registrar su dojo es ponerle un tramite de SUNAT delante de apuntar a su
+-- primer alumno — por un dato que ese dia no usa nadie.
+--
+-- NULL y no cadena vacia: son cosas distintas y la diferencia importa. NULL es
+-- "no tiene"; '' seria "tiene uno que es nada", que no significa nada y que
+-- cualquier consulta de "los que ya lo dieron" contaria mal.
+--
+-- Lo que NO cambia: el RUC que se escribe se sigue comprobando de verdad, con
+-- digito verificador (`checkRuc`). Opcional no es "vale cualquier cosa" — vale
+-- no darlo, o darlo bien.
+ALTER TABLE "tenants" ALTER COLUMN "tax_id" DROP NOT NULL;--> statement-breakpoint
+
+-- 'PENDIENTE' era exactamente este NULL, escrito a mano porque la columna no
+-- dejaba decirlo. Ahora si deja, y el placeholder sobra: mientras siga ahi, la
+-- ficha de esos locales ensena la palabra PENDIENTE donde deberia ir un RUC, y
+-- nada puede distinguir "no tiene" de "tiene uno raro". Solo esa cadena exacta,
+-- que es nuestra y nunca fue de nadie.
+UPDATE "tenants" SET "tax_id" = NULL WHERE "tax_id" = 'PENDIENTE';

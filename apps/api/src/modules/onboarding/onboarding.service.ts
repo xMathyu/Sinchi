@@ -11,8 +11,11 @@
  * pruebas:
  *
  *  · **cuenta de Google verificada**, igual que para reservar una clase gratis;
- *  · **RUC con digito verificador**, comprobado de verdad (`checkRuc`). La
- *    columna es NOT NULL y lo que entre ahi sale despues en las boletas;
+ *  · **RUC si lo tiene**, comprobado de verdad cuando lo da (`checkRuc`). Es
+ *    OPCIONAL: el profesor que arranca lo saca cuando empieza a facturar, y
+ *    exigirlo para registrar el dojo ponia un tramite de SUNAT delante de su
+ *    primer alumno. Lo que se escribe sale despues en las boletas, asi que un
+ *    RUC mal puesto se rechaza igual que antes;
  *  · **hasta cinco locales por persona**. El profesor que lleva la escuela de
  *    una universidad y ademas cobra sus clases aparte son DOS padrones, y el
  *    alta lo permite; el tope existe solo porque cada local nuevo estrena su
@@ -83,7 +86,15 @@ export interface SignUpGymInput {
   readonly displayName: string | null;
   /** Del gimnasio. */
   readonly gymName: string;
-  readonly taxId: string;
+  /**
+   * RUC del gimnasio. OPCIONAL.
+   *
+   * Se pidio obligatorio hasta que se vio lo que producia: tres siembras de
+   * este mismo repo escribian 'PENDIENTE' porque el club no lo habia dado. Un
+   * campo que solo se satisface falsificandolo no protege el dato. Ausente o
+   * vacio queda NULL en la columna; presente, se comprueba entero.
+   */
+  readonly taxId?: string | null | undefined;
   /**
    * Escalon que el dueno declara al darse de alta.
    *
@@ -203,9 +214,21 @@ export class OnboardingService {
   ) {}
 
   async signUpGym(input: SignUpGymInput): Promise<SignUpGymResult> {
-    const taxId = normalizeRuc(input.taxId);
-    const taxIdDenial = checkRuc(taxId);
-    if (taxIdDenial !== null) throw new BadRequestException(rucDenialMessage(taxIdDenial));
+    /**
+     * El RUC, si lo hay. Vacio es una respuesta valida y NO se rellena.
+     *
+     * `normalizeRuc` tira todo lo que no sea digito, asi que "abc" llegaria
+     * aqui como cadena vacia — pero solo se toma por ausencia lo que llego
+     * vacio de verdad. Sin esa distincion, escribir letras en el campo se
+     * guardaria como "no tiene RUC" en silencio, que es justo el tipo de dato
+     * inventado que esta columna venia arrastrando.
+     */
+    const writtenTaxId = (input.taxId ?? '').trim();
+    const taxId = writtenTaxId.length === 0 ? null : normalizeRuc(writtenTaxId);
+    if (taxId !== null) {
+      const taxIdDenial = checkRuc(taxId);
+      if (taxIdDenial !== null) throw new BadRequestException(rucDenialMessage(taxIdDenial));
+    }
 
     const gymName = input.gymName.trim();
     if (gymName.length < 3) {

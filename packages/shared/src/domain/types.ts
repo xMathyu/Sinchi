@@ -108,7 +108,8 @@ export type QuotaOverflowPolicy = 'block' | 'offer_drop_in';
 export interface Tenant {
   readonly id: TenantId;
   readonly name: string;
-  readonly taxId: string;
+  /** RUC. `null` mientras no lo tenga: no todo dojo empieza con RUC. */
+  readonly taxId: string | null;
   readonly slug: string;
   readonly timezone: IanaTimeZone;
   readonly saasTier: SaasTier;

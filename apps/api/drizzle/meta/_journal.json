@@ -127,6 +127,13 @@
       "when": 1788566390119,
       "tag": "0017_donde_queda_el_gimnasio",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788566391119,
+      "tag": "0018_el_ruc_puede_esperar",
+      "breakpoints": true
     }
   ]
 }

@@ -81,7 +81,8 @@ const codes: string[] = [];
 interface SignUpInput {
   readonly uid: string;
   readonly gymName: string;
-  readonly taxId: string;
+  /** El RUC. `null` lo omite del cuerpo: es opcional. */
+  readonly taxId?: string | null;
   readonly saasTier?: string;
   readonly promoCode?: string;
   /** Lo que el dueño escribe como mensualidad. `null` lo omite del cuerpo. */
@@ -97,7 +98,7 @@ const signUp = async (input: SignUpInput) => {
   const res = await http.post('/v1/gyms/signup').send({
     idToken: declareIdentity(input.uid),
     gymName: input.gymName,
-    taxId: input.taxId,
+    ...(input.taxId === null || input.taxId === undefined ? {} : { taxId: input.taxId }),
     saasTier: input.saasTier ?? 'up_to_60',
     ...(input.monthlyPriceCents === null
       ? {}
@@ -187,6 +188,19 @@ afterAll(async () => {
   await app?.close();
 });
 
+/** El RUC tal como quedó en la columna. Ninguna ruta lo devuelve. */
+const storedTaxId = async (tenantId: string): Promise<string | null> => {
+  const { schema, withoutTenantIsolation } = await import('./db/client');
+  const { DATABASE } = await import('./db/db.module');
+  return withoutTenantIsolation(app.get(DATABASE), async (tx) => {
+    const [row] = await tx
+      .select({ taxId: schema.tenants.taxId })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, tenantId));
+    return row?.taxId ?? null;
+  });
+};
+
 suite('dar de alta un gimnasio desde la app', () => {
   it('crea el gimnasio, deja al dueño dentro y arranca su mes gratis', async () => {
     const { body, status } = await signUp({
@@ -222,6 +236,49 @@ suite('dar de alta un gimnasio desde la app', () => {
       uid: `dueno-${runId}-malo`,
       gymName: `Dojo Del RUC Falso ${runId}`,
       taxId: '20100070971',
+    });
+
+    expect(status).toBe(400);
+    expect(body.message).toContain('RUC');
+  });
+
+  /**
+   * El RUC es OPCIONAL, y este caso es la razón entera de que lo sea.
+   *
+   * Lo pedía obligatorio y la columna era `NOT NULL`, así que quien no lo tenía
+   * tenía dos salidas: irse, o inventarse once dígitos. Este repo eligió la
+   * segunda TRES veces —Kaizen y Fa Meng Chuen con `'PENDIENTE'`, el gimnasio de
+   * revisión con un `'20000000000'`—, que es la prueba de que la regla no se
+   * podía cumplir. Fuera del repo es el profesor que arranca con doce alumnos y
+   * saca el RUC cuando empieza a facturar: se le ponía un trámite de SUNAT
+   * delante de apuntar a su primer alumno, por un dato que ese día no usa nadie.
+   */
+  it('sin RUC se da de alta igual: el que empieza lo saca después', async () => {
+    const { body, status } = await signUp({
+      uid: `dueno-${runId}-sin-ruc`,
+      gymName: `Dojo Sin RUC Todavía ${runId}`,
+      taxId: null,
+    });
+
+    expect(status).toBe(201);
+    expect(body.session.role).toBe('owner');
+    // NULL y no cadena vacía: "no tiene" y "tiene uno que es nada" no son lo
+    // mismo para nada que después cuente quién ya lo dio.
+    expect(await storedTaxId(body.tenantId)).toBeNull();
+  });
+
+  /**
+   * Opcional no es «vale cualquier cosa».
+   *
+   * Es la mitad que sostiene a la otra: si un RUC a medias entrara, el campo
+   * dejaría de significar algo y las boletas de ese gimnasio saldrían mal. Se
+   * puede no darlo, o darlo bien.
+   */
+  it('un RUC a medias no entra, aunque el campo sea opcional', async () => {
+    const { body, status } = await signUp({
+      uid: `dueno-${runId}-ruc-corto`,
+      gymName: `Dojo Del RUC Corto ${runId}`,
+      taxId: '2010007',
     });
 
     expect(status).toBe(400);

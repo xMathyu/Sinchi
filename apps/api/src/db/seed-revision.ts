@@ -19,17 +19,21 @@
  *
  * ## Por que va por script y no por el alta publica de la app
  *
- * `POST /gyms/signup` comprueba el RUC de verdad —modulo 11 con los pesos de
- * SUNAT— y ahi esta el problema: **cualquier numero de once digitos que pase ese
- * check es, con casi total seguridad, el de un contribuyente real**, y con
- * prefijo 10 lleva dentro el DNI de una persona. Inventar uno para un gimnasio
- * que no existe seria escribir el identificador tributario de un tercero en
- * produccion.
+ * El alta publica deja el padron a medias: crea el local y su dueno, pero este
+ * gimnasio necesita ademas alumnos, planes, horarios y asistencias para que el
+ * revisor vea una app con algo dentro. Eso es lo que hace este script.
  *
- * Asi que el RUC queda en un placeholder que NO pasa el check y por eso mismo no
- * puede confundirse con el de nadie. Es la misma decision que Kaizen, que vive
- * con `taxId: 'PENDIENTE'` hasta que el club de el suyo. El DNI y el celular van
- * por lo mismo: ceros, que ninguna persona tiene.
+ * **El RUC va vacio**, y es la decision importante. `checkRuc` comprueba de
+ * verdad —modulo 11 con los pesos de SUNAT— y de ahi sale que **cualquier
+ * numero de once digitos que pase ese check es, con casi total seguridad, el de
+ * un contribuyente real**, y con prefijo 10 lleva dentro el DNI de una persona.
+ * Inventar uno para un gimnasio que no existe seria escribir el identificador
+ * tributario de un tercero en produccion.
+ *
+ * Llego a ser un '20000000000' de relleno, elegido porque NO pasa el check y por
+ * eso mismo no podia confundirse con el de nadie. Ya no hace falta: la columna
+ * es nullable desde `0018_el_ruc_puede_esperar` y "no tiene" se dice diciendolo.
+ * El DNI y el celular siguen en ceros por lo mismo: ningun peruano los tiene.
  *
  * ## Y por que el `firebase_uid` se ata aqui
  *
@@ -62,8 +66,10 @@ const DEMO: GymSpec = {
   // Que el nombre lo diga. Sale en el directorio publico junto a los gimnasios
   // de verdad, y quien lo vea tiene que entender de una que no es uno de ellos.
   name: 'Sinchi Demo (gimnasio de demostración)',
-  // No pasa el digito verificador de SUNAT, a proposito. Ver la cabecera.
-  taxId: '20000000000',
+  // Sin RUC. Era un '20000000000' que no pasa el digito verificador de SUNAT,
+  // elegido para que no pudiera confundirse con el de nadie; ahora la columna
+  // deja decirlo directamente, que es mas honesto que un numero de relleno.
+  taxId: null,
   enrollmentSoles: 0,
   gymPlans: [
     { name: '2 veces por semana', type: 'sessions_per_week', sessionsPerWeek: 2, soles: 120 },

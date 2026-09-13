@@ -14,9 +14,9 @@ import { JUE, LUN, MAR, MIE, SAB, VIE, seedGym, seedOwner, type GymSpec } from '
 const KAIZEN: GymSpec = {
   slug: 'kaizen',
   name: 'Asociación Deportiva Club Kaizen',
-  // PENDIENTE: el RUC real lo tiene que dar el club. Se marca en vez de
-  // inventarlo porque va en los comprobantes.
-  taxId: 'PENDIENTE',
+  // Sin RUC: lo tiene que dar el club. Se deja vacio en vez de inventarlo
+  // porque va en los comprobantes.
+  taxId: null,
   // La matricula es del gimnasio, no del plan: se cobra una vez al entrar y no
   // cambia segun cuantas veces por semana venga la persona.
   enrollmentSoles: 50,

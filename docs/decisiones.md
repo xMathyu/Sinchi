@@ -328,9 +328,21 @@ Es la única ruta pública que crea un tenant, así que la fricción no es
 burocracia: es lo único que separa un padrón real de una tabla de pruebas.
 
 - **Cuenta de Google verificada**, igual que para reservar una clase gratis.
-- **RUC con dígito verificador**, comprobado de verdad y no solo por longitud: un
-  tipeo cambia un dígito y la longitud sigue siendo once. La columna es `NOT
-  NULL` y lo que entre ahí sale después en las boletas del gimnasio.
+- **RUC opcional, y comprobado de verdad si lo dan.** Empezó siendo obligatorio
+  con la columna en `NOT NULL`, y lo que produjo fue lo contrario de lo que
+  buscaba: este mismo repo se lo saltó tres veces —Kaizen y Fa Meng Chuen con
+  `'PENDIENTE'`, el gimnasio de revisión con un `'20000000000'`—, que es la
+  señal de que la regla no se podía cumplir. Un `NOT NULL` que se satisface con
+  un placeholder no protege el dato: obliga a falsificarlo y deja la columna
+  llena de cadenas que parecen un RUC y no lo son. Fuera del repo es el profesor
+  que arranca con doce alumnos y saca el RUC cuando empieza a facturar: se le
+  ponía un trámite de SUNAT delante de apuntar a su primer alumno.
+
+  Lo que no cambió es la comprobación del que **sí** se escribe: dígito
+  verificador de verdad y no solo longitud —un tipeo cambia un dígito y siguen
+  siendo once—, porque lo que entre ahí sale después en las boletas. Opcional no
+  es «vale cualquier cosa»: vale no darlo, o darlo bien. Ver
+  `0018_el_ruc_puede_esperar`.
 - **Hasta cinco locales por persona.** Empezó siendo uno —«multi-sede es el
   escalón de S/ 499 y una conversación, no un botón»— y se abrió: el caso que
   bloqueaba es corriente, el profesor que lleva la escuela de una universidad

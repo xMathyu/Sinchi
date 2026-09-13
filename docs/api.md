@@ -149,7 +149,7 @@ que es exactamente la persona que la clase gratis quiere convertir en alumno.
 | `GET` | `/gyms/:slug` | Horarios, precios, las clases concretas —con fecha— que se pueden reservar, lo que viene y las rutinas **públicas** con `membersOnlyRoutines`, que cuenta las de alumnos sin nombrarlas. Anónima. |
 | `GET` | `/gyms/:slug/routines/:routineId` | Una rutina, desde la calle. La única ruta del producto que entrega contenido a quien no tiene cuenta de nada. Si es de alumnos devuelve 200 con `unlocked: false` y un anzuelo SIN videos ni instrucciones. Anónima. |
 | `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
-| `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada, RUC con dígito verificador y un tope de cinco locales por persona. |
+| `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada y tiene un tope de cinco locales por persona. El RUC es opcional —no todo dojo tiene uno— y el que se escribe se comprueba con dígito verificador. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
 | `POST` | `/gyms/trials/:id/cancel` | Cancela la suya. Libera el cupo del gimnasio. |
 
