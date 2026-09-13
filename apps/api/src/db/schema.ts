@@ -503,16 +503,6 @@ export const staff = pgTable(
       .references(() => users.id, { onDelete: 'restrict' }),
     role: staffRoleEnum('role').notNull(),
     displayName: text('display_name').notNull(),
-    /**
-     * Hash scrypt del PIN con el que abre turno en el equipo compartido.
-     *
-     * Nunca el PIN. Son 4-6 digitos: un hash rapido se rompe por fuerza bruta en
-     * segundos, y los intentos se limitan con las dos columnas de abajo.
-     */
-    pinHash: text('pin_hash'),
-    pinUpdatedAt: timestamp('pin_updated_at', { withTimezone: true }),
-    pinFailedAttempts: smallint('pin_failed_attempts').notNull().default(0),
-    pinLockedUntil: timestamp('pin_locked_until', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -1042,41 +1032,6 @@ export const attendance = pgTable(
 );
 
 /**
- * Dispositivo de la puerta.
- *
- * Modo B del MD 4.6: tablet fija mostrando el QR del local, que el alumno
- * escanea. Tiene su propio secreto TOTP porque ese QR tambien es de vida corta.
- */
-export const checkinDevices = pgTable(
-  'checkin_devices',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    tenantId: uuid('tenant_id')
-      .notNull()
-      .references(() => tenants.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    totpSecretEncrypted: text('totp_secret_encrypted'),
-    /**
-     * Hash del token de portador del equipo.
-     *
-     * Secreto de portador y no JWT porque revocar tiene que ser inmediato: una
-     * tablet que se pierde en el gimnasio. Borrar una fila es inmediato; un JWT
-     * vive hasta que expira.
-     */
-    tokenHash: text('token_hash'),
-    tokenIssuedAt: timestamp('token_issued_at', { withTimezone: true }),
-    active: boolean('active').notNull().default(true),
-    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
-  },
-  (t) => [
-    index('checkin_devices_tenant_idx').on(t.tenantId),
-    uniqueIndex('checkin_devices_token_hash_key')
-      .on(t.tokenHash)
-      .where(sql`token_hash is not null`),
-  ],
-);
-
-/**
  * Webhooks del gateway. Vacia en la version 1.
  *
  * `culqi_event_id` unico: los webhooks se procesan de forma idempotente porque
@@ -1114,7 +1069,6 @@ export const TENANT_SCOPED_TABLES = [
   'charges',
   'class_schedules',
   'attendance',
-  'checkin_devices',
   'tenant_gateway',
   'trial_bookings',
   'gym_events',

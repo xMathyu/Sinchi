@@ -87,7 +87,6 @@ import {
   recordPayment,
   resubscribe,
   scanQr,
-  setOwnPin,
   type CheckInOutcomeDto,
   type RedeemPromoDto,
   type SaasSubscriptionDto,
@@ -456,7 +455,7 @@ export async function pendingClaims(): Promise<readonly AccountClaim[]> {
  */
 export async function linkAccount(code: string, membershipId: string): Promise<void> {
   const session = withServer();
-  if (session === null) throw new Error('Vincular cuentas necesita una sesión de turno abierta.');
+  if (session === null) throw new Error('Vincular cuentas necesita una sesión de staff.');
   await confirmClaim(code, membershipId);
   await refreshRoster(session);
 }
@@ -529,24 +528,6 @@ export async function registerGym(
   return signUp;
 }
 
-/**
- * Fija el PIN de turno de quien tiene la sesión abierta.
- *
- * Cerraba un círculo que no tenía salida: para abrir turno en el equipo del
- * mostrador hace falta un PIN, `shift.tsx` decía «el dueño puede asignarle uno
- * desde su cuenta», y esa pantalla no existía en ninguna parte. Quien entraba
- * con Google y no tenía PIN no podía volver a entrar por el mostrador nunca.
- *
- * La api solo deja cambiar el PIN de otra persona al dueño, y con razón: si
- * recepción pudiera cambiar el de un compañero, podría marcar asistencia a su
- * nombre y la auditoría dejaría de significar nada. Aquí se fija únicamente el
- * propio.
- */
-export async function fijarMiPin(pin: string): Promise<void> {
-  if (withServer() === null) throw new Error('Fijar el PIN necesita una sesión de turno.');
-  await setOwnPin(pin);
-}
-
 // ---------------------------------------------------------------------------
 // Refresco
 // ---------------------------------------------------------------------------
@@ -555,7 +536,7 @@ export async function fijarMiPin(pin: string): Promise<void> {
  * Vuelve a pedir los datos de quien tiene la sesión abierta.
  *
  * Faltaba, y se notaba justo donde más duele: el padrón se cargaba una vez al
- * abrir turno y no se volvía a pedir nunca. Si el alumno cambiaba de plan desde
+ * entrar y no se volvía a pedir nunca. Si el alumno cambiaba de plan desde
  * su teléfono, o si otra recepcionista cobraba desde otro equipo, el mostrador
  * seguía viendo el estado del momento en que entró — sin nada que lo dijera.
  *
@@ -593,7 +574,7 @@ export async function reactivateSubscription(
   planId: string,
 ): Promise<void> {
   const session = withServer();
-  if (session === null) throw new Error('Reactivar necesita una sesión de turno abierta.');
+  if (session === null) throw new Error('Reactivar necesita una sesión de staff.');
   await resubscribe(membershipId, planId);
   await refreshRoster(session);
 }
@@ -966,7 +947,7 @@ export async function enrollStudent(input: {
   readonly planId: string;
 }): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
   const session = withServer();
-  if (session === null) throw new Error('Inscribir necesita una sesión de turno abierta.');
+  if (session === null) throw new Error('Inscribir necesita una sesión de staff.');
 
   let outcome;
   try {

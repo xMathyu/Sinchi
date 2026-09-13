@@ -19,7 +19,7 @@ gimnasios a los que asiste.
 | Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
 | Alta de gimnasio | **Desde la app, y el local queda usable el mismo día**: nace con tarifas y el dueño escribe su horario |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
-| Autenticación | Google vía Firebase + PIN de turno. Falta activar el proveedor en la consola |
+| Autenticación | Google vía Firebase, o correo y contraseña. Falta activar el proveedor en la consola |
 | CI/CD | GitHub Actions con federación de identidad. Sin secretos en el repo. **La base se migra sola antes de desplegar** |
 
 La app todavía corre contra un store en memoria (`apps/mobile/src/data`) que pasa
@@ -205,7 +205,7 @@ la cola offline.
   glosario.md        dominio en español ↔ código en inglés
   decisiones.md      qué se decidió y por qué; desviaciones del diseño
   api.md             rutas, autenticación, idempotencia, aislamiento por tenant
-  autenticacion.md   Google vía Firebase, vinculación con el padrón, PIN de turno
+  autenticacion.md   Google vía Firebase, vinculación con el padrón, cambio de modo
   probar-en-dispositivo.md  por qué Expo Go no sirve; dev build con EAS
   decisiones-repo.md un repo o varios; CI/CD sin secretos en GitHub
   despliegue.md      Cloud Run: costo, el cron que no corre, cómo redesplegar

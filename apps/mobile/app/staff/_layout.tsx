@@ -18,7 +18,7 @@
  * bajo `app/staff/` sin su `TabTrigger` no puede enfocarse: `router.push` navega
  * y no se ve absolutamente nada. Falla en silencio —sin error, sin ruta
  * desconocida, sin nada en el log— y ese silencio se cobro cuatro pantallas
- * (inscribir, vincular, marcar manual y abrir turno) mas el viejo boton "Padron
+ * (inscribir, vincular, marcar manual y ajustes) mas el viejo boton "Padron
  * y cobros", que nunca funciono. Todas viven ahora en el Stack raiz.
  */
 import { TabList, TabSlot, TabTrigger, Tabs } from 'expo-router/ui';

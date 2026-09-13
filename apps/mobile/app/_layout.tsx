@@ -23,12 +23,7 @@ import { DISPLAY_FONTS } from '../src/design/fonts';
 import { ThemeProvider } from '../src/design/theme';
 import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
-import {
-  clearSession,
-  currentToken,
-  getDeviceToken,
-  restoreSession,
-} from '../src/data/session';
+import { clearSession, currentToken, restoreSession } from '../src/data/session';
 import { restoreFirebaseAccount } from '../src/data/auth';
 import { useWelcomeState, useSession } from '../src/data/session-hooks';
 import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
@@ -46,7 +41,6 @@ import { SectionLoader } from '../src/design/loading';
  */
 setCredentialProvider({
   getToken: currentToken,
-  getDeviceToken,
   // Y la vuelta: si el servidor rechaza la sesión, se suelta aquí mismo.
   // `SessionRouter` reacciona al `signed_out` y lleva al login, que es la salida
   // que antes había que adivinar en Ajustes. Ver `onUnauthorized` en `api.ts`.
@@ -135,7 +129,6 @@ export default function RootLayout() {
             name="scan"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
           />
-          <Stack.Screen name="shift" options={{ animation: 'fade' }} />
           <Stack.Screen
             name="result/[membershipId]"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}
@@ -258,7 +251,7 @@ function DataLoader() {
  * la regla de zonas las trataba como territorio ajeno: con sesion de staff,
  * abrir el cobro o los ajustes rebotaba a `/staff` en el mismo instante. Se ve
  * como que el boton no hace nada, y por eso el modo staff no tenia forma de
- * cerrar turno.
+ * cerrar sesion.
  *
  * Se enumeran en vez de dejar pasar todo lo que no sea la zona contraria: una
  * pantalla nueva tiene que decidir de quien es, y olvidarse la deja fuera —que
@@ -358,9 +351,6 @@ function SessionRouter() {
     const first = segments[0];
     const onWelcome = first === 'welcome';
     const enLogin = first === 'login' || first === 'link';
-    // El registro del equipo y la apertura de turno se hacen SIN sesion: son
-    // justamente lo que produce una.
-    const onShift = first === 'shift';
     // La puerta de desarrollo tambien: es de donde sale el modo demostracion.
     // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
     // devolvia a /login en el mismo instante — se veia como que no pasaba nada.
@@ -406,15 +396,7 @@ function SessionRouter() {
        * del flujo, en el paso siguiente, que es donde de verdad hace falta:
        * `registerGym` firma el alta con la credencial de Firebase.
        */
-      if (
-        !enLogin &&
-        !onShift &&
-        !enDev &&
-        !onInvite &&
-        !enDirectorio &&
-        !onGymSignUp &&
-        !onWelcome
-      ) {
+      if (!enLogin && !enDev && !onInvite && !enDirectorio && !onGymSignUp && !onWelcome) {
         router.replace('/login');
       }
       return;
@@ -452,12 +434,12 @@ function SessionRouter() {
     void markWelcomeSeen();
 
     // Con sesion: cada rol a su sitio. El staff no entra a las pantallas del
-    // alumno con su sesion de turno — para ver su propia billetera existe
+    // alumno con su sesion de trabajo — para ver su propia billetera existe
     // `/auth/switch-to-student`.
     const esStaff = state.session.role !== 'student';
     const destino = esStaff ? '/staff' : '/student';
 
-    if (enLogin || onShift || first === undefined || first === 'index') {
+    if (enLogin || first === undefined || first === 'index') {
       router.replace(destino);
       return;
     }

@@ -34,7 +34,6 @@ beforeEach(() => {
   setApiBase('http://api.de.prueba/v1');
   setCredentialProvider({
     getToken: () => 'un-token-que-el-servidor-va-a-rechazar',
-    getDeviceToken: async () => null,
     onUnauthorized: () => {
       soltadas += 1;
     },
@@ -80,8 +79,7 @@ describe('cuando el servidor rechaza la sesión', () => {
     responderCon(401);
     setCredentialProvider({
       getToken: () => null,
-      getDeviceToken: async () => null,
-      onUnauthorized: () => {
+        onUnauthorized: () => {
         soltadas += 1;
       },
     });

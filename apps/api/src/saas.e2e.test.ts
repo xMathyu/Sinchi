@@ -229,8 +229,18 @@ suite('cuando el mes gratis vence y no se paga', () => {
     expect(response.status).not.toBe(403);
   });
 
-  it('el PIN de turno sigue abierto: sin PIN no hay puerta', async () => {
-    const response = await http.post('/v1/staff/pin').set(auth(token.owner)).send({ pin: '4417' });
+  /**
+   * Lo que esta prueba cuidaba era el PIN de turno —«sin PIN nadie abre turno y
+   * sin turno no hay puerta»— y el turno ya no existe. Lo que NO ha cambiado es
+   * la regla: el modo solo lectura frena las altas y los cobros, no el trabajo
+   * de la puerta. Marcar asistencia es ese trabajo.
+   */
+  it('marcar asistencia sigue abierto: solo lectura no cierra el local', async () => {
+    const response = await http
+      .post('/v1/staff/checkin/manual')
+      .set(auth(token.owner))
+      .send({ membershipId: '00000000-0000-4000-8000-000000000000' });
+
     expect(response.status).not.toBe(403);
   });
 

@@ -294,7 +294,7 @@ suite('invitaciones', () => {
     // filas — el test pasaria por razones equivocadas. Y acotarlo a este token
     // evita envejecer las invitaciones de las otras pruebas.
     const { createDatabase, createPool, schema, withTenant } = await import('./db/client');
-    const { hashDeviceToken } = await import('./auth/secrets');
+    const { hashBearerToken } = await import('./auth/secrets');
     const { eq, sql } = await import('drizzle-orm');
 
     const pool = createPool(DATABASE_URL!);
@@ -303,7 +303,7 @@ suite('invitaciones', () => {
       tx
         .update(schema.invites)
         .set({ expiresAt: sql`now() - interval '1 hour'` })
-        .where(eq(schema.invites.tokenHash, hashDeviceToken(invite.token)))
+        .where(eq(schema.invites.tokenHash, hashBearerToken(invite.token)))
         .returning({ id: schema.invites.id }),
     );
     await pool.end();

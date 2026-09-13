@@ -73,25 +73,14 @@ export interface QueryContext {
   readonly tenantId?: string;
   /** Identidad global de quien pide. Habilita leer sus propias membresías. */
   readonly userId?: string;
-  /**
-   * Hash del token que presentó un equipo del mostrador.
-   *
-   * Habilita una sola cosa: leer la fila de ESE equipo en `checkin_devices`. Al
-   * abrir turno todavía no se sabe el gimnasio —se descubre a partir del token—
-   * así que hace falta una vía que no exija saberlo antes.
-   *
-   * Mismo patrón que la excepción de `memberships` y `staff`: puedes leer la fila
-   * cuyo secreto tienes en la mano.
-   */
-  readonly deviceTokenHash?: string;
   readonly inviteTokenHash?: string;
   readonly inviteEmail?: string;
   /**
    * Cuenta de Firebase ya verificada de quien todavia no tiene ficha.
    *
    * Habilita una sola cosa: leer sus propias reservas de clase gratis. Es la
-   * misma excepcion que el token de equipo y el de invitacion —puedes leer las
-   * filas cuyo secreto presentaste— y aqui hace falta porque quien reserva no
+   * misma excepcion que el token de invitacion —puedes leer las filas cuyo
+   * secreto presentaste— y aqui hace falta porque quien reserva no
    * tiene gimnasio ni identidad global: si no, no podria volver a ver la clase
    * que reservo.
    */
@@ -117,9 +106,6 @@ export async function withContext<T>(
     );
     await tx.execute(sql`select set_config('app.current_user', ${context.userId ?? ''}, true)`);
     await tx.execute(
-      sql`select set_config('app.device_token_hash', ${context.deviceTokenHash ?? ''}, true)`,
-    );
-    await tx.execute(
       sql`select set_config('app.invite_token_hash', ${context.inviteTokenHash ?? ''}, true)`,
     );
     await tx.execute(
@@ -139,20 +125,6 @@ export function withTenant<T>(
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> {
   return withContext(db, { tenantId }, run);
-}
-
-/**
- * Contexto de un equipo del mostrador que se identifica con su token.
- *
- * Solo para el arranque del turno: descubrir a qué gimnasio pertenece el equipo.
- * Todo lo que venga después va con contexto de gimnasio normal.
- */
-export function withDeviceToken<T>(
-  db: Database,
-  tokenHash: string,
-  run: (tx: Tx) => Promise<T>,
-): Promise<T> {
-  return withContext(db, { deviceTokenHash: tokenHash }, run);
 }
 
 /**

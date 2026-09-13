@@ -1,7 +1,8 @@
 # Autenticación
 
-Google Sign-In vía Firebase para alumnos y dueños; token de equipo más PIN para
-el staff del mostrador.
+Google Sign-In vía Firebase, o correo y contraseña. Una sola puerta para los
+tres: alumno, recepción y dueño. Lo que distingue a cada uno es su fila en
+`staff`, no la forma de entrar.
 
 ---
 
@@ -88,39 +89,32 @@ con autoridad confirmara su código, y todavía no hay nadie. Está limitada a
 
 ---
 
-## Staff: token del equipo + PIN
+## Recepción entra como todos (y antes no)
 
-El equipo del mostrador es compartido y los turnos rotan. Cerrar y abrir sesión
-de Google en cada cambio termina en *"dejemos la de Ana abierta"* — que es
-exactamente el agujero que la auditoría intenta cerrar: `attendance.recorded_by`
-y `charges.recorded_by` dejarían de decir la verdad sobre quién marcó y quién
-cobró.
+Hubo una puerta aparte para el mostrador: el dueño registraba el equipo
+(`POST /v1/staff/devices` → un token de portador que se mostraba una vez) y cada
+persona abría su turno con un PIN de 4-6 dígitos (`POST /v1/auth/shift` → sesión
+de 12 h). El razonamiento era bueno: la tablet es compartida y los turnos rotan,
+así que cerrar y abrir sesión de Google en cada cambio termina en *"dejemos la
+de Ana abierta"* — y ahí `attendance.recorded_by` y `charges.recorded_by` dejan
+de decir la verdad sobre quién marcó y quién cobró.
 
-```
-El dueño registra el equipo    POST /v1/staff/devices  -> deviceToken (una vez)
-Cada persona abre su turno     POST /v1/auth/shift     -> sesión de 12 h
-```
+**Se retiró en `0019_fuera_el_turno_del_mostrador`.** El gimnasio que lo
+necesitaba no existe en esta red: el profesor ES la recepción y entra con su
+propia cuenta desde su teléfono. Sostenerlo costaba dos rutas públicas, un
+registro de equipos, hasheo scrypt con bloqueo por intentos, una excepción de RLS
+y la tabla `checkin_devices` entera.
 
-- El **token del equipo** es un secreto de portador de 32 bytes, guardado como
-  `sha256`. Secreto de portador y no JWT porque revocar tiene que ser inmediato:
-  una tablet que se pierde en el gimnasio. Se muestra **una vez**.
-- El **PIN** son 4 a 6 dígitos, guardado con **scrypt**. Se rechazan los obvios
-  (`1111`, `1234`).
-- Tras **5 intentos** fallidos se bloquea **15 minutos**. Sin ese bloqueo, probar
-  las diez mil combinaciones de un PIN de cuatro dígitos es cuestión de minutos.
-- La sesión dura **12 horas**: cubre el turno más largo y muere antes del
-  siguiente, así que quien entra a las seis no hereda la sesión de mediodía.
+No dejó a nadie fuera, y eso es lo que lo hizo seguro de borrar: **el turno era
+una CUARTA puerta, no la única de recepción**. Quien tiene fila en `staff` entra
+con Google o con su correo como cualquiera, y `issueForUser` le da sesión de
+`front_desk` leyendo esa fila.
 
-### Por qué scrypt para el PIN y sha256 para el token
-
-Confundirlo es el error clásico, y va en las dos direcciones:
-
-- El **PIN** tiene como máximo un millón de combinaciones. Con un hash rápido se
-  rompe en segundos, así que va con un KDF deliberadamente lento.
-- El **token** tiene 32 bytes de entropía: no hay nada que romper por fuerza
-  bruta. Y hace falta **buscar** el equipo por su hash, lo que un KDF con sal
-  aleatoria hace imposible. Con scrypt habría que recorrer todos los equipos
-  probando uno por uno.
+Lo que se pierde, dicho en voz alta: en una tablet compartida ya no hay nada que
+obligue a cada persona a identificarse, y la sesión dura **7 días** en vez de 12
+horas. Si algún día entra un gimnasio con recepción rotando de verdad, esto
+vuelve — y el razonamiento de por qué un PIN pedía scrypt y un token de 32 bytes
+no, está en el historial (busca `hashPin`), no hay que volver a deducirlo.
 
 ---
 
@@ -138,10 +132,8 @@ el código. Faltaban dos cosas, y la segunda es la que importaba:
 
 1. **Nadie lo llamaba.** El selector de rol de ajustes es de demostración y está
    escondido cuando hay sesión real, así que la ruta no tenía botón.
-2. **No había vuelta.** No existía `switch-to-staff`. La otra entrada al modo
-   staff es `POST /auth/shift`, que pide el token del equipo del mostrador — y el
-   teléfono del dueño no es esa tablet. Cambiar a alumno era un viaje de ida:
-   para volver había que cerrar sesión y entrar de nuevo.
+2. **No había vuelta.** No existía `switch-to-staff`, así que cambiar a alumno
+   era un viaje de ida: para volver había que cerrar sesión y entrar de nuevo.
 
 ```
 POST /auth/switch-to-student   staff  -> sesión de alumno
@@ -160,11 +152,12 @@ la dueña: manda el rol del token, no quién es.
 
 ### El agujero que abría, y que costó una prueba
 
-Reemitir el token **regalaba vida nueva**. El turno del mostrador dura 12 horas a
-propósito: «quien entra a las seis no hereda la sesión de mediodía». Pero
-`switch-to-student` y su vuelta firmaban con el TTL del login normal, así que en
-una tablet compartida bastaba pasar por alumno y volver para convertir un turno
-de 12 horas en una sesión de **7 días**.
+Reemitir el token **regalaba vida nueva**. `switch-to-student` y su vuelta
+firmaban con el TTL del login normal, así que cada viaje de ida y vuelta devolvía
+una sesión nueva y completa: bastaba pasar por alumno y volver para tener una
+sesión eterna en el aparato de quien fuera. Lo destapó el turno del mostrador,
+que duraba 12 horas y se convertía en 7 días con dos toques; el turno ya no
+existe, pero el agujero era del cambio de modo, no del turno.
 
 Se cierra atando la reemisión al `exp` del token que pide el cambio: lo que queda
 de vida, nunca más. Así el cambio es lo que dice ser —la misma sesión con otra
@@ -226,8 +219,7 @@ dos sitios donde comprobar que el puesto es suyo, y el segundo es el que un día
 se olvida.
 
 Cambiar de local **no alarga la sesión**, por lo mismo que no la alarga cambiar
-de modo: saltar de un local al otro y volver renovaría un turno de doce horas
-para siempre.
+de modo: saltar de un local al otro y volver la renovaría indefinidamente.
 
 ### El alta del segundo local
 
@@ -247,17 +239,12 @@ mes gratis, y para eso está el tope.
 | Método | Ruta | Quién |
 |---|---|---|
 | `POST` | `/auth/google` | público — devuelve sesión **o** código de vinculación |
-| `GET` | `/auth/shift/staff` | equipo (`X-Device-Token`) — quiénes pueden abrir turno |
-| `POST` | `/auth/shift` | equipo + PIN — abre turno |
 | `GET` | `/staff/claims` | staff — códigos vigentes |
 | `POST` | `/staff/claims/confirm` | staff — vincula `{ code, membershipId }` |
 | `GET` | `/auth/modes` | cualquier sesión — qué otros modos tiene |
 | `POST` | `/auth/switch-to-student` | staff con ficha — mira su billetera |
 | `POST` | `/auth/switch-to-staff` | quien tenga fila en `staff` — vuelve a su puesto, o salta al local que pida en `{ tenantId }` |
 | `DELETE` | `/staff/members/:id/account` | dueño — desvincula |
-| `POST` | `/staff/pin` | staff (el propio) / dueño (de cualquiera) |
-| `GET` `POST` | `/staff/devices` | dueño |
-| `DELETE` | `/staff/devices/:id` | dueño — revoca |
 
 La respuesta de `/auth/google` tiene dos formas y el cliente **debe** mirar
 `linked`:
@@ -361,23 +348,26 @@ el riesgo, es qué pasa **después** de saber quién es la persona: ¿se vincula
 ficha correcta? ¿se puede robar la de otro? ¿aísla RLS al recepcionista de otro
 gimnasio?
 
-Ese test encontró dos bugs que no se veían leyendo el código:
+Ese test encontró dos bugs que no se veían leyendo el código. Los dos aparecieron
+en el turno del mostrador, que ya no existe, y se dejan escritos porque **ninguna
+de las dos lecciones era del turno**:
 
 1. **`SECURITY DEFINER` dependía de un privilegio del rol.** La primera versión
-   buscaba el equipo con una función `SECURITY DEFINER`, que corre con los
+   buscaba una fila con una función `SECURITY DEFINER`, que corre con los
    privilegios del *dueño* de la función. En Neon el dueño es `neondb_owner`, que
    tiene `BYPASSRLS`, así que funcionaba — pero solo por esa propiedad, que es
    justo la que este diseño intenta no necesitar. En el Postgres local de
-   pruebas, donde el dueño no la tiene, abrir turno fallaba con "este equipo no
-   está registrado". Se comportaba distinto en producción y en pruebas.
-   Reemplazado por una excepción en la política RLS (migración 0003), con el mismo
-   patrón que `memberships` y `staff`.
+   pruebas, donde el dueño no la tiene, fallaba. Se comportaba distinto en
+   producción y en pruebas. Se reemplazó por una excepción en la política RLS
+   (migración 0003), con el mismo patrón que `memberships` y `staff` — que es el
+   patrón que hoy usan la invitación y la clase de prueba.
 
-2. **El bloqueo del PIN no existía.** El contador de intentos se incrementaba
-   dentro de la misma transacción que lanzaba la excepción, así que el rollback lo
-   deshacía. El contador nunca subía: se podían probar las diez mil combinaciones
-   de un PIN de cuatro dígitos sin que nada lo notara. Ahora el registro del fallo
-   va en su propia transacción, que sí se confirma.
+2. **Un contador de intentos dentro de la transacción que falla no cuenta nada.**
+   El bloqueo por intentos fallidos se incrementaba en la misma transacción que
+   lanzaba la excepción, así que el rollback lo deshacía: se podían probar las
+   diez mil combinaciones sin que nada lo notara. Registrar el fallo tiene que ir
+   en su propia transacción, que sí se confirma. Vale para cualquier límite de
+   intentos que se escriba mañana.
 
 ---
 
@@ -482,7 +472,7 @@ normal es `null`.
 
 La consulta de la vista previa empezó siendo un `JOIN` con `tenants` y `plans`, y
 devolvía **siempre vacío**. La invitación sí se ve —el token abre esa fila por
-excepción de política, igual que el token de equipo—, pero las tablas vecinas
+excepción de política, igual que la reserva de una clase de prueba—, pero las tablas vecinas
 tienen su propio aislamiento por gimnasio y sin contexto no devuelven nada.
 
 Se resolvió en dos pasos: el token abre la invitación, la invitación dice a qué

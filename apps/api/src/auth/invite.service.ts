@@ -21,7 +21,7 @@ import {
   type Database,
   type Tx,
 } from '../db/client';
-import { hashDeviceToken, issueDeviceToken } from './secrets';
+import { hashBearerToken, issueBearerToken } from './secrets';
 
 /** Una semana: suficiente para que alguien lo vea el fin de semana. */
 const DEFAULT_TTL_DAYS = 7;
@@ -74,7 +74,7 @@ export class InviteService {
     readonly membershipId?: string | null | undefined;
     readonly ttlDays?: number | undefined;
   }): Promise<CreatedInvite> {
-    const { token, hash } = issueDeviceToken();
+    const { token, hash } = issueBearerToken();
     const ttl = input.ttlDays ?? DEFAULT_TTL_DAYS;
     const expiresAt = new Date(Date.now() + ttl * 24 * 60 * 60 * 1000);
 
@@ -124,7 +124,7 @@ export class InviteService {
    * consumiera la invitacion, abrirla por curiosidad la quemaria.
    */
   async preview(token: string): Promise<InvitePreview> {
-    const hash = hashDeviceToken(token);
+    const hash = hashBearerToken(token);
 
     // Dos pasos, no un JOIN: el token abre la fila de `invites`, pero `tenants` y
     // `plans` tienen su propio aislamiento por gimnasio y sin contexto no
@@ -191,7 +191,7 @@ export class InviteService {
     readonly firebaseUid: string;
     readonly email: string | null;
   }): Promise<{ readonly userId: string; readonly tenantId: string }> {
-    const hash = hashDeviceToken(input.token);
+    const hash = hashBearerToken(input.token);
 
     return withInviteToken(this.db, hash, async (tx) => {
       const [invite] = await tx

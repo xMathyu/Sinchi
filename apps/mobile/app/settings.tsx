@@ -21,7 +21,6 @@ import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
 import { switchGym, switchMode, signOut } from '../src/data/auth';
-import { fijarMiPin } from '../src/data/actions';
 import { fetchModes, type AvailableModesDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
 import { loadDemo, resetState, setRole } from '../src/data/store';
@@ -148,7 +147,6 @@ export default function SettingsScreen() {
         </Row>
       </Card>
 
-      {isStaffSession && <ShiftPin />}
 
       {/* Las dos caras de la misma persona, a un toque.
           La api sabía hacerlo desde el principio —`switch-to-student`— pero
@@ -409,25 +407,18 @@ export default function SettingsScreen() {
 
         {/* El modo staff no tenia salida: las pantallas de la puerta no llevaban
             a ajustes, y con sesion de staff el enrutado ademas rebotaba
-            `/settings` a `/staff`. Cerrar turno era imposible sin desinstalar. */}
+            `/settings` a `/staff`. Cerrar sesion era imposible sin desinstalar. */}
         {session.status === 'signed_in' && (
           <Stack gap={10} style={{ marginTop: 24 }}>
             <Eyebrow>Sesión</Eyebrow>
-            {isStaffSession && (
-              <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                El equipo sigue registrado en {onShift?.name ?? 'este gimnasio'}: al cerrar,
-                la siguiente persona abre su turno con su PIN, sin volver a pegar el
-                token del dueño.
-              </Text>
-            )}
             <Pressable
               accessibilityRole="button"
               onPress={() => {
                 // El secreto del QR se olvida al salir el ALUMNO: si presta el
-                // telefono, el siguiente no debe poder generar su codigo. Al
-                // cerrar turno no hay ninguno que olvidar —el equipo del
-                // mostrador no genera QR— y borrarlo tocaria el del dueño de
-                // este telefono, que no es lo que se pidió.
+                // telefono, el siguiente no debe poder generar su codigo. Con
+                // sesion de staff no se toca: el secreto es del dueño de este
+                // telefono como alumno, y cerrar su sesion de trabajo no tiene
+                // por que borrarselo.
                 void signOut({ forgetTotpSecret: !isStaffSession }).then(() => {
                   resetState();
                   router.replace('/login');
@@ -436,7 +427,7 @@ export default function SettingsScreen() {
             >
               <Card radius={theme.radii.lg}>
                 <Text variant="bodySmall" weight="semibold" color={theme.semaphore.bad}>
-                  {isStaffSession ? 'Cerrar turno' : 'Cerrar sesión'}
+                  Cerrar sesión
                 </Text>
               </Card>
             </Pressable>
@@ -512,106 +503,6 @@ function PaletteSample({
       >
         {label}
       </Text>
-    </Stack>
-  );
-}
-
-/**
- * Fijar el PIN de turno.
- *
- * Sin esto, quien entra por primera vez con Google no tiene forma de conseguir
- * un PIN, y sin PIN no puede abrir turno en el equipo del mostrador — que es el
- * único sitio donde se marca y se cobra. `shift.tsx` remitía a una pantalla del
- * dueño que nunca se escribió.
- */
-function ShiftPin() {
-  const theme = useTheme();
-  const [pin, setPin] = useState('');
-  const [repetido, setRepetido] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const coincide = pin.length >= 4 && pin === repetido;
-
-  return (
-    <Stack gap={10} style={{ marginTop: 20 }}>
-      <Eyebrow>PIN de turno</Eyebrow>
-      <Card radius={theme.radii.xl}>
-        <Stack gap={12}>
-          <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            Es con lo que abres tu turno en el equipo del mostrador. Lo que marques y
-            cobres queda a tu nombre, así que no lo compartas.
-          </Text>
-          <TextInput
-            value={pin}
-            onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="PIN nuevo"
-            placeholderTextColor={theme.colors.textPlaceholder}
-            keyboardType="number-pad"
-            secureTextEntry
-            accessibilityLabel="PIN nuevo"
-            style={{
-              color: theme.colors.ink,
-              fontSize: 22,
-              letterSpacing: 6,
-              paddingVertical: 8,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.hairline,
-            }}
-          />
-          <TextInput
-            value={repetido}
-            onChangeText={(value) => setRepetido(value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="Repítelo"
-            placeholderTextColor={theme.colors.textPlaceholder}
-            keyboardType="number-pad"
-            secureTextEntry
-            accessibilityLabel="Repite el PIN"
-            style={{
-              color: theme.colors.ink,
-              fontSize: 22,
-              letterSpacing: 6,
-              paddingVertical: 8,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.hairline,
-            }}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !coincide || saving }}
-            onPress={() => {
-              if (!coincide || saving) return;
-              setSaving(true);
-              setNotice(null);
-              void fijarMiPin(pin)
-                .then(() => {
-                  setNotice('PIN guardado. Ya puedes abrir turno con él.');
-                  setPin('');
-                  setRepetido('');
-                })
-                .catch((causa: unknown) => {
-                  setNotice(causa instanceof Error ? causa.message : 'No se pudo guardar el PIN.');
-                })
-                .finally(() => setSaving(false));
-            }}
-            style={{ opacity: coincide && !saving ? 1 : 0.4 }}
-          >
-            <Text variant="bodySmall" weight="semibold" color={theme.semaphore.ok}>
-              {saving ? 'Guardando…' : 'Guardar PIN'}
-            </Text>
-          </Pressable>
-          {notice === null ? null : (
-            <Text variant="captionSmall" color={theme.colors.textSecondary}>
-              {notice}
-            </Text>
-          )}
-          {pin.length > 0 && repetido.length > 0 && !coincide ? (
-            <Text variant="micro" color={theme.semaphore.alert}>
-              {pin.length < 4 ? 'El PIN tiene al menos 4 dígitos.' : 'Los dos no coinciden.'}
-            </Text>
-          ) : null}
-        </Stack>
-      </Card>
     </Stack>
   );
 }

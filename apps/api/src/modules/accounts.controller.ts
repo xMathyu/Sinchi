@@ -16,23 +16,12 @@ import { MailService } from './mail/mail.service';
 import { AccountLinkService } from '../auth/account-link.service';
 import { AuthService } from '../auth/auth.service';
 import { InviteService } from '../auth/invite.service';
-import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from '../auth/secrets';
 
 const confirmSchema = z.object({
   /** Los 6 dígitos que el alumno muestra en su app. */
   code: z.string().regex(/^\d{6}$/),
   /** A quién pertenece. Recepción lo elige del padrón. */
   membershipId: z.string().uuid(),
-});
-
-const pinSchema = z.object({
-  pin: z.string().regex(new RegExp(`^\\d{${PIN_MIN_LENGTH},${PIN_MAX_LENGTH}}$`)),
-  /** Solo el dueño puede fijar el PIN de otra persona. */
-  staffId: z.string().uuid().optional(),
-});
-
-const deviceSchema = z.object({
-  name: z.string().min(2).max(60),
 });
 
 const inviteSchema = z.object({
@@ -192,73 +181,4 @@ export class AccountsController {
     return { unlinked: true };
   }
 
-  // -------------------------------------------------------------------------
-  // PIN
-  // -------------------------------------------------------------------------
-
-  /**
-   * Cada persona fija el suyo; el dueño puede fijar el de cualquiera.
-   *
-   * Abierta aunque el gimnasio no haya pagado su suscripción a Sinchi: sin PIN
-   * nadie abre turno, y sin turno no hay puerta. Cortarla convertiría el modo
-   * solo lectura en el cierre del local, que es justo lo que no se quiso hacer.
-   */
-  @AllowedWhenReadOnly()
-  @Post('pin')
-  async setPin(
-    @CurrentSession() session: Session,
-    @Body(parseWith(pinSchema)) body: z.infer<typeof pinSchema>,
-  ) {
-    const staff = assertStaffSession(session);
-    const target = body.staffId ?? staff.staffId;
-
-    if (target !== staff.staffId && staff.role !== 'owner') {
-      // Sin esto, recepción podría cambiarle el PIN a otra persona y marcar
-      // asistencia a su nombre. La auditoría dejaría de servir.
-      return { changed: false, reason: 'Solo el dueño puede cambiar el PIN de otra persona.' };
-    }
-
-    await this.auth.setPin({ tenantId: staff.tenantId, targetStaffId: target, pin: body.pin });
-    return { changed: true, staffId: target };
-  }
-
-  // -------------------------------------------------------------------------
-  // Equipos del mostrador
-  // -------------------------------------------------------------------------
-
-  @OwnerOnly()
-  @Get('devices')
-  devices(@CurrentSession() session: Session) {
-    return this.auth.listDevices(assertStaffSession(session).tenantId);
-  }
-
-  /**
-   * Registra un equipo y devuelve su token.
-   *
-   * El token se muestra UNA vez: la base guarda solo el hash. Si se pierde, se
-   * registra otro equipo y se revoca este, que es más seguro que poder
-   * recuperarlo.
-   */
-  /** Misma razón que el PIN: una tablet rota no puede dejar al gimnasio sin puerta. */
-  @AllowedWhenReadOnly()
-  @OwnerOnly()
-  @Post('devices')
-  registerDevice(
-    @CurrentSession() session: Session,
-    @Body(parseWith(deviceSchema)) body: z.infer<typeof deviceSchema>,
-  ) {
-    return this.auth.registerDevice(assertStaffSession(session).tenantId, body.name);
-  }
-
-  /** Revoca un equipo: una tablet que se pierde en el gimnasio. */
-  @AllowedWhenReadOnly()
-  @OwnerOnly()
-  @Delete('devices/:deviceId')
-  async revokeDevice(
-    @CurrentSession() session: Session,
-    @Param('deviceId', ParseUUIDPipe) deviceId: string,
-  ) {
-    await this.auth.revokeDevice(assertStaffSession(session).tenantId, deviceId);
-    return { revoked: true };
-  }
 }

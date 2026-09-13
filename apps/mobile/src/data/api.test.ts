@@ -57,7 +57,6 @@ beforeAll(async () => {
 
   setCredentialProvider({
     getToken: () => (active === 'student' ? studentToken : active === 'staff' ? staffToken : null),
-    getDeviceToken: async () => null,
   });
 
   // `dev-login` en vez de Google: probar el intercambio con Firebase exigiría un

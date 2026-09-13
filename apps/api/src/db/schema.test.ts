@@ -991,7 +991,6 @@ describe('aislamiento por tenant', () => {
       'charges',
       'class_schedules',
       'attendance',
-      'checkin_devices',
       'tenant_gateway',
       'trial_bookings',
       'gym_events',

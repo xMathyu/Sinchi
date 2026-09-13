@@ -131,10 +131,10 @@ export default function DoorScreen() {
             )}
           </Pressable>
           {/* La unica salida del modo staff: sin esto no habia forma de cerrar
-              turno desde la puerta, que es donde se pasa el dia. */}
+              sesion desde la puerta, que es donde se pasa el dia. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Ajustes y cerrar turno"
+            accessibilityLabel="Ajustes y cerrar sesión"
             onPress={() => router.push('/settings')}
           >
             <Avatar initials={initials(staff.displayName)} size={34} radius={17} />

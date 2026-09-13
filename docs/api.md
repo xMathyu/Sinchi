@@ -97,7 +97,8 @@ La forma del token refleja la del producto:
   más que escriba otro uuid en la URL.
 
 La autenticación es **Google Sign-In vía Firebase** para alumnos y dueños, y
-**token de equipo + PIN** para el staff del mostrador. El detalle está en
+y también para recepción: lo que la hace staff es su fila en `staff`, no una
+puerta distinta. El detalle está en
 [`autenticacion.md`](autenticacion.md), incluido el problema que Firebase no
 resuelve —vincular la cuenta con la ficha que la recepcionista ya creó— y cómo se
 cierra sin agujeros.
@@ -115,8 +116,6 @@ arrancar con esa bandera en producción.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve código de vinculación. Al registrarse acepta `fullName` y `phone`, que quedan con el código para no volver a pedirlos al reservar. |
-| `GET` | `/auth/shift/staff` | Quiénes pueden abrir turno en este equipo (`X-Device-Token`). |
-| `POST` | `/auth/shift` | Abre turno: token del equipo + PIN. Sesión de 12 h. |
 | `POST` | `/auth/switch-to-student` | El dueño del dojo también entrena en él: puede mirar su propia billetera. |
 | `POST` | `/auth/dev-login` | Emite sesión por celular. Sin verificar. Solo desarrollo. |
 
@@ -193,9 +192,6 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
 | `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |
 | `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
-| `POST` | `/staff/pin` | Fija el PIN de turno. |
-| `GET` `POST` | `/staff/devices` | Solo el dueño: equipos del mostrador. |
-| `DELETE` | `/staff/devices/:id` | Solo el dueño: revoca un equipo. |
 
 ### Salud
 
@@ -398,8 +394,8 @@ Qué significa exactamente:
 |---|---|
 | `POST /staff/checkin/qr` y `/checkin/manual` | `POST /staff/members` y `/members/:id/resubscribe` |
 | `POST /staff/sync` — repite lo que ya pasó en el mostrador | `POST /staff/payments` |
-| `POST /staff/pin` y `/staff/devices` — sin PIN ni equipo no hay puerta | `POST /staff/trials/settings` |
-| Los `DELETE`: revocar invitación, desvincular cuenta, revocar equipo — solo quitan acceso | `POST /staff/invites` y `/staff/claims/confirm` |
+| `POST /staff/checkin/qr` y `/checkin/manual` — la puerta es el trabajo del día, no una alta | `POST /staff/trials/settings` |
+| Los `DELETE`: revocar invitación, desvincular cuenta — solo quitan acceso | `POST /staff/invites` y `/staff/claims/confirm` |
 | Todos los `GET`: padrón, deuda, historial, reportes | Sale del directorio: `GET /gyms` y `GET /gyms/:slug` |
 
 Vincular una cuenta de Google a una ficha (`claims/confirm`) sí se bloquea, y es

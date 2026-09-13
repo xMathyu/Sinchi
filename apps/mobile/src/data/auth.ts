@@ -18,12 +18,9 @@ import * as SecureStore from 'expo-secure-store';
 import {
   claimInvite,
   linkDevice,
-  openShift,
   signInWithGoogle,
-  staffForDevice,
   switchToStaff,
   switchToStudent,
-  type ShiftCandidate,
 } from './api';
 import {
   exchangeGoogleToken,
@@ -34,11 +31,9 @@ import {
 import {
   clearSession,
   currentFirebaseToken,
-  forgetDeviceToken,
   loadAccountDetails,
   loadFirebaseCredential,
   saveAccountDetails,
-  saveDeviceToken,
   saveFirebaseCredential,
   saveSession,
   setUnlinked,
@@ -277,67 +272,17 @@ export async function acceptInvite(
 }
 
 // ---------------------------------------------------------------------------
-// Turno del staff
-// ---------------------------------------------------------------------------
-
-/**
- * Quiénes pueden abrir turno en este equipo.
- *
- * Devuelve `null` si el equipo no está registrado, que es distinto de "la lista
- * está vacía": lo primero pide registrar el equipo, lo segundo pide asignar PIN.
- */
-export async function shiftCandidates(): Promise<readonly ShiftCandidate[] | null> {
-  try {
-    return await staffForDevice();
-  } catch {
-    return null;
-  }
-}
-
-export async function startShift(staffId: string, pin: string): Promise<SignInOutcome> {
-  try {
-    const result = await openShift(staffId, pin);
-    await saveSession({
-      accessToken: result.accessToken,
-      expiresInSeconds: result.expiresInSeconds,
-      role: result.role,
-      userId: result.userId,
-      tenantId: result.tenantId,
-    });
-    return { kind: 'signed_in' };
-  } catch (error) {
-    return { kind: 'error', message: describe(error) };
-  }
-}
-
-/**
- * Registra este equipo con el token que dio el dueño.
- *
- * El token se pega una sola vez, al montar la tablet en el mostrador. Después
- * sobrevive a todos los cambios de turno: es del aparato, no de la persona.
- */
-export async function registerThisDevice(deviceToken: string): Promise<SignInOutcome> {
-  await saveDeviceToken(deviceToken.trim());
-  const candidates = await shiftCandidates();
-
-  if (candidates === null) {
-    await forgetDeviceToken();
-    return { kind: 'error', message: 'Ese token no corresponde a ningún gimnasio.' };
-  }
-  return { kind: 'signed_in' };
-}
-
-// ---------------------------------------------------------------------------
 // Salir
 // ---------------------------------------------------------------------------
 
 /**
- * Cierra el turno o la sesión del alumno.
+ * Cierra la sesión.
  *
- * `forgetTotpSecret` decide algo que no es obvio: al cerrar turno el secreto NO
- * se borra —el equipo del mostrador no tiene ninguno— pero cuando un alumno sale
- * de su cuenta sí, porque si presta el teléfono el siguiente no debe poder
- * generar su QR.
+ * `forgetTotpSecret` decide algo que no es obvio: con sesión de staff el secreto
+ * NO se borra —es el del dueño de este teléfono como alumno, y cerrar su sesión
+ * de trabajo no tiene por qué quitárselo— pero cuando un alumno sale de su
+ * cuenta sí, porque si presta el teléfono el siguiente no debe poder generar su
+ * QR.
  */
 export async function signOut(options: { readonly forgetTotpSecret: boolean }): Promise<void> {
   await clearSession();

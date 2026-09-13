@@ -1,18 +1,20 @@
 /**
  * Entrar.
  *
- * Una sola pantalla para los tres roles. El alumno entra con correo o con Google;
- * el staff abre turno en el equipo del mostrador. La app no pregunta "¿eres
- * alumno o staff?" — el rol lo decide la api al mirar si esa persona tiene fila
- * en `staff`, no una elección del usuario.
+ * Una sola pantalla para los tres roles, y con UNA sola forma de entrar: correo
+ * o Google. La app no pregunta "¿eres alumno o staff?" — el rol lo decide la api
+ * al mirar si esa persona tiene fila en `staff`, no una elección del usuario.
+ *
+ * Hubo un acceso aparte para el mostrador, «Soy staff — abrir turno», que pedía
+ * el token de una tablet compartida más un PIN. Se retiró con el turno: en los
+ * gimnasios de esta red el profesor ES la recepción y entra con su propia
+ * cuenta, así que la puerta extra solo añadía una pregunta que nadie necesitaba
+ * responder.
  *
  * Los dos caminos del alumno terminan en el mismo sitio: un ID token de Firebase
  * que la api cambia por una sesión de Sinchi. El correo va primero porque es el
  * que siempre funciona — Google depende de un cliente OAuth que solo se crea
  * desde la consola de Firebase.
- *
- * El acceso del staff va abajo y discreto a propósito: en un dojo de 60 alumnos
- * hay 60 personas que entran con Google y una que abre turno.
  *
  * La tarjeta de dueño, en cambio, NO es discreta. Esta pantalla es lo primero
  * que ve alguien que viene a evaluar Sinchi para su gimnasio, y hasta ahora solo
@@ -451,16 +453,6 @@ export default function LoginScreen() {
               <ChevronRight size={18} color={theme.colors.textTertiary} />
             </Row>
           </Card>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/shift')}
-          style={{ minHeight: 44, justifyContent: 'center', marginTop: 4 }}
-        >
-          <Text variant="caption" color={theme.colors.textSecondary} align="center">
-            Soy staff — abrir turno
-          </Text>
         </Pressable>
 
         {/* Solo en desarrollo. En un build de produccion `__DEV__` es false y

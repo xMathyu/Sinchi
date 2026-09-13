@@ -52,7 +52,6 @@ export interface CredentialProvider {
   /** Token de sesión de Sinchi, o `null` si no hay. */
   readonly getToken: () => string | null;
   /** Token del equipo del mostrador. */
-  readonly getDeviceToken: () => Promise<string | null>;
   /**
    * El servidor rechazó la sesión. Hay que soltarla.
    *
@@ -76,7 +75,6 @@ export interface CredentialProvider {
 
 let credentials: CredentialProvider = {
   getToken: () => null,
-  getDeviceToken: async () => null,
 };
 
 export function setCredentialProvider(provider: CredentialProvider): void {
@@ -145,10 +143,8 @@ export class ApiError extends Error {
 interface RequestOptions {
   readonly method?: 'GET' | 'POST' | 'DELETE';
   readonly body?: unknown;
-  /** Rutas públicas: `/auth/google`, `/auth/shift`. */
+  /** Rutas públicas: `/auth/google`, `/gyms/signup`, el directorio. */
   readonly anonymous?: boolean;
-  /** Manda `X-Device-Token`: solo para abrir turno. */
-  readonly withDeviceToken?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -160,14 +156,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       throw new ApiError(401, 'No hay sesión activa.');
     }
     headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (options.withDeviceToken === true) {
-    const deviceToken = await credentials.getDeviceToken();
-    if (deviceToken === null) {
-      throw new ApiError(400, 'Este equipo no está registrado en ningún gimnasio.');
-    }
-    headers['X-Device-Token'] = deviceToken;
   }
 
   // `AbortController` y no solo el timeout de fetch: en la red de un gimnasio una
@@ -285,12 +273,6 @@ export const signInWithGoogle = (
     body: { idToken, ...details },
     anonymous: true,
   });
-
-export interface ShiftCandidate {
-  readonly id: string;
-  readonly displayName: string;
-  readonly hasPin: boolean;
-}
 
 /**
  * Que gimnasio y que plan hay detras de un enlace de invitacion.
@@ -590,17 +572,6 @@ export const cancelGuestTrial = (
     method: 'POST',
     anonymous: true,
     body: { idToken },
-  });
-
-export const staffForDevice = (): Promise<readonly ShiftCandidate[]> =>
-  request('/auth/shift/staff', { anonymous: true, withDeviceToken: true });
-
-export const openShift = (staffId: string, pin: string): Promise<IssuedSessionDto> =>
-  request('/auth/shift', {
-    method: 'POST',
-    body: { staffId, pin },
-    anonymous: true,
-    withDeviceToken: true,
   });
 
 /** Un puesto de trabajo: el rol, y en que local. */
@@ -1568,9 +1539,6 @@ export const fetchClaims = (): Promise<
 
 export const confirmClaim = (code: string, membershipId: string): Promise<unknown> =>
   request('/staff/claims/confirm', { method: 'POST', body: { code, membershipId } });
-
-export const setOwnPin = (pin: string): Promise<unknown> =>
-  request('/staff/pin', { method: 'POST', body: { pin } });
 
 /**
  * Quien viene a probar. La lista de posibles alumnos del local.

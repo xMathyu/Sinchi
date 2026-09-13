@@ -6,13 +6,18 @@
  *  · **alumno** — entra con Google. Si su cuenta ya está vinculada a una ficha
  *    del padrón, recibe sesión. Si no, recibe un código para que recepción lo
  *    confirme.
- *  · **staff** — abre turno con el token del equipo del mostrador más su PIN.
- *    El equipo es compartido y los turnos rotan, así que la sesión es de la
- *    persona, no del aparato: `recorded_by` tiene que decir la verdad.
- *  · **dueño** — entra con Google como el alumno. Su vínculo se resuelve solo
- *    por email verificado en el arranque (ver `AccountLinkService`).
+ *  · **recepción** — entra con Google igual que el alumno. Lo que la hace staff
+ *    es su fila en `staff`, que `issueForUser` lee para decidir el rol: no hay
+ *    una puerta distinta por ser del mostrador.
+ *  · **dueño** — entra con Google como los otros dos. Su vínculo se resuelve
+ *    solo por email verificado en el arranque (ver `AccountLinkService`).
+ *
+ * Hubo una cuarta, `POST /auth/shift`: token del equipo del mostrador más un
+ * PIN, para una tablet compartida con turnos rotando. Se retiró — los gimnasios
+ * de la red no trabajan así, el profesor ES la recepción y entra con su cuenta
+ * desde su teléfono.
  */
-import { BadRequestException, Body, Controller, Get, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
   AuthService,
@@ -23,9 +28,6 @@ import {
 import { CurrentSession, Public } from './auth.guard';
 import type { Session } from './session';
 import { parseWith } from '../common/zod.pipe';
-import { PIN_MAX_LENGTH, PIN_MIN_LENGTH } from './secrets';
-
-export const DEVICE_TOKEN_HEADER = 'x-device-token';
 
 const googleSchema = z.object({
   /** ID token que devuelve Firebase en el cliente. */
@@ -40,11 +42,6 @@ const googleSchema = z.object({
    */
   fullName: z.string().min(2).max(120).optional(),
   phone: z.string().min(6).max(20).optional(),
-});
-
-const shiftSchema = z.object({
-  staffId: z.string().uuid(),
-  pin: z.string().regex(new RegExp(`^\\d{${PIN_MIN_LENGTH},${PIN_MAX_LENGTH}}$`)),
 });
 
 const devLoginSchema = z.object({
@@ -91,27 +88,6 @@ export class AuthController {
     });
   }
 
-  /** Quiénes pueden abrir turno en este equipo. Alimenta el selector. */
-  @Public()
-  @Get('shift/staff')
-  staffForDevice(@Headers(DEVICE_TOKEN_HEADER) deviceToken: string | undefined) {
-    return this.auth.staffForDevice(requireDeviceToken(deviceToken));
-  }
-
-  /** Abrir turno: token del equipo + PIN de la persona. */
-  @Public()
-  @Post('shift')
-  openShift(
-    @Headers(DEVICE_TOKEN_HEADER) deviceToken: string | undefined,
-    @Body(parseWith(shiftSchema)) body: z.infer<typeof shiftSchema>,
-  ): Promise<IssuedSession> {
-    return this.auth.openShift({
-      deviceToken: requireDeviceToken(deviceToken),
-      staffId: body.staffId,
-      pin: body.pin,
-    });
-  }
-
   /**
    * Qué otros modos tiene quien pregunta.
    *
@@ -132,8 +108,8 @@ export class AuthController {
   /**
    * Y la vuelta a su puesto — o el salto a otro de sus locales.
    *
-   * Sin esto el cambio era de ida y sin regreso: la otra entrada al modo staff
-   * es `POST /auth/shift`, que pide el token del equipo del mostrador.
+   * Sin esto el cambio era de ida y sin regreso: para volver a su puesto había
+   * que cerrar sesión y entrar otra vez.
    *
    * Con `tenantId` es el cambio de local, y es la misma operación: emitir una
    * sesión de staff en un gimnasio donde esa persona tiene puesto. Que sea una
@@ -162,13 +138,4 @@ export class AuthController {
   ): Promise<IssuedSession> {
     return this.auth.devLogin(body.phone);
   }
-}
-
-function requireDeviceToken(token: string | undefined): string {
-  if (token === undefined || token.length === 0) {
-    // `BadRequestException` y no un Error suelto: un Error se convierte en 500 y
-    // parece una falla del servidor cuando el problema esta en la peticion.
-    throw new BadRequestException(`Falta la cabecera ${DEVICE_TOKEN_HEADER}.`);
-  }
-  return token;
 }

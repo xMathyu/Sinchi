@@ -104,6 +104,12 @@ Otras diferencias menores:
   botón; la regla de prorrateo merece verse antes de confirmar.
 - Los números de la maqueta (S/ 14 de diferencial, «2 de 3» en la semana 34) son
   ilustrativos. En la app salen del dominio y cambian con la fecha real.
+- **`checkin_devices` ya no existe**, aunque la especificación la lista (MD 4.6,
+  «Modo B»: tablet fija del local mostrando el QR que el alumno escanea). Esa
+  parte nunca se construyó —el TOTP que la puerta usa es el de `users`— y lo
+  único vivo de la tabla acabó siendo el token del turno del mostrador, que se
+  retiró. Ver §11. Si el Modo B se construye, nacerá con las columnas que
+  necesite.
 
 ## 6. Cosas que el diseño resolvió mejor que la especificación
 
@@ -232,9 +238,9 @@ Tres consecuencias que no son obvias y están en el código por escrito:
 - **`POST /staff/sync` sigue abierta.** No crea nada: repite marcados y pagos que
   ya ocurrieron en el mostrador mientras no había wifi. Rechazarla borraría
   dinero ya cobrado en efectivo.
-- **El PIN de turno y el alta de equipos siguen abiertos.** Sin PIN nadie abre
-  turno y sin equipo no hay puerta: cortarlos convertiría el modo solo lectura en
-  el cierre del local, que es justo lo que se prometió no hacer.
+- **Marcar asistencia sigue abierto.** La puerta es el trabajo del día y no un
+  alta: cortarla convertiría el modo solo lectura en el cierre del local, que es
+  justo lo que se prometió no hacer.
 - **Sale del directorio público.** Un local que no paga deja de recibir gente que
   le llega *por* Sinchi. Es la parte del corte que le cuesta algo al dueño sin
   costarle nada al alumno que ya entrena ahí. Las reservas ya hechas se respetan,
@@ -559,3 +565,44 @@ un alumno toca la técnica y YouTube le contesta que el video no existe.
 para quien la escribe. Modelarla con campos `sets` y `reps` sirve al gimnasio de
 pesas y deja al judoca rellenando repeticiones que no significan nada en su
 deporte. Sinchi no cuenta series; las dice.
+
+---
+
+## 11. Lo que se retiró, y por qué
+
+Borrar una función bien construida es una decisión, y merece quedar escrita igual
+que construirla.
+
+### El turno del mostrador: token de equipo + PIN
+
+El dueño registraba la tablet del mostrador y cada recepcionista abría su turno
+con un PIN de 4-6 dígitos, para una sesión de 12 horas. El razonamiento era
+correcto y sigue siéndolo **para el gimnasio que lo necesita**: si la tablet es
+compartida y los turnos rotan, cerrar y abrir sesión de Google en cada cambio
+termina en «dejemos la de Ana abierta», y ahí `recorded_by` deja de decir la
+verdad sobre quién marcó y quién cobró.
+
+**Ese gimnasio no está en esta red.** Los locales reales son dojos pequeños donde
+el profesor ES la recepción, y entra con su propia cuenta desde su teléfono. La
+función costaba dos rutas públicas, un registro de equipos, hasheo scrypt con
+bloqueo por intentos, una excepción de RLS y la tabla `checkin_devices` entera —
+todo para un caso que nadie ejercía.
+
+Lo que lo hizo seguro de borrar es que **era una cuarta puerta, no la única de
+recepción**: quien tiene fila en `staff` entra con Google o con su correo, y
+`issueForUser` le da sesión de `front_desk` leyendo esa fila. No dejó a nadie
+fuera.
+
+Lo que se perdió, dicho en voz alta: en una tablet compartida ya nada obliga a
+cada persona a identificarse, y la sesión de recepción dura 7 días en vez de 12
+horas. Se decidió aceptarlo, no ignorarlo. Si entra un gimnasio con recepción
+rotando de verdad, esto vuelve — y el razonamiento de por qué un PIN pedía scrypt
+y un token de 32 bytes no, está en el historial (`hashPin`), sin que haya que
+deducirlo otra vez.
+
+Migración `0019_fuera_el_turno_del_mostrador`. Con ella se fue también
+`checkin_devices`, que nació para el «Modo B» del MD 4.6 —tablet fija mostrando
+el QR del local— y nunca se construyó: su `totp_secret_encrypted` no lo leía
+nadie, el TOTP que la puerta usa de verdad es el de `users`. Si el Modo B se
+construye, nacerá con las columnas que necesite en vez de heredar las que
+sobraron de otra cosa.

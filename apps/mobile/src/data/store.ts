@@ -334,7 +334,7 @@ export function applyRemoteData(data: RemoteData): void {
 /**
  * Vacia el store.
  *
- * Se llama al cerrar sesion o turno. Antes devolvia a los datos de demostracion,
+ * Se llama al cerrar sesion. Antes devolvia a los datos de demostracion,
  * asi que salir de una cuenta real dejaba en pantalla la billetera de un alumno
  * inventado hasta el siguiente login.
  */

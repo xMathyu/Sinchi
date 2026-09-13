@@ -14,8 +14,6 @@ import type { AppRole } from '@sinchi/shared';
 
 const TOKEN_KEY = 'sinchi.session.token.v1';
 const META_KEY = 'sinchi.session.meta.v1';
-/** Token del equipo del mostrador. Sobrevive a los cambios de turno. */
-const DEVICE_KEY = 'sinchi.device.token.v1';
 /**
  * Nombre y celular de quien todavía no tiene ficha.
  *
@@ -355,19 +353,3 @@ export async function clearSession(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Token del equipo del mostrador
 // ---------------------------------------------------------------------------
-
-/**
- * El token del equipo NO se borra al cerrar turno.
- *
- * Es del aparato, no de la persona: la tablet sigue siendo la tablet del dojo
- * cuando Ana se va y entra Carlos. Solo lo borra revocar el equipo desde el
- * panel del dueño.
- */
-export const getDeviceToken = (): Promise<string | null> =>
-  SecureStore.getItemAsync(DEVICE_KEY);
-
-export const saveDeviceToken = (token: string): Promise<void> =>
-  SecureStore.setItemAsync(DEVICE_KEY, token);
-
-export const forgetDeviceToken = (): Promise<void> =>
-  SecureStore.deleteItemAsync(DEVICE_KEY);
