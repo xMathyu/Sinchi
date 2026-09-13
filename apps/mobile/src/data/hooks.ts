@@ -612,22 +612,32 @@ export function useOwnerSchedules(): {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  useEffect(() => {
-    let cancelado = false;
-    setError(null);
-    void ownerSchedules()
-      .then((fetched) => {
-        if (!cancelado) setSchedules(fetched);
-      })
-      .catch((e: unknown) => {
-        if (!cancelado) {
-          setError(e instanceof Error ? e.message : 'No se pudieron traer tus horarios.');
-        }
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [attempt]);
+  /**
+   * Al enfocar, no solo al montar. Ver `useOwnerPlans`: mismo fallo exacto.
+   *
+   * El editor de un bloque hace `reload()` y `router.back()` —al guardar, al
+   * archivar y al borrar—, y ese `reload` era el de SU instancia del hook. La
+   * lista de debajo nunca se desmonta mientras el editor esta encima, asi que
+   * volvia a verse igual que antes: el horario recien escrito no aparecia.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelado = false;
+      setError(null);
+      void ownerSchedules()
+        .then((fetched) => {
+          if (!cancelado) setSchedules(fetched);
+        })
+        .catch((e: unknown) => {
+          if (!cancelado) {
+            setError(e instanceof Error ? e.message : 'No se pudieron traer tus horarios.');
+          }
+        });
+      return () => {
+        cancelado = true;
+      };
+    }, [attempt]),
+  );
 
   return {
     schedules,
@@ -647,20 +657,41 @@ export function useOwnerPlans(): {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
-  useEffect(() => {
-    let cancelado = false;
-    setError(null);
-    void ownerPlans()
-      .then((fetched) => {
-        if (!cancelado) setOwnerPlanList(fetched);
-      })
-      .catch((e: unknown) => {
-        if (!cancelado) setError(e instanceof Error ? e.message : 'No se pudieron traer tus planes.');
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [attempt]);
+  /**
+   * Al ENFOCAR, y no solo al montar. Aqui vivia un fallo reportado.
+   *
+   * «Puse el precio y cuántas veces por semana, le di a guardar y no se guardó:
+   * salía como si no la hubiera creado». La tarifa SI se guardaba —se comprobo
+   * en la base— y lo que mentia era esta lista.
+   *
+   * El motivo es que este hook guarda su estado POR COMPONENTE. El editor
+   * (`plans/[planId]`) llama a `reload()` antes de `router.back()`, pero ese
+   * `reload` es el de su propia instancia: la lista de debajo tiene la suya, no
+   * se desmonta nunca mientras el editor esta encima, y por tanto no volvia a
+   * preguntar. El dueno veia exactamente lo mismo que antes de escribir.
+   *
+   * `useFocusEffect` es lo que ya hacian `useEvents` y `useBiblioteca`, y este
+   * se quedo sin ello. Volver a una pantalla es el momento en que sus datos
+   * pueden haber cambiado — casi siempre porque los cambio uno mismo.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelado = false;
+      setError(null);
+      void ownerPlans()
+        .then((fetched) => {
+          if (!cancelado) setOwnerPlanList(fetched);
+        })
+        .catch((e: unknown) => {
+          if (!cancelado) {
+            setError(e instanceof Error ? e.message : 'No se pudieron traer tus planes.');
+          }
+        });
+      return () => {
+        cancelado = true;
+      };
+    }, [attempt]),
+  );
 
   return {
     plans: ownerPlanList,
@@ -1045,19 +1076,23 @@ export function useGymPlans(): {
    */
   const [fetched, setFetched] = useState<readonly Plan[] | null>(null);
 
-  useEffect(() => {
-    let cancelado = false;
-    void gymPlans()
-      .then((list) => {
-        if (!cancelado) setFetched(list);
-      })
-      .catch(() => {
-        if (!cancelado) setFetched([]);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, []);
+  // Al enfocar, por lo mismo que `useOwnerPlans`: desde la reinscripcion se
+  // abre Planes para escribir una tarifa, y al volver hay que verla.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelado = false;
+      void gymPlans()
+        .then((list) => {
+          if (!cancelado) setFetched(list);
+        })
+        .catch(() => {
+          if (!cancelado) setFetched([]);
+        });
+      return () => {
+        cancelado = true;
+      };
+    }, []),
+  );
 
   return { plans: fetched ?? [], loading: fetched === null };
 }
