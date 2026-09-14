@@ -59,15 +59,21 @@ export default function EnrollScreen() {
   // y a recepción un botón que la api le va a responder 403 no le sirve de nada.
   const isOwner = useRole() === 'owner';
 
-  /** La reserva de la app que esta alta viene a cerrar, si viene de una. */
+  /**
+   * De dónde viene el alta, si viene de algún sitio: la reserva de la app que
+   * cierra, o el QR de la cuenta que la persona mostró. Los dos traen nombre,
+   * celular y correo ya puestos.
+   */
   const reserva = useLocalSearchParams<{
     bookingId?: string;
+    accountToken?: string;
     name?: string;
     phone?: string;
     email?: string;
     planId?: string;
   }>();
   const bookingId = (reserva.bookingId ?? '').length > 0 ? reserva.bookingId! : null;
+  const accountToken = (reserva.accountToken ?? '').length > 0 ? reserva.accountToken! : null;
 
   const [correo, setCorreo] = useState(reserva.email ?? '');
   // `null` = todavia no se ha comprobado el correo.
@@ -393,6 +399,7 @@ export default function EnrollScreen() {
               ...(correo.trim().length > 0 ? { email: correo.trim() } : {}),
               planId: plan.id,
               ...(bookingId === null ? {} : { bookingId }),
+              ...(accountToken === null ? {} : { accountToken }),
             })
               .then((outcome) => {
                 // A la ficha recién creada: es donde se cobra la matrícula, que

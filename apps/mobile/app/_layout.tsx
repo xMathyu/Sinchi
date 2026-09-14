@@ -109,7 +109,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
           <Stack.Screen name="login" options={{ animation: 'fade' }} />
-          <Stack.Screen name="link" options={{ animation: 'fade' }} />
+          <Stack.Screen name="visitor" options={{ animation: 'fade' }} />
           <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
           <Stack.Screen name="explore/index" />
           <Stack.Screen name="explore/[slug]" />
@@ -122,7 +122,6 @@ export default function RootLayout() {
           <Stack.Screen name="charge/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="member/[membershipId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="enroll" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="claims" options={{ presentation: 'modal' }} />
           <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
           {/* A pantalla completa y sin animacion lateral: es la camara, no una
               ficha que se consulta. Se queda abierta DEBAJO del resultado para
@@ -291,7 +290,6 @@ const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     'result',
     'member',
     'enroll',
-    'claims',
     'manual',
     'scan',
     // La oferta del local. Del staff y no compartidas: el alumno no tiene nada
@@ -360,7 +358,7 @@ function SessionRouter() {
 
     const first = segments[0];
     const onWelcome = first === 'welcome';
-    const enLogin = first === 'login' || first === 'link';
+    const enLogin = first === 'login';
     // La puerta de desarrollo tambien: es de donde sale el modo demostracion.
     // Sin esto, tocar "Probar sin Google" navegaba a /dev y este efecto lo
     // devolvia a /login en el mismo instante — se veia como que no pasaba nada.
@@ -375,9 +373,9 @@ function SessionRouter() {
     /**
      * El alta de un gimnasio sale del directorio, y quien la abre casi siempre
      * es una cuenta RECIEN creada sin ficha en ningun padron — que es el estado
-     * `unlinked`, cuya rama devuelve al directorio todo lo que no sea el codigo
-     * de vinculacion. Sin esta excepcion el boton rebotaba a `/explore` sin
-     * mostrar nada, y el fallo era mudo: ni error, ni ruta desconocida, nada.
+     * `unlinked`, cuya rama devuelve a sus pestañas todo lo que no este en su
+     * lista. Sin esta excepcion el boton rebotaba sin mostrar nada, y el fallo
+     * era mudo: ni error, ni ruta desconocida, nada.
      */
     const onGymSignUp = first === 'gym-signup';
     // Escribirle a un gimnasio nace en el directorio, que se mira sin cuenta: la
@@ -425,21 +423,19 @@ function SessionRouter() {
 
     if (state.status === 'unlinked') {
       /**
-       * Cuenta creada y sin ficha en ningun padron: aterriza en el DIRECTORIO,
-       * no en el codigo de seis digitos.
+       * Cuenta creada y sin ficha en ningun padron: aterriza en SUS PESTAÑAS
+       * —gimnasios, su QR y sus mensajes—.
        *
-       * Antes lo primero que veia quien acababa de instalar la app era un numero
-       * que solo sirve si ya hay un gimnasio esperandolo con su ficha hecha. Al
-       * que todavia no entrena en ningun sitio —que es justo a quien este
-       * producto quiere— la app le abria con una pared.
-       *
-       * El codigo NO desaparece: sigue en `/link`, a un toque desde el
-       * directorio. Hace falta para el alumno al que su gimnasio dio de alta por
-       * DNI sin invitarlo, que es el unico camino que le queda para que esa
-       * ficha llegue a su app — el auto-vinculo por correo solo existe para el
-       * dueno (`tryLinkOwnerByEmail`).
+       * Fue primero el codigo de seis digitos, una pared para quien todavia no
+       * entrena en ningun sitio, y despues el directorio a secas: sin barra, con
+       * el codigo, los mensajes y cerrar sesion escondidos dentro. Son las tres
+       * cosas que hace alguien sin gimnasio —buscar donde, preguntar y dejarse
+       * inscribir mostrando su QR—, y la ficha le llega como una solicitud que
+       * acepta desde ahi mismo (decisiones §14).
        */
-      if (first !== 'link' && !enDirectorio && !onGymSignUp && !onChat) router.replace('/explore');
+      if (first !== 'visitor' && !enDirectorio && !onGymSignUp && !onChat) {
+        router.replace('/visitor');
+      }
       return;
     }
 

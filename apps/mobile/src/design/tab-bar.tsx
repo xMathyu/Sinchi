@@ -16,6 +16,7 @@ import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 // puerta de `./icons/*` son 7 archivos y nada mas.
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import CalendarCheck from 'lucide-react-native/icons/calendar-check';
+import Dumbbell from 'lucide-react-native/icons/dumbbell';
 // `History` es un alias: el archivo se llama por su forma, no por su uso.
 import History from 'lucide-react-native/icons/rotate-ccw-clock';
 import MessageCircle from 'lucide-react-native/icons/message-circle';
@@ -49,6 +50,7 @@ import { useTheme } from './theme';
  * cambiar de icono; `wallet` y `history` si.
  */
 export type TabIconShape =
+  | 'gyms'
   | 'wallet'
   | 'qr'
   | 'plan'
@@ -60,6 +62,7 @@ export type TabIconShape =
   | 'device';
 
 const ICONS: Readonly<Record<TabIconShape, LucideIcon>> = {
+  gyms: Dumbbell,
   wallet: Wallet,
   qr: QrCode,
   trials: CalendarCheck,

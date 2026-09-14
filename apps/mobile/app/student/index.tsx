@@ -27,12 +27,15 @@ import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import {
   useErrorDeCarga,
+  useLinkRequests,
   useMyBookings,
   useRefresco,
   useStore,
   useWallet,
 } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
+import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
+import { LinkRequestList } from '../../src/design/link-requests';
 import type { MembershipView } from '../../src/data/store';
 import type { ClassBookingDto } from '../../src/data/api';
 import { formatShortDate, formatWeekdayAndDay, initials, splitGymName } from '../../src/lib/format';
@@ -86,6 +89,8 @@ export default function WalletScreen() {
           {active === 1 ? 'membresía activa' : 'membresías activas'}
         </Text>
       </Stack>
+
+      <PendingLinkRequests />
 
       {wallet.length === 0 && errorDeCarga !== null ? (
         <View style={{ flex: 1, minHeight: 380 }}>
@@ -289,3 +294,28 @@ function SecondaryLine({
  */
 const badgeForYou = (badge: string): string =>
   badge.startsWith('DEBE ') ? `DEBES ${badge.slice('DEBE '.length)}` : badge;
+
+/**
+ * Los gimnasios que la inscribieron y esperan que acepte.
+ *
+ * Arriba de la billetera y no dentro: lo que está aquí todavía NO es una
+ * membresía suya, y mezclarlo con las tarjetas del semáforo lo haría pasar por
+ * una. Es el caso que la regla vino a cubrir —el segundo gimnasio que inscribe a
+ * alguien por su DNI— y por eso tiene que verse sin buscarlo.
+ */
+function PendingLinkRequests() {
+  const requests = useLinkRequests();
+  if (requests.details.length === 0) return null;
+
+  return (
+    <Stack gap={10} style={{ marginTop: 18 }}>
+      <Eyebrow>Te agregaron</Eyebrow>
+      <LinkRequestList
+        requests={requests.details}
+        onAccept={acceptLinkRequest}
+        onReject={rejectLinkRequest}
+        onAnswered={requests.reload}
+      />
+    </Stack>
+  );
+}

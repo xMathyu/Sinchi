@@ -50,12 +50,16 @@ export type SessionState =
   | { readonly status: 'signed_out' }
   /**
    * La cuenta de Google es válida pero no está vinculada a ninguna ficha del
-   * padrón. No es un error: es el estado normal del alumno nuevo, y lo resuelve
-   * la recepcionista confirmando el código.
+   * padrón. No es un error: es el estado normal de quien acaba de registrarse, y
+   * lo resuelve la propia persona aceptando la solicitud de un gimnasio.
    */
   | {
       readonly status: 'unlinked';
-      readonly code: string;
+      /**
+       * Lo que va en su QR de cuenta (`SINCHI1:a:<qrToken>`), con el que
+       * recepción la inscribe. Vence en `expiresAt`; volver a entrar lo renueva.
+       */
+      readonly qrToken: string;
       readonly expiresAt: number;
       /**
        * El ID token de Firebase con el que entró.
@@ -252,13 +256,13 @@ export function enterDemoMode(): void {
 }
 
 export function setUnlinked(input: {
-  readonly code: string;
+  readonly qrToken: string;
   readonly expiresAt: number;
   readonly idToken: string;
   readonly fullName: string | null;
   readonly phone: string | null;
 }): void {
-  // No se persiste: el código dura diez minutos y el servidor devuelve el mismo
+  // No se persiste: el QR dura diez minutos y el servidor devuelve el mismo
   // mientras siga vivo, así que volver a entrar lo recupera — con sus datos.
   emit({ status: 'unlinked', ...input });
 }

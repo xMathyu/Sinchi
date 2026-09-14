@@ -107,9 +107,9 @@ export default function LoginScreen() {
         return;
       }
       // Cuando queda vinculado, el layout raíz enruta solo al ver la sesión.
-      // Sin ficha en ningún padrón, al directorio: es lo único que esa persona
-      // puede hacer hoy, y su código sigue a un toque desde ahí.
-      if (outcome.kind === 'needs_link') router.replace('/explore');
+      // Sin ficha en ningún padrón, a sus pestañas: los gimnasios, su QR y sus
+      // mensajes.
+      if (outcome.kind === 'needs_link') router.replace('/visitor');
     });
 
     return () => {
@@ -131,7 +131,7 @@ export default function LoginScreen() {
         setError(outcome.message);
         return;
       }
-      if (outcome.kind === 'needs_link') router.replace('/explore');
+      if (outcome.kind === 'needs_link') router.replace('/visitor');
       // Si quedo dentro, el layout raiz enruta solo al ver la sesion.
     });
   };

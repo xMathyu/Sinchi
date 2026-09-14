@@ -19,12 +19,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { parseAccountQrPayload } from '@sinchi/shared';
 import { screenPadding } from '@sinchi/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Stack, Text } from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
 import { useRoster } from '../src/data/hooks';
-import { evaluarQr } from '../src/data/actions';
+import { evaluarQr, lookupAccount } from '../src/data/actions';
 
 /** Lado del objetivo. El QR se lee mucho antes de llenarlo; es una guía, no un marco. */
 const TARGET = 288;
@@ -63,6 +64,34 @@ export default function ScanScreen() {
     if (locked.current) return;
     locked.current = true;
     setValidando(true);
+
+    // El QR de una CUENTA no se valida en la puerta: quien lo muestra viene a
+    // inscribirse. Se canjea por su nombre y su contacto y se abre el alta con
+    // ellos puestos — a recepción solo le queda leer el DNI y elegir el plan.
+    const accountToken = parseAccountQrPayload(data);
+    if (accountToken !== null) {
+      void lookupAccount(accountToken)
+        .then((account) => {
+          router.push({
+            pathname: '/enroll',
+            params: {
+              accountToken,
+              name: account.displayName ?? '',
+              phone: account.phone ?? '',
+              email: account.email ?? '',
+            },
+          });
+        })
+        .catch((causa: unknown) => {
+          Alert.alert(
+            'No se pudo leer ese QR',
+            causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+            [{ text: 'Entendido', onPress: () => (locked.current = false) }],
+          );
+        })
+        .finally(() => setValidando(false));
+      return;
+    }
 
     // La firma TOTP la verifica el servidor, no este aparato: `evaluarQr`
     // decide a quién preguntar y cae a la caché si no hay red.

@@ -36,7 +36,6 @@ import { switchGym } from '../../src/data/auth';
 import type { StaffPostDto } from '../../src/data/api';
 import {
   useBajas,
-  useClaims,
   useMyGyms,
   useOwnerSummary,
   useRefresco,
@@ -53,7 +52,6 @@ export default function RosterScreen() {
   const roster = useRoster();
   const loading = useStore((s) => s.hydrating);
   const isOwner = useStore((s) => s.staff.role) === 'owner';
-  const { claims } = useClaims();
   const summary = useOwnerSummary();
   const { subscription, reload: reloadSubscription } = useSinchiSubscription();
   /**
@@ -129,26 +127,6 @@ export default function RosterScreen() {
         <Row gap={10}>
           <Eyebrow>Padrón</Eyebrow>
           <Row gap={8} justify="flex-end" style={{ flexShrink: 0 }}>
-            {/* Solo aparece cuando hay alguien esperando. Un chip permanente
-                para algo que ocurre tres veces por semana es ruido en la
-                pantalla que recepción mira todo el día. */}
-            {claims.length > 0 && (
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={12}
-                onPress={() => router.push('/claims')}
-              >
-                <Card
-                  radius={theme.radii.pill}
-                  borderColor={withAlpha(theme.semaphore.warn, 0.35)}
-                  style={{ paddingVertical: 7, paddingHorizontal: 12 }}
-                >
-                  <Text variant="captionSmall" weight="semibold" color={theme.semaphore.warn}>
-                    {claims.length} por vincular
-                  </Text>
-                </Card>
-              </Pressable>
-            )}
             {/* Inscribir sí es permanente: es la acción que sostiene todo lo
                 demás —sin padrón no hay a quién vincular, ni a quién escanear,
                 ni a quién cobrar— y hasta ahora no existía en ninguna pantalla.

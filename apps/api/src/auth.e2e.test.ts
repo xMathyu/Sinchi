@@ -137,7 +137,7 @@ afterAll(async () => {
 });
 
 suite('entrar con Google', () => {
-  it('una cuenta sin vincular NO recibe sesión, recibe un código', async () => {
+  it('una cuenta sin ficha NO recibe sesión: recibe el QR con el que la inscriben', async () => {
     // Es la decisión central: la ficha del padrón existe antes que la cuenta, y
     // adivinar a cuál corresponde sería regalarle a alguien el historial de otro.
     const token = declareIdentity('diego-google');
@@ -145,17 +145,16 @@ suite('entrar con Google', () => {
 
     expect(body.linked).toBe(false);
     expect(body.accessToken).toBeUndefined();
-    expect(body.claim.code).toMatch(/^\d{6}$/);
+    expect(body.claim.qrToken).toMatch(/^[A-Za-z0-9_-]{24}$/);
     expect(new Date(body.claim.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('entrar dos veces devuelve el MISMO código', async () => {
-    // Si el alumno cierra y abre la app mientras espera en la cola, el número que
-    // tiene en la mano tiene que seguir sirviendo.
+  it('entrar dos veces devuelve el MISMO QR', async () => {
+    // Quien cierra y abre la app en la cola del mostrador sigue mostrando el mismo.
     const token = declareIdentity('lucia-google');
     const first = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
     const second = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    expect(second.body.claim.code).toBe(first.body.claim.code);
+    expect(second.body.claim.qrToken).toBe(first.body.claim.qrToken);
   });
 
   it('rechaza un token que Firebase no valida', async () => {
@@ -163,93 +162,206 @@ suite('entrar con Google', () => {
   });
 });
 
-suite('vinculación en el mostrador', () => {
-  it('recepción confirma y desde ahí sí hay sesión', async () => {
-    const token = declareIdentity('julio-google');
-    const claim = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    const membershipId = await findMembership(frontDesk, 'Julio Salcedo');
+/**
+ * Solicitudes de vínculo (migración 0023).
+ *
+ * Reemplazan a las pruebas del código de 6 dígitos. Cuidan la regla nueva
+ * —ningún gimnasio aparece en la app de alguien sin que lo acepte— y que aceptar
+ * no sirva para quedarse con la ficha de otra persona.
+ */
+suite('solicitudes de vínculo', () => {
+  /** Único por corrida: las identidades que crea un alta sobreviven al reset. */
+  const run = String(Date.now()).slice(-7);
+  const VALERIA = { dni: `8${run}`, phone: `+5199${run}`, name: 'Valeria Torres' };
+  let valeriaSession = '';
 
-    const confirmed = await http
-      .post('/v1/staff/claims/confirm')
-      .set(auth(frontDesk))
-      .send({ code: claim.body.claim.code, membershipId })
-      .expect(201);
-    expect(confirmed.body.linked).toBe(true);
+  const monthlyPlan = async (bearer: string): Promise<string> => {
+    const { body } = await http.get('/v1/staff/plans').set(auth(bearer)).expect(200);
+    const plan = (body as { id: string; type: string }[]).find((p) => p.type !== 'drop_in');
+    if (plan === undefined) throw new Error('El gimnasio sembrado no tiene mensualidades');
+    return plan.id;
+  };
 
-    // Ahora el mismo token de Google sí abre sesión, y sobre la ficha correcta.
-    const session = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    expect(session.body.linked).toBe(true);
-    expect(session.body.role).toBe('student');
+  const wallet = async (bearer: string): Promise<string[]> => {
+    const { body } = await http.get('/v1/me/wallet').set(auth(bearer)).expect(200);
+    return (body as { tenant: { name: string } }[]).map((view) => view.tenant.name).sort();
+  };
 
-    const me = await http.get('/v1/me').set(auth(session.body.accessToken)).expect(200);
-    expect(me.body.user.name).toBe('Julio Salcedo');
-  });
-
-  it('el código se consume: no sirve dos veces', async () => {
-    const token = declareIdentity('rosa-google');
-    const claim = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    const rosa = await findMembership(frontDesk, 'Rosa Salazar');
-    const lucia = await findMembership(frontDesk, 'Lucía Ferrer');
-
-    await http
-      .post('/v1/staff/claims/confirm')
-      .set(auth(frontDesk))
-      .send({ code: claim.body.claim.code, membershipId: rosa })
-      .expect(201);
-
-    // Reusarlo para vincular a otra persona no debe funcionar.
-    await http
-      .post('/v1/staff/claims/confirm')
-      .set(auth(frontDesk))
-      .send({ code: claim.body.claim.code, membershipId: lucia })
-      .expect(404);
-  });
-
-  it('no se puede desplazar la cuenta de alguien ya vinculado', async () => {
-    // Sin esto, cualquiera podría quedarse con el historial y el QR de otro.
-    const intruso = declareIdentity('intruso-google');
-    const claim = await http.post('/v1/auth/google').send({ idToken: intruso }).expect(201);
+  it('la que va por celular la ve quien entra con ese celular, y aceptar la vincula', async () => {
     const julio = await findMembership(frontDesk, 'Julio Salcedo');
-
-    const { body } = await http
-      .post('/v1/staff/claims/confirm')
+    const { body: enviada } = await http
+      .post(`/v1/staff/members/${julio}/link-request`)
       .set(auth(frontDesk))
-      .send({ code: claim.body.claim.code, membershipId: julio })
-      .expect(409);
-    expect(JSON.stringify(body)).toMatch(/ya tiene una cuenta vinculada/i);
+      .expect(201);
+    expect(enviada.request.status).toBe('pending');
+    expect(enviada.accountLinked).toBe(false);
+
+    // Con espacios, como lo escribe la gente: la ficha lo tiene sin ellos.
+    const token = declareIdentity('julio-google');
+    await http
+      .post('/v1/auth/google')
+      .send({ idToken: token, phone: '+51 987 333 444' })
+      .expect(201);
+
+    const { body: pendientes } = await http
+      .post('/v1/link-requests/mine')
+      .send({ idToken: token })
+      .expect(201);
+    expect(pendientes).toHaveLength(1);
+    expect(pendientes[0].gymName).toBe('Dojo Shotokan Miraflores');
+
+    const { body: sesion } = await http
+      .post(`/v1/link-requests/${pendientes[0].id}/accept`)
+      .send({ idToken: token })
+      .expect(201);
+    expect(sesion.linked).toBe(true);
+    expect(sesion.role).toBe('student');
+
+    const me = await http.get('/v1/me').set(auth(sesion.accessToken)).expect(200);
+    expect(me.body.user.name).toBe('Julio Salcedo');
+
+    const { body: estado } = await http
+      .get(`/v1/staff/members/${julio}/link-request`)
+      .set(auth(frontDesk))
+      .expect(200);
+    expect(estado.request.status).toBe('accepted');
+    expect(estado.accountLinked).toBe(true);
   });
 
-  it('recepción no puede vincular contra el padrón de otro gimnasio', async () => {
-    // La autoridad la da RLS: la membresía se resuelve con contexto de tenant.
-    const token = declareIdentity('ajeno-google');
-    const claim = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
-    const ajena = await findMembership(owner, 'Mathyu Quispe'); // en Iron Muay Thai
+  it('otra cuenta no la ve ni puede contestarla', async () => {
+    const rosa = await findMembership(frontDesk, 'Rosa Salazar');
+    const { body: enviada } = await http
+      .post(`/v1/staff/members/${rosa}/link-request`)
+      .set(auth(frontDesk))
+      .expect(201);
+
+    const extrano = declareIdentity('extrano-google');
+    await http
+      .post('/v1/auth/google')
+      .send({ idToken: extrano, phone: '+51900000001' })
+      .expect(201);
+
+    const { body: pendientes } = await http
+      .post('/v1/link-requests/mine')
+      .send({ idToken: extrano })
+      .expect(201);
+    expect(pendientes).toHaveLength(0);
+
+    // Con el id en la mano tampoco: el mismo 404 que si no existiera.
+    await http
+      .post(`/v1/link-requests/${enviada.request.id}/accept`)
+      .send({ idToken: extrano })
+      .expect(404);
+  });
+
+  it('recepción escanea el QR de una cuenta, la inscribe, y la cuenta acepta', async () => {
+    const token = declareIdentity(`valeria-${run}`);
+    const { body: cuenta } = await http
+      .post('/v1/auth/google')
+      .send({ idToken: token, fullName: VALERIA.name, phone: VALERIA.phone })
+      .expect(201);
+
+    // Canjear el QR le ahorra al mostrador teclear lo que la persona ya escribió.
+    const { body: vista } = await http
+      .post('/v1/staff/accounts/lookup')
+      .set(auth(frontDesk))
+      .send({ token: cuenta.claim.qrToken })
+      .expect(201);
+    expect(vista).toEqual({
+      displayName: VALERIA.name,
+      phone: VALERIA.phone,
+      email: `valeria-${run}@example.com`,
+    });
+
+    const { body: alta } = await http
+      .post('/v1/staff/members')
+      .set(auth(frontDesk))
+      .send({
+        documentId: VALERIA.dni,
+        name: vista.displayName,
+        phone: vista.phone,
+        planId: await monthlyPlan(frontDesk),
+        accountToken: cuenta.claim.qrToken,
+      })
+      .expect(201);
+    expect(alta.linkRequestSent).toBe(true);
+
+    const { body: pendientes } = await http
+      .post('/v1/link-requests/mine')
+      .send({ idToken: token })
+      .expect(201);
+    expect(pendientes.map((p: { gymName: string }) => p.gymName)).toEqual([
+      'Dojo Shotokan Miraflores',
+    ]);
+
+    const { body: sesion } = await http
+      .post(`/v1/link-requests/${pendientes[0].id}/accept`)
+      .send({ idToken: token })
+      .expect(201);
+    valeriaSession = sesion.accessToken as string;
+    expect(await wallet(valeriaSession)).toEqual(['Dojo Shotokan Miraflores']);
+  });
+
+  it('quien ya es alumna no ve el gimnasio nuevo en su billetera hasta aceptar', async () => {
+    // Es el caso que la regla vino a cerrar: con su DNI, cualquier gimnasio podía
+    // meterse en la app de alguien que ya entrenaba en otro.
+    const { body: alta } = await http
+      .post('/v1/staff/members')
+      .set(auth(owner))
+      .send({ documentId: VALERIA.dni, planId: await monthlyPlan(owner) })
+      .expect(201);
+    expect(alta.reusedIdentity).toBe(true);
+    expect(alta.linkRequestSent).toBe(true);
+    const iron = alta.view.membership.id as string;
+    const ironName = alta.view.tenant.name as string;
+
+    expect(await wallet(valeriaSession)).toEqual(['Dojo Shotokan Miraflores']);
+
+    const { body: pendientes } = await http
+      .get('/v1/me/link-requests')
+      .set(auth(valeriaSession))
+      .expect(200);
+    expect(pendientes.map((p: { gymName: string }) => p.gymName)).toEqual([ironName]);
 
     await http
-      .post('/v1/staff/claims/confirm')
-      .set(auth(frontDesk)) // Ana trabaja en Dojo Shotokan
-      .send({ code: claim.body.claim.code, membershipId: ajena })
-      .expect(404);
+      .post(`/v1/me/link-requests/${pendientes[0].id}/reject`)
+      .set(auth(valeriaSession))
+      .expect(201);
+    expect(await wallet(valeriaSession)).toEqual(['Dojo Shotokan Miraflores']);
+
+    // El gimnasio ve el rechazo, y puede volver a pedirlo.
+    const { body: rechazada } = await http
+      .get(`/v1/staff/members/${iron}/link-request`)
+      .set(auth(owner))
+      .expect(200);
+    expect(rechazada.request.status).toBe('rejected');
+
+    await http.post(`/v1/staff/members/${iron}/link-request`).set(auth(owner)).expect(201);
+    const { body: otraVez } = await http
+      .get('/v1/me/link-requests')
+      .set(auth(valeriaSession))
+      .expect(200);
+    await http
+      .post(`/v1/me/link-requests/${otraVez[0].id}/accept`)
+      .set(auth(valeriaSession))
+      .expect(201);
+
+    expect(await wallet(valeriaSession)).toEqual(['Dojo Shotokan Miraflores', ironName].sort());
   });
 
-  it('un código vencido o inexistente se rechaza con un mensaje útil', async () => {
-    const membershipId = await findMembership(frontDesk, 'Lucía Ferrer');
+  it('un QR vencido o inventado no se canjea', async () => {
     const { body } = await http
-      .post('/v1/staff/claims/confirm')
+      .post('/v1/staff/accounts/lookup')
       .set(auth(frontDesk))
-      .send({ code: '000000', membershipId })
+      .send({ token: 'x'.repeat(24) })
       .expect(404);
-    expect(JSON.stringify(body)).toMatch(/vuelva a entrar/i);
+    expect(JSON.stringify(body)).toMatch(/venció/);
   });
 
-  it('recepción ve los códigos vigentes sin que se los dicten', async () => {
-    const pendiente = declareIdentity('pendiente-google');
-    await http.post('/v1/auth/google').send({ idToken: pendiente }).expect(201);
-
-    const { body } = await http.get('/v1/staff/claims').set(auth(frontDesk)).expect(200);
-    expect(body.some((c: { email: string }) => c.email === 'pendiente-google@example.com')).toBe(
-      true,
-    );
+  it('recepción no mira ni reenvía solicitudes de otro gimnasio', async () => {
+    const ajena = await findMembership(owner, 'Mathyu Quispe'); // su ficha en Iron Muay Thai
+    await http.get(`/v1/staff/members/${ajena}/link-request`).set(auth(frontDesk)).expect(404);
+    await http.post(`/v1/staff/members/${ajena}/link-request`).set(auth(frontDesk)).expect(404);
   });
 
   it('el dueño puede desvincular; recepción no', async () => {
@@ -307,11 +419,11 @@ suite('vinculación automática del dueño', () => {
     expect(body.linked).toBe(false);
   });
 
-  it('un correo desconocido cae al código, no inventa una cuenta', async () => {
+  it('un correo desconocido no inventa una cuenta: queda sin ficha', async () => {
     const token = declareIdentity('nadie-google', { email: `nadie.${Date.now()}@example.pe` });
     const { body } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
     expect(body.linked).toBe(false);
-    expect(body.claim.code).toMatch(/^\d{6}$/);
+    expect(body.claim.qrToken).toMatch(/^[A-Za-z0-9_-]{24}$/);
   });
 });
 

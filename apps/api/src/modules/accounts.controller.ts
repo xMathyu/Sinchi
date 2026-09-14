@@ -1,9 +1,13 @@
 /**
- * Vinculación de cuentas, PIN y equipos: lo que el staff administra.
+ * La identidad de los alumnos, del lado del staff: invitaciones, el QR de una
+ * cuenta y las solicitudes de vínculo.
  *
  * Vive aparte de `staff.controller.ts` porque es otro asunto —identidad y
- * acceso, no la operación diaria de la puerta— y porque casi todo aquí es del
- * dueño, no de recepción.
+ * acceso, no la operación diaria de la puerta—.
+ *
+ * Aquí vivía también la confirmación del código de 6 dígitos, `/staff/claims`.
+ * Se retiró con la migración 0023: el vínculo ya no lo confirma recepción, lo
+ * acepta la persona en su app (ver `LinkRequestsService`).
  */
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { z } from 'zod';
@@ -14,21 +18,14 @@ import { parseWith } from '../common/zod.pipe';
 import { loadEnv } from '../config/env';
 import { MailService } from './mail/mail.service';
 import { AccountLinkService } from '../auth/account-link.service';
-import { AuthService } from '../auth/auth.service';
 import { InviteService } from '../auth/invite.service';
-
-const confirmSchema = z.object({
-  /** Los 6 dígitos que el alumno muestra en su app. */
-  code: z.string().regex(/^\d{6}$/),
-  /** A quién pertenece. Recepción lo elige del padrón. */
-  membershipId: z.string().uuid(),
-});
+import { LinkRequestsService } from './identity/link-requests.service';
 
 const inviteSchema = z.object({
   fullName: z.string().min(2).max(120),
   /**
-   * Con correo, la cuenta se activa sola al entrar con Google. Es el camino
-   * normal; sin el, la persona recibe el codigo de 6 digitos.
+   * Con correo, la cuenta se activa sola al entrar con Google. Sin el, la
+   * persona entra por el enlace.
    */
   email: z.string().email().max(254).optional(),
   /** DNI peruano: 8 digitos. CE y pasaporte no caben aqui todavia. */
@@ -40,14 +37,19 @@ const inviteSchema = z.object({
   ttlDays: z.number().int().min(1).max(30).optional(),
 });
 
+const accountQrSchema = z.object({
+  /** Lo que sigue a `SINCHI1:a:` en el QR de la cuenta. */
+  token: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/),
+});
+
 @StaffOnly()
 @Controller('staff')
 export class AccountsController {
   constructor(
     private readonly accountLink: AccountLinkService,
-    private readonly auth: AuthService,
     private readonly invites: InviteService,
     private readonly mail: MailService,
+    private readonly linkRequests: LinkRequestsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -57,10 +59,11 @@ export class AccountsController {
   /**
    * Crea la invitacion y devuelve el token **una vez**.
    *
-   * Es la alternativa al codigo de 6 digitos: en vez de que el alumno lo dicte
-   * en el mostrador, el staff decide ficha y plan aqui y manda el enlace. El
-   * token no vuelve a estar disponible — si se pierde, se revoca y se invita
-   * otra vez.
+   * Sirve a quien todavia no tiene Sinchi instalado: el staff decide ficha y
+   * plan aqui, manda el enlace, y quien lo abre crea su cuenta y entra ya
+   * inscrito. Abrirlo es su forma de aceptar, y por eso no deja solicitud. El
+   * token no vuelve a estar disponible — si se pierde, se revoca y se invita otra
+   * vez.
    */
   @Post('invites')
   async createInvite(
@@ -125,51 +128,65 @@ export class AccountsController {
   }
 
   // -------------------------------------------------------------------------
-  // Vincular cuentas
+  // El QR de una cuenta y las solicitudes
   // -------------------------------------------------------------------------
 
   /**
-   * Códigos vigentes.
+   * Canjea el QR de una cuenta por su nombre y su contacto.
    *
-   * Existe para que recepción no dependa de que el alumno le dicte bien seis
-   * dígitos: si su cuenta aparece en la lista, basta tocarla.
+   * Es lo que evita teclearlos al inscribir a alguien que ya tiene la app. El
+   * uid de Firebase no sale de aquí: la inscripción vuelve a mandar el token y
+   * lo resuelve la api, que es quien decide a qué cuenta va la solicitud.
+   *
+   * POST y no GET porque el token va en el cuerpo: en la URL acabaría en los
+   * logs del balanceador.
    */
-  @Get('claims')
-  pendingClaims() {
-    return this.accountLink.listPending();
+  @Post('accounts/lookup')
+  async previewAccount(@Body(parseWith(accountQrSchema)) body: z.infer<typeof accountQrSchema>) {
+    const { displayName, phone, email } = await this.accountLink.previewByQrToken(body.token);
+    return { displayName, phone, email };
   }
 
-  /**
-   * Confirma que esa cuenta de Google es de este alumno.
-   *
-   * Es LA operación sensible del módulo: vincular mal significa entregarle a
-   * alguien el historial de pagos y el QR de otro. Por eso la confirma una
-   * persona que tiene al alumno enfrente, y por eso la membresía se resuelve con
-   * aislamiento por tenant — recepción solo puede vincular contra su padrón.
-   */
-  @Post('claims/confirm')
-  async confirmClaim(
+  /** Cómo está la ficha frente a la app de la persona. */
+  @Get('members/:membershipId/link-request')
+  linkState(
     @CurrentSession() session: Session,
-    @Body(parseWith(confirmSchema)) body: z.infer<typeof confirmSchema>,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
+  ) {
+    return this.linkRequests.forMembership(assertStaffSession(session).tenantId, membershipId);
+  }
+
+  /** Vuelve a mandarle la solicitud: la rechazó sin querer, o el gimnasio la retiró. */
+  @Post('members/:membershipId/link-request')
+  resendLinkRequest(
+    @CurrentSession() session: Session,
+    @Param('membershipId', ParseUUIDPipe) membershipId: string,
   ) {
     const staff = assertStaffSession(session);
-    const result = await this.accountLink.confirmClaim({
-      tenantId: staff.tenantId,
-      staffId: staff.staffId,
-      code: body.code,
-      membershipId: body.membershipId,
-    });
-    return { linked: true, ...result };
+    return this.linkRequests.resend(staff.tenantId, membershipId, staff.staffId);
+  }
+
+  /** Retira una solicitud sin contestar. Quita, no crea: abierta en solo lectura. */
+  @AllowedWhenReadOnly()
+  @Delete('link-requests/:requestId')
+  async cancelLinkRequest(
+    @CurrentSession() session: Session,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+  ) {
+    await this.linkRequests.cancel(assertStaffSession(session).tenantId, requestId);
+    return { canceled: true };
   }
 
   /**
    * Desvincula. Solo el dueño.
    *
-   * El vínculo lo hace una persona y las personas se equivocan: si recepción
-   * asocia la cuenta de Diego a la ficha de Julio, tiene que haber forma de
-   * deshacerlo sin entrar a la base a mano.
+   * El vínculo lo acepta una persona sobre un celular que no se verifica: si
+   * alguien se registró con el de otra y aceptó su solicitud, tiene que haber
+   * forma de deshacerlo sin entrar a la base a mano.
+   *
+   * Abierta en solo lectura por lo mismo que revocar la invitación: solo quita
+   * acceso.
    */
-  /** Misma razón que revocar la invitación: desvincular solo quita acceso. */
   @AllowedWhenReadOnly()
   @OwnerOnly()
   @Delete('members/:membershipId/account')
@@ -180,5 +197,4 @@ export class AccountsController {
     await this.accountLink.unlink(assertStaffSession(session).tenantId, membershipId);
     return { unlinked: true };
   }
-
 }

@@ -41,33 +41,38 @@ Los atajos que parecen obvios son agujeros:
 | Emparejar por email | Exige que recepción lo pida y lo escriba sin error. Un typo vincula a la persona equivocada; sin email, no vincula a nadie. |
 | Crear un usuario nuevo | Rompe la tesis del producto: la persona existiría dos veces, y el QR, el cupo y la deuda cuelgan de la ficha del padrón. |
 
-### La solución: lo confirma quien tiene al alumno enfrente
+### La solución: lo acepta la persona
 
-Es la verificación de identidad más fuerte disponible, y es gratis.
+Hasta la migración 0023 lo confirmaba recepción. La app mostraba un código de 6
+dígitos, la persona lo dictaba y recepción lo escribía junto a su ficha: la
+verificación más fuerte disponible, porque la confirma quien tiene a la persona
+enfrente. Tenía dos costes. Era una pared para quien todavía no entrena en ningún
+sitio, y dejaba abierto un agujero: inscribir por DNI a alguien que ya tenía
+cuenta metía el gimnasio en su app sin preguntarle.
+
+Ahora el gimnasio deja una **solicitud** y la persona la acepta en su app
+(decisiones §14):
 
 ```
-1. El alumno entra con Google
-2. La api responde { linked: false, claim: { code: "482917", expiresAt } }
-3. Su app muestra los 6 dígitos
-4. Recepción los escribe junto a su nombre en el padrón
-5. firebase_uid queda atado a esa ficha — una sola vez, para siempre
+1. Recepción inscribe: escanea el QR de la cuenta, o escribe su celular o correo
+2. Queda una solicitud en link_requests
+3. La persona la ve en su app —arriba del directorio, de Mi QR o de su billetera
+4. Acepta: firebase_uid queda atado a esa ficha y el gimnasio aparece en su billetera
 ```
-
-Se pliega al alta: el alumno ya está en el mostrador cuando se inscribe, así que
-para alguien nuevo es un solo paso.
 
 **Detalles que importan:**
 
-- El código dura 10 minutos y **se reutiliza** mientras esté vivo. Si el alumno
-  cierra y abre la app en la cola, el número que tiene en la mano sigue sirviendo.
-- La membresía se resuelve **con contexto de tenant**, así que RLS garantiza que
-  recepción solo pueda vincular contra su propio padrón, aunque el código sea de
-  alguien de otro local.
-- Si la ficha ya tiene otra cuenta vinculada, se **rechaza**. Sin eso, alguien
-  podría desplazar la cuenta de un alumno y quedarse con su historial.
-- El dueño puede **desvincular**. El vínculo lo hace una persona y las personas
-  se equivocan; si recepción asocia la cuenta de Diego a la ficha de Julio, tiene
-  que haber forma de deshacerlo sin entrar a la base a mano.
+- La solicitud va a la cuenta del QR si se escaneó; si no, a quien entre con el
+  celular o el correo de la ficha. El celular del registro no se verifica, y por
+  eso queda qué cuenta aceptó y el dueño puede desvincular.
+- Aceptar comprueba, antes de marcar nada, que ni la cuenta abra ya otra ficha ni
+  la ficha abra con otra cuenta. Sin eso, alguien podría desplazar la cuenta de un
+  alumno y quedarse con su historial.
+- Desde el staff la solicitud se lee con contexto de tenant, así que RLS
+  garantiza que recepción solo vea las de su padrón. Desde la persona, con su
+  identidad o con la cuenta de Firebase que presentó.
+- El dueño puede **desvincular**. El vínculo lo acepta una persona sobre datos que
+  no se verifican; tiene que haber forma de deshacerlo sin entrar a la base a mano.
 
 ### La única excepción: el dueño en el arranque
 
@@ -83,9 +88,9 @@ este caso.
 Y el vínculo es fuerte: Google certifica que quien entra controla ese buzón
 (`email_verified`), y el buzón lo pusimos nosotros.
 
-Existe porque sin ella el arranque es circular: el dueño necesitaría que alguien
-con autoridad confirmara su código, y todavía no hay nadie. Está limitada a
-`owner`; recepción se vincula con código, como todos.
+Existe porque sin ella el arranque es circular: el dueño tendría que aceptar la
+solicitud de un gimnasio que todavía no tiene a nadie que la mande. Está limitada
+a `owner`; recepción acepta su solicitud, como todos.
 
 ---
 
@@ -238,9 +243,13 @@ mes gratis, y para eso está el tope.
 
 | Método | Ruta | Quién |
 |---|---|---|
-| `POST` | `/auth/google` | público — devuelve sesión **o** código de vinculación |
-| `GET` | `/staff/claims` | staff — códigos vigentes |
-| `POST` | `/staff/claims/confirm` | staff — vincula `{ code, membershipId }` |
+| `POST` | `/auth/google` | público — devuelve sesión **o** la cuenta sin ficha, con su QR |
+| `POST` | `/staff/accounts/lookup` | staff — canjea el QR de una cuenta `{ token }` por nombre y contacto |
+| `GET` · `POST` | `/staff/members/:id/link-request` | staff — cómo está la solicitud, o reenviarla |
+| `DELETE` | `/staff/link-requests/:id` | staff — la retira sin contestar |
+| `POST` | `/link-requests/mine` | público, con ID token — las pendientes de una cuenta sin ficha |
+| `POST` | `/link-requests/:id/accept` · `/reject` | público, con ID token — aceptar devuelve la sesión |
+| `GET` · `POST` | `/me/link-requests` · `/:id/accept` · `/:id/reject` | sesión — las de quien ya es alumno |
 | `GET` | `/auth/modes` | cualquier sesión — qué otros modos tiene |
 | `POST` | `/auth/switch-to-student` | staff con ficha — mira su billetera |
 | `POST` | `/auth/switch-to-staff` | quien tenga fila en `staff` — vuelve a su puesto, o salta al local que pida en `{ tenantId }` |
@@ -250,7 +259,7 @@ La respuesta de `/auth/google` tiene dos formas y el cliente **debe** mirar
 `linked`:
 
 ```json
-{ "linked": false, "claim": { "code": "482917", "expiresAt": "..." } }
+{ "linked": false, "claim": { "qrToken": "Zq3_x-9fK2mB7wLpQ0rT1sUv", "expiresAt": "..." } }
 { "linked": true,  "accessToken": "...", "role": "student", "tenantId": null }
 ```
 
@@ -393,35 +402,26 @@ iba a `logger.debug`, que Cloud Run no muestra: los logs salían vacíos. Ahora
 
 ## Dónde aterriza quien entra sin ficha
 
-El código de 6 dígitos **ya no es la primera pantalla**. Lo era, y para quien
-instalaba la app sin entrenar en ningún sitio —justo a quien el producto quiere
-llegar— era una pared: un número que solo sirve si un gimnasio ya tiene su ficha
-hecha y alguien va a confirmarlo.
+En **sus pestañas**: Gimnasios, Mi QR y Mensajes (`app/visitor`).
 
-Ahora una cuenta sin ficha aterriza en el **directorio de gimnasios**, que es lo
-único que esa persona puede hacer hoy: mirar horarios y precios, y reservar su
-primera clase gratis.
+Fue primero el código de 6 dígitos, que para quien instalaba la app sin entrenar
+en ningún sitio —justo a quien el producto quiere llegar— era una pared: un
+número que solo servía si un gimnasio ya tenía su ficha hecha y alguien iba a
+confirmarlo. Después fue el directorio a secas, sin barra, con el código, los
+mensajes y cerrar sesión escondidos dentro. Son tres las cosas que hace alguien
+sin gimnasio —buscar dónde, preguntarle a un gimnasio y dejarse inscribir— y cada
+una es ahora una pestaña.
 
 Crear la cuenta pide además **nombre y celular**, y esa es la única vez que se
 piden. No autentican nada —eso lo hace el token de Firebase— y no tocan `users`:
-viven con el código pendiente (`account_claims.display_name` y `phone`) hasta que
-haya una ficha a la que atarlos. Existen por una razón concreta: sin ellos,
-reservar una clase gratis volvía a preguntar lo que la persona acababa de
-escribir, y eso se lee como que la app no guarda nada.
+viven en `account_claims` hasta que haya una ficha a la que atarlos. Sirven para
+dos cosas: que reservar una clase no vuelva a preguntar lo que la persona acaba de
+escribir, y encontrar las solicitudes que un gimnasio le dejó por su celular.
 
-El código no desaparece, y no puede: es el único camino para el alumno al que su
-gimnasio dio de alta **por DNI y sin invitarlo**. El auto-vínculo por correo
-verificado existe solo para el dueño (`tryLinkOwnerByEmail`), a propósito — el
-correo de un alumno lo escribe otra persona con prisa en un mostrador, y un typo
-entregaría una membresía ajena. Así que el código vive a un toque, en el
-directorio: una línea bajo el saludo —«¿Ya entrenas en un gimnasio con Sinchi?
-Muestra tu código»— y otra vez en el menú de la cuenta, junto a cerrar sesión.
-
-Esa pantalla abría con una tarjeta del código y «Entrar con otra cuenta» ENTRE la
-presentación y la lista: lo primero que leía alguien que acababa de registrarse
-era la salida y un trámite que casi nunca le toca. Ahora saluda por su nombre,
-dice que la cuenta está lista y va directo a los gimnasios; cerrar sesión se
-mudó al avatar, que es donde se busca.
+**Mi QR** es con lo que recepción la inscribe (`SINCHI1:a:<token>`). No abre la
+puerta. Vence a los diez minutos y la app lo renueva sola, y mientras la pantalla
+está abierta pide las solicitudes cada pocos segundos: la del gimnasio llega
+mientras recepción termina el alta, con la persona todavía en el mostrador.
 
 ---
 

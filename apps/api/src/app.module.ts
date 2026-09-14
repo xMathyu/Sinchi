@@ -48,6 +48,8 @@ import { RoutinesController } from './modules/routines/routines.controller';
 import { RoutinesService } from './modules/routines/routines.service';
 import { videoStorageProvider } from './modules/routines/video-storage';
 import { VisitorService } from './modules/identity/visitor.service';
+import { LinkRequestsService } from './modules/identity/link-requests.service';
+import { LinkRequestsController } from './modules/link-requests.controller';
 import { MessagingService } from './modules/messaging/messaging.service';
 import { PlacesController } from './modules/places/places.controller';
 import { PlacesService } from './modules/places/places.service';
@@ -67,6 +69,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     PlacesController,
     AccountsController,
     InvitesController,
+    LinkRequestsController,
     JobsController,
   ],
   providers: [
@@ -93,6 +96,7 @@ import { SaasGuard } from './modules/saas/saas.guard';
     PlacesService,
     videoStorageProvider,
     VisitorService,
+    LinkRequestsService,
     MessagingService,
     RefreshDelinquencyJob,
     RefreshSaasJob,

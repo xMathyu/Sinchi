@@ -214,6 +214,22 @@ palabra: al alumno suspendido no lo dejan entrenar; al gimnasio impago no se le
 cierra nada de lo que ya tiene, se le impide crear más. Llamarlos igual invita a
 copiar el comportamiento equivocado.
 
+## Conceptos de la vinculación
+
+Lo que une una cuenta con una ficha del padrón (decisiones §14). Ojo con
+`claim`: nació como el código de 6 dígitos que se confirmaba en el mostrador, y
+hoy `account_claims` es la cuenta sin ficha. El nombre de la tabla se quedó
+porque renombrarla es una migración sin nada que ganar.
+
+| Negocio | Código |
+|---|---|
+| cuenta sin ficha (entró, pero no abre ninguna) | `unlinked` / `account_claims` |
+| QR de la cuenta, con el que la inscriben | `qrToken` / `SINCHI1:a:<token>` |
+| solicitud de vínculo: el gimnasio agrega, la persona acepta | `LinkRequest` / `link_requests` |
+| aceptada · rechazada · retirada por el gimnasio | `accepted` · `rejected` · `canceled` |
+| no está en su billetera hasta que acepte | `notAwaitingPerson` |
+| las pestañas de quien no tiene ficha | `visitor` |
+
 ## Nota sobre el MD
 
 El esquema del documento de especificación (sección 5) nombra las columnas en

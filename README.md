@@ -173,9 +173,9 @@ fuente. Después de tocarlos, `npm run build` antes de recargar la app.
 Abre en **modo alumno**. Para llegar al modo staff: toca el avatar arriba a la
 derecha en Billetera → Ajustes → Rol de la sesión → Recepción.
 
-Quien entra con una cuenta nueva —sin ficha en ningún padrón— aterriza en el
-directorio, no en el código de 6 dígitos: ese código sigue existiendo, a un toque,
-para el alumno al que su gimnasio dio de alta por DNI.
+Quien entra con una cuenta nueva —sin ficha en ningún padrón— aterriza en sus
+pestañas: Gimnasios, Mi QR y Mensajes. Recepción la inscribe escaneando su QR, y
+el gimnasio aparece en su app cuando acepta la solicitud que le llega.
 
 Desde la billetera, «¿Entrenas en otro gimnasio?» abre el **directorio**: los
 gimnasios activos de la red con sus horarios y sus precios, y la reserva de la

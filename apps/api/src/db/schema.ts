@@ -161,6 +161,16 @@ export const conversationTopicEnum = pgEnum('conversation_topic', [
 export const conversationStatusEnum = pgEnum('conversation_status', ['open', 'closed']);
 /** `person` y no `student`: escribe tambien quien todavia no es alumno de nadie. */
 export const messageSenderEnum = pgEnum('message_sender', ['person', 'gym']);
+/**
+ * Lo que paso con la solicitud de un gimnasio. `canceled` lo pone el gimnasio al
+ * retirarla antes de que la persona conteste; los otros dos, la persona.
+ */
+export const linkRequestStatusEnum = pgEnum('link_request_status', [
+  'pending',
+  'accepted',
+  'rejected',
+  'canceled',
+]);
 
 // ---------------------------------------------------------------------------
 // Identidad global
@@ -207,12 +217,14 @@ export const users = pgTable(
 );
 
 /**
- * Codigo con el que una cuenta de Google reclama una ficha del padron.
+ * Una cuenta de Firebase que todavia no abre ninguna ficha del padron.
  *
- * Sin `tenant_id` a proposito: se emite ANTES de saber a que gimnasio pertenece
- * la persona. La proteccion no esta aqui sino del otro lado — confirmar exige
- * una sesion de staff y una membresia, y las membresias si estan aisladas por
- * RLS, asi que un recepcionista solo puede vincular contra su propio padron.
+ * Nacio como el codigo de 6 digitos que recepcion confirmaba, y hoy es lo que
+ * sabe la api de quien acaba de registrarse: su nombre, su celular y el token de
+ * su QR de cuenta. La vinculacion ya no la hace el mostrador sino la persona,
+ * aceptando la solicitud del gimnasio (`link_requests`, migracion 0023).
+ *
+ * Sin `tenant_id` a proposito: la cuenta no pertenece a ningun gimnasio.
  */
 export const accountClaims = pgTable(
   'account_claims',
@@ -234,8 +246,19 @@ export const accountClaims = pgTable(
      * encarga `class_bookings_one_trial_per_phone`.
      */
     phone: text('phone'),
-    /** 6 digitos: se dicta en voz alta en el mostrador. */
+    /**
+     * 6 digitos. Ya no se muestra ni se confirma: sigue emitiendose porque la
+     * columna es NOT NULL y las apps anteriores a la 0023 lo leen al entrar.
+     */
     code: text('code').notNull(),
+    /**
+     * Lo que va dentro del QR de la cuenta: `SINCHI1:a:<qr_token>`.
+     *
+     * Largo y aleatorio, al reves que `code`: no se dicta, se escanea, y quien lo
+     * canjea recibe el nombre, el celular y el correo de la persona. Seis digitos
+     * se podrian recorrer desde cualquier sesion de staff.
+     */
+    qrToken: text('qr_token'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     consumedBy: uuid('consumed_by').references(() => staff.id, { onDelete: 'set null' }),
@@ -243,9 +266,9 @@ export const accountClaims = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('account_claims_active_code')
-      .on(t.code)
-      .where(sql`consumed_at is null`),
+    uniqueIndex('account_claims_active_qr_token')
+      .on(t.qrToken)
+      .where(sql`consumed_at is null and qr_token is not null`),
     index('account_claims_firebase_uid_idx').on(t.firebaseUid),
   ],
 );
@@ -525,6 +548,50 @@ export const staff = pgTable(
   (t) => [
     uniqueIndex('staff_tenant_user_key').on(t.tenantId, t.userId),
     index('staff_tenant_idx').on(t.tenantId),
+  ],
+);
+
+/**
+ * Un gimnasio le pide a una persona que acepte su ficha.
+ *
+ * Es lo que reemplazo al codigo de 6 digitos, y la regla que lo ordena es otra:
+ * ningun gimnasio aparece en la app de alguien sin que esa persona lo acepte. La
+ * ficha es del gimnasio y existe igual —recepcion inscribe, cobra y marca la
+ * puerta sin esperar a nadie—; lo que espera es que la persona la vea en su
+ * billetera. Sin esto, cualquier local que conociera un DNI podia meterse en la
+ * app de quien quisiera.
+ *
+ * A quien va: a `firebase_uid` si se sabe la cuenta —el QR que se escaneo, o la
+ * que la identidad ya tenia—, y si no a quien entre con el celular o el correo de
+ * la ficha (`users`), que se leen de ahi y no se copian.
+ */
+export const linkRequests = pgTable(
+  'link_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    membershipId: uuid('membership_id')
+      .notNull()
+      .references(() => memberships.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    firebaseUid: text('firebase_uid'),
+    status: linkRequestStatusEnum('status').notNull().default('pending'),
+    createdBy: uuid('created_by').references(() => staff.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /** La cuenta que contesto: es lo que el dueno mira si acepto quien no era. */
+    decidedByFirebaseUid: text('decided_by_firebase_uid'),
+  },
+  (t) => [
+    uniqueIndex('link_requests_one_pending')
+      .on(t.membershipId)
+      .where(sql`status = 'pending'`),
+    index('link_requests_user_idx').on(t.userId),
+    index('link_requests_account_idx').on(t.firebaseUid),
   ],
 );
 

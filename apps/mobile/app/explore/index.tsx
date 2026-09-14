@@ -14,18 +14,19 @@
 import { Alert, Pressable, View } from 'react-native';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
-import { cents, conversationTopicLabel, formatPENShort, type BookingKind } from '@sinchi/shared';
+import { cents, formatPENShort, type BookingKind } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Avatar, Badge, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { ConversationRow } from '../../src/design/chat';
+import { Avatar, Badge, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { LinkRequestList } from '../../src/design/link-requests';
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGyms, useMyConversations, useMyBookings } from '../../src/data/hooks';
+import { useGyms, useLinkRequests, useMyBookings } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { signOut } from '../../src/data/auth';
 import { cancelBooking } from '../../src/data/trials';
+import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay, initials } from '../../src/lib/format';
 
@@ -41,7 +42,7 @@ export default function ExploreScreen() {
   const { details: gyms, loading, error, reload } = useGyms();
   const bookings = useMyBookings();
   const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
-  const conversations = useMyConversations();
+  const requests = useLinkRequests();
   // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
   // app, y le habla a esa persona por su nombre. Titulada «Gimnasios» a secas,
   // quien acababa de registrarse caía en una lista sin saber si la cuenta se
@@ -59,8 +60,8 @@ export default function ExploreScreen() {
         </Text>
         {/* Esta pantalla es a veces un modal —se abre desde la billetera— y a
             veces la primera de la app, para quien acaba de crear su cuenta. Sin
-            la segunda rama queda sin salida justo cuando recepción confirma el
-            código: la sesión pasa a ser de alumno y el directorio se queda
+            la segunda rama queda sin salida justo cuando acepta su primera
+            solicitud: la sesión pasa a ser de alumno y el directorio se queda
             encima de nada. La tercera es la cuenta sin ficha, cuya única salida
             —cerrar sesión— va en el avatar. */}
         {router.canGoBack() ? (
@@ -88,11 +89,24 @@ export default function ExploreScreen() {
           abre la app por primera vez no sabe de qué red le hablan. */}
       <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
         {unlinked
-          ? 'Tu cuenta está lista. Elige un gimnasio para ver sus horarios y precios, y reserva una clase o inscríbete.'
+          ? 'Tu cuenta está lista. Elige un gimnasio para ver sus horarios y precios, y reserva una clase o inscríbete. Si te inscriben en recepción, muestra tu QR.'
           : 'Escuelas y dojos que usan Sinchi. Entra a cualquiera para ver sus horarios y sus precios, y reserva una clase o inscríbete.'}
       </Text>
 
-      {unlinked ? <LinkCodeRow /> : null}
+      {/* Arriba de todo: es lo único de esta pantalla que espera una respuesta, y
+          lo que llega mientras recepción termina de inscribirla. Solo sin ficha;
+          con ficha, las solicitudes viven en su billetera. */}
+      {unlinked && requests.details.length > 0 ? (
+        <Stack gap={10} style={{ marginTop: 22 }}>
+          <Eyebrow>Te agregaron</Eyebrow>
+          <LinkRequestList
+            requests={requests.details}
+            onAccept={acceptLinkRequest}
+            onReject={rejectLinkRequest}
+            onAnswered={requests.reload}
+          />
+        </Stack>
+      ) : null}
 
       {upcoming.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
@@ -100,36 +114,6 @@ export default function ExploreScreen() {
           {upcoming.map((booking) => (
             <UpcomingCard key={booking.id} booking={booking} onCanceled={bookings.reload} />
           ))}
-        </Stack>
-      ) : null}
-
-      {/* Sus conversaciones, para quien todavía no tiene ficha. Con sesión de
-          alumno viven en su pestaña de Mensajes; la cuenta sin ficha no tiene
-          pestañas, y sin esto la respuesta del gimnasio llegaba a un hilo que no
-          sabía cómo volver a abrir. */}
-      {unlinked && conversations.details.length > 0 ? (
-        <Stack gap={10} style={{ marginTop: 22 }}>
-          <Eyebrow>Tus mensajes</Eyebrow>
-          <Card radius={theme.radii.xl} style={{ paddingVertical: 2 }}>
-            {conversations.details.map((conversation, index) => (
-              <View key={conversation.id}>
-                {index > 0 ? <Divider /> : null}
-                <ConversationRow
-                  title={conversation.gymName}
-                  detail={conversationTopicLabel(conversation.topic)}
-                  lastMessage={conversation.lastMessage}
-                  me="person"
-                  unread={conversation.unread}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/chat/[slug]',
-                      params: { slug: conversation.gymSlug },
-                    })
-                  }
-                />
-              </View>
-            ))}
-          </Card>
         </Stack>
       ) : null}
 
@@ -314,39 +298,6 @@ function OwnerInvitation() {
 }
 
 /**
- * El código para recepción, en una línea y no en una tarjeta.
- *
- * No desaparece: al alumno al que su gimnasio dio de alta por DNI, sin
- * invitación, es lo único que le conecta la ficha con la app. Pero tampoco puede
- * ser lo primero que lea quien acaba de registrarse. Era una tarjeta con título
- * entre la presentación y la lista, y empujaba los gimnasios hacia abajo para
- * ofrecer un trámite que a la mayoría no le toca. En una línea bajo el saludo
- * sigue a la vista de quien sí lo busca —recepción se lo acaba de pedir— sin
- * tapar a los demás.
- */
-function LinkCodeRow() {
-  const theme = useTheme();
-  const router = useRouter();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Ver mi código para recepción"
-      hitSlop={10}
-      onPress={() => router.push('/link')}
-      style={{ marginTop: 14 }}
-    >
-      <Text variant="captionSmall" color={theme.colors.textTertiary}>
-        ¿Ya entrenas en un gimnasio con Sinchi?{' '}
-        <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
-          Muestra tu código ›
-        </Text>
-      </Text>
-    </Pressable>
-  );
-}
-
-/**
  * La cuenta, arriba a la derecha: donde se busca en cualquier app.
  *
  * Cerrar sesión vivía como «Entrar con otra cuenta» en medio del directorio,
@@ -354,8 +305,8 @@ function LinkCodeRow() {
  * que entrar a un gimnasio. Aquí queda a un toque para quien lo busca y fuera
  * del camino de quien no.
  *
- * Una alerta y no una pantalla: son dos acciones, y la cuenta sin ficha no
- * tiene ajustes a los que llevarlas — `SessionRouter` la devuelve aquí.
+ * Una alerta y no una pantalla: es una sola acción, y la cuenta sin ficha no
+ * tiene ajustes a los que llevarla — `SessionRouter` la devuelve a sus pestañas.
  */
 function AccountButton({
   fullName,
@@ -374,7 +325,6 @@ function AccountButton({
       hitSlop={12}
       onPress={() =>
         Alert.alert(fullName ?? 'Tu cuenta', phone ?? undefined, [
-          { text: 'Mi código para recepción', onPress: () => router.push('/link') },
           {
             text: 'Cerrar sesión',
             style: 'destructive',

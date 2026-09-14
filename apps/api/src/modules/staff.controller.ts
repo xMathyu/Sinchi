@@ -70,6 +70,8 @@ const enrollSchema = z.object({
   internalAlias: z.string().max(60).optional(),
   /** La inscripción reservada desde el directorio que este alta viene a cerrar. */
   bookingId: z.string().uuid().optional(),
+  /** El token del QR de cuenta que la persona mostró: `SINCHI1:a:<token>`. */
+  accountToken: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).optional(),
 });
 
 const resubscribeSchema = z.object({ planId: z.string().uuid() });
@@ -236,7 +238,11 @@ export class StaffController {
     @CurrentSession() session: Session,
     @Body(parseWith(enrollSchema)) body: z.infer<typeof enrollSchema>,
   ) {
-    return this.members.enroll(assertStaffSession(session).tenantId, body);
+    const staff = assertStaffSession(session);
+    return this.members.enroll(staff.tenantId, body, {
+      staffId: staff.staffId,
+      userId: session.sub,
+    });
   }
 
   @Post('members/:membershipId/resubscribe')

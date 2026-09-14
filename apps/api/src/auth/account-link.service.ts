@@ -1,53 +1,43 @@
 /**
- * Vinculación de una cuenta de Google con una ficha del padrón.
+ * La cuenta de Firebase de quien todavía no abre ninguna ficha del padrón.
  *
- * El problema, otra vez, porque es el corazón de este archivo: la ficha existe
- * antes que la cuenta. La recepcionista escribe nombre, DNI y celular en el
- * mostrador, y el alumno instala la app después. Google devuelve un uid y un
- * email que no están en esa ficha, así que hay que unirlos, y unirlos MAL
- * significa darle a alguien el historial de pagos y el QR de otro.
+ * El problema de fondo no cambió: la ficha existe antes que la cuenta. La
+ * recepcionista escribe nombre, DNI y celular en el mostrador, la persona
+ * instala la app después, y Firebase devuelve un uid y un correo que no están en
+ * esa ficha. Unirlos MAL es darle a alguien el historial de pagos y el QR de otro.
  *
- * La única forma sin agujeros es que lo confirme quien tiene a la persona
- * enfrente. El alumno entra con Google, su app muestra 6 dígitos, y recepción
- * los escribe junto a su nombre.
- *
- * Hay UNA excepción, para el dueño en el arranque, y está justificada abajo.
+ * Lo que cambió es QUIÉN los une. Hasta la migración 0023 lo confirmaba
+ * recepción con un código de 6 dígitos que la persona dictaba; ahora el gimnasio
+ * deja una solicitud y la persona la acepta en su app (`LinkRequestsService`).
+ * Aquí queda lo que la api sabe de esa cuenta mientras tanto —su nombre, su
+ * celular y el QR con el que se deja inscribir— y la única vinculación
+ * automática: el dueño en el arranque, justificada abajo.
  */
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { InjectDb } from '../db/db.module';
-import {
-  adoptUser,
-  schema,
-  withTenant,
-  withoutTenantIsolation,
-  type Database,
-  type Tx,
-} from '../db/client';
-import { generateClaimCode } from './secrets';
+import { adoptUser, schema, withTenant, withoutTenantIsolation, type Database } from '../db/client';
+import { generateAccountQrToken, generateClaimCode } from './secrets';
 import type { VerifiedIdentity } from './firebase';
 
 /**
- * Diez minutos.
+ * Diez minutos: lo que vale el QR de la cuenta.
  *
- * Es el tiempo que tarda una persona en mostrar la pantalla al mostrador. Más
- * largo deja códigos vivos por ahí; más corto obliga a repetir el login cuando
- * hay cola.
+ * Quien lo muestra en el mostrador lo tiene abierto delante, y la app lo renueva
+ * sola al vencer. Uno que valiera horas sería una captura en un chat que
+ * cualquier recepción podría canjear por el nombre y el celular de esa persona.
  */
 const CLAIM_TTL_MINUTES = 10;
 
 export interface PendingClaim {
+  /** 6 dígitos. Solo lo leen las apps anteriores a la 0023: ya no se confirma. */
   readonly code: string;
+  /** Lo que va en el QR de la cuenta: `SINCHI1:a:<qrToken>`. */
+  readonly qrToken: string;
   readonly expiresAt: Date;
   readonly email: string | null;
   readonly displayName: string | null;
-  /** Lo dio al crear la cuenta. Es con lo que reserva su clase gratis. */
+  /** Lo dio al crear la cuenta. Es con lo que reserva y con lo que la encuentran. */
   readonly phone: string | null;
 }
 
@@ -63,12 +53,12 @@ export interface SignUpDetails {
   readonly phone?: string | undefined;
 }
 
-export interface ClaimSummary {
-  readonly id: string;
-  readonly code: string;
-  readonly email: string | null;
+/** Lo que recepción recibe al escanear el QR de una cuenta. */
+export interface AccountPreview {
+  readonly firebaseUid: string;
   readonly displayName: string | null;
-  readonly expiresAt: Date;
+  readonly phone: string | null;
+  readonly email: string | null;
 }
 
 @Injectable()
@@ -96,8 +86,8 @@ export class AccountLinkService {
   /**
    * Vinculación automática del dueño en el arranque.
    *
-   * Aquí SÍ se empareja por email, y eso parece contradecir el rechazo de arriba.
-   * No lo es, porque las dos objeciones al email desaparecen en este caso
+   * Aquí SÍ se empareja por email sin preguntarle a nadie, y es la excepción a
+   * la regla de las solicitudes. Las objeciones al email desaparecen en este caso
    * concreto:
    *
    *  · **"la recepcionista lo escribe con prisa y se equivoca"** — el email del
@@ -111,10 +101,10 @@ export class AccountLinkService {
    * ese buzón (`email_verified`), y el buzón lo pusimos nosotros. Nadie puede
    * reclamarlo sin acceso a esa cuenta.
    *
-   * Existe porque si no, el arranque es circular: el dueño necesitaría que
-   * alguien con autoridad confirme su código, y todavía no hay nadie.
+   * Existe porque si no, el arranque es circular: el dueño tendría que aceptar
+   * una solicitud de un gimnasio que todavía no tiene a nadie que la mande.
    *
-   * Se limita a `owner` a propósito. Recepción se vincula con código, como todos.
+   * Se limita a `owner` a propósito. Recepción acepta su solicitud, como todos.
    */
   async tryLinkOwnerByEmail(identity: VerifiedIdentity): Promise<string | null> {
     if (identity.email === null || !identity.emailVerified) return null;
@@ -145,9 +135,9 @@ export class AccountLinkService {
 
       await adoptUser(tx, candidate.userId);
 
-      // El auto-vinculo es SOLO para duenos. Recepcion se vincula con codigo,
-      // como todos: su correo lo escribe otra persona y sin esa restriccion un
-      // typo entregaria el mostrador entero.
+      // El auto-vinculo es SOLO para duenos. Su correo lo pusimos nosotros; el de
+      // recepcion lo escribe otra persona, y sin esta restriccion un typo
+      // entregaria el mostrador entero.
       const [owner] = await tx
         .select({ id: schema.staff.id })
         .from(schema.staff)
@@ -167,11 +157,16 @@ export class AccountLinkService {
   }
 
   /**
-   * Emite (o reutiliza) el código que el alumno le muestra al mostrador.
+   * La fila de la cuenta sin ficha, con su QR vigente.
    *
-   * Reutilizar el vigente en vez de emitir uno nuevo en cada login es
-   * deliberado: si el alumno cierra y abre la app mientras espera en la cola, el
-   * número que tiene en la mano tiene que seguir sirviendo.
+   * UNA fila por cuenta, que se renueva al vencer en vez de borrarse y nacer
+   * otra. Mientras el código de 6 dígitos tuvo índice único, los vencidos se
+   * borraban para no chocar, y con ellos se iban el nombre y el celular de quien
+   * se registró hace más de diez minutos — que ahora hacen falta para encontrar
+   * las solicitudes que le dejaron por su celular.
+   *
+   * El QR se reutiliza mientras está vivo: quien cierra y abre la app en la cola
+   * del mostrador sigue mostrando el mismo.
    */
   async issueClaim(
     identity: VerifiedIdentity,
@@ -179,18 +174,12 @@ export class AccountLinkService {
   ): Promise<PendingClaim> {
     const writtenName = details.fullName?.trim();
     const writtenPhone = details.phone?.trim();
+    const name = writtenName !== undefined && writtenName.length > 0 ? writtenName : null;
+    const phone = writtenPhone !== undefined && writtenPhone.length > 0 ? writtenPhone : null;
 
     return withoutTenantIsolation(this.db, async (tx) => {
-      await this.purgeExpired(tx);
-
       const [existing] = await tx
-        .select({
-          id: schema.accountClaims.id,
-          code: schema.accountClaims.code,
-          expiresAt: schema.accountClaims.expiresAt,
-          displayName: schema.accountClaims.displayName,
-          phone: schema.accountClaims.phone,
-        })
+        .select()
         .from(schema.accountClaims)
         .where(
           and(
@@ -198,79 +187,101 @@ export class AccountLinkService {
             isNull(schema.accountClaims.consumedAt),
           ),
         )
+        .orderBy(desc(schema.accountClaims.createdAt))
         .limit(1);
 
-      if (existing !== undefined) {
-        // Si esta vez llegan datos y la fila no los tenia, se completan: quien
-        // entro con Google y luego escribio su celular no deberia tener que
-        // repetirlo al reservar.
-        const displayName = writtenName !== undefined && writtenName.length > 0 ? writtenName : existing.displayName;
-        const phone = writtenPhone !== undefined && writtenPhone.length > 0 ? writtenPhone : existing.phone;
+      const renewedUntil = new Date(Date.now() + CLAIM_TTL_MINUTES * 60_000);
 
-        if (displayName !== existing.displayName || phone !== existing.phone) {
-          await tx
-            .update(schema.accountClaims)
-            .set({ displayName, phone })
-            .where(eq(schema.accountClaims.id, existing.id));
-        }
-
-        return {
-          code: existing.code,
-          expiresAt: existing.expiresAt,
-          email: identity.email,
-          displayName,
+      if (existing === undefined) {
+        const fresh = {
+          code: generateClaimCode(),
+          qrToken: generateAccountQrToken(),
+          expiresAt: renewedUntil,
+          // El nombre que escribio manda sobre el de Google: es como quiere que lo
+          // llamen, y con correo y contrasena Google no da ninguno.
+          displayName: name ?? identity.displayName,
           phone,
         };
-      }
-
-      const expiresAt = new Date(Date.now() + CLAIM_TTL_MINUTES * 60_000);
-
-      // Reintenta por si el código sorteado choca con uno vivo. Con un millón de
-      // combinaciones y un puñado de códigos activos, la colisión es rarísima,
-      // pero el índice único la haría fallar y no vale la pena que el alumno vea
-      // un error por eso.
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        const code = generateClaimCode();
-        const [inserted] = await tx
+        await tx
           .insert(schema.accountClaims)
-          .values({
-            firebaseUid: identity.uid,
-            email: identity.email,
-            // El nombre que escribio manda sobre el de Google: es como quiere
-            // que lo llamen, y con correo y contrasena Google no da ninguno.
-            displayName: writtenName !== undefined && writtenName.length > 0 ? writtenName : identity.displayName,
-            phone: writtenPhone !== undefined && writtenPhone.length > 0 ? writtenPhone : null,
-            code,
-            expiresAt,
-          })
-          .onConflictDoNothing()
-          .returning({ code: schema.accountClaims.code });
-
-        if (inserted !== undefined) {
-          return {
-            code: inserted.code,
-            expiresAt,
-            email: identity.email,
-            displayName:
-              writtenName !== undefined && writtenName.length > 0 ? writtenName : identity.displayName,
-            phone: writtenPhone ?? null,
-          };
-        }
+          .values({ firebaseUid: identity.uid, email: identity.email, ...fresh });
+        return { ...fresh, email: identity.email };
       }
 
-      throw new ConflictException(
-        'No se pudo generar un código de vinculación. Intenta de nuevo.',
-      );
+      // Si esta vez llegan datos y la fila no los tenia, se completan: quien entro
+      // con Google y luego escribio su celular no deberia tener que repetirlo.
+      const expired = existing.qrToken === null || existing.expiresAt.getTime() <= Date.now();
+      const current = {
+        code: expired ? generateClaimCode() : existing.code,
+        qrToken: expired ? generateAccountQrToken() : (existing.qrToken as string),
+        expiresAt: expired ? renewedUntil : existing.expiresAt,
+        displayName: name ?? existing.displayName,
+        phone: phone ?? existing.phone,
+      };
+
+      if (
+        expired ||
+        current.displayName !== existing.displayName ||
+        current.phone !== existing.phone ||
+        (identity.email !== null && identity.email !== existing.email)
+      ) {
+        await tx
+          .update(schema.accountClaims)
+          .set({ ...current, email: identity.email ?? existing.email })
+          .where(eq(schema.accountClaims.id, existing.id));
+      }
+
+      return { ...current, email: identity.email ?? existing.email };
     });
   }
 
   /**
-   * Lo que la persona dijo de si misma al registrarse, si sigue vigente.
+   * Lo que se lleva recepción al escanear el QR de una cuenta.
    *
-   * Lo usa la reserva de clase gratis para no volver a preguntarle el nombre y
-   * el celular a quien acaba de escribirlos. `account_claims` no lleva RLS —una
-   * cuenta sin ficha no pertenece a ningun gimnasio— y la busqueda es por el uid
-   * que Firebase ya verifico.
+   * Nombre, celular y correo, para no teclearlos. Entregarlos no es una fuga: la
+   * persona los está mostrando en su teléfono, delante del mostrador, justo
+   * para eso. Lo que no pasa por aquí es el documento — ese se lee del carné.
+   */
+  async previewByQrToken(qrToken: string): Promise<AccountPreview> {
+    const [row] = await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .select({
+          firebaseUid: schema.accountClaims.firebaseUid,
+          displayName: schema.accountClaims.displayName,
+          phone: schema.accountClaims.phone,
+          email: schema.accountClaims.email,
+          expiresAt: schema.accountClaims.expiresAt,
+        })
+        .from(schema.accountClaims)
+        .where(
+          and(
+            eq(schema.accountClaims.qrToken, qrToken),
+            isNull(schema.accountClaims.consumedAt),
+          ),
+        )
+        .limit(1),
+    );
+
+    if (row === undefined || row.expiresAt.getTime() <= Date.now()) {
+      throw new NotFoundException('Ese QR ya venció. Pídele que lo vuelva a abrir en su app.');
+    }
+
+    return {
+      firebaseUid: row.firebaseUid,
+      displayName: row.displayName,
+      phone: row.phone,
+      email: row.email,
+    };
+  }
+
+  /**
+   * Lo que la persona dijo de si misma al registrarse.
+   *
+   * Lo usan la reserva y el chat para no volver a preguntarle el nombre y el
+   * celular a quien acaba de escribirlos, y las solicitudes para encontrar las
+   * que le dejaron por su celular. `account_claims` no lleva RLS —una cuenta sin
+   * ficha no pertenece a ningun gimnasio— y la busqueda es por el uid que
+   * Firebase ya verifico.
    */
   async signUpDetails(
     firebaseUid: string,
@@ -294,122 +305,32 @@ export class AccountLinkService {
     });
   }
 
-  /** Códigos vigentes, para que recepción los vea sin que se los dicten. */
-  async listPending(): Promise<readonly ClaimSummary[]> {
-    return withoutTenantIsolation(this.db, async (tx) => {
-      await this.purgeExpired(tx);
-      const rows = await tx
-        .select({
-          id: schema.accountClaims.id,
-          code: schema.accountClaims.code,
-          email: schema.accountClaims.email,
-          displayName: schema.accountClaims.displayName,
-          expiresAt: schema.accountClaims.expiresAt,
-        })
-        .from(schema.accountClaims)
-        .where(isNull(schema.accountClaims.consumedAt))
-        .orderBy(schema.accountClaims.createdAt)
-        .limit(20);
-      return rows;
-    });
-  }
-
   /**
-   * Confirma el código contra una membresía del gimnasio del staff.
+   * La cuenta ya abre una ficha: su fila queda cerrada, con a cuál llegó.
    *
-   * Dos comprobaciones importan:
-   *
-   *  · la membresía se busca CON contexto de tenant, así que RLS garantiza que
-   *    un recepcionista solo pueda vincular contra su propio padrón, por más que
-   *    el código sea de alguien de otro local;
-   *
-   *  · si esa ficha ya tiene otra cuenta vinculada, se rechaza. Sin eso, alguien
-   *    podría desplazar la cuenta de un alumno y quedarse con su historial.
+   * Se conserva, no se borra. Es el rastro de qué cuenta terminó en qué ficha, que
+   * es lo que el dueño necesita el día que alguien diga «esa no soy yo».
    */
-  async confirmClaim(input: {
-    readonly tenantId: string;
-    readonly staffId: string;
-    readonly code: string;
-    readonly membershipId: string;
-  }): Promise<{ readonly userId: string; readonly displayName: string | null }> {
-    // La membresía primero, con aislamiento: es la comprobación de autoridad.
-    const target = await withTenant(this.db, input.tenantId, async (tx) => {
-      const [row] = await tx
-        .select({
-          userId: schema.memberships.userId,
-          userName: schema.users.name,
-          firebaseUid: schema.users.firebaseUid,
-        })
-        .from(schema.memberships)
-        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-        .where(eq(schema.memberships.id, input.membershipId))
-        .limit(1);
-      return row ?? null;
-    });
-
-    if (target === null) {
-      throw new NotFoundException('Esa membresía no existe en este gimnasio.');
-    }
-
-    return withoutTenantIsolation(this.db, async (tx) => {
-      const [claim] = await tx
-        .select()
-        .from(schema.accountClaims)
+  async consume(firebaseUid: string, userId: string): Promise<void> {
+    await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .update(schema.accountClaims)
+        .set({ consumedAt: new Date(), linkedUserId: userId })
         .where(
           and(
-            eq(schema.accountClaims.code, input.code),
+            eq(schema.accountClaims.firebaseUid, firebaseUid),
             isNull(schema.accountClaims.consumedAt),
           ),
-        )
-        .limit(1);
-
-      if (claim === undefined) {
-        throw new NotFoundException(
-          'Ese código no existe o ya se usó. Pídele al alumno que vuelva a entrar en la app.',
-        );
-      }
-      if (claim.expiresAt.getTime() < Date.now()) {
-        throw new BadRequestException(
-          'Ese código ya venció. Pídele al alumno que vuelva a entrar en la app.',
-        );
-      }
-
-      if (target.firebaseUid !== null && target.firebaseUid !== claim.firebaseUid) {
-        throw new ConflictException(
-          `${target.userName} ya tiene una cuenta vinculada. Un dueño puede desvincularla ` +
-            'antes de asociar otra.',
-        );
-      }
-
-      await tx
-        .update(schema.users)
-        .set({ firebaseUid: claim.firebaseUid })
-        .where(eq(schema.users.id, target.userId));
-
-      await tx
-        .update(schema.accountClaims)
-        .set({
-          consumedAt: new Date(),
-          consumedBy: input.staffId,
-          linkedUserId: target.userId,
-        })
-        .where(eq(schema.accountClaims.id, claim.id));
-
-      this.logger.log(
-        `Cuenta ${claim.email ?? claim.firebaseUid} vinculada a ${target.userName} ` +
-          `por el staff ${input.staffId}`,
-      );
-
-      return { userId: target.userId, displayName: claim.displayName };
-    });
+        ),
+    );
   }
 
   /**
    * Desvincula. Solo el dueño.
    *
-   * Existe porque el vínculo lo hace una persona y las personas se equivocan: si
-   * recepción asocia la cuenta de Diego a la ficha de Julio, tiene que haber
-   * forma de deshacerlo sin tocar la base a mano.
+   * Existe porque el vínculo lo acepta una persona sobre datos que no se
+   * verifican: si alguien se registró con el celular de otra y aceptó su
+   * solicitud, tiene que haber forma de deshacerlo sin tocar la base a mano.
    */
   async unlink(tenantId: string, membershipId: string): Promise<void> {
     const userId = await withTenant(this.db, tenantId, async (tx) => {
@@ -428,24 +349,5 @@ export class AccountLinkService {
     await withoutTenantIsolation(this.db, (tx) =>
       tx.update(schema.users).set({ firebaseUid: null }).where(eq(schema.users.id, userId)),
     );
-  }
-
-  /**
-   * Borra los códigos vencidos sin consumir.
-   *
-   * No es solo higiene: el espacio es de un millón de combinaciones y el índice
-   * único solo aplica a los vivos, así que dejar basura ahí sube la probabilidad
-   * de colisión al emitir. Los consumidos se conservan — son el rastro de quién
-   * vinculó qué cuenta y cuándo.
-   */
-  private async purgeExpired(tx: Tx): Promise<void> {
-    await tx
-      .delete(schema.accountClaims)
-      .where(
-        and(
-          isNull(schema.accountClaims.consumedAt),
-          lt(schema.accountClaims.expiresAt, new Date()),
-        ),
-      );
   }
 }

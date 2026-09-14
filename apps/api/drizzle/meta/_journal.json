@@ -162,6 +162,13 @@
       "when": 1788566395119,
       "tag": "0022_clase_suelta_e_inscripcion_desde_el_directorio",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788566396119,
+      "tag": "0023_solicitudes_de_vinculo",
+      "breakpoints": true
     }
   ]
 }

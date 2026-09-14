@@ -251,7 +251,8 @@ export interface IssuedSessionDto {
 export interface UnlinkedAccountDto {
   readonly linked: false;
   readonly claim: {
-    readonly code: string;
+    /** Lo que va en el QR de la cuenta: `SINCHI1:a:<qrToken>`. Vence con `expiresAt`. */
+    readonly qrToken: string;
     readonly expiresAt: string;
     readonly email: string | null;
     /** Como se presenta: lo que escribió al registrarse, o lo que dijo Google. */
@@ -810,6 +811,8 @@ export interface EnrollResultDto {
   readonly view: MembershipViewDto;
   /** `true` si la persona ya existia en la red y solo se le sumo este gimnasio. */
   readonly reusedIdentity: boolean;
+  /** `true` si le quedó una solicitud por aceptar en su app. */
+  readonly linkRequestSent: boolean;
 }
 
 /**
@@ -832,6 +835,8 @@ export const enrollMember = async (input: {
    * reserva queda apuntando a la ficha y su cuenta de Google pasa a abrirla.
    */
   readonly bookingId?: string;
+  /** El QR de la cuenta que la persona mostró: la solicitud va a esa cuenta. */
+  readonly accountToken?: string;
 }): Promise<EnrollResultDto> => {
   const out = await request<EnrollResultDto>('/staff/members', { method: 'POST', body: input });
   return { ...out, view: reviveView(out.view) };
@@ -1546,18 +1551,83 @@ export interface SignUpGymDto {
 export const signUpGym = (input: SignUpGymInput): Promise<SignUpGymDto> =>
   request('/gyms/signup', { method: 'POST', body: input, anonymous: true });
 
-export const fetchClaims = (): Promise<
-  readonly {
-    readonly id: string;
-    readonly code: string;
-    readonly email: string | null;
-    readonly displayName: string | null;
-    readonly expiresAt: string;
-  }[]
-> => request('/staff/claims');
+/** Lo que recepción recibe al escanear el QR de una cuenta: para no teclearlo. */
+export interface AccountPreviewDto {
+  readonly displayName: string | null;
+  readonly phone: string | null;
+  readonly email: string | null;
+}
 
-export const confirmClaim = (code: string, membershipId: string): Promise<unknown> =>
-  request('/staff/claims/confirm', { method: 'POST', body: { code, membershipId } });
+export const lookupAccountQr = (token: string): Promise<AccountPreviewDto> =>
+  request('/staff/accounts/lookup', { method: 'POST', body: { token } });
+
+export type LinkRequestStatus = 'pending' | 'accepted' | 'rejected' | 'canceled';
+
+/** Cómo está una ficha frente a la app de la persona. */
+export interface MemberLinkStateDto {
+  /** La última solicitud de la ficha, o `null` si nunca se mandó ninguna. */
+  readonly request: {
+    readonly id: string;
+    readonly status: LinkRequestStatus;
+    readonly createdAt: string;
+    readonly decidedAt: string | null;
+  } | null;
+  /** Si la identidad de la ficha ya abre con una cuenta de Sinchi. */
+  readonly accountLinked: boolean;
+}
+
+export const fetchMemberLinkState = (membershipId: string): Promise<MemberLinkStateDto> =>
+  request(`/staff/members/${membershipId}/link-request`);
+
+export const resendLinkRequest = (membershipId: string): Promise<MemberLinkStateDto> =>
+  request(`/staff/members/${membershipId}/link-request`, { method: 'POST' });
+
+export const cancelLinkRequest = (requestId: string): Promise<{ readonly canceled: boolean }> =>
+  request(`/staff/link-requests/${requestId}`, { method: 'DELETE' });
+
+/** Un gimnasio que la agregó y espera su respuesta (decisiones §14). */
+export interface LinkRequestDto {
+  readonly id: string;
+  readonly gymName: string;
+  readonly gymSlug: string;
+  readonly createdAt: string;
+}
+
+export const fetchMyLinkRequests = (): Promise<readonly LinkRequestDto[]> =>
+  request('/me/link-requests');
+
+export const acceptMyLinkRequest = (requestId: string): Promise<{ readonly accepted: boolean }> =>
+  request(`/me/link-requests/${requestId}/accept`, { method: 'POST' });
+
+export const rejectMyLinkRequest = (requestId: string): Promise<{ readonly rejected: boolean }> =>
+  request(`/me/link-requests/${requestId}/reject`, { method: 'POST' });
+
+/**
+ * Sin ficha: firmadas con el ID token de Firebase, como las reservas de invitado.
+ * Aceptar devuelve la sesión, porque aceptar es lo que la vincula.
+ */
+export const fetchGuestLinkRequests = (idToken: string): Promise<readonly LinkRequestDto[]> =>
+  request('/link-requests/mine', { method: 'POST', anonymous: true, body: { idToken } });
+
+export const acceptGuestLinkRequest = (
+  requestId: string,
+  idToken: string,
+): Promise<IssuedSessionDto> =>
+  request(`/link-requests/${requestId}/accept`, {
+    method: 'POST',
+    anonymous: true,
+    body: { idToken },
+  });
+
+export const rejectGuestLinkRequest = (
+  requestId: string,
+  idToken: string,
+): Promise<{ readonly rejected: boolean }> =>
+  request(`/link-requests/${requestId}/reject`, {
+    method: 'POST',
+    anonymous: true,
+    body: { idToken },
+  });
 
 /**
  * Quien viene a probar. La lista de posibles alumnos del local.

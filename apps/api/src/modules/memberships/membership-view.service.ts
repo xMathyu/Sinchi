@@ -50,6 +50,22 @@ import {
 } from '../../common/mappers';
 import { Clock } from '../../common/clock';
 
+/**
+ * Lo que un gimnasio agregó y la persona no aceptó no está en su billetera.
+ *
+ * Se ve si la ficha nunca mandó solicitud —las de antes de la 0023, y las que
+ * nacen de algo que pidió la propia persona: su reserva, su invitación— o si
+ * alguna se aceptó. Pendiente, rechazada o retirada, no: es la regla que evita
+ * que un gimnasio se meta en la app de alguien sin preguntarle.
+ */
+const notAwaitingPerson = sql`(
+  not exists (select 1 from link_requests r where r.membership_id = ${schema.memberships.id})
+  or exists (
+    select 1 from link_requests r
+    where r.membership_id = ${schema.memberships.id} and r.status = 'accepted'
+  )
+)`;
+
 export interface MembershipView {
   readonly membership: Membership;
   /** Identidad global: vive fuera del tenant (MD 5). */
@@ -240,6 +256,7 @@ export class MembershipViewService {
           and(
             eq(schema.memberships.userId, userId),
             eq(schema.memberships.status, 'active'),
+            notAwaitingPerson,
           ),
         ),
     );

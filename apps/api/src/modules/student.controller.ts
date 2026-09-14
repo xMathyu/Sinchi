@@ -23,6 +23,7 @@ import { TrialsService } from './trials/trials.service';
 import { EventRegistrationsService } from './events/registrations.service';
 import { RoutinesService } from './routines/routines.service';
 import { MessagingService } from './messaging/messaging.service';
+import { LinkRequestsService } from './identity/link-requests.service';
 
 const planChangeSchema = z.object({ planId: z.string().uuid() });
 const trialSchema = z.object({
@@ -76,6 +77,7 @@ export class StudentController {
     private readonly routines: RoutinesService,
     private readonly bajas: AccountDeletionService,
     private readonly messaging: MessagingService,
+    private readonly requests: LinkRequestsService,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -433,5 +435,39 @@ export class StudentController {
   @Delete('account/deletion-request')
   async cancelDeletion(@CurrentSession() session: Session) {
     return { canceled: await this.bajas.cancelar(session.sub) };
+  }
+
+  // -------------------------------------------------------------------------
+  // Solicitudes de vinculo
+  // -------------------------------------------------------------------------
+
+  /**
+   * Los gimnasios que la agregaron y esperan su respuesta.
+   *
+   * Existe tambien con sesion porque quien ya entrena en un local es el caso
+   * que la regla vino a cubrir: el segundo gimnasio que la inscribe por su DNI
+   * no aparece en su billetera hasta que acepte.
+   */
+  @Get('link-requests')
+  linkRequests(@CurrentSession() session: Session) {
+    return this.requests.pendingFor({ kind: 'user', userId: session.sub });
+  }
+
+  @Post('link-requests/:requestId/accept')
+  async acceptLinkRequest(
+    @CurrentSession() session: Session,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+  ) {
+    await this.requests.accept({ kind: 'user', userId: session.sub }, requestId);
+    return { accepted: true };
+  }
+
+  @Post('link-requests/:requestId/reject')
+  async rejectLinkRequest(
+    @CurrentSession() session: Session,
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+  ) {
+    await this.requests.reject({ kind: 'user', userId: session.sub }, requestId);
+    return { rejected: true };
   }
 }

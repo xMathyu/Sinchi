@@ -157,3 +157,27 @@ export function parseQrPayload(raw: string): QrPayload | null {
   if (code === undefined || !/^\d{6,10}$/.test(code)) return null;
   return { subject: tag === 'u' ? 'user' : 'device', id, code };
 }
+
+/**
+ * El QR de una CUENTA, no de un alumno: `SINCHI1:a:<token>`.
+ *
+ * Lo muestra quien todavía no tiene ficha en ningún gimnasio, para que recepción
+ * lo inscriba sin teclear su nombre ni su celular. No abre ninguna puerta ni
+ * lleva un código que rote: el token lo emite la api y vence a los minutos.
+ *
+ * Tiene su propio lector, y no un tercer `subject` de `parseQrPayload`, para que
+ * la puerta no pueda confundirlo nunca con el de un alumno: quien lee uno de
+ * estos tiene que abrir una inscripción, no dejar pasar a nadie.
+ */
+export function encodeAccountQrPayload(token: string): string {
+  return `${QR_PREFIX}:a:${token}`;
+}
+
+export function parseAccountQrPayload(raw: string): string | null {
+  const parts = raw.trim().split(':');
+  if (parts.length !== 3) return null;
+  const [prefix, tag, token] = parts;
+  if (prefix !== QR_PREFIX || tag !== 'a') return null;
+  if (token === undefined || !/^[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
+  return token;
+}

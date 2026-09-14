@@ -115,7 +115,9 @@ arrancar con esa bandera en producción.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve código de vinculación. Al registrarse acepta `fullName` y `phone`, que quedan con el código para no volver a pedirlos al reservar. |
+| `POST` | `/auth/google` | Cambia un ID token de Firebase por sesión, o devuelve la cuenta sin ficha con el token de su QR. Al registrarse acepta `fullName` y `phone`, que quedan con la cuenta para no volver a pedirlos al reservar y para encontrar las solicitudes que le dejen por su celular. |
+| `POST` | `/link-requests/mine` | Sin ficha, con ID token: los gimnasios que la agregaron y esperan respuesta. |
+| `POST` | `/link-requests/:id/accept` · `/reject` | Sin ficha, con ID token. Aceptar la vincula a la ficha y devuelve la sesión. |
 | `POST` | `/auth/switch-to-student` | El dueño del dojo también entrena en él: puede mirar su propia billetera. |
 | `POST` | `/auth/dev-login` | Emite sesión por celular. Sin verificar. Solo desarrollo. |
 
@@ -124,7 +126,8 @@ arrancar con esa bandera en producción.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `GET` | `/me` | Identidad + billetera. Es la primera pantalla de la app. |
-| `GET` | `/me/wallet` | Membresías en todos los gimnasios de la red. |
+| `GET` | `/me/wallet` | Membresías en todos los gimnasios de la red. No trae las que esperan que acepte o que rechazó (decisiones §14). |
+| `GET` | `/me/link-requests` | Las solicitudes pendientes de quien ya es alumno. `POST /:id/accept` y `/:id/reject` las contestan. |
 | `POST` | `/me/device` | Siembra el secreto TOTP. `{ rotate: true }` cuando pierde el celular. |
 | `GET` | `/me/memberships/:id` | Detalle con historial de pagos y asistencia. |
 | `GET` | `/me/memberships/:id/checkin-preview` | Qué pasaría si marcara ahora. |
@@ -173,7 +176,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/roster` | Padrón con estado. Dos consultas, sin N+1. |
 | `GET` | `/staff/roster/search?q=` | Por nombre o documento. |
 | `GET` | `/staff/members/:id` | Detalle para la pantalla de cobro. |
-| `POST` | `/staff/members` | Alta. Reutiliza la identidad si ya existe en la red. Con `bookingId` cierra una inscripción reservada desde la app: la suscripción empieza hoy, la reserva queda apuntando a la ficha y la cuenta de Google con la que se reservó pasa a abrirla. 409 si el documento no es de quien reservó. |
+| `POST` | `/staff/members` | Alta. Reutiliza la identidad si ya existe en la red. Con `bookingId` cierra una inscripción reservada desde la app: la suscripción empieza hoy, la reserva queda apuntando a la ficha y la cuenta de Google con la que se reservó pasa a abrirla. 409 si el documento no es de quien reservó. Con `accountToken` —el QR de la cuenta que mostró— la solicitud va a esa cuenta; 409 si esa cuenta no corresponde a la ficha del documento. Sin reserva detrás deja una solicitud (`linkRequestSent`). |
 | `POST` | `/staff/members/:id/resubscribe` | Vuelve tras cancelar, sin re-registrar a la persona. |
 | `GET` | `/staff/plans` · `/staff/schedules` | Configuración del local. Lo ACTIVO, que es contra lo que se inscribe y contra lo que valida la puerta. |
 | `GET` | `/staff/schedules/all` | Solo el dueño: también los archivados, con cuánta gente tiene reserva en cada bloque (`upcomingTrials`, de cualquier tipo) y cuáles se pisan entre sí. |
@@ -208,8 +211,10 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/routines/videos` | Solo el dueño: firma la subida de UN video y devuelve la URL. El archivo **no pasa por la api**. Declarada antes que `:routineId`, o «videos» entraría ahí como si fuera un id. |
 | `POST` | `/staff/routines/videos/:id/ready` | Solo el dueño: confirma que el archivo llegó, preguntándoselo al almacenamiento. 409 si todavía no está. |
 | `DELETE` | `/staff/routines/:id` | Solo el dueño, y solo si está sin publicar: 409 si no. |
-| `GET` | `/staff/claims` | Códigos de vinculación vigentes. |
-| `POST` | `/staff/claims/confirm` | Vincula una cuenta de Google a una ficha del padrón. |
+| `POST` | `/staff/accounts/lookup` | Canjea el QR de una cuenta `{ token }` por nombre, celular y correo. 404 si venció. |
+| `GET` | `/staff/members/:id/link-request` | Si la persona tiene la ficha en su app: la última solicitud y si su identidad ya abre con una cuenta. |
+| `POST` | `/staff/members/:id/link-request` | Reenvía la solicitud rechazada o retirada, a la cuenta a la que iba. |
+| `DELETE` | `/staff/link-requests/:id` | Retira una solicitud sin contestar. |
 | `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
 
 ### Salud
@@ -414,13 +419,13 @@ Qué significa exactamente:
 | `POST /staff/checkin/qr` y `/checkin/manual` | `POST /staff/members` y `/members/:id/resubscribe` |
 | `POST /staff/sync` — repite lo que ya pasó en el mostrador | `POST /staff/payments` |
 | `POST /staff/checkin/qr` y `/checkin/manual` — la puerta es el trabajo del día, no una alta | `POST /staff/trials/settings` |
-| Los `DELETE`: revocar invitación, desvincular cuenta — solo quitan acceso | `POST /staff/invites` y `/staff/claims/confirm` |
+| Los `DELETE`: revocar invitación, retirar solicitud, desvincular cuenta — solo quitan acceso | `POST /staff/invites` y reenviar una solicitud |
 | Todos los `GET`: padrón, deuda, historial, reportes | Sale del directorio: `GET /gyms` y `GET /gyms/:slug` |
 
-Vincular una cuenta de Google a una ficha (`claims/confirm`) sí se bloquea, y es
-el caso más discutible de la tabla: el alumno ya existe y ya paga. No queda
-tirado —en la puerta lo marcan a mano igual, que es lo que importa— y esperar
-unos días a tener la app no es que le nieguen la entrada.
+Reenviar una solicitud de vínculo sí se bloquea, y es el caso más discutible de
+la tabla: el alumno ya existe y ya paga. No queda tirado —en la puerta lo marcan a
+mano igual, que es lo que importa— y esperar unos días a tenerlo en la app no es
+que le nieguen la entrada.
 
 La regla que ordena esa tabla: **el corte de Sinchi al gimnasio nunca cae sobre
 el alumno**. Cerrar la puerta castigaría a quien sí le pagó a su gimnasio,

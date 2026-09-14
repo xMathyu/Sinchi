@@ -1,8 +1,10 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  encodeAccountQrPayload,
   encodeQrPayload,
   generateTotp,
+  parseAccountQrPayload,
   parseQrPayload,
   secondsUntilRotation,
   totpCounter,
@@ -119,5 +121,28 @@ describe('payload del QR', () => {
 
   it('ignora espacios del lector de camara', () => {
     expect(parseQrPayload('  SINCHI1:u:u1:12345678\n')).not.toBeNull();
+  });
+});
+
+describe('QR de la cuenta', () => {
+  const TOKEN = 'Zq3_x-9fK2mB7wLpQ0rT1sUv';
+
+  it('ida y vuelta', () => {
+    expect(encodeAccountQrPayload(TOKEN)).toBe(`SINCHI1:a:${TOKEN}`);
+    expect(parseAccountQrPayload(encodeAccountQrPayload(TOKEN))).toBe(TOKEN);
+  });
+
+  it('la puerta no lo confunde con el de un alumno, ni al reves', () => {
+    // Es la razon de que tenga su propio lector: un QR de cuenta leido como de
+    // alumno dejaria pasar a quien viene a inscribirse.
+    expect(parseQrPayload(encodeAccountQrPayload(TOKEN))).toBeNull();
+    expect(parseAccountQrPayload('SINCHI1:u:u1:12345678')).toBeNull();
+  });
+
+  it('rechaza lo que no es un token', () => {
+    expect(parseAccountQrPayload('SINCHI1:a:corto')).toBeNull();
+    expect(parseAccountQrPayload('SINCHI1:a:con espacios que no van ahi')).toBeNull();
+    expect(parseAccountQrPayload(`SINCHI0:a:${TOKEN}`)).toBeNull();
+    expect(parseAccountQrPayload(`SINCHI1:a:${TOKEN}:extra`)).toBeNull();
   });
 });

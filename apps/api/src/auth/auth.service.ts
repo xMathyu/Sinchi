@@ -45,8 +45,9 @@ import { InviteService } from './invite.service';
 
 /**
  * La cuenta de Google es valida pero no esta vinculada a ninguna ficha del
- * padron. No se emite sesion: se devuelve el codigo que la recepcionista
- * confirma en el mostrador.
+ * padron. No se emite sesion: se devuelve lo que la app necesita mientras tanto
+ * —su nombre, su celular y el QR con el que se deja inscribir—. La vincula la
+ * persona al aceptar la solicitud de un gimnasio (`/link-requests`).
  */
 export interface UnlinkedAccount {
   readonly linked: false;

@@ -43,17 +43,29 @@ export function hashBearerToken(token: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Código de vinculación
+// Cuenta sin ficha
 // ---------------------------------------------------------------------------
 
 /**
  * Seis dígitos, con `randomInt` (que usa el generador criptográfico) y no
  * `Math.random`.
  *
- * Es corto porque se dicta en voz alta en el mostrador, y es aceptable que sea
- * corto porque no vale por sí solo: hay que estar frente a la recepcionista para
- * usarlo, dura minutos, y quien lo confirma está mirando a la persona.
+ * Era el código que se dictaba en el mostrador. Ya no se confirma —la persona
+ * acepta la solicitud del gimnasio—, pero se sigue emitiendo: la columna es NOT
+ * NULL y las apps anteriores a la migración 0023 lo leen al entrar.
  */
 export function generateClaimCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+/**
+ * El token del QR de la cuenta: 18 bytes, 24 caracteres base64url.
+ *
+ * Largo porque no se dicta, se escanea, y porque canjearlo entrega el nombre, el
+ * celular y el correo de la persona: seis dígitos se podrían recorrer desde
+ * cualquier sesión de staff. Se guarda en claro, al revés que el de la
+ * invitación, porque vive diez minutos y no abre nada por sí solo.
+ */
+export function generateAccountQrToken(): string {
+  return randomBytes(18).toString('base64url');
 }

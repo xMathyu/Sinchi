@@ -824,3 +824,91 @@ app instalada.
   comprometió a nada.
 - **No cobra por adelantado en la app.** Se paga en recepción, como todo en la
   versión 1.
+
+---
+
+## 14. El gimnasio agrega, la persona acepta
+
+Lo pidió Mathyu en dos frases: el código de recepción ya no tenía sentido, y un
+gimnasio que agrega a alguien tiene que preguntarle. El código de 6 dígitos
+(`autenticacion.md`) resolvía un problema real —la ficha existe antes que la
+cuenta y Firebase no dice a cuál corresponde— con un trámite que alguien tenía
+que dictar y otro confirmar, y que era una pared para quien todavía no entrena
+en ningún sitio. Al retirarlo apareció el agujero que tapaba sin querer:
+inscribir por DNI a alguien que YA tenía cuenta metía el gimnasio en su
+billetera sin preguntarle, y cualquier local que conociera un DNI podía hacerlo.
+
+### La regla
+
+**Ningún gimnasio aparece en la app de alguien sin que esa persona lo acepte.**
+La ficha es del gimnasio y no espera a nadie —recepción inscribe, cobra y marca
+la puerta igual, tenga la persona la app o no—; lo que espera es la billetera.
+
+Cada alta deja una solicitud (`link_requests`, migración 0023). La billetera
+enseña una ficha si nunca mandó solicitud o si alguna se aceptó
+(`notAwaitingPerson`). Las anteriores a la 0023 siguen donde estaban, y no dejan
+solicitud las altas que nacen de algo que pidió la propia persona —su reserva de
+inscripción, su enlace de invitación— ni la del staff que se inscribe en su
+propio local.
+
+### A quién le llega
+
+De la forma más cierta a la más débil:
+
+1. **El QR de su cuenta**, escaneado en el mostrador. Va a esa cuenta y a
+   ninguna otra. El QR (`SINCHI1:a:<token>`) lo emite la api, vence a los diez
+   minutos, y canjearlo entrega nombre, celular y correo para no teclearlos; el
+   DNI se sigue leyendo del carné.
+2. **La cuenta que su identidad ya tenía**, porque entrena en otro gimnasio.
+3. **El celular o el correo de la ficha**, para quien no estaba delante. La
+   solicitud no los copia: los lee de `users`, y la ve la cuenta que entró con
+   ese celular —el que dio al registrarse— o ese correo.
+
+El tercero es débil y hay que decirlo: **el celular del registro no se
+verifica**. Alguien que escriba el de otra persona podría aceptar una solicitud
+que no es suya. Se eligió igual, sabiéndolo, porque sin él no se puede agregar a
+nadie a distancia. Lo acotan tres cosas: aceptar deja qué cuenta contestó
+(`decided_by_firebase_uid`), el gimnasio ve en la ficha si la persona la tiene
+en su app, y el dueño puede desvincular. Verificar el celular por SMS cerraría
+el hueco, y cuesta un proveedor.
+
+### Lo que no es obvio
+
+- **`account_claims` pasó a ser la fila estable de la cuenta.** El código tenía
+  índice único y por eso los vencidos se borraban cada vez que alguien entraba;
+  con ellos se iban el nombre y el celular de quien se registró hace más de diez
+  minutos, que ahora hacen falta para encontrar sus solicitudes. La 0023 quita el
+  índice, la fila se queda y el QR se renueva en ella. El código de 6 dígitos se
+  sigue emitiendo solo porque la columna es NOT NULL y las apps viejas lo leen.
+- **Aceptar sin ficha es entrar.** La api devuelve la sesión en la misma
+  respuesta, y antes de marcar nada comprueba que ni la cuenta abra ya otra
+  ficha ni la ficha abra con otra cuenta.
+- **El mismo 404 para «no existe», «no es tuya» y «ya se contestó».**
+  Distinguirlos le diría a quien prueba ids si acertó con la solicitud de otra
+  persona.
+- **Rechazar no borra la ficha.** Queda en el padrón del gimnasio, que lo ve y
+  puede volver a mandarla. Se reenvía a la cuenta a la que iba: si llegó por un
+  QR, reenviarla por celular abriría el camino débil sin motivo.
+- **Una pendiente por ficha** (índice parcial): inscribir dos veces no le manda
+  dos avisos a nadie.
+
+### La app, de paso
+
+La cuenta sin ficha tenía una sola pantalla —el directorio, sin barra— con el
+código, los mensajes y cerrar sesión escondidos dentro. Ahora tiene pestañas:
+**Gimnasios**, **Mi QR** y **Mensajes**. Las solicitudes llegan arriba del
+directorio y de Mi QR, que las pide cada pocos segundos porque es la pantalla
+que se tiene en la mano mientras recepción termina el alta; a quien ya es
+alumno, arriba de su billetera. En la ficha del staff, «En su app» dice si la
+persona la aceptó, y deja reenviarla o retirarla.
+
+### Lo que no hace
+
+- **No avisa por push.** No hay canal: la solicitud se ve al abrir la app.
+- **No inscribe desde el QR de un alumno de otro gimnasio.** Escanearlo en un
+  local donde no está responde que no tiene membresía ahí; recepción lo inscribe
+  por su DNI y la solicitud le llega a la cuenta que ya tiene.
+- **No convierte en solicitud la invitación por correo verificado.** Quien entra
+  con un correo que un gimnasio invitó sigue quedando inscrito solo
+  (`claimByVerifiedEmail`). El gimnasio tuvo que conocer su correo y su DNI, y
+  cerrarlo es el siguiente paso de esta misma regla.

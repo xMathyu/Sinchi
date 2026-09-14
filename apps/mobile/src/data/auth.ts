@@ -83,8 +83,8 @@ export async function firebaseSigningToken(): Promise<string | null> {
 
 export type SignInOutcome =
   | { readonly kind: 'signed_in' }
-  /** Falta que recepción confirme el código. */
-  | { readonly kind: 'needs_link'; readonly code: string }
+  /** Entró, pero todavía no abre ninguna ficha: va a sus gimnasios y su QR. */
+  | { readonly kind: 'needs_link' }
   | { readonly kind: 'error'; readonly message: string };
 
 /**
@@ -195,13 +195,13 @@ async function exchangeForSinchiSession(
     await saveAccountDetails({ fullName, phone });
 
     setUnlinked({
-      code: result.claim.code,
+      qrToken: result.claim.qrToken,
       expiresAt: new Date(result.claim.expiresAt).getTime(),
       idToken: firebaseIdToken,
       fullName,
       phone,
     });
-    return { kind: 'needs_link', code: result.claim.code };
+    return { kind: 'needs_link' };
   }
 
   await saveSession({

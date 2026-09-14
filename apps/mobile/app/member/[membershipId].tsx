@@ -31,10 +31,10 @@ import {
 import { PhotoCircle } from '../../src/design/photo';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
-import { useGymPlans, useStaffMember } from '../../src/data/hooks';
+import { useGymPlans, useMemberLinkState, useStaffMember } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { markAttendance, reactivateSubscription } from '../../src/data/actions';
-import { openMemberConversation } from '../../src/data/api';
+import { cancelLinkRequest, openMemberConversation, resendLinkRequest } from '../../src/data/api';
 import { formatCheckInMoment, formatLongDate, formatShortDate } from '../../src/lib/format';
 
 type Pestana = 'attendance' | 'payments';
@@ -240,6 +240,8 @@ function Record({
           <Linea label="Correo" value={user.email ?? 'sin correo'} last />
         </Card>
       </Stack>
+
+      <AppLinkCard membershipId={view.membership.id} />
 
       {receivable.due ? (
         <Card
@@ -655,5 +657,108 @@ function WriteToMember({
         </Text>
       )}
     </Stack>
+  );
+}
+
+/**
+ * Si la persona tiene esta ficha en su app.
+ *
+ * El mostrador inscribe sin esperar a nadie, pero la ficha no aparece en la app
+ * de la persona hasta que ella acepta (decisiones §14). Sin esto, recepción no
+ * tenía cómo contestar la pregunta de siempre —«no me sale en la app»— ni qué
+ * hacer después: reenviar lo rechazado sin querer, o retirar lo mandado a quien
+ * no era.
+ */
+function AppLinkCard({ membershipId }: { readonly membershipId: string }) {
+  const theme = useTheme();
+  const state = useMemberLinkState(membershipId);
+  const [working, setWorking] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Sin respuesta todavía —o sin red— no se afirma nada: decir «no la tiene»
+  // a quien sí la tiene manda a recepción a reenviar lo que no hace falta.
+  if (state.details === null) return null;
+
+  const { request, accountLinked } = state.details;
+  const status = request?.status ?? null;
+
+  const view: {
+    readonly title: string;
+    readonly body: string;
+    readonly action: 'resend' | 'cancel' | null;
+    readonly label: string;
+  } =
+    status === 'accepted' || (status === null && accountLinked)
+      ? {
+          title: 'La tiene en su app',
+          body: 'Ve su plan, lo que debe y su QR para entrar.',
+          action: null,
+          label: '',
+        }
+      : status === 'pending'
+        ? {
+            title: 'Esperando que acepte',
+            body: 'Le llegó una solicitud a su app. Hasta que la acepte, este gimnasio no aparece ahí.',
+            action: 'cancel',
+            label: 'Retirar la solicitud',
+          }
+        : status === 'rejected'
+          ? {
+              title: 'Rechazó la solicitud',
+              body: 'Dijo que no entrena aquí. Si fue un error, vuelve a enviársela.',
+              action: 'resend',
+              label: 'Volver a enviar',
+            }
+          : {
+              title: 'No la tiene en su app',
+              body: 'Envíale la solicitud: le llega a la cuenta que entre con su celular o su correo.',
+              action: 'resend',
+              label: 'Enviar solicitud',
+            };
+
+  const run = (): void => {
+    setWorking(true);
+    setNotice(null);
+    const call =
+      view.action === 'cancel' && request !== null
+        ? cancelLinkRequest(request.id)
+        : resendLinkRequest(membershipId);
+    void call
+      .then(state.reload)
+      .catch((causa: unknown) =>
+        setNotice(causa instanceof Error ? causa.message : 'No se pudo. Intenta de nuevo.'),
+      )
+      .finally(() => setWorking(false));
+  };
+
+  return (
+    <Card radius={theme.radii.xl} style={{ marginTop: 18 }}>
+      <Stack gap={10}>
+        <Stack gap={3}>
+          <Eyebrow color={status === 'rejected' ? theme.semaphore.warn : undefined}>
+            En su app
+          </Eyebrow>
+          <Text variant="bodySmall" weight="semibold">
+            {view.title}
+          </Text>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            {view.body}
+          </Text>
+        </Stack>
+        {view.action === null ? null : (
+          <Button
+            label={working ? 'Un momento…' : view.label}
+            variant="secondary"
+            disabled={working}
+            onPress={run}
+          />
+        )}
+        {notice === null ? null : (
+          <Text variant="micro" color={theme.semaphore.bad}>
+            {notice}
+          </Text>
+        )}
+      </Stack>
+    </Card>
   );
 }

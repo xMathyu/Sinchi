@@ -51,9 +51,13 @@ import {
   type StaffPostDto,
   type SummaryDto,
   type ClassBookingDto,
+  fetchMemberLinkState,
+  type LinkRequestDto,
+  type MemberLinkStateDto,
 } from './api';
 import { myBookings } from './trials';
 import { myConversations, threadWith } from './chat';
+import { myLinkRequests } from './link-requests';
 import {
   gymDeletions,
   loadStudentDetail,
@@ -74,8 +78,6 @@ import {
   myGymRoutine,
   publicRoutine,
   sinchiSubscription,
-  pendingClaims,
-  type AccountClaim,
 } from './actions';
 import { ensureAccessCodeSecret } from './auth';
 import { getSessionState } from './session';
@@ -502,47 +504,27 @@ export function useMyGyms(): readonly StaffPostDto[] {
 }
 
 /**
- * Códigos de vinculación vigentes, con recarga manual.
+ * Los gimnasios que la agregaron y esperan su respuesta.
  *
- * No se refresca solo: el código dura diez minutos y quien mira esta pantalla
- * tiene al alumno enfrente enseñándole la pantalla. Un temporizador que recarga
- * cada pocos segundos movería la lista bajo el dedo justo al tocarla.
+ * Con o sin ficha: a quien no tiene ninguna le llegan por el QR que mostró o por
+ * su celular, y a quien ya entrena en un local, del siguiente que la inscribe.
  */
-export function useClaims(): {
-  readonly claims: readonly AccountClaim[];
-  readonly loading: boolean;
-  readonly error: string | null;
-  readonly reload: () => void;
-} {
-  const [claims, setClaims] = useState<readonly AccountClaim[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
+export function useLinkRequests(): Carga<readonly LinkRequestDto[]> {
+  return useCargaRemota<readonly LinkRequestDto[]>(
+    myLinkRequests,
+    [],
+    'No se pudieron traer tus solicitudes.',
+  );
+}
 
-  useEffect(() => {
-    let cancelado = false;
-    setLoading(true);
-    setError(null);
-
-    void pendingClaims()
-      .then((list) => {
-        if (!cancelado) setClaims(list);
-      })
-      .catch((causa: unknown) => {
-        if (!cancelado) {
-          setError(causa instanceof Error ? causa.message : 'No se pudieron traer los códigos.');
-        }
-      })
-      .finally(() => {
-        if (!cancelado) setLoading(false);
-      });
-
-    return () => {
-      cancelado = true;
-    };
-  }, [attempt]);
-
-  return { claims, loading, error, reload: () => setAttempt((n) => n + 1) };
+/** Si la persona de esta ficha la tiene en su app, para el mostrador. */
+export function useMemberLinkState(membershipId: string): Carga<MemberLinkStateDto | null> {
+  const request = useCallback(() => fetchMemberLinkState(membershipId), [membershipId]);
+  return useCargaRemota<MemberLinkStateDto | null>(
+    request,
+    null,
+    'No se pudo saber si la tiene en su app.',
+  );
 }
 
 /**

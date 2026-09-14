@@ -31,6 +31,8 @@ import {
   MembershipViewService,
   type MembershipView,
 } from '../memberships/membership-view.service';
+import { AccountLinkService } from '../../auth/account-link.service';
+import { LinkRequestsService } from '../identity/link-requests.service';
 
 export interface EnrollMemberInput {
   /** Solo si la persona es nueva: reutilizando una identidad, ya se sabe. */
@@ -50,12 +52,28 @@ export interface EnrollMemberInput {
    * cuenta de Google con la que se reservó pasa a abrir esa ficha.
    */
   readonly bookingId?: string | undefined;
+  /**
+   * El QR de la cuenta que la persona mostró en el mostrador.
+   *
+   * Con él la solicitud va a ESA cuenta, y no a quien entre con el celular de la
+   * ficha, que es el camino débil. El documento se sigue leyendo del carné: el
+   * QR dice quién es la cuenta, no quién es la persona ante el padrón.
+   */
+  readonly accountToken?: string | undefined;
+}
+
+/** Quién inscribe. Sin él —desde un script— la solicitud sale sin firma. */
+export interface EnrollActor {
+  readonly staffId: string;
+  readonly userId: string;
 }
 
 export interface EnrollResult {
   readonly view: MembershipView;
   /** `true` si la persona ya existía en la red y solo se le sumó este gimnasio. */
   readonly reusedIdentity: boolean;
+  /** `true` si le quedó una solicitud por aceptar en su app. */
+  readonly linkRequestSent: boolean;
 }
 
 @Injectable()
@@ -66,6 +84,8 @@ export class MembersService {
     @InjectDb() private readonly db: Database,
     private readonly clock: Clock,
     private readonly views: MembershipViewService,
+    private readonly accountLink: AccountLinkService,
+    private readonly linkRequests: LinkRequestsService,
   ) {}
 
   /**
@@ -90,16 +110,25 @@ export class MembersService {
     return { existe: found.length === 1 };
   }
 
-  async enroll(tenantId: string, input: EnrollMemberInput): Promise<EnrollResult> {
+  async enroll(
+    tenantId: string,
+    input: EnrollMemberInput,
+    actor: EnrollActor | null = null,
+  ): Promise<EnrollResult> {
     const phone = input.phone === undefined ? null : input.phone.trim();
     const documentId = input.documentId.trim();
     const booking =
       input.bookingId === undefined
         ? null
         : await this.enrollmentBooking(tenantId, input.bookingId);
+    // El QR se canjea antes de tocar nada: si venció, no queda un alta a medias.
+    const account =
+      input.accountToken === undefined
+        ? null
+        : await this.accountLink.previewByQrToken(input.accountToken);
 
     // La identidad se resuelve FUERA del contexto del tenant: es global.
-    const { userId, reused } = await withoutTenantIsolation(this.db, async (tx) => {
+    const { userId, reused, identityAccount } = await withoutTenantIsolation(this.db, async (tx) => {
       // El ancla es el DOCUMENTO, no el correo. El correo no es unico en esta
       // tabla —dos personas pueden compartirlo— y ademas un tipeo en un correo
       // ajeno inscribiria a un desconocido. El documento es lo que recepcion
@@ -110,6 +139,7 @@ export class MembersService {
           phone: schema.users.phone,
           doc: schema.users.documentId,
           email: schema.users.email,
+          firebaseUid: schema.users.firebaseUid,
         })
         .from(schema.users)
         .where(
@@ -130,6 +160,33 @@ export class MembersService {
       if (booking !== null && booking.userId !== null && existing?.id !== booking.userId) {
         throw new ConflictException(
           'Ese documento no es de quien reservó. Revisa su carné antes de inscribirla.',
+        );
+      }
+
+      /**
+       * La cuenta del QR tiene que poder abrir ESTA ficha.
+       *
+       * Si la ficha del documento ya abre con otra cuenta, o la del QR ya abre
+       * otra ficha, aceptar la solicitud chocaría después, con la persona ya en
+       * su casa. Se dice aquí, con ella delante y el carné en la mano.
+       */
+      const [accountHolder] =
+        account === null
+          ? []
+          : await tx
+              .select({ id: schema.users.id })
+              .from(schema.users)
+              .where(eq(schema.users.firebaseUid, account.firebaseUid))
+              .limit(1);
+      const accountMismatch =
+        account !== null &&
+        (existing === undefined
+          ? accountHolder !== undefined
+          : (existing.firebaseUid !== null && existing.firebaseUid !== account.firebaseUid) ||
+            (accountHolder !== undefined && accountHolder.id !== existing.id));
+      if (accountMismatch) {
+        throw new ConflictException(
+          'La cuenta de ese QR no corresponde a la ficha de este documento. Revisa el carné antes de inscribirla.',
         );
       }
 
@@ -156,7 +213,7 @@ export class MembersService {
             .where(eq(schema.users.id, existing.id));
         }
 
-        return { userId: existing.id, reused: true };
+        return { userId: existing.id, reused: true, identityAccount: existing.firebaseUid };
       }
 
       // Persona nueva: aqui SI hacen falta el nombre y el celular. Solo se
@@ -178,7 +235,7 @@ export class MembersService {
         })
         .returning({ id: schema.users.id });
 
-      return { userId: created!.id, reused: false };
+      return { userId: created!.id, reused: false, identityAccount: null };
     });
 
     const view = await withTenant(this.db, tenantId, async (tx) => {
@@ -305,7 +362,25 @@ export class MembersService {
 
     if (booking?.firebaseUid != null) await this.linkBookingAccount(userId, booking.firebaseUid);
 
-    return { view, reusedIdentity: reused };
+    /**
+     * La solicitud: sin ella, este gimnasio no aparece en la app de la persona.
+     *
+     * Dos altas no la necesitan, porque ya las pidió la persona: la que cierra
+     * una reserva suya —reservó su inscripción desde el directorio— y la del staff
+     * que se inscribe a sí mismo en su propio local.
+     */
+    const linkRequestSent = booking === null && actor?.userId !== userId;
+    if (linkRequestSent) {
+      await this.linkRequests.create({
+        tenantId,
+        membershipId: view.membership.id,
+        userId,
+        firebaseUid: account?.firebaseUid ?? identityAccount,
+        staffId: actor?.staffId ?? null,
+      });
+    }
+
+    return { view, reusedIdentity: reused, linkRequestSent };
   }
 
   /**
@@ -365,7 +440,8 @@ export class MembersService {
       );
     } catch (error) {
       // `users_firebase_uid_key`: esa cuenta ya abre otra ficha. La inscripción
-      // ya está hecha y no se deshace por esto: queda el código de siempre.
+      // ya está hecha y no se deshace por esto: el gimnasio puede mandarle la
+      // solicitud desde su ficha.
       this.logger.warn(
         `No se vinculó la cuenta de la reserva: ${error instanceof Error ? error.message : error}`,
       );

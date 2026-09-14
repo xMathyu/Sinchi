@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateClaimCode, hashBearerToken, issueBearerToken } from './secrets';
+import {
+  generateAccountQrToken,
+  generateClaimCode,
+  hashBearerToken,
+  issueBearerToken,
+} from './secrets';
 
 describe('token de portador', () => {
   it('el hash es determinista, para poder buscar por el', () => {
@@ -43,5 +48,20 @@ describe('codigo de vinculacion', () => {
   it('no repite de forma evidente', () => {
     const codes = new Set(Array.from({ length: 500 }, () => generateClaimCode()));
     expect(codes.size).toBeGreaterThan(480);
+  });
+});
+
+describe('token del QR de la cuenta', () => {
+  it('cabe en el formato que lee el mostrador', () => {
+    // `parseAccountQrPayload` exige 20 a 64 caracteres base64url: un token que se
+    // saliera de ahi seria un QR que el escaner descarta sin decir por que.
+    for (let i = 0; i < 200; i += 1) {
+      expect(generateAccountQrToken()).toMatch(/^[A-Za-z0-9_-]{24}$/);
+    }
+  });
+
+  it('no se repite', () => {
+    const tokens = new Set(Array.from({ length: 2000 }, () => generateAccountQrToken()));
+    expect(tokens.size).toBe(2000);
   });
 });

@@ -22,8 +22,8 @@ import {
   changePlan as changePlanRemote,
   enrollMember,
   identityExists,
-  confirmClaim,
-  fetchClaims,
+  lookupAccountQr,
+  type AccountPreviewDto,
   fetchPlansFor,
   fetchSaasSubscription,
   fetchSummary,
@@ -413,52 +413,20 @@ export async function cancelSubscription(membershipId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Vinculación de cuentas
+// El QR de una cuenta
 // ---------------------------------------------------------------------------
 
-export interface AccountClaim {
-  readonly id: string;
-  readonly code: string;
-  readonly email: string | null;
-  readonly displayName: string | null;
-  readonly expiresAt: Date;
-}
-
 /**
- * Códigos de vinculación vigentes en este gimnasio.
+ * Canjea el QR de una cuenta por su nombre y su contacto, para abrir el alta con
+ * ellos puestos.
  *
- * `docs/autenticacion.md` describe el flujo entero —el alumno entra con Google,
- * la api responde `linked: false` con un código de seis dígitos, y recepción lo
- * confirma contra la ficha del padrón— y la app nunca tuvo la última mitad.
- * `fetchClaims` y `confirmClaim` llevaban escritos desde entonces sin que ninguna
- * pantalla los llamara, así que un alumno recién instalado se quedaba en
- * `unlinked` indefinidamente, mirando un código que nadie podía canjear.
+ * Reemplaza a la vinculación por código: la cuenta ya no se ata a la ficha en el
+ * mostrador, la ata la persona aceptando la solicitud que el alta le deja. Exige
+ * servidor como toda alta — el token lo resuelve la api.
  */
-export async function pendingClaims(): Promise<readonly AccountClaim[]> {
-  if (withServer() === null) return [];
-  const rows = await fetchClaims();
-  return rows.map((row) => ({
-    id: row.id,
-    code: row.code,
-    email: row.email,
-    displayName: row.displayName,
-    expiresAt: new Date(row.expiresAt),
-  }));
-}
-
-/**
- * Vincula una cuenta de Google con una ficha del padrón.
- *
- * La api comprueba que la ficha sea de ESTE gimnasio y rechaza si ya tiene otra
- * cuenta: el vínculo lo hace una persona con prisa y las personas se equivocan.
- * Aquí no se replica ninguna de esas dos reglas — replicarlas sería tener dos
- * verdades sobre quién puede vincular a quién.
- */
-export async function linkAccount(code: string, membershipId: string): Promise<void> {
-  const session = withServer();
-  if (session === null) throw new Error('Vincular cuentas necesita una sesión de staff.');
-  await confirmClaim(code, membershipId);
-  await refreshRoster(session);
+export async function lookupAccount(token: string): Promise<AccountPreviewDto> {
+  exigeServidor('Inscribir con el QR de una cuenta');
+  return await lookupAccountQr(token);
 }
 
 /**
@@ -948,6 +916,8 @@ export async function enrollStudent(input: {
   readonly planId: string;
   /** La inscripción reservada desde la app que este alta viene a cerrar. */
   readonly bookingId?: string;
+  /** El QR de la cuenta que mostró en el mostrador: la solicitud va a esa cuenta. */
+  readonly accountToken?: string;
 }): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
   const session = withServer();
   if (session === null) throw new Error('Inscribir necesita una sesión de staff.');
