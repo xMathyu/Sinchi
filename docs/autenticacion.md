@@ -414,7 +414,14 @@ gimnasio dio de alta **por DNI y sin invitarlo**. El auto-vínculo por correo
 verificado existe solo para el dueño (`tryLinkOwnerByEmail`), a propósito — el
 correo de un alumno lo escribe otra persona con prisa en un mostrador, y un typo
 entregaría una membresía ajena. Así que el código vive a un toque, en el
-directorio: «¿Tu gimnasio ya te registró? Muéstrale tu código a recepción».
+directorio: una línea bajo el saludo —«¿Ya entrenas en un gimnasio con Sinchi?
+Muestra tu código»— y otra vez en el menú de la cuenta, junto a cerrar sesión.
+
+Esa pantalla abría con una tarjeta del código y «Entrar con otra cuenta» ENTRE la
+presentación y la lista: lo primero que leía alguien que acababa de registrarse
+era la salida y un trámite que casi nunca le toca. Ahora saluda por su nombre,
+dice que la cuenta está lista y va directo a los gimnasios; cerrar sesión se
+mudó al avatar, que es donde se busca.
 
 ---
 

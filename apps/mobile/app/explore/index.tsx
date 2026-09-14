@@ -16,7 +16,7 @@ import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
 import { cents, conversationTopicLabel, formatPENShort, type BookingKind } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Badge, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Avatar, Badge, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { ConversationRow } from '../../src/design/chat';
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
@@ -27,7 +27,7 @@ import { useSession } from '../../src/data/session-hooks';
 import { signOut } from '../../src/data/auth';
 import { cancelBooking } from '../../src/data/trials';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
-import { formatWeekdayAndDay } from '../../src/lib/format';
+import { formatWeekdayAndDay, initials } from '../../src/lib/format';
 
 /** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
 const KIND_LABEL: Readonly<Record<BookingKind, string>> = {
@@ -43,22 +43,26 @@ export default function ExploreScreen() {
   const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
   const conversations = useMyConversations();
   // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
-  // app: hay que dejarle a mano las dos únicas cosas que puede necesitar y que
-  // no están aquí — su código para el mostrador, y salir de la cuenta.
+  // app, y le habla a esa persona por su nombre. Titulada «Gimnasios» a secas,
+  // quien acababa de registrarse caía en una lista sin saber si la cuenta se
+  // había creado ni qué le tocaba hacer ahora.
   const session = useSession();
   const unlinked = session.status === 'unlinked';
+  const firstName =
+    session.status === 'unlinked' ? (session.fullName?.trim().split(/\s+/)[0] ?? '') : '';
 
   return (
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Gimnasios
+        <Text variant="titleSmall" weight="bold" numberOfLines={1} style={{ flex: 1 }}>
+          {firstName.length > 0 ? `Hola, ${firstName}` : 'Gimnasios'}
         </Text>
         {/* Esta pantalla es a veces un modal —se abre desde la billetera— y a
             veces la primera de la app, para quien acaba de crear su cuenta. Sin
             la segunda rama queda sin salida justo cuando recepción confirma el
             código: la sesión pasa a ser de alumno y el directorio se queda
-            encima de nada. */}
+            encima de nada. La tercera es la cuenta sin ficha, cuya única salida
+            —cerrar sesión— va en el avatar. */}
         {router.canGoBack() ? (
           <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
             <Text variant="body" color={theme.colors.textSecondary}>
@@ -75,13 +79,20 @@ export default function ExploreScreen() {
               Mi billetera
             </Text>
           </Pressable>
+        ) : session.status === 'unlinked' ? (
+          <AccountButton fullName={session.fullName} phone={session.phone} />
         ) : null}
       </Row>
 
+      {/* «De la red» se fue: es como llamamos al conjunto por dentro, y quien
+          abre la app por primera vez no sabe de qué red le hablan. */}
       <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
-        Escuelas y dojos de la red. Entra a cualquiera para ver sus horarios y sus
-        precios, y reserva una clase o inscríbete.
+        {unlinked
+          ? 'Tu cuenta está lista. Elige un gimnasio para ver sus horarios y precios, y reserva una clase o inscríbete.'
+          : 'Escuelas y dojos que usan Sinchi. Entra a cualquiera para ver sus horarios y sus precios, y reserva una clase o inscríbete.'}
       </Text>
+
+      {unlinked ? <LinkCodeRow /> : null}
 
       {upcoming.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
@@ -122,8 +133,6 @@ export default function ExploreScreen() {
         </Stack>
       ) : null}
 
-      {unlinked ? <NewAccountFooter /> : null}
-
       {loading && gyms.length === 0 ? (
         <View style={{ minHeight: 340 }}>
           <SectionLoader text="Buscando gimnasios…" />
@@ -147,7 +156,7 @@ export default function ExploreScreen() {
         </View>
       ) : (
         <Stack gap={12} style={{ marginTop: 22 }}>
-          <Eyebrow>{gyms.length} en la red</Eyebrow>
+          <Eyebrow>{gyms.length === 1 ? '1 gimnasio' : `${gyms.length} gimnasios`}</Eyebrow>
           {gyms.map((gymCard) => (
             <GymCard key={gymCard.id} gym={gymCard} />
           ))}
@@ -305,55 +314,80 @@ function OwnerInvitation() {
 }
 
 /**
- * Lo que necesita quien acaba de crear su cuenta y no es de ningún gimnasio.
+ * El código para recepción, en una línea y no en una tarjeta.
  *
- * El código de seis dígitos ya no es la pantalla de entrada —era una pared para
- * quien todavía no entrena en ningún sitio— pero no desaparece: al alumno al que
- * su gimnasio dio de alta por DNI, sin invitación, es lo único que le conecta la
- * ficha con la app. Así que vive aquí, a un toque, en vez de recibirle.
+ * No desaparece: al alumno al que su gimnasio dio de alta por DNI, sin
+ * invitación, es lo único que le conecta la ficha con la app. Pero tampoco puede
+ * ser lo primero que lea quien acaba de registrarse. Era una tarjeta con título
+ * entre la presentación y la lista, y empujaba los gimnasios hacia abajo para
+ * ofrecer un trámite que a la mayoría no le toca. En una línea bajo el saludo
+ * sigue a la vista de quien sí lo busca —recepción se lo acaba de pedir— sin
+ * tapar a los demás.
  */
-function NewAccountFooter() {
+function LinkCodeRow() {
   const theme = useTheme();
   const router = useRouter();
 
   return (
-    <Stack gap={10} style={{ marginTop: 22 }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Ver mi código para recepción"
-        onPress={() => router.push('/link')}
-      >
-        <Card radius={theme.radii.lg} tone="sunken">
-          <Row style={{ gap: 12 }}>
-            <Stack gap={5} style={{ flex: 1 }}>
-              <Text variant="bodySmall" weight="semibold">
-                ¿Tu gimnasio ya te registró?
-              </Text>
-              <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                Muéstrale tu código a recepción y tu membresía aparece aquí, con tu plan
-                y tu QR.
-              </Text>
-            </Stack>
-            <Text variant="title" color={theme.colors.textFaint}>
-              ›
-            </Text>
-          </Row>
-        </Card>
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        hitSlop={12}
-        style={{ alignSelf: 'center' }}
-        onPress={() => {
-          void signOut({ forgetTotpSecret: true }).then(() => router.replace('/login'));
-        }}
-      >
-        <Text variant="caption" color={theme.colors.textSecondary}>
-          Entrar con otra cuenta
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Ver mi código para recepción"
+      hitSlop={10}
+      onPress={() => router.push('/link')}
+      style={{ marginTop: 14 }}
+    >
+      <Text variant="captionSmall" color={theme.colors.textTertiary}>
+        ¿Ya entrenas en un gimnasio con Sinchi?{' '}
+        <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+          Muestra tu código ›
         </Text>
-      </Pressable>
-    </Stack>
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * La cuenta, arriba a la derecha: donde se busca en cualquier app.
+ *
+ * Cerrar sesión vivía como «Entrar con otra cuenta» en medio del directorio,
+ * encima de la lista, y a quien acababa de registrarse le ofrecía salir antes
+ * que entrar a un gimnasio. Aquí queda a un toque para quien lo busca y fuera
+ * del camino de quien no.
+ *
+ * Una alerta y no una pantalla: son dos acciones, y la cuenta sin ficha no
+ * tiene ajustes a los que llevarlas — `SessionRouter` la devuelve aquí.
+ */
+function AccountButton({
+  fullName,
+  phone,
+}: {
+  readonly fullName: string | null;
+  readonly phone: string | null;
+}) {
+  const router = useRouter();
+  const letters = initials(fullName ?? '');
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Mi cuenta"
+      hitSlop={12}
+      onPress={() =>
+        Alert.alert(fullName ?? 'Tu cuenta', phone ?? undefined, [
+          { text: 'Mi código para recepción', onPress: () => router.push('/link') },
+          {
+            text: 'Cerrar sesión',
+            style: 'destructive',
+            onPress: () => {
+              void signOut({ forgetTotpSecret: true }).then(() => router.replace('/login'));
+            },
+          },
+          { text: 'Cancelar', style: 'cancel' },
+        ])
+      }
+    >
+      <Avatar initials={letters.length > 0 ? letters : '·'} size={38} radius={19} />
+    </Pressable>
   );
 }
 
