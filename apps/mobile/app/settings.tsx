@@ -1,7 +1,10 @@
 /**
- * Ajustes.
+ * Mi cuenta.
  *
- * No está en el diseño, pero hacen falta dos interruptores reales:
+ * Era Ajustes. El avatar de arriba a la derecha lleva aquí desde cualquier
+ * cuenta —sin gimnasio, alumno o staff—, y arriba van sus datos para corregirlos
+ * (decisiones §15). Debajo sigue lo que ya estaba, porque hacen falta dos
+ * interruptores reales:
  *
  *  - la paleta segura para daltonismo. En este producto el color ES la
  *    información: un recepcionista que no distingue verde de rojo no puede
@@ -15,13 +18,30 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Switch, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
+import {
+  accountDetailsDenialMessage,
+  checkAccountDetails,
+  normalizePhoneNumber,
+} from '@sinchi/shared';
 import { SEMAPHORE_COLORBLIND_SAFE, SEMAPHORE_DEFAULT } from '@sinchi/ui';
-import { Card, Divider, Dot, Eyebrow, Logo, Row, Stack, Text } from '../src/design/primitives';
+import {
+  Button,
+  Card,
+  Divider,
+  Dot,
+  Eyebrow,
+  Field,
+  Logo,
+  Row,
+  Stack,
+  Text,
+} from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
 import { switchGym, switchMode, signOut } from '../src/data/auth';
-import { fetchModes, type AvailableModesDto } from '../src/data/api';
+import { fetchMe, fetchModes, type AvailableModesDto } from '../src/data/api';
+import { saveMyDetails } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
 import { loadDemo, resetState, setRole } from '../src/data/store';
 
@@ -122,7 +142,7 @@ export default function SettingsScreen() {
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold">
-          Ajustes
+          Mi cuenta
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
           <Text variant="body" color={theme.colors.textSecondary}>
@@ -131,6 +151,10 @@ export default function SettingsScreen() {
         </Pressable>
       </Row>
 
+      {/* Quién es y dónde trabaja, solo cuando no lo dicen ya los datos de abajo:
+          con sesión de staff dice el puesto, y en demostración es lo único que
+          identifica a la persona inventada. */}
+      {isStaffSession || session.status === 'demo' ? (
       <Card radius={theme.radii.xl} style={{ marginTop: 16 }}>
         <Row gap={12} justify="flex-start">
           <Logo size={28} />
@@ -146,6 +170,9 @@ export default function SettingsScreen() {
           </Stack>
         </Row>
       </Card>
+      ) : null}
+
+      <AccountDetails />
 
 
       {/* Las dos caras de la misma persona, a un toque.
@@ -338,7 +365,7 @@ export default function SettingsScreen() {
       {/* Con sesion real el rol lo firma el token: cambiarlo aqui solo dejaria la
           app pintando una zona para la que la api va a devolver 403. El selector
           es lo que sostiene el recorrido en modo demostracion, y ahi se queda. */}
-      {session.status === 'signed_in' ? null : (
+      {session.status !== 'demo' ? null : (
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Rol de la sesión</Eyebrow>
         {ROLES.map((option) => (
@@ -408,7 +435,7 @@ export default function SettingsScreen() {
         {/* El modo staff no tenia salida: las pantallas de la puerta no llevaban
             a ajustes, y con sesion de staff el enrutado ademas rebotaba
             `/settings` a `/staff`. Cerrar sesion era imposible sin desinstalar. */}
-        {session.status === 'signed_in' && (
+        {(session.status === 'signed_in' || session.status === 'unlinked') && (
           <Stack gap={10} style={{ marginTop: 24 }}>
             <Eyebrow>Sesión</Eyebrow>
             <Pressable
@@ -437,6 +464,9 @@ export default function SettingsScreen() {
                 irse abre ajustes y mira debajo de «cerrar sesión». Discreto a
                 propósito —sin recuadro y en texto terciario— para no ofrecer la
                 baja a quien solo venía a cambiar el tema. */}
+            {/* Solo con sesión: la baja la pide `/me`, y la cuenta sin ficha
+                todavía no tiene cómo pedirla desde aquí. */}
+            {session.status === 'signed_in' ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push('/delete-account')}
@@ -447,12 +477,13 @@ export default function SettingsScreen() {
                 Eliminar mi cuenta
               </Text>
             </Pressable>
+            ) : null}
           </Stack>
         )}
 
       {/* Reinicia el store a `demo.ts`. Con sesion real solo consigue pintar
           datos inventados encima de los del gimnasio hasta la siguiente carga. */}
-      {session.status !== 'signed_in' && (
+      {session.status === 'demo' && (
         <Stack gap={10} style={{ marginTop: 24 }}>
           <Eyebrow>Datos de demostración</Eyebrow>
           <Pressable
@@ -473,6 +504,158 @@ export default function SettingsScreen() {
         </Stack>
       )}
     </Screen>
+  );
+}
+
+/**
+ * Tus datos: el nombre y el celular, para corregirlos.
+ *
+ * Cualquier cuenta los edita, porque son de la persona y no del local. La
+ * identidad es una sola para toda la red: lo que corrige aquí es lo que ven los
+ * gimnasios en su padrón. El documento se muestra y no se toca —lo lee el
+ * gimnasio del carné, y es lo que ancla quién es quién—.
+ *
+ * Los datos se piden a `/me` y no al store: con sesión de staff el store no
+ * tiene la billetera de nadie, y enseñaría el nombre de la demostración.
+ */
+function AccountDetails() {
+  const theme = useTheme();
+  const session = useSession();
+  const [saved, setSaved] = useState<{
+    readonly name: string;
+    readonly phone: string;
+    readonly documentId: string | null;
+  } | null>(null);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [notice, setNotice] = useState<{ readonly ok: boolean; readonly text: string } | null>(
+    null,
+  );
+
+  const show = (current: NonNullable<typeof saved>): void => {
+    setSaved(current);
+    setName(current.name);
+    setPhone(current.phone);
+  };
+
+  useEffect(() => {
+    if (session.status === 'unlinked') {
+      show({ name: session.fullName ?? '', phone: session.phone ?? '', documentId: null });
+      return;
+    }
+    if (session.status !== 'signed_in') return;
+
+    let vivo = true;
+    void fetchMe().then(
+      (me) => {
+        if (vivo) show({ name: me.user.name, phone: me.user.phone, documentId: me.user.documentId });
+      },
+      () => {
+        // Sin respuesta no se ofrece editar: un formulario vacío invitaría a
+        // guardar un nombre en blanco encima del de verdad.
+      },
+    );
+    return () => {
+      vivo = false;
+    };
+    // Solo al cambiar de estado: los datos de la sesión sin ficha cambian al
+    // guardar, y volver a copiarlos pisaría lo que se está escribiendo.
+  }, [session.status]);
+
+  if (saved === null) return null;
+
+  const denial = checkAccountDetails({ name, phone });
+  const changed =
+    name.trim() !== saved.name.trim() ||
+    normalizePhoneNumber(phone) !== normalizePhoneNumber(saved.phone);
+  const message = denial === null ? undefined : accountDetailsDenialMessage(denial);
+
+  const save = (): void => {
+    setSaving(true);
+    setNotice(null);
+    void saveMyDetails({ name, phone })
+      .then(() => {
+        show({ ...saved, name: name.trim(), phone: normalizePhoneNumber(phone) });
+        setAttempted(false);
+        setNotice({
+          ok: true,
+          text:
+            session.status === 'unlinked'
+              ? 'Guardado.'
+              : 'Guardado: tus gimnasios ya ven estos datos.',
+        });
+      })
+      .catch((causa: unknown) =>
+        setNotice({ ok: false, text: causa instanceof Error ? causa.message : 'No se pudo guardar.' }),
+      )
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <Stack gap={10} style={{ marginTop: 16 }}>
+      <Eyebrow>Tus datos</Eyebrow>
+      <Card radius={theme.radii.xl}>
+        <Stack gap={14}>
+          <Field
+            label="Tu nombre"
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              setNotice(null);
+            }}
+            placeholder="Nombre y apellido"
+            autoComplete="name"
+            error={attempted && denial?.startsWith('name') === true ? message : undefined}
+          />
+          <Field
+            label="Tu celular"
+            value={phone}
+            onChangeText={(text) => {
+              setPhone(text);
+              setNotice(null);
+            }}
+            placeholder="+51987654321"
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+            autoComplete="tel"
+            hint="Es con lo que los gimnasios te reconocen."
+            error={attempted && denial === 'phone_invalid' ? message : undefined}
+          />
+          {saved.documentId === null ? null : (
+            <Row>
+              <Stack gap={2} style={{ flex: 1 }}>
+                <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                  Documento
+                </Text>
+                <Text variant="micro" color={theme.colors.textFaint}>
+                  Lo corrige tu gimnasio: lo lee de tu carné.
+                </Text>
+              </Stack>
+              <Text variant="bodySmall" weight="semibold">
+                {saved.documentId}
+              </Text>
+            </Row>
+          )}
+          <Button
+            label={saving ? 'Guardando…' : 'Guardar cambios'}
+            disabled={!changed || denial !== null || saving}
+            onBlockedPress={changed && !saving ? () => setAttempted(true) : undefined}
+            onPress={save}
+          />
+          {notice === null ? null : (
+            <Text
+              variant="captionSmall"
+              color={notice.ok ? theme.semaphore.ok : theme.semaphore.bad}
+              align="center"
+            >
+              {notice.text}
+            </Text>
+          )}
+        </Stack>
+      </Card>
+    </Stack>
   );
 }
 

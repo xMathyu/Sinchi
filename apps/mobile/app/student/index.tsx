@@ -73,7 +73,7 @@ export default function WalletScreen() {
         </Row>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Ajustes de la cuenta"
+          accessibilityLabel="Mi cuenta"
           onPress={() => router.push('/settings')}
         >
           <Avatar initials={initials(user.name)} size={38} radius={19} />

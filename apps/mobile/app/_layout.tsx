@@ -432,8 +432,17 @@ function SessionRouter() {
        * cosas que hace alguien sin gimnasio —buscar donde, preguntar y dejarse
        * inscribir mostrando su QR—, y la ficha le llega como una solicitud que
        * acepta desde ahi mismo (decisiones §14).
+       *
+       * `settings` es Mi cuenta: tambien sin ficha se corrige el nombre y se
+       * cierra sesion desde ahi (decisiones §15).
        */
-      if (first !== 'visitor' && !enDirectorio && !onGymSignUp && !onChat) {
+      if (
+        first !== 'visitor' &&
+        first !== 'settings' &&
+        !enDirectorio &&
+        !onGymSignUp &&
+        !onChat
+      ) {
         router.replace('/visitor');
       }
       return;

@@ -24,7 +24,6 @@ import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import { useGyms, useLinkRequests, useMyBookings } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
-import { signOut } from '../../src/data/auth';
 import { cancelBooking } from '../../src/data/trials';
 import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
@@ -81,7 +80,7 @@ export default function ExploreScreen() {
             </Text>
           </Pressable>
         ) : session.status === 'unlinked' ? (
-          <AccountButton fullName={session.fullName} phone={session.phone} />
+          <AccountButton fullName={session.fullName} />
         ) : null}
       </Row>
 
@@ -300,21 +299,12 @@ function OwnerInvitation() {
 /**
  * La cuenta, arriba a la derecha: donde se busca en cualquier app.
  *
- * Cerrar sesión vivía como «Entrar con otra cuenta» en medio del directorio,
- * encima de la lista, y a quien acababa de registrarse le ofrecía salir antes
- * que entrar a un gimnasio. Aquí queda a un toque para quien lo busca y fuera
- * del camino de quien no.
- *
- * Una alerta y no una pantalla: es una sola acción, y la cuenta sin ficha no
- * tiene ajustes a los que llevarla — `SessionRouter` la devuelve a sus pestañas.
+ * Lleva a Mi cuenta, la misma pantalla que abre el avatar de la billetera y el
+ * del mostrador: sus datos para corregirlos y cerrar sesión. Era un menú con
+ * cerrar sesión y nada más, y quien se registró con el nombre mal escrito no
+ * tenía dónde arreglarlo.
  */
-function AccountButton({
-  fullName,
-  phone,
-}: {
-  readonly fullName: string | null;
-  readonly phone: string | null;
-}) {
+function AccountButton({ fullName }: { readonly fullName: string | null }) {
   const router = useRouter();
   const letters = initials(fullName ?? '');
 
@@ -323,18 +313,7 @@ function AccountButton({
       accessibilityRole="button"
       accessibilityLabel="Mi cuenta"
       hitSlop={12}
-      onPress={() =>
-        Alert.alert(fullName ?? 'Tu cuenta', phone ?? undefined, [
-          {
-            text: 'Cerrar sesión',
-            style: 'destructive',
-            onPress: () => {
-              void signOut({ forgetTotpSecret: true }).then(() => router.replace('/login'));
-            },
-          },
-          { text: 'Cancelar', style: 'cancel' },
-        ])
-      }
+      onPress={() => router.push('/settings')}
     >
       <Avatar initials={letters.length > 0 ? letters : '·'} size={38} radius={19} />
     </Pressable>

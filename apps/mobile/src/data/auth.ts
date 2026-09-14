@@ -245,6 +245,30 @@ export async function restoreFirebaseAccount(): Promise<boolean> {
 }
 
 /**
+ * Corrige el nombre y el celular de quien todavía no tiene ficha.
+ *
+ * Sin ruta propia: `/auth/google` ya guarda lo que la persona dice de sí misma
+ * cuando se lo manda, y lo pone ENCIMA de lo que tenía. Volver a entrar con la
+ * credencial guardada y los datos nuevos es exactamente eso, y deja la sesión con
+ * ellos sin inventar un segundo camino para escribirlos.
+ */
+export async function updateAccountDetails(details: {
+  readonly fullName: string;
+  readonly phone: string;
+}): Promise<SignInOutcome> {
+  try {
+    const refreshToken = await loadFirebaseCredential();
+    const idToken = refreshToken === null ? null : await refreshIdToken(refreshToken);
+    if (refreshToken === null || idToken === null) {
+      return { kind: 'error', message: 'Vuelve a entrar con tu cuenta para cambiar tus datos.' };
+    }
+    return await exchangeForSinchiSession({ idToken, refreshToken }, details);
+  } catch (error) {
+    return { kind: 'error', message: describe(error) };
+  }
+}
+
+/**
  * Acepta una invitacion: entra y queda inscrito de una vez.
  *
  * No pasa por `exchangeForSinchiSession` porque no hay nada que vincular — el

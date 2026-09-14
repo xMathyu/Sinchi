@@ -722,6 +722,15 @@ export const fetchMe = async (): Promise<MeDto> => {
   return { user: reviveUser(me.user), wallet: me.wallet.map(reviveView) };
 };
 
+/**
+ * Corrige su nombre y su celular. Lo ven todos sus gimnasios —la identidad es una
+ * sola— y responde 409 si el celular ya es de otra persona.
+ */
+export const updateMyProfile = async (input: {
+  readonly name: string;
+  readonly phone: string;
+}): Promise<User> => reviveUser(await request<User>('/me/profile', { method: 'POST', body: input }));
+
 export const fetchWallet = async (): Promise<readonly MembershipViewDto[]> =>
   (await request<readonly MembershipViewDto[]>('/me/wallet')).map(reviveView);
 

@@ -128,6 +128,7 @@ arrancar con esa bandera en producción.
 | `GET` | `/me` | Identidad + billetera. Es la primera pantalla de la app. |
 | `GET` | `/me/wallet` | Membresías en todos los gimnasios de la red. No trae las que esperan que acepte o que rechazó (decisiones §14). |
 | `GET` | `/me/link-requests` | Las solicitudes pendientes de quien ya es alumno. `POST /:id/accept` y `/:id/reject` las contestan. |
+| `POST` | `/me/profile` | Corrige `{ name, phone }` de la identidad global —lo ven todos sus gimnasios— y el nombre de staff en sus locales. Valida con `checkAccountDetails`; 409 si el celular ya es de otra persona. Abierta en solo lectura. |
 | `POST` | `/me/device` | Siembra el secreto TOTP. `{ rotate: true }` cuando pierde el celular. |
 | `GET` | `/me/memberships/:id` | Detalle con historial de pagos y asistencia. |
 | `GET` | `/me/memberships/:id/checkin-preview` | Qué pasaría si marcara ahora. |

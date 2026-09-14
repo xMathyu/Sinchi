@@ -56,6 +56,14 @@ const messageSchema = z.object({
   body: z.string().max(4000),
   topic: z.enum(['general', 'trial', 'drop_in', 'membership', 'event']).optional(),
 });
+/**
+ * Lo que la persona corrige de si misma. Aqui solo se corta lo absurdo: la regla
+ * de verdad —y su frase— es `checkAccountDetails`, la misma que corre la app.
+ */
+const profileSchema = z.object({
+  name: z.string().max(200),
+  phone: z.string().max(40),
+});
 /** El motivo es opcional: obligar a explicarse para irse es un peaje. */
 const deletionSchema = z.object({ reason: z.string().max(500).optional() });
 
@@ -88,6 +96,23 @@ export class StudentController {
       this.views.wallet(session.sub),
     ]);
     return { user, wallet };
+  }
+
+  /**
+   * Corrige su nombre y su celular (decisiones §15).
+   *
+   * POST y no PATCH por lo mismo que el resto de la api: el cliente habla GET,
+   * POST y DELETE. Abierta aunque el gimnasio deba su suscripcion: corregir el
+   * propio nombre no crea nada para el local, y a quien trabaja en uno impago no
+   * se le puede atar su identidad a que su jefe le pague a Sinchi.
+   */
+  @AllowedWhenReadOnly()
+  @Post('profile')
+  updateProfile(
+    @CurrentSession() session: Session,
+    @Body(parseWith(profileSchema)) body: z.infer<typeof profileSchema>,
+  ) {
+    return this.identity.updateDetails(session.sub, body);
   }
 
   @Get('wallet')

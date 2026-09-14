@@ -14,6 +14,11 @@
  * Así no hay forma de tener una app "conectada" que escriba en memoria.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
+import {
+  accountDetailsDenialMessage,
+  checkAccountDetails,
+  normalizePhoneNumber,
+} from '@sinchi/shared';
 import type { CheckInMethod, ClassBooking, ClassSchedule, PaymentRail, Plan } from '@sinchi/shared';
 import {
   ApiError,
@@ -23,6 +28,7 @@ import {
   enrollMember,
   identityExists,
   lookupAccountQr,
+  updateMyProfile,
   type AccountPreviewDto,
   fetchPlansFor,
   fetchSaasSubscription,
@@ -96,7 +102,7 @@ import {
   type SummaryDto,
 } from './api';
 import { currentFirebaseToken, getSessionState, saveSession } from './session';
-import { firebaseSigningToken } from './auth';
+import { firebaseSigningToken, updateAccountDetails } from './auth';
 import {
   cancelSubscription as cancelSubscriptionLocal,
   changePlan as changePlanLocal,
@@ -427,6 +433,43 @@ export async function cancelSubscription(membershipId: string): Promise<void> {
 export async function lookupAccount(token: string): Promise<AccountPreviewDto> {
   exigeServidor('Inscribir con el QR de una cuenta');
   return await lookupAccountQr(token);
+}
+
+// ---------------------------------------------------------------------------
+// Mi cuenta
+// ---------------------------------------------------------------------------
+
+/**
+ * Guarda el nombre y el celular de quien mira (decisiones §15).
+ *
+ * La regla va antes de pedir nada —la misma `checkAccountDetails` que corre la
+ * api—, y después se recarga lo que los enseña: la billetera o el puesto leen el
+ * nombre del servidor, no de este formulario, y sin recargar seguirían con el
+ * viejo hasta la próxima vez que se abra la app.
+ */
+export async function saveMyDetails(draft: {
+  readonly name: string;
+  readonly phone: string;
+}): Promise<void> {
+  const denial = checkAccountDetails(draft);
+  if (denial !== null) throw new Error(accountDetailsDenialMessage(denial));
+  const clean = { name: draft.name.trim(), phone: normalizePhoneNumber(draft.phone) };
+
+  const state = getSessionState();
+  if (state.status === 'unlinked') {
+    const outcome = await updateAccountDetails({ fullName: clean.name, phone: clean.phone });
+    if (outcome.kind === 'error') throw new Error(outcome.message);
+    return;
+  }
+  if (state.status !== 'signed_in') throw new Error('Entra con tu cuenta para cambiar tus datos.');
+
+  await updateMyProfile(clean);
+  const { session } = state;
+  if (session.role === 'student') {
+    await hydrate();
+  } else {
+    await hydrateStaff({ userId: session.userId, tenantId: session.tenantId, role: session.role });
+  }
 }
 
 /**

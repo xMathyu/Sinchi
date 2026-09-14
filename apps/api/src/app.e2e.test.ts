@@ -790,3 +790,69 @@ suite('validación de entrada', () => {
     expect(JSON.stringify(body)).toMatch(/membershipId/);
   });
 });
+
+/**
+ * Mi cuenta (decisiones §15).
+ *
+ * Con una persona propia y no con las sembradas: el resto del archivo entra por
+ * celular y busca por nombre, y corregirle los datos a Mathyu rompería pruebas
+ * lejos de aquí.
+ */
+suite('mi cuenta', () => {
+  const run = String(Date.now()).slice(-7);
+  const PERSON = { dni: `6${run}`, phone: `+5197${run}`, name: 'Pedro Prueba' };
+  const NEW_PHONE = `+5196${run}`;
+  let session = '';
+
+  beforeAll(async () => {
+    const { body: plans } = await http.get('/v1/staff/plans').set(auth(token.frontDesk)).expect(200);
+    const plan = (plans as { id: string; type: string }[]).find((p) => p.type !== 'drop_in');
+    await http
+      .post('/v1/staff/members')
+      .set(auth(token.frontDesk))
+      .send({ documentId: PERSON.dni, name: PERSON.name, phone: PERSON.phone, planId: plan!.id })
+      .expect(201);
+    session = await login(PERSON.phone);
+  });
+
+  it('corrige su nombre y su celular, y su gimnasio ve lo nuevo', async () => {
+    // Con espacios y bordes, como se escribe: se guarda limpio.
+    const { body: user } = await http
+      .post('/v1/me/profile')
+      .set(auth(session))
+      .send({ name: '  Pedro Corregido ', phone: `+51 96${run.slice(0, 3)} ${run.slice(3)}` })
+      .expect(201);
+    expect(user.name).toBe('Pedro Corregido');
+    expect(user.phone).toBe(NEW_PHONE);
+
+    const { body: roster } = await http.get('/v1/staff/roster').set(auth(token.frontDesk)).expect(200);
+    const entry = find(roster, 'Pedro Corregido') as unknown as { user: { phone: string } };
+    expect(entry.user.phone).toBe(NEW_PHONE);
+  });
+
+  it('no se queda con el celular de otra persona', async () => {
+    // El de Ana, escrito con espacios: normalizado es el mismo número.
+    const { body } = await http
+      .post('/v1/me/profile')
+      .set(auth(session))
+      .send({ name: 'Pedro Corregido', phone: '+51 987 000 111' })
+      .expect(409);
+    expect(JSON.stringify(body)).toMatch(/otra persona/);
+  });
+
+  it('valida con la misma regla que la app', async () => {
+    const corto = await http
+      .post('/v1/me/profile')
+      .set(auth(session))
+      .send({ name: 'P', phone: NEW_PHONE })
+      .expect(400);
+    expect(JSON.stringify(corto.body)).toMatch(/al menos dos letras/);
+
+    const sinPais = await http
+      .post('/v1/me/profile')
+      .set(auth(session))
+      .send({ name: 'Pedro', phone: '987654321' })
+      .expect(400);
+    expect(JSON.stringify(sinPais.body)).toMatch(/código del país/);
+  });
+});

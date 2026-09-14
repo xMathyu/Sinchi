@@ -912,3 +912,32 @@ persona la aceptó, y deja reenviarla o retirarla.
   con un correo que un gimnasio invitó sigue quedando inscrito solo
   (`claimByVerifiedEmail`). El gimnasio tuvo que conocer su correo y su DNI, y
   cerrarlo es el siguiente paso de esta misma regla.
+
+---
+
+## 15. La persona corrige su nombre y su celular
+
+Lo pidió Mathyu: tocar el avatar de arriba a la derecha tenía que llevar a editar
+los datos de la cuenta, y en cualquier cuenta —la que no tiene gimnasio, la del
+alumno y la de quien trabaja en uno—. No había ningún camino. El nombre y el
+celular los escribía el mostrador, o la persona una sola vez al registrarse, y un
+error de tipeo se quedaba para siempre.
+
+- **Qué se edita:** el nombre y el celular. El documento no: lo lee el gimnasio
+  del carné y es lo que ancla quién es quién. El correo tampoco, por ahora: es el
+  de entrar, y cambiarlo exige verificar el nuevo.
+- **Lo ven los gimnasios.** La identidad es una sola para toda la red (MD 5), y
+  un padrón que conservara el nombre viejo seguiría llamando mal a la persona. El
+  nombre de staff (`staff.display_name`) se corrige también, local por local,
+  porque su política deja leer la fila propia sin gimnasio pero no escribirla.
+- **El celular sigue siendo único.** Se compara normalizado —con y sin espacios es
+  el mismo número— y quedarse con el de otra persona responde 409.
+- **Una regla, dos puntas:** `checkAccountDetails` apaga el botón en la app y
+  valida en la api, con la misma frase.
+- **Sin ficha no hay ruta nueva:** `/auth/google` ya guarda lo que la persona dice
+  de sí misma cuando se lo manda, así que corregir es volver a entrar con los
+  datos nuevos.
+
+Mi cuenta es la pantalla que se llamaba Ajustes: los datos arriba, y debajo lo que
+ya tenía. La cuenta sin ficha entra también, y encuentra ahí cerrar sesión; lo que
+no encuentra todavía es la baja, que sigue pidiendo una sesión de `/me`.

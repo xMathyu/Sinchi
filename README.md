@@ -171,7 +171,7 @@ fuente. Después de tocarlos, `npm run build` antes de recargar la app.
 ### Recorrido de la app
 
 Abre en **modo alumno**. Para llegar al modo staff: toca el avatar arriba a la
-derecha en Billetera → Ajustes → Rol de la sesión → Recepción.
+derecha en Billetera → Mi cuenta → Rol de la sesión → Recepción.
 
 Quien entra con una cuenta nueva —sin ficha en ningún padrón— aterriza en sus
 pestañas: Gimnasios, Mi QR y Mensajes. Recepción la inscribe escaneando su QR, y
