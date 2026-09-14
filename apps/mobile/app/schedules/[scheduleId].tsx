@@ -409,7 +409,7 @@ export default function ScheduleEditorScreen() {
             {existente.active
               ? existente.upcomingTrials === 0
                 ? 'Sacarla la esconde de tu ficha y de la puerta, y la puedes devolver cuando quieras.'
-                : `${existente.upcomingTrials} ${existente.upcomingTrials === 1 ? 'persona viene' : 'personas vienen'} a probar en esta clase. Su reserva sigue en pie con la hora que le dijiste; lo que dejas de ofrecer es de aquí en adelante.`
+                : `${existente.upcomingTrials} ${existente.upcomingTrials === 1 ? 'persona tiene' : 'personas tienen'} reserva en esta clase. Su reserva sigue en pie con la hora que le dijiste; lo que dejas de ofrecer es de aquí en adelante.`
               : 'Está fuera del horario: no sale en tu ficha ni valida en la puerta.'}
           </Text>
 
@@ -439,7 +439,7 @@ export default function ScheduleEditorScreen() {
                 `Borrar "${existente.schedule.name}"`,
                 existente.upcomingTrials === 0
                   ? 'Desaparece de tu horario. No se puede deshacer.'
-                  : `${existente.upcomingTrials} ${existente.upcomingTrials === 1 ? 'persona sigue esperada' : 'personas siguen esperadas'} a esa hora: su reserva se conserva con la clase y la hora que le dijiste. No se puede deshacer.`,
+                  : `${existente.upcomingTrials} ${existente.upcomingTrials === 1 ? 'persona sigue esperada' : 'personas siguen esperadas'} a esa hora: su reserva —de prueba, suelta o de inscripción— se conserva con la clase y la hora que le dijiste. No se puede deshacer.`,
                 [
                   { text: 'Cancelar', style: 'cancel' },
                   {

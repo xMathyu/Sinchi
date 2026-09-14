@@ -36,7 +36,7 @@ import { EmptyState } from '../../src/design/empty';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import {
-  useGymTrialClasses,
+  useGymBookings,
   useRecentCheckIns,
   useRefresco,
   useRoster,
@@ -58,7 +58,7 @@ export default function DoorScreen() {
   const today = useToday();
   const roster = useRoster();
   const recent = useRecentCheckIns();
-  const { details: pruebas } = useGymTrialClasses();
+  const { details: reservas } = useGymBookings();
   // Al volver a la puerta se relee el padrón: puede haber cambiado fuera.
   useRefresco();
 
@@ -78,9 +78,16 @@ export default function DoorScreen() {
     [recent, today],
   );
 
-  const pruebasHoy = useMemo(
-    () => pruebas.filter((r) => r.status !== 'canceled' && isSameDay(r.date, today)).length,
-    [pruebas, today],
+  /**
+   * Quién tiene reserva para hoy: a probar, a una clase suelta o a inscribirse.
+   *
+   * Cuenta las tres porque las tres son trabajo de la puerta —recibir, cobrar,
+   * hacer la ficha—, y una cifra que solo contara las pruebas dejaría fuera justo
+   * a quien viene a pagar.
+   */
+  const reservasHoy = useMemo(
+    () => reservas.filter((r) => r.status !== 'canceled' && isSameDay(r.date, today)).length,
+    [reservas, today],
   );
 
   const inDebt = roster.filter((e) => e.view.receivable.amountCents > 0).length;
@@ -149,11 +156,11 @@ export default function DoorScreen() {
         <Row gap={8} align="stretch">
           <Stat value={String(marcadosHoy)} caption="marcados" color={theme.colors.ink} />
           <Stat
-            value={String(pruebasHoy)}
-            caption="a probar"
+            value={String(reservasHoy)}
+            caption="reservas"
             color={theme.colors.ink}
             onPress={() => switchTab('trials', {})}
-            accessibilityLabel={`${pruebasHoy} vienen a probar hoy. Abre la lista.`}
+            accessibilityLabel={`${reservasHoy} ${reservasHoy === 1 ? 'reserva' : 'reservas'} para hoy. Abre la lista.`}
           />
           <Stat
             value={String(inDebt)}

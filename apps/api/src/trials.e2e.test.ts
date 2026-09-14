@@ -172,7 +172,9 @@ suite('directorio publico', () => {
     expect(nova.trialClassEnabled).toBe(true);
   });
 
-  it('no ofrece horas de un gimnasio que no da clase gratis', async () => {
+  // Shotokan no da prueba pero sí vende clases sueltas: lo que lo deja sin horas
+  // es que no publica horario (opera libre), no la prueba apagada.
+  it('no ofrece horas de un gimnasio sin horario publicado', async () => {
     const { body } = await http.get('/v1/gyms/dojo-shotokan').expect(200);
     expect((body as GymDetail).trialClassEnabled).toBe(false);
     expect((body as GymDetail).slots).toEqual([]);
@@ -675,7 +677,7 @@ suite('activar y desactivar la clase gratis', () => {
   const change = (token: string, enabled: boolean) =>
     http.post('/v1/staff/trials/settings').set(auth(token)).send({ enabled });
 
-  it('el dueño la apaga y el gimnasio deja de ofrecer horas', async () => {
+  it('el dueño la apaga y el gimnasio deja de ofrecer la prueba, no sus clases', async () => {
     const before = await iron();
     expect(before.trialClassEnabled).toBe(true);
     expect(before.slots.length).toBeGreaterThan(0);
@@ -685,9 +687,10 @@ suite('activar y desactivar la clase gratis', () => {
 
     const after = await iron();
     expect(after.trialClassEnabled).toBe(false);
-    // Sin horas que ofrecer: una lista de horarios reservables en un local que
-    // no da clase gratis promete algo que la reserva rechazaría.
-    expect(after.slots).toEqual([]);
+    // Las horas SIGUEN: Iron vende clases sueltas y tiene mensualidades. Antes
+    // desaparecían con la prueba, y un gimnasio sin prueba no dejaba hacer nada
+    // desde su ficha — que es justo el hueco que cierra la 0022.
+    expect(after.slots.length).toBeGreaterThan(0);
   });
 
   it('apagada, una reserva nueva vuelve con el motivo', async () => {
@@ -730,5 +733,406 @@ suite('activar y desactivar la clase gratis', () => {
     const after = await iron();
     expect(after.trialClassEnabled).toBe(true);
     expect(after.slots.length).toBeGreaterThan(0);
+  });
+});
+
+/** Hoy en Lima, `YYYY-MM-DD`: el día civil del gimnasio, no el del runner. */
+const limaDate = (offsetDays = 0): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(
+    new Date(Date.now() + offsetDays * 86_400_000),
+  );
+
+/** DNI distinto por persona y por corrida, por lo mismo que `nextPhone`. */
+const nextDocument = (): string => String(runId + 700_000 + ++personCounter).padStart(8, '0');
+
+const novaPlan = (name: string): { id: string; name: string; priceCents: number } => {
+  const plan = (nova.plans as unknown as { id: string; name: string; priceCents: number }[]).find(
+    (row) => row.name === name,
+  );
+  if (plan === undefined) throw new Error(`Nova no tiene el plan «${name}».`);
+  return plan;
+};
+
+interface StaffBookingRow {
+  id: string;
+  kind: string;
+  status: string;
+  planId: string | null;
+  chargeId: string | null;
+  membershipId: string | null;
+}
+
+const staffList = async (token: string, onlyPast = false): Promise<StaffBookingRow[]> =>
+  (
+    await http
+      .get(onlyPast ? '/v1/staff/trials?onlyPast=true' : '/v1/staff/trials')
+      .set(auth(token))
+      .expect(200)
+  ).body as StaffBookingRow[];
+
+/**
+ * La clase suelta, desde el directorio.
+ *
+ * Existe porque en un gimnasio sin clase de prueba la ficha no dejaba hacer nada:
+ * quien solo quería venir a UNA clase, pagándola, tenía que presentarse sin
+ * avisar. Lo que importa aquí no es solo reservarla sino cobrarla sin inventarle
+ * una ficha a nadie.
+ */
+suite('reservar y cobrar una clase suelta', () => {
+  const reservarSuelta = (slug: string, input: { token: string; slot: Slot; phone?: string }) =>
+    http.post(`/v1/gyms/${slug}/trial`).send({
+      idToken: input.token,
+      fullName: 'Viene Suelto',
+      phone: input.phone ?? nextPhone(),
+      classScheduleId: input.slot.scheduleId,
+      date: iso(input.slot.date),
+      kind: 'drop_in',
+    });
+
+  it('se reserva con el precio de una clase, congelado', async () => {
+    const { body } = await reservarSuelta('nova-bjj', {
+      token: declareIdentity(`suelta-${runId}-1`),
+      slot: nova.slots[0]!,
+    });
+
+    expect(body.booked).toBe(true);
+    expect(body.booking.kind).toBe('drop_in');
+    // Nova no tiene plan por clase: manda lo que el local cobra por una suelta.
+    expect(body.booking.priceCents).toBe(2_500);
+  });
+
+  it('la misma clase dos veces no; otro día sí', async () => {
+    const token = declareIdentity(`suelta-${runId}-2`);
+    const phone = nextPhone();
+    const primera = nova.slots[0]!;
+    const otra = nova.slots[nova.slots.length - 1]!;
+
+    expect((await reservarSuelta('nova-bjj', { token, slot: primera, phone })).body.booked).toBe(true);
+
+    const repetida = await reservarSuelta('nova-bjj', { token, slot: primera, phone });
+    expect(repetida.body.booked).toBe(false);
+    expect(repetida.body.reason.code).toBe('already_booked');
+
+    expect((await reservarSuelta('nova-bjj', { token, slot: otra, phone })).body.booked).toBe(true);
+  });
+
+  it('el mostrador la cobra sin inventarle una ficha, y dos toques no cobran dos veces', async () => {
+    const { body: reserva } = await reservarSuelta('nova-bjj', {
+      token: declareIdentity(`suelta-${runId}-3`),
+      slot: nova.slots[0]!,
+    });
+
+    const { body: pagada } = await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(novaFrontDesk))
+      .send({ rail: 'cash' })
+      .expect(201);
+
+    expect(pagada.chargeId).not.toBeNull();
+    // Cobrar es que vino: nadie paga una clase a la que no está entrando.
+    expect(pagada.status).toBe('attended');
+    expect(pagada.membershipId).toBeNull();
+
+    const { body: otraVez } = await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(novaFrontDesk))
+      .send({ rail: 'yape' })
+      .expect(201);
+    expect(otraVez.chargeId).toBe(pagada.chargeId);
+  });
+
+  it('una prueba gratis no se cobra', async () => {
+    const { body: reserva } = await reservar('nova-bjj', {
+      token: declareIdentity(`suelta-${runId}-4`),
+      slot: nova.slots[0]!,
+    });
+
+    await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(novaFrontDesk))
+      .send({ rail: 'cash' })
+      .expect(400);
+  });
+
+  it('la prueba con precio se cobra igual que una clase suelta', async () => {
+    const { body: iron } = await http.get('/v1/gyms/iron-muay-thai').expect(200);
+    const { body: reserva } = await reservar('iron-muay-thai', {
+      token: declareIdentity(`suelta-${runId}-5`),
+      slot: (iron as GymDetail).slots[0]!,
+    });
+    expect(reserva.booking.priceCents).toBe(3_000);
+
+    const { body: pagada } = await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(ironOwner))
+      .send({ rail: 'yape' })
+      .expect(201);
+    expect(pagada.chargeId).not.toBeNull();
+  });
+
+  it('un mostrador ajeno no cobra la reserva de otro gimnasio', async () => {
+    const { body: reserva } = await reservarSuelta('nova-bjj', {
+      token: declareIdentity(`suelta-${runId}-6`),
+      slot: nova.slots[0]!,
+    });
+
+    await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(shotokanFrontDesk))
+      .send({ rail: 'cash' })
+      .expect(404);
+  });
+
+  it('al alumno de casa no se le vende por aquí: se le cobra en la puerta', async () => {
+    const { body: session } = await http
+      .post('/v1/auth/dev-login')
+      .send({ phone: '+51987654321' })
+      .expect(201);
+
+    const { body } = await http
+      .post('/v1/me/trials')
+      .set(auth(session.accessToken))
+      .send({
+        slug: 'nova-bjj',
+        classScheduleId: nova.slots[0]!.scheduleId,
+        date: iso(nova.slots[0]!.date),
+        kind: 'drop_in',
+      });
+
+    expect(body.booked).toBe(false);
+    expect(body.reason.code).toBe('already_member');
+  });
+});
+
+/**
+ * La inscripción, desde el directorio.
+ *
+ * Se reserva la PRIMERA clase con un plan, y la ficha la hace recepción cuando la
+ * persona llega. Lo que estas pruebas fijan es lo que pidió Mathyu: quien dice
+ * «empiezo el martes» y aparece el jueves empieza a deber desde el jueves.
+ */
+suite('inscribirse desde el directorio', () => {
+  const inscribirse = (input: {
+    token: string;
+    slot: Slot;
+    planId: string;
+    phone?: string;
+    fullName?: string;
+  }) =>
+    http.post('/v1/gyms/nova-bjj/trial').send({
+      idToken: input.token,
+      fullName: input.fullName ?? 'Quiere Inscribirse',
+      phone: input.phone ?? nextPhone(),
+      classScheduleId: input.slot.scheduleId,
+      date: iso(input.slot.date),
+      kind: 'enrollment',
+      planId: input.planId,
+    });
+
+  it('reserva su primera clase con el plan, sin crear ninguna ficha todavía', async () => {
+    const token = declareIdentity(`inscripcion-${runId}-1`);
+    const plan = novaPlan('2x por semana');
+
+    const { body } = await inscribirse({ token, slot: nova.slots[0]!, planId: plan.id });
+
+    expect(body.booked).toBe(true);
+    expect(body.booking.kind).toBe('enrollment');
+    expect(body.booking.planName).toBe('2x por semana');
+    // El primer mes, congelado: es lo que el mostrador le dirá que cuesta.
+    expect(body.booking.priceCents).toBe(plan.priceCents);
+    expect(body.booking.membershipId).toBeNull();
+
+    const { body: account } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(account.linked).toBe(false);
+  });
+
+  it('un plan que el gimnasio no vende vuelve con el motivo', async () => {
+    const { body } = await inscribirse({
+      token: declareIdentity(`inscripcion-${runId}-2`),
+      slot: nova.slots[0]!,
+      planId: '00000000-0000-4000-8000-000000000000',
+    });
+
+    expect(body.booked).toBe(false);
+    expect(body.reason.code).toBe('plan_unavailable');
+  });
+
+  it('una inscripción pendiente a la vez, y recuerda cuál', async () => {
+    const token = declareIdentity(`inscripcion-${runId}-3`);
+    const phone = nextPhone();
+    const plan = novaPlan('Ilimitado');
+
+    await inscribirse({ token, slot: nova.slots[0]!, planId: plan.id, phone });
+    const { body } = await inscribirse({
+      token,
+      slot: nova.slots[nova.slots.length - 1]!,
+      planId: plan.id,
+      phone,
+    });
+
+    expect(body.booked).toBe(false);
+    expect(body.reason.code).toBe('already_booked');
+    expect(body.message.detail).toContain('Tu primera clase');
+  });
+
+  it('quien ya probó puede inscribirse', async () => {
+    const token = declareIdentity(`inscripcion-${runId}-4`);
+    const phone = nextPhone();
+
+    expect((await reservar('nova-bjj', { token, slot: nova.slots[0]!, phone })).body.booked).toBe(
+      true,
+    );
+    const { body } = await inscribirse({
+      token,
+      slot: nova.slots[0]!,
+      planId: novaPlan('1x por semana').id,
+      phone,
+    });
+    expect(body.booked).toBe(true);
+  });
+
+  it('recepción la convierte en ficha el día que llega, no el que reservó', async () => {
+    const token = declareIdentity(`inscripcion-${runId}-5`);
+    const phone = nextPhone();
+    const plan = novaPlan('3x por semana');
+    // La última hora ofrecida: reservó para dentro de unos días y aparece HOY.
+    const slot = nova.slots[nova.slots.length - 1]!;
+    expect(iso(slot.date)).not.toBe(limaDate());
+
+    const { body: reserva } = await inscribirse({
+      token,
+      slot,
+      planId: plan.id,
+      phone,
+      fullName: 'Llega Antes',
+    });
+    expect(reserva.booked).toBe(true);
+
+    // En «por venir», con el plan que eligió: es lo que recepción va a cobrar.
+    const antes = (await staffList(novaFrontDesk)).find((row) => row.id === reserva.booking.id);
+    expect(antes?.kind).toBe('enrollment');
+    expect(antes?.planId).toBe(plan.id);
+
+    const { body: alta } = await http
+      .post('/v1/staff/members')
+      .set(auth(novaFrontDesk))
+      .send({
+        name: 'Llega Antes',
+        documentId: nextDocument(),
+        phone,
+        planId: plan.id,
+        bookingId: reserva.booking.id,
+      })
+      .expect(201);
+
+    // La mensualidad cuenta desde HOY, y ya se debe: se cobra por adelantado.
+    expect(iso(alta.view.subscription.startDate)).toBe(limaDate());
+    expect(alta.view.receivable.due).toBe(true);
+
+    // La reserva queda cerrada y apuntando a la ficha que produjo.
+    const despues = (await staffList(novaFrontDesk)).find((row) => row.id === reserva.booking.id);
+    expect(despues?.status).toBe('attended');
+    expect(despues?.membershipId).toBe(alta.view.membership.id);
+
+    // Cerrarla dos veces daría dos altas de la misma reserva.
+    await http
+      .post('/v1/staff/members')
+      .set(auth(novaFrontDesk))
+      .send({ documentId: nextDocument(), planId: plan.id, bookingId: reserva.booking.id })
+      .expect(409);
+
+    // Y la cuenta con la que reservó ya abre su ficha: sin dictar ningún código.
+    const { body: account } = await http.post('/v1/auth/google').send({ idToken: token }).expect(201);
+    expect(account.linked).toBe(true);
+  });
+
+  it('no se cierra con el documento de otra persona', async () => {
+    // Lucía reserva con su sesión; en el mostrador teclean el carné de Diego.
+    const { body: lucia } = await http
+      .post('/v1/auth/dev-login')
+      .send({ phone: '+51987111222' })
+      .expect(201);
+    const plan = novaPlan('1x por semana');
+
+    const { body: reserva } = await http
+      .post('/v1/me/trials')
+      .set(auth(lucia.accessToken))
+      .send({
+        slug: 'nova-bjj',
+        classScheduleId: nova.slots[0]!.scheduleId,
+        date: iso(nova.slots[0]!.date),
+        kind: 'enrollment',
+        planId: plan.id,
+      });
+    expect(reserva.booked).toBe(true);
+
+    await http
+      .post('/v1/staff/members')
+      .set(auth(novaFrontDesk))
+      .send({ documentId: '70112334', planId: plan.id, bookingId: reserva.booking.id })
+      .expect(409);
+
+    const fila = (await staffList(novaFrontDesk)).find((row) => row.id === reserva.booking.id);
+    expect(fila?.status).toBe('booked');
+    expect(fila?.membershipId).toBeNull();
+  });
+
+  it('la inscripción no se cobra como una clase', async () => {
+    const { body: reserva } = await inscribirse({
+      token: declareIdentity(`inscripcion-${runId}-6`),
+      slot: nova.slots[0]!,
+      planId: novaPlan('Ilimitado').id,
+    });
+
+    await http
+      .post(`/v1/staff/trials/${reserva.booking.id}/pay`)
+      .set(auth(novaFrontDesk))
+      .send({ rail: 'cash' })
+      .expect(400);
+  });
+});
+
+/**
+ * Lo que nadie atendió sigue siendo trabajo del mostrador.
+ *
+ * Quien reservó el martes y aparece el jueves tiene que estar en «por venir», no
+ * enterrado en el historial: es el caso normal de la inscripción.
+ */
+suite('una reserva sin atender de hace unos días', () => {
+  it('sigue por venir hasta que alguien la marca', async () => {
+    const { schema, withTenant } = await import('./db/client');
+    const { DATABASE } = await import('./db/db.module');
+
+    const [row] = await withTenant(app.get(DATABASE), nova.id, (tx) =>
+      tx
+        .insert(schema.classBookings)
+        .values({
+          tenantId: nova.id,
+          kind: 'enrollment',
+          firebaseUid: `atrasada-${runId}`,
+          fullName: 'Llega Tarde',
+          phone: nextPhone(),
+          className: 'Fundamentos',
+          localDate: limaDate(-3),
+          startTime: '19:00',
+          endTime: '20:30',
+          priceCents: 12_000,
+          planName: '2x por semana',
+        })
+        .returning({ id: schema.classBookings.id }),
+    );
+
+    expect((await staffList(novaFrontDesk)).map((b) => b.id)).toContain(row!.id);
+    expect((await staffList(novaFrontDesk, true)).map((b) => b.id)).not.toContain(row!.id);
+
+    // Marcada, ya no es pendiente: pasa al historial, y a una sola de las dos.
+    await http
+      .post(`/v1/staff/trials/${row!.id}/status`)
+      .set(auth(novaFrontDesk))
+      .send({ status: 'no_show' })
+      .expect(201);
+
+    expect((await staffList(novaFrontDesk)).map((b) => b.id)).not.toContain(row!.id);
+    expect((await staffList(novaFrontDesk, true)).map((b) => b.id)).toContain(row!.id);
   });
 });

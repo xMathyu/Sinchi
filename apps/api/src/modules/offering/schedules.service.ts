@@ -75,9 +75,12 @@ export interface ScheduleCreateInput extends Omit<ScheduleInput, 'weekday'> {
  * Un bloque con lo que el dueno necesita saber ANTES de tocarlo.
  *
  * `upcomingTrials` es el equivalente de `activeMembers` en un plan: la
- * diferencia entre "esto se puede quitar" y "hay tres personas que vienen a
- * probar aqui el jueves". La reserva sobrevive al borrado —lleva la hora
- * copiada— pero el dueno tiene que enterarse antes, no despues.
+ * diferencia entre "esto se puede quitar" y "hay tres personas que vienen
+ * aqui el jueves". La reserva sobrevive al borrado —lleva la hora copiada— pero
+ * el dueno tiene que enterarse antes, no despues.
+ *
+ * Cuenta toda reserva viva —prueba, clase suelta o inscripcion— desde la 0022, y
+ * se sigue llamando asi porque la lee la app ya instalada.
  *
  * `overlaps` es el aviso del punto 2: no impide guardar, pero la lista lo marca.
  */

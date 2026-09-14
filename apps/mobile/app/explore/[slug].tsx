@@ -1,17 +1,22 @@
 /**
- * La página del gimnasio, y la reserva de la clase gratis.
+ * La página del gimnasio, y lo que se puede reservar desde ella.
  *
  * Responde las tres preguntas de quien todavía no entrena en ningún sitio —qué
- * se entrena, cuándo y cuánto cuesta— y le da la única acción que puede tomar
- * hoy: venir a probar un día concreto.
+ * se entrena, cuándo y cuánto cuesta— y le da lo que puede hacer hoy: venir a
+ * probar, venir a una clase pagándola, o inscribirse. Las tres se piden igual,
+ * eligiendo un día concreto.
+ *
+ * Antes solo existía la primera, y un gimnasio sin clase de prueba no dejaba
+ * hacer NADA desde su ficha: quien ya había decidido entrenar ahí solo podía
+ * presentarse sin avisar.
  *
  * La reserva se pide con **fecha y hora**, no "cuando pueda". Es lo que la
  * convierte en algo útil para el gimnasio: una lista de quién viene el martes a
  * las 19:00 se puede preparar; «alguien está interesado» no.
  *
- * El veredicto lo da el servidor con la misma función pura que decide qué se
- * ofrece aquí (`@sinchi/shared`), así que lo que la pantalla muestra es lo que
- * la api acepta.
+ * Qué se ofrece lo calcula `bookingOffer` y el veredicto lo da el servidor con la
+ * misma función pura (`@sinchi/shared`), así que lo que la pantalla muestra es lo
+ * que la api acepta.
  */
 import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -19,6 +24,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import {
   addDays,
   allWeekdays,
+  bookingOffer,
   cents,
   eventBookingDenialMessage,
   formatPEN,
@@ -28,11 +34,14 @@ import {
   isoWeekday,
   weekdayInitial,
   weekdayName,
+  type BookingKind,
+  type Cents,
   type ClassSchedule,
+  type ClassSlot,
   type ConversationTopic,
   type IsoWeekday,
+  type Plan,
   type PlainDate,
-  type ClassSlot,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import Lock from 'lucide-react-native/icons/lock';
@@ -44,15 +53,21 @@ import { OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { GymLocationBlock } from '../../src/design/gym-location';
 import { useTheme } from '../../src/design/theme';
-import { useGym, useMyTrialClasses, useToday, useWallet } from '../../src/data/hooks';
+import { useGym, useMyBookings, useToday, useWallet } from '../../src/data/hooks';
 import {
-  rescheduleTrialClass,
+  rescheduleBooking,
   bookingCredential,
   askForDetails,
-  bookTrialClass,
+  bookClass,
   bookEventSeat,
 } from '../../src/data/trials';
-import type { BookEventDto, BookTrialDto, EventWithSeats, RoutineListItem } from '../../src/data/api';
+import type {
+  BookClassDto,
+  BookEventDto,
+  ClassBookingDto,
+  EventWithSeats,
+  RoutineListItem,
+} from '../../src/data/api';
 import {
   formatEventDate,
   formatLongDate,
@@ -60,37 +75,64 @@ import {
   shortLevel,
 } from '../../src/lib/format';
 
+/**
+ * Por qué viene quien reservó.
+ *
+ * Con `??` porque la app se actualiza sola y la api no: contra un despliegue
+ * anterior a la 0022 el campo no viene, y entonces todo lo reservado era una
+ * clase de prueba.
+ */
+const kindOf = (booking: { readonly kind?: BookingKind }): BookingKind => booking.kind ?? 'trial';
+
+/** Una forma de venir, con su precio y, si no se puede elegir, por qué. */
+interface KindOption {
+  readonly kind: BookingKind;
+  readonly title: string;
+  readonly price: string;
+  readonly detail: string;
+  /** Por qué no se puede pedir ahora. `null` = se puede. */
+  readonly blocked: string | null;
+}
+
 export default function GymScreen() {
   const theme = useTheme();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { details: gym, loading, error, reload } = useGym(slug ?? '');
-  const bookings = useMyTrialClasses();
+  const bookings = useMyBookings();
   const wallet = useWallet();
   const hoy = useToday();
 
+  /**
+   * Cómo quiere venir: a probar, a una clase suelta o a inscribirse.
+   *
+   * `null` mientras no lo dice. Con una sola forma posible no se le pregunta —es
+   * el gimnasio de siempre, el que solo da prueba— y la pantalla se comporta
+   * como antes: el horario ya se toca.
+   */
+  const [chosen, setChosen] = useState<BookingKind | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
   const [slot, setSlot] = useState<ClassSlot | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('+51');
   const [submitting, setBooking] = useState(false);
-  const [outcome, setOutcome] = useState<BookTrialDto | null>(null);
+  const [outcome, setOutcome] = useState<BookClassDto | null>(null);
+  /** Tocó el botón apagado: se dice qué falta en vez de ignorar el toque. */
+  const [attempted, setAttempted] = useState(false);
   /**
-   * Está eligiendo una hora nueva para la reserva que ya tiene.
+   * La reserva a la que le está cambiando la hora.
    *
    * Es un modo de esta misma pantalla y no otra: el horario ya está aquí, las
    * filas ya se tocan, y lo único que cambia es a qué llama el botón. Mandarle a
    * una pantalla aparte a elegir entre las mismas catorce filas sería contar lo
    * mismo dos veces.
    */
-  const [switching, setSwitching] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   const account = bookingCredential();
   // Solo si de verdad no sabemos quién es. Con identidad Sinchi los datos están
   // en el padrón; sin ficha, en lo que escribió al crear su cuenta. Preguntar
   // otra vez lo que la persona acaba de dar convierte la reserva en un trámite.
   const needsDetails = askForDetails();
-  const existingBooking = bookings.details.find(
-    (booking) => booking.gymSlug === slug && booking.status === 'booked',
-  );
 
   if (loading && gym === null) return <SectionLoader text="Abriendo el gimnasio…" />;
 
@@ -112,88 +154,182 @@ export default function GymScreen() {
     );
   }
 
-  const puedeReservar = gym.trialClassEnabled && gym.slots.length > 0;
-  // `?? 0` porque la app se actualiza sola y la api no: contra un despliegue
-  // viejo el campo no viene, y «PRUEBA undefined» es peor que asumir gratis.
-  const priceCents = gym.trialClassPriceCents ?? 0;
-  const free = priceCents === 0;
-  const price = formatPEN(cents(priceCents));
+  const offer = bookingOffer({
+    trialClassEnabled: gym.trialClassEnabled,
+    // `?? 0` porque la app se actualiza sola y la api no: contra un despliegue
+    // viejo el campo no viene, y «PRUEBA undefined» es peor que asumir gratis.
+    trialClassPriceCents: gym.trialClassPriceCents ?? 0,
+    dropInPriceCents: gym.dropInPriceCents,
+    enrollmentFeeCents: gym.enrollmentFeeCents,
+    plans: gym.plans,
+  });
+  const hasSlots = gym.slots.length > 0;
+  const trialPrice = offer.trial?.priceCents ?? cents(0);
+  const dropInPrice = offer.dropIn?.priceCents ?? cents(0);
+  const free = trialPrice === 0;
   /** Para la insignia y el botón, donde «S/ 40.00» se come media línea. */
-  const shortPrice = formatPENShort(cents(priceCents));
+  const shortPrice = formatPENShort(trialPrice);
+
   /**
    * Ya entrena aquí.
    *
-   * La api lo rechaza igual —`already_member`, la clase gratis es para conocer
-   * un local nuevo— pero enterarse DESPUÉS de elegir día y hora es que la
-   * pantalla te haga trabajar para nada. La billetera ya sabe la respuesta.
-   */
-  const isStudent = wallet.some(
-    (entry) =>
-      entry.tenant.id === gym.id && entry.subscription.status !== 'canceled',
-  );
-
-  /**
-   * Se ofrece reservar solo a quien de verdad puede.
-   *
-   * Quien ya entrena ahí, quien ya reservó o quien acaba de reservar sigue
-   * viendo el horario entero —es información del gimnasio— pero sin filas que se
-   * toquen: ofrecerle elegir una hora para después decirle que no es hacerle
-   * trabajar para nada.
-   */
-  const puedeOfrecer =
-    puedeReservar && !isStudent && existingBooking === undefined && !(outcome?.booked ?? false);
-
-  /**
-   * Y se ofrece MOVER a quien ya tiene la suya y lo pidió.
-   *
-   * Las filas se vuelven a tocar, pero por otra razón y con otro botón. Hasta
-   * ahora la única salida era cancelar y reservar otra vez: dos pantallas, un
-   * aviso que amenaza con que el gimnasio «dejará de esperarte», y el cupo en el
-   * aire entre una cosa y la otra. Quien solo quería venir el jueves en vez del
-   * martes no debería jugarse nada.
-   */
-  const canReschedule = switching && existingBooking !== undefined && puedeReservar && !isStudent;
-  /** Quien puede tocar las filas del horario, por cualquiera de los dos motivos. */
-  const eligiendo = puedeOfrecer || canReschedule;
-
-  /**
-   * De qué va a preguntar, deducido de quién es aquí: el alumno de casa pregunta
-   * por su mensualidad —o por su clase suelta, si paga por clase—, quien reservó
-   * pregunta por su prueba y el resto es una consulta. Solo cuenta si abre el
-   * hilo, y es lo que le dice al mostrador con quién habla antes de leer.
+   * La api lo rechaza igual —`already_member`— pero enterarse DESPUÉS de elegir
+   * día y hora es que la pantalla te haga trabajar para nada. La billetera ya
+   * sabe la respuesta.
    */
   const membershipHere = wallet.find(
     (entry) => entry.tenant.id === gym.id && entry.subscription.status !== 'canceled',
   );
+  const isStudent = membershipHere !== undefined;
+
+  /** La que acaba de hacer: se cuenta con su propia tarjeta, no en la lista. */
+  const justBooked = outcome !== null && outcome.booked ? outcome.booking : null;
+  const mine = bookings.details.filter((booking) => booking.gymSlug === gym.slug);
+  const live = mine.filter(
+    (booking) => booking.status === 'booked' && booking.id !== justBooked?.id,
+  );
+
+  /** La prueba es UNA por gimnasio: la que ya usó cuenta aunque haya venido. */
+  const trialUsed =
+    (justBooked !== null && kindOf(justBooked) === 'trial') ||
+    mine.some((booking) => kindOf(booking) === 'trial' && booking.status !== 'canceled');
+  const enrollmentPending =
+    (justBooked !== null && kindOf(justBooked) === 'enrollment') ||
+    live.some((booking) => kindOf(booking) === 'enrollment');
+
+  const cheapestMonthly =
+    offer.enrollment?.plans.reduce<Cents | null>(
+      (min, plan) => (min === null || plan.priceCents < min ? plan.priceCents : min),
+      null,
+    ) ?? null;
+
+  const options: readonly KindOption[] = [
+    ...(offer.trial === null
+      ? []
+      : [
+          {
+            kind: 'trial' as const,
+            title: 'Clase de prueba',
+            price: free ? 'Gratis' : shortPrice,
+            detail: 'Para conocer el gimnasio. Una por persona.',
+            blocked: trialUsed ? 'Ya reservaste tu clase de prueba aquí.' : null,
+          },
+        ]),
+    ...(offer.dropIn === null
+      ? []
+      : [
+          {
+            kind: 'drop_in' as const,
+            title: 'Clase suelta',
+            price: formatPENShort(dropInPrice),
+            detail: 'Vienes a una clase y la pagas en recepción al llegar.',
+            blocked: null,
+          },
+        ]),
+    ...(offer.enrollment === null
+      ? []
+      : [
+          {
+            kind: 'enrollment' as const,
+            title: 'Inscribirme',
+            price: cheapestMonthly === null ? '' : `desde ${formatPENShort(cheapestMonthly)}/mes`,
+            detail: 'Eliges tu plan y tu primera clase. Pagas en recepción el día que vengas.',
+            blocked: enrollmentPending
+              ? 'Ya reservaste tu inscripción: arriba está tu primera clase.'
+              : null,
+          },
+        ]),
+  ];
+
+  const available = options.filter((option) => option.blocked === null);
+  const kind: BookingKind | null =
+    chosen !== null && available.some((option) => option.kind === chosen)
+      ? chosen
+      : available.length === 1
+        ? available[0]!.kind
+        : null;
+
+  const plan: Plan | null =
+    kind === 'enrollment'
+      ? (offer.enrollment?.plans.find((candidate) => candidate.id === planId) ?? null)
+      : null;
+
+  const switching = live.find((booking) => booking.id === switchingId) ?? null;
+
+  /**
+   * Se ofrece reservar solo a quien de verdad puede, y cuando ya dijo qué.
+   *
+   * Quien ya entrena ahí o acaba de reservar sigue viendo el horario entero —es
+   * información del gimnasio— pero sin filas que se toquen: ofrecerle elegir una
+   * hora para después decirle que no es hacerle trabajar para nada.
+   */
+  const puedeOfrecer =
+    hasSlots && !isStudent && kind !== null && switching === null && justBooked === null;
+
+  /**
+   * Y se ofrece MOVER a quien ya tiene una y lo pidió.
+   *
+   * Las filas se vuelven a tocar, pero por otra razón y con otro botón. Hasta
+   * que existió, la única salida era cancelar y reservar otra vez: dos
+   * pantallas, un aviso que amenaza con que el gimnasio «dejará de esperarte», y
+   * el cupo en el aire entre una cosa y la otra.
+   */
+  const canReschedule = switching !== null && hasSlots && !isStudent;
+  /** Quien puede tocar las filas del horario, por cualquiera de los dos motivos. */
+  const eligiendo = puedeOfrecer || canReschedule;
+  /** Hay entre qué elegir, y no está en medio de otra cosa. */
+  const showOptions =
+    hasSlots && !isStudent && options.length > 1 && switching === null && justBooked === null;
+
+  /**
+   * De qué va a preguntar, deducido de quién es aquí: el alumno de casa pregunta
+   * por su mensualidad —o por su clase suelta, si paga por clase—, quien reservó
+   * pregunta por lo que reservó y el resto es una consulta. Solo cuenta si abre el
+   * hilo, y es lo que le dice al mostrador con quién habla antes de leer.
+   */
   const chatTopic: ConversationTopic =
     membershipHere !== undefined
       ? isDropInPlan(membershipHere.plan)
         ? 'drop_in'
         : 'membership'
-      : existingBooking !== undefined
-        ? 'trial'
-        : 'general';
+      : live.some((booking) => kindOf(booking) === 'enrollment')
+        ? 'membership'
+        : live.some((booking) => kindOf(booking) === 'trial')
+          ? 'trial'
+          : live.some((booking) => kindOf(booking) === 'drop_in')
+            ? 'drop_in'
+            : 'general';
+
+  /** Qué le falta al botón, dicho en vez de apagarlo en silencio. */
+  const missing =
+    kind === 'enrollment' && plan === null
+      ? 'Elige tu plan.'
+      : slot === null
+        ? 'Elige el día y la hora en el horario.'
+        : needsDetails && (name.trim().length < 2 || phone.trim().length < 7)
+          ? 'Faltan tu nombre y tu celular.'
+          : null;
 
   /**
-   * Mueve la que ya tiene. Mismo botón, misma salida, otra llamada.
+   * Mueve la que ya tiene.
    *
-   * El resultado se lee igual que una reserva —o la reserva con su hora nueva, o
-   * el motivo por el que esa hora no sirve— para que la pantalla no tenga que
-   * distinguir dos casos que para quien la usa son uno.
+   * Al salir bien no deja tarjeta de «listo»: la reserva ya sale arriba con su
+   * hora nueva, y contarlo dos veces haría creer que ahora tiene dos.
    */
   const confirmReschedule = (): void => {
-    if (slot === null || existingBooking === undefined) return;
+    if (slot === null || switching === null) return;
     setBooking(true);
     setOutcome(null);
 
-    void rescheduleTrialClass({ bookingId: existingBooking.id, slot })
-      .then((outcome) => {
-        setOutcome(outcome);
-        if (outcome.booked) {
-          setSlot(null);
-          setSwitching(false);
-          bookings.reload();
+    void rescheduleBooking({ bookingId: switching.id, slot })
+      .then((result) => {
+        if (!result.booked) {
+          setOutcome(result);
+          return;
         }
+        setSlot(null);
+        setSwitchingId(null);
+        bookings.reload();
       })
       .catch((causa: unknown) => {
         setOutcome({
@@ -209,22 +345,25 @@ export default function GymScreen() {
   };
 
   const confirmar = (): void => {
-    if (slot === null) return;
+    if (kind === null || missing !== null || slot === null) return;
     setBooking(true);
     setOutcome(null);
 
     // Solo se mandan si la pantalla los pidió. Mandar los campos vacíos —que es
     // lo que hay cuando no se enseñaron— tapaba lo que ya sabíamos de la persona
     // y la api rechazaba la reserva por «nombre demasiado corto».
-    void bookTrialClass({
+    void bookClass({
       slug: gym.slug,
       slot,
+      kind,
+      ...(plan === null ? {} : { planId: plan.id }),
       ...(needsDetails ? { fullName: name, phone: phone } : {}),
     })
-      .then((outcome) => {
-        setOutcome(outcome);
-        if (outcome.booked) {
+      .then((result) => {
+        setOutcome(result);
+        if (result.booked) {
           setSlot(null);
+          setAttempted(false);
           bookings.reload();
         }
       })
@@ -242,6 +381,48 @@ export default function GymScreen() {
       })
       .finally(() => setBooking(false));
   };
+
+  const eyebrow = canReschedule
+    ? 'Elige tu hora nueva'
+    : !puedeOfrecer
+      ? 'Horarios'
+      : kind === 'enrollment'
+        ? 'Tu primera clase'
+        : kind === 'drop_in'
+          ? 'Elige tu clase'
+          : free
+            ? 'Tu primera clase, gratis'
+            : 'Reserva tu clase de prueba';
+
+  const hint = canReschedule
+    ? 'Tu sitio no se pierde: se mueve. El gimnasio recibe el aviso con la hora nueva.'
+    : options.length === 0
+      ? 'Este gimnasio no toma reservas por la app. Puedes acercarte al local en cualquiera de estos horarios.'
+      : showOptions && kind === null
+        ? 'Elige arriba cómo quieres venir, y después tu clase.'
+        : !puedeOfrecer
+          ? null
+          : kind === 'enrollment'
+            ? // La mitad que importa: quien no puede el día que eligió no pierde
+              // nada. La mensualidad la empieza recepción el día que llega.
+              'Elige el día de tu primera clase. Si al final vienes otro día no pasa nada: tu mensualidad empieza el día que llegues y pagues en recepción.'
+            : kind === 'drop_in'
+              ? `Elige el día y la hora. Pagas ${formatPEN(dropInPrice)} en recepción al llegar; el gimnasio recibe el aviso al instante.`
+              : free
+                ? 'Elige el día y la hora a la que vendrás. El gimnasio recibe el aviso al instante.'
+                : `Elige el día y la hora. Reservas tu sitio y pagas ${formatPEN(trialPrice)} al llegar; el gimnasio recibe el aviso al instante.`;
+
+  const bookLabel = submitting
+    ? 'Reservando…'
+    : kind === 'enrollment'
+      ? plan === null
+        ? 'Inscribirme'
+        : `Inscribirme · ${plan.name}`
+      : kind === 'drop_in'
+        ? `Reservar mi clase · ${formatPENShort(dropInPrice)}`
+        : free
+          ? 'Reservar mi clase gratis'
+          : `Reservar mi clase · ${shortPrice}`;
 
   return (
     <Screen scroll>
@@ -288,7 +469,7 @@ export default function GymScreen() {
           que se habla aquí se queda en la app (decisiones §12). */}
       <AskTheGym slug={gym.slug} gymName={gym.name} topic={chatTopic} />
 
-      {/* --- Reservar, si toca ---------------------------------------------- */}
+      {/* --- Lo que ya tiene aquí --------------------------------------------- */}
       {isStudent ? (
         <Card tone="sunken" radius={theme.radii.xl} style={{ marginTop: 22 }}>
           <Stack gap={6}>
@@ -296,74 +477,39 @@ export default function GymScreen() {
               Ya entrenas aquí
             </Text>
             <Text variant="caption" color={theme.colors.textSecondary}>
-              Tu membresía está en la billetera. La clase de prueba es para conocer un
-              gimnasio nuevo.
+              Tu membresía está en la billetera, y tus clases se marcan en la puerta.
             </Text>
           </Stack>
         </Card>
-      ) : existingBooking !== undefined ? (
-        <Card
-          accent={theme.semaphore.ok}
-          borderColor={withAlpha(theme.semaphore.ok, 0.26)}
-          radius={theme.radii.xl}
-          style={{ marginTop: 22 }}
-        >
-          <Stack gap={6}>
-            <Text variant="bodySmall" weight="semibold">
-              Ya tienes tu clase reservada
-            </Text>
-            <Text variant="caption" color={theme.colors.textSecondary}>
-              {existingBooking.className} · {formatWeekdayAndDay(existingBooking.date)} a las{' '}
-              {existingBooking.startTime}. Te esperan.
-              {(existingBooking.priceCents ?? 0) === 0
-                ? ''
-                : ` Se paga en el local: ${formatPEN(cents(existingBooking.priceCents))}.`}
-            </Text>
-            {/* La salida que faltaba. Antes, desde aquí, lo único que se podía
-                hacer con una reserva hecha era cancelarla — y quien solo quería
-                otra hora acababa soltando el cupo para volver a pedirlo. */}
-            {puedeReservar && !isStudent ? (
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={10}
-                style={{ alignSelf: 'flex-start', paddingTop: 4 }}
-                onPress={() => {
-                  setSwitching((post) => !post);
-                  setSlot(null);
-                  setOutcome(null);
-                }}
-              >
-                <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
-                  {switching ? 'Dejarlo como está' : 'Cambiar la hora'}
-                </Text>
-              </Pressable>
-            ) : null}
-          </Stack>
-        </Card>
-      ) : outcome !== null && outcome.booked ? (
-        <Card
-          accent={theme.semaphore.ok}
-          borderColor={withAlpha(theme.semaphore.ok, 0.26)}
-          radius={theme.radii.xl}
-          style={{ marginTop: 22 }}
-        >
-          <Stack gap={6}>
-            <Text variant="heading" weight="bold">
-              Listo, te esperan
-            </Text>
-            <Text variant="caption" color={theme.colors.textSecondary}>
-              {outcome.booking.className} · {formatWeekdayAndDay(outcome.booking.date)} a las{' '}
-              {outcome.booking.startTime}. El gimnasio ya tiene tu nombre en su lista.
-            </Text>
-            <Text variant="captionSmall" color={theme.colors.textFaint}>
-              {(outcome.booking.priceCents ?? 0) === 0
-                ? 'Llega unos minutos antes y di que vienes por tu clase de prueba.'
-                : `Llega unos minutos antes. La clase se paga en el local: ${formatPEN(
-                    cents(outcome.booking.priceCents),
-                  )}.`}
-            </Text>
-          </Stack>
-        </Card>
+      ) : null}
+
+      {!isStudent && justBooked !== null ? (
+        <BookedCard
+          booking={justBooked}
+          onAnother={() => {
+            setOutcome(null);
+            setChosen(null);
+            setPlanId(null);
+          }}
+        />
+      ) : null}
+
+      {!isStudent && live.length > 0 ? (
+        <Stack gap={10} style={{ marginTop: 22 }}>
+          {live.map((booking) => (
+            <LiveBookingCard
+              key={booking.id}
+              booking={booking}
+              switching={switchingId === booking.id}
+              canSwitch={hasSlots}
+              onToggleSwitch={() => {
+                setSwitchingId((current) => (current === booking.id ? null : booking.id));
+                setSlot(null);
+                setOutcome(null);
+              }}
+            />
+          ))}
+        </Stack>
       ) : null}
 
       {/* --- Dónde queda ----------------------------------------------------
@@ -380,6 +526,41 @@ export default function GymScreen() {
         }}
       />
 
+      {/* --- Cómo quiere venir ---------------------------------------------
+          Solo si hay entre qué elegir. La tarjeta dice el precio que le toca,
+          porque es lo que decide entre una y otra: «clase suelta S/ 25» contra
+          «desde S/ 90 al mes» se compara de un vistazo. */}
+      {showOptions ? (
+        <Stack gap={10} style={{ marginTop: 24 }}>
+          <Eyebrow>Cómo quieres venir</Eyebrow>
+          {options.map((option) => (
+            <KindCard
+              key={option.kind}
+              option={option}
+              selected={option.kind === kind}
+              onPress={() => {
+                setChosen(option.kind);
+                setSlot(null);
+                setOutcome(null);
+                setAttempted(false);
+              }}
+            />
+          ))}
+        </Stack>
+      ) : null}
+
+      {puedeOfrecer && kind === 'enrollment' && offer.enrollment !== null ? (
+        <PlanPicker
+          plans={offer.enrollment.plans}
+          feeCents={offer.enrollment.enrollmentFeeCents}
+          picked={planId}
+          onPick={(id) => {
+            setPlanId(id);
+            setAttempted(false);
+          }}
+        />
+      ) : null}
+
       {/* --- El horario, que es también el selector --------------------------
           Antes eran dos cosas: una tira de días para reservar y, más abajo, una
           lista plana con el horario del gimnasio. Dos formas de contar lo mismo
@@ -387,42 +568,22 @@ export default function GymScreen() {
           responder «¿cuándo puedo ir?». Ahora es un solo horario, y sus filas se
           tocan cuando esa clase se puede reservar. */}
       <Stack gap={12} style={{ marginTop: 24 }}>
-        {/* Sin bloques publicados no hay nada que reservar, así que el título no
-            puede prometerlo: debajo solo va el aviso de que este local todavía
-            no publicó su horario. */}
-        <Eyebrow>
-          {canReschedule
-            ? 'Elige tu hora nueva'
-            : !gym.trialClassEnabled || gym.schedules.length === 0
-              ? 'Horarios'
-              : free
-                ? 'Tu primera clase, gratis'
-                : 'Reserva tu clase de prueba'}
-        </Eyebrow>
+        <Eyebrow>{eyebrow}</Eyebrow>
 
-        {canReschedule ? (
+        {hint === null ? null : (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            Tu sitio no se pierde: se mueve. El gimnasio recibe el aviso con la hora
-            nueva.
+            {hint}
           </Text>
-        ) : !gym.trialClassEnabled ? (
-          <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            Este gimnasio no toma reservas por la app. Puedes acercarte al local en
-            cualquiera de estos horarios.
-          </Text>
-        ) : puedeOfrecer ? (
-          <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            {free
-              ? 'Elige el día y la hora a la que vendrás. El gimnasio recibe el aviso al instante.'
-              : `Elige el día y la hora. Reservas tu sitio y pagas ${price} al llegar; el gimnasio recibe el aviso al instante.`}
-          </Text>
-        ) : null}
+        )}
 
         <Timetable
           schedules={gym.schedules}
           slots={eligiendo ? gym.slots : []}
           picked={slot}
-          onPick={setSlot}
+          onPick={(picked) => {
+            setSlot(picked);
+            setAttempted(false);
+          }}
           hoy={hoy}
         />
 
@@ -442,22 +603,7 @@ export default function GymScreen() {
             la reserva que se mueve, y la cuenta es la misma que la hizo. */}
         {canReschedule ? (
           <>
-            {outcome !== null && !outcome.booked ? (
-              <Card
-                accent={theme.semaphore.alert}
-                borderColor={withAlpha(theme.semaphore.alert, 0.28)}
-                radius={theme.radii.lg}
-              >
-                <Stack gap={4}>
-                  <Text variant="bodySmall" weight="semibold">
-                    {outcome.message.title}
-                  </Text>
-                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {outcome.message.detail}
-                  </Text>
-                </Stack>
-              </Card>
-            ) : null}
+            {outcome !== null && !outcome.booked ? <Rejection outcome={outcome} /> : null}
 
             <Button
               label={submitting ? 'Cambiando…' : 'Cambiar mi hora'}
@@ -490,42 +636,24 @@ export default function GymScreen() {
               </Card>
             ) : null}
 
-            {outcome !== null && !outcome.booked ? (
-              <Card
-                accent={theme.semaphore.alert}
-                borderColor={withAlpha(theme.semaphore.alert, 0.28)}
-                radius={theme.radii.lg}
-              >
-                <Stack gap={4}>
-                  <Text variant="bodySmall" weight="semibold">
-                    {outcome.message.title}
-                  </Text>
-                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                    {outcome.message.detail}
-                  </Text>
-                </Stack>
-              </Card>
+            {outcome !== null && !outcome.booked ? <Rejection outcome={outcome} /> : null}
+
+            {attempted && missing !== null ? (
+              <Text variant="caption" color={theme.semaphore.bad} align="center">
+                {missing}
+              </Text>
             ) : null}
 
             <Button
-              label={
-                submitting
-                  ? 'Reservando…'
-                  : free
-                    ? 'Reservar mi clase gratis'
-                    : `Reservar mi clase · ${shortPrice}`
-              }
-              disabled={
-                slot === null ||
-                submitting ||
-                (needsDetails && (name.trim().length < 2 || phone.trim().length < 7))
-              }
+              label={bookLabel}
+              disabled={missing !== null || submitting}
+              onBlockedPress={submitting ? undefined : () => setAttempted(true)}
               onPress={confirmar}
             />
           </>
         ) : null}
 
-        {gym.trialClassEnabled && gym.slots.length === 0 && gym.schedules.length > 0 ? (
+        {options.length > 0 && !hasSlots && gym.schedules.length > 0 ? (
           <Text variant="micro" color={theme.colors.textFaint}>
             No hay clases reservables en las próximas dos semanas.
           </Text>
@@ -629,6 +757,272 @@ export default function GymScreen() {
 
       <View style={{ height: 16 }} />
     </Screen>
+  );
+}
+
+const LIVE_TITLE: Readonly<Record<BookingKind, string>> = {
+  trial: 'Ya tienes tu clase de prueba reservada',
+  drop_in: 'Tienes una clase suelta reservada',
+  enrollment: 'Tu inscripción está reservada',
+};
+
+/**
+ * Qué se paga y dónde, dicho para quien reservó.
+ *
+ * En la inscripción, además, que la mensualidad cuenta desde el día que llegue:
+ * quien reservó el martes y solo puede el jueves no tiene que mover nada para no
+ * perder dos días de mes.
+ */
+function paymentNote(booking: ClassBookingDto): string {
+  const price = cents(booking.priceCents ?? 0);
+  switch (kindOf(booking)) {
+    case 'enrollment': {
+      const fee = cents(booking.enrollmentFeeCents ?? 0);
+      return ` En recepción terminas tu inscripción: ${booking.planName ?? 'tu plan'}, ${formatPEN(price)} al mes${
+        fee > 0 ? ` y ${formatPEN(fee)} de matrícula` : ''
+      }. Si llegas otro día, tu mensualidad empieza ese día.`;
+    }
+    case 'drop_in':
+      return ` Pagas ${formatPEN(price)} en recepción al llegar.`;
+    case 'trial':
+      return price === 0 ? ' Te esperan.' : ` Te esperan. Se paga en el local: ${formatPEN(price)}.`;
+  }
+}
+
+/** Una reserva que tiene en pie en este gimnasio. */
+function LiveBookingCard({
+  booking,
+  switching,
+  canSwitch,
+  onToggleSwitch,
+}: {
+  readonly booking: ClassBookingDto;
+  readonly switching: boolean;
+  readonly canSwitch: boolean;
+  readonly onToggleSwitch: () => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Card
+      accent={theme.semaphore.ok}
+      borderColor={withAlpha(theme.semaphore.ok, 0.26)}
+      radius={theme.radii.xl}
+    >
+      <Stack gap={6}>
+        <Text variant="bodySmall" weight="semibold">
+          {LIVE_TITLE[kindOf(booking)]}
+        </Text>
+        <Text variant="caption" color={theme.colors.textSecondary}>
+          {booking.className} · {formatWeekdayAndDay(booking.date)} a las {booking.startTime}.
+          {paymentNote(booking)}
+        </Text>
+        {/* La salida que faltaba. Antes, desde aquí, lo único que se podía
+            hacer con una reserva hecha era cancelarla — y quien solo quería
+            otra hora acababa soltando el cupo para volver a pedirlo. */}
+        {canSwitch ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={10}
+            style={{ alignSelf: 'flex-start', paddingTop: 4 }}
+            onPress={onToggleSwitch}
+          >
+            <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+              {switching ? 'Dejarlo como está' : 'Cambiar la hora'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </Stack>
+    </Card>
+  );
+}
+
+/** La reserva que acaba de hacer: lo que tiene que saber para llegar. */
+function BookedCard({
+  booking,
+  onAnother,
+}: {
+  readonly booking: ClassBookingDto;
+  readonly onAnother: () => void;
+}) {
+  const theme = useTheme();
+  const price = cents(booking.priceCents ?? 0);
+  const kind = kindOf(booking);
+
+  const foot =
+    kind === 'enrollment'
+      ? 'En recepción terminas tu inscripción y pagas tu primer mes. Tu mensualidad empieza el día que llegues, aunque no sea este.'
+      : kind === 'drop_in'
+        ? `Llega unos minutos antes y paga ${formatPEN(price)} en recepción.`
+        : price === 0
+          ? 'Llega unos minutos antes y di que vienes por tu clase de prueba.'
+          : `Llega unos minutos antes. La clase se paga en el local: ${formatPEN(price)}.`;
+
+  return (
+    <Card
+      accent={theme.semaphore.ok}
+      borderColor={withAlpha(theme.semaphore.ok, 0.26)}
+      radius={theme.radii.xl}
+      style={{ marginTop: 22 }}
+    >
+      <Stack gap={6}>
+        <Text variant="heading" weight="bold">
+          Listo, te esperan
+        </Text>
+        <Text variant="caption" color={theme.colors.textSecondary}>
+          {booking.className} · {formatWeekdayAndDay(booking.date)} a las {booking.startTime}. El
+          gimnasio ya tiene tu nombre en su lista.
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textFaint}>
+          {foot}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          hitSlop={10}
+          style={{ alignSelf: 'flex-start', paddingTop: 4 }}
+          onPress={onAnother}
+        >
+          <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+            Reservar otra clase
+          </Text>
+        </Pressable>
+      </Stack>
+    </Card>
+  );
+}
+
+/** El motivo por el que no quedó hecho, en el sitio donde se tocó el botón. */
+function Rejection({ outcome }: { readonly outcome: BookClassDto & { readonly booked: false } }) {
+  const theme = useTheme();
+  return (
+    <Card
+      accent={theme.semaphore.alert}
+      borderColor={withAlpha(theme.semaphore.alert, 0.28)}
+      radius={theme.radii.lg}
+    >
+      <Stack gap={4}>
+        <Text variant="bodySmall" weight="semibold">
+          {outcome.message.title}
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          {outcome.message.detail}
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+/** Una forma de venir. Se toca entera, como un radio. */
+function KindCard({
+  option,
+  selected,
+  onPress,
+}: {
+  readonly option: KindOption;
+  readonly selected: boolean;
+  readonly onPress: () => void;
+}) {
+  const theme = useTheme();
+  const blocked = option.blocked !== null;
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled: blocked }}
+      accessibilityLabel={`${option.title}, ${option.price}`}
+      disabled={blocked}
+      onPress={onPress}
+    >
+      <Card
+        radius={theme.radii.lg}
+        borderColor={selected ? theme.semaphore.ok : theme.colors.hairline}
+        style={{ opacity: blocked ? 0.55 : 1 }}
+      >
+        <Row align="flex-start" gap={12}>
+          <Stack gap={3} style={{ flex: 1 }}>
+            <Text variant="bodySmall" weight="semibold">
+              {option.title}
+            </Text>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              {option.blocked ?? option.detail}
+            </Text>
+          </Stack>
+          <Text
+            variant="bodySmall"
+            weight="semibold"
+            color={selected ? theme.semaphore.ok : theme.colors.ink}
+          >
+            {option.price}
+          </Text>
+        </Row>
+      </Card>
+    </Pressable>
+  );
+}
+
+/**
+ * El plan con el que dice que entra.
+ *
+ * Con el precio al mes a la vista y la matrícula debajo: es lo que va a pagar en
+ * recepción, y enterarse allí de la matrícula es la discusión que esta lista
+ * evita.
+ */
+function PlanPicker({
+  plans,
+  feeCents,
+  picked,
+  onPick,
+}: {
+  readonly plans: readonly Plan[];
+  readonly feeCents: Cents;
+  readonly picked: string | null;
+  readonly onPick: (planId: string) => void;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Stack gap={10} style={{ marginTop: 24 }}>
+      <Eyebrow>Tu plan</Eyebrow>
+      {plans.map((option) => {
+        const active = option.id === picked;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${option.name}, ${formatPEN(option.priceCents)} al mes`}
+            onPress={() => onPick(option.id)}
+          >
+            <Card
+              radius={theme.radii.lg}
+              borderColor={active ? theme.semaphore.ok : theme.colors.hairline}
+            >
+              <Row>
+                <Text variant="bodySmall" weight="semibold" style={{ flex: 1 }}>
+                  {option.name}
+                </Text>
+                <Text
+                  variant="bodySmall"
+                  weight="semibold"
+                  color={active ? theme.semaphore.ok : theme.colors.ink}
+                >
+                  {formatPEN(option.priceCents)} al mes
+                </Text>
+              </Row>
+            </Card>
+          </Pressable>
+        );
+      })}
+      {feeCents > 0 ? (
+        <Text variant="micro" color={theme.colors.textFaint}>
+          Más {formatPEN(feeCents)} de matrícula, una sola vez. Todo se paga en recepción.
+        </Text>
+      ) : (
+        <Text variant="micro" color={theme.colors.textFaint}>
+          Sin matrícula. El primer mes se paga en recepción.
+        </Text>
+      )}
+    </Stack>
   );
 }
 

@@ -117,17 +117,22 @@ export class MailService {
    * Como el resto de este archivo: **no puede tumbar lo que lo llama**. La
    * reserva ya existe y sale en la app del mostrador aunque Resend esté caído.
    */
-  async notifyTrialBooking(input: {
+  async notifyBooking(input: {
     readonly recipient: string;
     readonly gym: string;
+    /** Prueba, clase suelta o inscripción: cambia qué se cobra y cuándo. */
+    readonly kind: 'trial' | 'drop_in' | 'enrollment';
     readonly personName: string;
     readonly telefono: string;
     readonly klass: string;
     /** "martes 2 de setiembre", ya formateado por quien conoce la zona. */
     readonly when: string;
     readonly time: string;
-    /** Lo que esa clase le cuesta. 0 = gratis. */
+    /** Lo que esa clase le cuesta —en una inscripción, el primer mes—. 0 = gratis. */
     readonly priceCents: number;
+    /** Solo en una inscripción. */
+    readonly planName?: string | null;
+    readonly enrollmentFeeCents?: number;
     /**
      * La persona MOVIO una reserva que ya tenia, no reservo por primera vez.
      *
@@ -147,32 +152,62 @@ export class MailService {
     // FUERA de Sinchi justo con quien acaba de llegar por Sinchi. La respuesta
     // va por el chat de la app (migración 0020); el celular sigue en el correo
     // porque es un dato de la persona, no una invitación a salir.
-    const free = input.priceCents === 0;
+    const soles = (value: number): string => `S/ ${(value / 100).toFixed(2)}`;
+    const fee = input.enrollmentFeeCents ?? 0;
+    const what =
+      input.kind === 'enrollment'
+        ? 'su inscripción'
+        : input.kind === 'drop_in'
+          ? 'una clase suelta'
+          : 'una clase de prueba';
+
+    /**
+     * Qué se cobra, y dónde.
+     *
+     * En la inscripción el cobro es del día que llegue, no del que eligió: la
+     * mensualidad cuenta desde que recepción hace la ficha. Decir «al llegar el
+     * martes» invitaría a cobrarle el martes aunque aparezca el jueves.
+     */
+    const charge =
+      input.kind === 'enrollment'
+        ? `${input.planName ?? 'su plan'}: primer mes ${soles(input.priceCents)}${
+            fee > 0 ? ` + matrícula ${soles(fee)}` : ''
+          }, al inscribirse`
+        : input.priceCents === 0
+          ? 'gratis'
+          : `${soles(input.priceCents)} al llegar`;
 
     const change = input.rescheduled === true;
 
     const text = [
       change
-        ? `${input.personName} cambió la hora de su clase de prueba en ${input.gym}.`
-        : `${input.personName} reservó una clase de prueba en ${input.gym}.`,
+        ? `${input.personName} cambió la hora de ${what} en ${input.gym}.`
+        : input.kind === 'enrollment'
+          ? `${input.personName} quiere inscribirse en ${input.gym}.`
+          : `${input.personName} reservó ${what} en ${input.gym}.`,
       '',
       `Clase:    ${input.klass}`,
       `Cuándo:   ${input.when}, ${input.time}`,
       `Celular:  ${input.telefono}`,
-      `Cobro:    ${free ? 'gratis' : `S/ ${(input.priceCents / 100).toFixed(2)} al llegar`}`,
+      `Cobro:    ${charge}`,
       '',
       ...(change
         ? [
             'Es la MISMA persona y la misma reserva, movida: no esperes a dos.',
             'La hora de arriba es la que vale.',
           ]
-        : [
-            'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
-            'de Sinchi y eligió este horario.',
-          ]),
+        : input.kind === 'enrollment'
+          ? [
+              'Todavía no es alumno: la ficha la haces cuando llegue, con su',
+              'documento, desde Reservas. Su mensualidad empieza el día que venga.',
+            ]
+          : [
+              'Todavía no es alumno de ningún gimnasio tuyo: te encontró en la lista',
+              'de Sinchi y eligió este horario.',
+            ]),
       '',
-      'Escríbele desde la app: en Clases de prueba, toca «Escribirle» en su',
-      'reserva. La lista completa de quién viene también está ahí.',
+      'Escríbele desde la app: en Reservas, toca «Escribirle» en su reserva.',
+      'La lista completa de quién viene también está ahí.',
     ].join('\n');
 
     try {

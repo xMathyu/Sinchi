@@ -264,7 +264,10 @@ export interface Charge {
    * "cobrado este mes", asi que va al MISMO ledger y no a una tabla aparte: dos
    * sitios donde vive el dinero es como se dejan de cuadrar las cuentas.
    *
-   * La restriccion `charges_membership_unless_event` lo mantiene honesto: para
+   * Lo mismo vale para la clase suelta que alguien reservo desde el directorio
+   * (migracion 0022): viene a UNA clase, y cobrarsela no pide inventarle ficha.
+   *
+   * La restriccion `charges_membership_unless_walk_in` lo mantiene honesto: para
    * cualquier otro tipo la columna sigue siendo obligatoria.
    */
   readonly membershipId: MembershipId | null;
@@ -477,6 +480,16 @@ export interface ClassSchedule {
 export type ClassBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
 
 /**
+ * Por qué viene quien reservó.
+ *
+ * Las tres se piden igual —una clase con fecha, desde el directorio— y se
+ * atienden distinto en el mostrador: la prueba se marca, la clase suelta se
+ * cobra y la inscripción se convierte en ficha. Por eso son un campo de la misma
+ * reserva y no tres tablas (migración 0022).
+ */
+export type BookingKind = 'trial' | 'drop_in' | 'enrollment';
+
+/**
  * Una clase con fecha que alguien reservo desde la app.
  *
  * No hay `membershipId` ni `userId` obligatorio a proposito: quien reserva
@@ -493,6 +506,7 @@ export type ClassBookingStatus = 'booked' | 'attended' | 'no_show' | 'canceled';
 export interface ClassBooking {
   readonly id: ClassBookingId;
   readonly tenantId: TenantId;
+  readonly kind: BookingKind;
   readonly classScheduleId: ClassScheduleId | null;
   /** Identidad Sinchi, cuando ya la tiene. `null` mientras solo es una cuenta. */
   readonly userId: UserId | null;
@@ -503,8 +517,22 @@ export interface ClassBooking {
   readonly date: PlainDate;
   readonly startTime: LocalTime;
   readonly endTime: LocalTime;
-  /** Lo que cuesta esa clase, congelado al reservar. 0 = gratis. */
+  /**
+   * Lo que cuesta, congelado al reservar. 0 = gratis.
+   *
+   * En una inscripción es el PRIMER MES del plan que eligió: lo que el mostrador
+   * le va a cobrar al inscribirla, junto a `enrollmentFeeCents`.
+   */
   readonly priceCents: Cents;
+  /** Solo en una inscripción: el plan con el que dijo que entraba. */
+  readonly planId: PlanId | null;
+  readonly planName: string | null;
+  /** La matrícula del gimnasio al reservar la inscripción. 0 en los demás tipos. */
+  readonly enrollmentFeeCents: Cents;
+  /** El cargo con el que se pagó en el mostrador. `null` = por cobrar, o gratis. */
+  readonly chargeId: ChargeId | null;
+  /** La ficha que salió de la inscripción, cuando recepción la hizo. */
+  readonly membershipId: MembershipId | null;
   readonly status: ClassBookingStatus;
   readonly createdAt: Date;
 }

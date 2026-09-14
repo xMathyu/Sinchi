@@ -581,13 +581,16 @@ export class MessagingService {
   }
 
   /**
-   * Abre —o encuentra— el hilo con quien reservo una clase de prueba.
+   * Abre —o encuentra— el hilo con quien reservo una clase.
    *
    * Es lo que reemplaza al celular que abria WhatsApp en la tarjeta de la
    * reserva: el mostrador quiere confirmar, mover la hora o decir como llegar, y
    * eso ahora se escribe aqui.
+   *
+   * El tema sale del tipo de reserva y se congela con el hilo: quien reservo su
+   * inscripcion habla de su mensualidad; la clase suelta, de esa clase.
    */
-  async openForTrialBooking(
+  async openForBooking(
     tenantId: string,
     bookingId: string,
   ): Promise<{ readonly conversationId: string }> {
@@ -608,7 +611,12 @@ export class MessagingService {
           email: booking.email,
         };
         return {
-          conversationId: await this.open(tx, tenantId, person, 'trial'),
+          conversationId: await this.open(
+            tx,
+            tenantId,
+            person,
+            booking.kind === 'enrollment' ? 'membership' : booking.kind,
+          ),
         };
       }),
     );

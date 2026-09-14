@@ -89,6 +89,14 @@ const bookSchema = idTokenSchema.extend({
   phone: z.string().min(6).max(20).optional(),
   classScheduleId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+  /**
+   * Que se reserva. Por defecto la prueba, porque las apps anteriores a la 0022
+   * no lo mandan: para ellas esta ruta era la de la clase gratis, y lo sigue
+   * siendo.
+   */
+  kind: z.enum(['trial', 'drop_in', 'enrollment']).default('trial'),
+  /** Con que plan entra. Solo lo lee una inscripcion. */
+  planId: z.string().uuid().optional(),
 });
 
 @Controller('gyms')
@@ -315,7 +323,10 @@ export class GymsController {
   }
 
   /**
-   * Reserva la clase gratis.
+   * Reserva una clase: la de prueba, una suelta o la primera de una inscripcion.
+   *
+   * La ruta se llama `trial` porque nacio para la primera, y la llaman apps ya
+   * instaladas; sin `kind` sigue siendo la prueba.
    *
    * Primero se verifica quien es la persona ante Firebase y solo despues se
    * escribe, igual que al aceptar una invitacion: un token invalido no puede
@@ -342,6 +353,8 @@ export class GymsController {
     return this.trials.book({
       slug,
       account,
+      kind: body.kind,
+      planId: body.planId,
       fullName: body.fullName,
       phone: body.phone,
       classScheduleId: body.classScheduleId,

@@ -57,7 +57,7 @@ export default function StaffLayout() {
             <TabButton icon="messages" label="Mensajes" badge={unread} />
           </TabTrigger>
           <TabTrigger name="trials" href="/staff/trials" asChild>
-            <TabButton icon="trials" label="Prueba" />
+            <TabButton icon="trials" label="Reservas" />
           </TabTrigger>
           <TabTrigger name="device" href="/staff/device" asChild>
             <TabButton icon="device" label="Dispositivo" />

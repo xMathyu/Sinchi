@@ -129,7 +129,7 @@ arrancar con esa bandera en producción.
 | `GET` | `/me/memberships/:id` | Detalle con historial de pagos y asistencia. |
 | `GET` | `/me/memberships/:id/checkin-preview` | Qué pasaría si marcara ahora. |
 | `GET` | `/me/memberships/:id/plans` | Planes a los que puede cambiar. |
-| `GET` `POST` | `/me/trials` | Sus clases gratis reservadas, y reservar una nueva. |
+| `GET` `POST` | `/me/trials` | Sus reservas —prueba, clase suelta o inscripción—, y reservar una nueva con `kind` y, si es inscripción, `planId`. Sin `kind` es la prueba. |
 | `POST` | `/me/trials/:id/cancel` | Cancela una reserva suya. |
 | `GET` | `/me/memberships/:id/routines` | La biblioteca de ESE gimnasio: lo público y lo de alumnos. Va por membresía porque la biblioteca es del local, y un alumno con tres gimnasios tiene tres. |
 | `GET` | `/me/memberships/:id/routines/:routineId` | Una rutina con sus pasos y sus videos. |
@@ -140,18 +140,22 @@ arrancar con esa bandera en producción.
 | `GET` | `/me/conversations/:slug` | El hilo con ESE gimnasio, exista o no todavía. Trae `gymOpen` y `alreadyMember` para correr `checkMessageDraft` antes de escribir. Abrirlo lo marca leído. |
 | `POST` | `/me/conversations/:slug/messages` | Escribe. La primera vez abre el hilo; `topic` solo cuenta esa vez. Un rechazo es 400 con `{ code, message }`. |
 
-### Directorio y clase gratis (`/gyms`)
+### Directorio y reservas (`/gyms`)
 
 Las únicas rutas públicas que devuelven datos de negocio. Las llama alguien que
 todavía no tiene sesión de Sinchi —y muchas veces ni ficha en ningún padrón—,
-que es exactamente la persona que la clase gratis quiere convertir en alumno.
+que es exactamente la persona que el directorio quiere convertir en alumno.
+
+Las rutas de reservar se llaman `trial` y `trials` porque nacieron para la clase
+de prueba y las llaman apps ya instaladas. Desde la 0022 reservan cualquier clase
+con fecha, con `kind`: `trial`, `drop_in` o `enrollment` (decisiones §13).
 
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `GET` | `/gyms` | Gimnasios activos, con desde cuánto, cuántas clases por semana y qué cuesta su clase de prueba (0 = gratis). Anónima. |
-| `GET` | `/gyms/:slug` | Horarios, precios, las clases concretas —con fecha— que se pueden reservar, lo que viene y las rutinas **públicas** con `membersOnlyRoutines`, que cuenta las de alumnos sin nombrarlas. Anónima. |
+| `GET` | `/gyms/:slug` | Horarios, precios, las clases concretas —con fecha— que se pueden reservar, lo que viene y las rutinas **públicas** con `membersOnlyRoutines`, que cuenta las de alumnos sin nombrarlas. Las horas salen si el gimnasio ofrece algo que reservar: prueba, clase suelta o mensualidades (`bookingOffer`). Anónima. |
 | `GET` | `/gyms/:slug/routines/:routineId` | Una rutina, desde la calle. La única ruta del producto que entrega contenido a quien no tiene cuenta de nada. Si es de alumnos devuelve 200 con `unlocked: false` y un anzuelo SIN videos ni instrucciones. Anónima. |
-| `POST` | `/gyms/:slug/trial` | Reserva la clase gratis. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. |
+| `POST` | `/gyms/:slug/trial` | Reserva una clase: `kind` `trial` (por defecto), `drop_in` o `enrollment` con `planId`. El precio —en la inscripción, el primer mes y la matrícula— queda congelado en la reserva. Firma con un ID token de Firebase; nombre y celular si no tiene ficha. Un rechazo es 200 con `booked: false` y el motivo. |
 | `POST` | `/gyms/signup` | **Da de alta un gimnasio** y devuelve sesión de dueño. La única ruta pública que crea un tenant: exige cuenta de Google verificada y tiene un tope de cinco locales por persona. El RUC es opcional —no todo dojo tiene uno— y el que se escribe se comprueba con dígito verificador. |
 | `POST` | `/gyms/trials/mine` | Sus reservas. POST porque el token va en el cuerpo: en la query acabaría en los logs del balanceador. |
 | `POST` | `/gyms/trials/:id/cancel` | Cancela la suya. Libera el cupo del gimnasio. |
@@ -169,13 +173,13 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/roster` | Padrón con estado. Dos consultas, sin N+1. |
 | `GET` | `/staff/roster/search?q=` | Por nombre o documento. |
 | `GET` | `/staff/members/:id` | Detalle para la pantalla de cobro. |
-| `POST` | `/staff/members` | Alta. Reutiliza la identidad si ya existe en la red. |
+| `POST` | `/staff/members` | Alta. Reutiliza la identidad si ya existe en la red. Con `bookingId` cierra una inscripción reservada desde la app: la suscripción empieza hoy, la reserva queda apuntando a la ficha y la cuenta de Google con la que se reservó pasa a abrirla. 409 si el documento no es de quien reservó. |
 | `POST` | `/staff/members/:id/resubscribe` | Vuelve tras cancelar, sin re-registrar a la persona. |
 | `GET` | `/staff/plans` · `/staff/schedules` | Configuración del local. Lo ACTIVO, que es contra lo que se inscribe y contra lo que valida la puerta. |
-| `GET` | `/staff/schedules/all` | Solo el dueño: también los archivados, con cuánta gente viene a probar en cada bloque y cuáles se pisan entre sí. |
+| `GET` | `/staff/schedules/all` | Solo el dueño: también los archivados, con cuánta gente tiene reserva en cada bloque (`upcomingTrials`, de cualquier tipo) y cuáles se pisan entre sí. |
 | `POST` | `/staff/schedules` · `/staff/schedules/:id` | Solo el dueño: publica o reescribe un bloque. Un bloque es de UN día; la clase de martes y jueves son dos. |
 | `POST` | `/staff/schedules/:id/active` | Solo el dueño: lo saca del horario publicado o lo devuelve. Es el bloque de temporada. |
-| `DELETE` | `/staff/schedules/:id` | Solo el dueño, y **siempre**: al revés que un plan. `attendance` y `trial_bookings` lo apuntan con ON DELETE set null y llevan copiadas la clase y la hora, así que no queda historial sin explicar. |
+| `DELETE` | `/staff/schedules/:id` | Solo el dueño, y **siempre**: al revés que un plan. `attendance` y `class_bookings` lo apuntan con ON DELETE set null y llevan copiadas la clase y la hora, así que no queda historial sin explicar. |
 | `POST` | `/staff/checkin/qr` | Modo A: el staff escanea. Verifica la firma TOTP. |
 | `POST` | `/staff/checkin/manual` | Alumno sin celular. Queda auditado. |
 | `GET` | `/staff/checkin/recent` | "Últimos marcados" de la puerta. |
@@ -184,10 +188,11 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
 | `GET` | `/staff/subscription` | Solo el dueño: su suscripción a Sinchi, cuánto le queda de mes gratis y qué pasa al terminar. |
 | `POST` | `/staff/promo` | Solo el dueño: canjea un código y suma meses gratis. Abierta en solo lectura — es por donde un gimnasio cortado vuelve. |
-| `GET` | `/staff/trials` | Quién viene a probar, de hoy en adelante. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |
+| `GET` | `/staff/trials` | Quién tiene reserva —prueba, clase suelta o inscripción—, de hoy en adelante y con lo que nadie atendió en los últimos siete días. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |
 | `GET` | `/staff/trials/settings` | ¿Este gimnasio ofrece clase gratis? |
-| `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado. El precio se fija al dar de alta el gimnasio. |
+| `POST` | `/staff/trials/settings` | Solo el dueño: la enciende o la apaga. No cancela lo ya reservado, ni apaga la clase suelta o la inscripción, que salen de sus precios. |
 | `POST` | `/staff/trials/:id/status` | Vino, no vino o canceló. |
+| `POST` | `/staff/trials/:id/pay` | Cobra la clase suelta o la prueba con precio, al precio congelado. Sin ficha: el cargo es `drop_in` con `membership_id` nulo. Marca «vino», y cobrar dos veces devuelve el mismo cargo. La inscripción no se cobra aquí (400): se cierra con `POST /staff/members` y se cobra en la ficha. |
 | `POST` | `/staff/trials/:id/conversation` | Abre —o encuentra— el hilo con quien reservó. Reemplaza al enlace de WhatsApp. Abierta en solo lectura. |
 | `GET` | `/staff/conversations` | La bandeja: lo último hablado arriba, con lo no leído y `membershipId` si hoy es alumno. `?status=closed` trae lo archivado. |
 | `GET` | `/staff/conversations/unread` | Cuántos hilos esperan respuesta. |

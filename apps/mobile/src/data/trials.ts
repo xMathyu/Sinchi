@@ -1,5 +1,6 @@
 /**
- * Explorar gimnasios y reservar la clase gratis.
+ * Explorar gimnasios y reservar una clase: la de prueba, una suelta o la primera
+ * de una inscripción.
  *
  * Va aparte de `actions.ts` —que son las escrituras del staff— porque atiende a
  * otra persona: alguien que todavía no es alumno de ningún gimnasio y muchas
@@ -15,8 +16,11 @@
  * ningún padrón— era hasta ahora una pantalla con un código de seis dígitos y
  * ninguna salida. Es exactamente la persona que este producto quiere: la que
  * todavía no entrena en ningún sitio.
+ *
+ * Las rutas se siguen llamando `trials` aunque reserven cualquier clase: las
+ * llaman apps ya instaladas (migración 0021).
  */
-import { formatPlainDate, type ClassSlot } from '@sinchi/shared';
+import { formatPlainDate, type BookingKind, type ClassSlot } from '@sinchi/shared';
 import {
   bookEvent,
   bookEventAsGuest,
@@ -29,7 +33,7 @@ import {
   rescheduleGuestTrial,
   rescheduleTrial,
   type BookEventDto,
-  type BookTrialDto,
+  type BookClassDto,
   type ClassBookingDto,
 } from './api';
 import {
@@ -89,24 +93,31 @@ export const present = (value: string | null | undefined): string | null => {
 
 export class NoAccountError extends Error {
   constructor() {
-    super('Entra con tu correo o con Google para reservar tu clase gratis.');
+    super('Entra con tu correo o con Google para reservar tu clase.');
     this.name = 'SinCuenta';
   }
 }
 
-export async function bookTrialClass(input: {
+export async function bookClass(input: {
   readonly slug: string;
   readonly slot: ClassSlot;
+  readonly kind: BookingKind;
+  /** Solo en una inscripción: con qué plan entra. */
+  readonly planId?: string;
   /** Solo se usan como invitado. Con sesión se ignoran: ya los sabemos. */
   readonly fullName?: string;
   readonly phone?: string;
-}): Promise<BookTrialDto> {
+}): Promise<BookClassDto> {
   const credential = bookingCredential();
   const date = formatPlainDate(input.slot.date);
+  const what = {
+    classScheduleId: input.slot.scheduleId,
+    date,
+    kind: input.kind,
+    ...(input.planId === undefined ? {} : { planId: input.planId }),
+  };
 
-  if (credential.kind === 'session') {
-    return bookTrial({ slug: input.slug, classScheduleId: input.slot.scheduleId, date });
-  }
+  if (credential.kind === 'session') return bookTrial({ slug: input.slug, ...what });
   if (credential.kind === 'none') throw new NoAccountError();
 
   // Lo que la pantalla haya recogido manda; si no recogió nada, se usa lo que la
@@ -127,15 +138,14 @@ export async function bookTrialClass(input: {
     idToken: credential.idToken,
     fullName,
     phone,
-    classScheduleId: input.slot.scheduleId,
-    date,
+    ...what,
   });
 }
 
 /**
  * Coge plaza en un evento, venga con sesion o solo con su cuenta de Google.
  *
- * Vive aqui, junto a la clase gratis, porque es exactamente el mismo problema:
+ * Vive aqui, junto a las clases, porque es exactamente el mismo problema:
  * alguien que mira el directorio y puede no ser de ningun gimnasio todavia. Los
  * dos caminos —sesion y cuenta— se resuelven igual, y lo unico que cambia es que
  * al invitado a veces hay que preguntarle su nombre.
@@ -158,7 +168,7 @@ export async function bookEventSeat(input: {
   const fullName = present(input.fullName) ?? present(guardado?.fullName) ?? '';
   const phone = present(input.phone) ?? present(guardado?.phone) ?? '';
 
-  // Se recuerdan en el dispositivo, igual que en la clase gratis: la siguiente
+  // Se recuerdan en el dispositivo, igual que en las clases: la siguiente
   // reserva, aqui o en otro gimnasio, ya no pregunta nada.
   await saveAccountDetails({ fullName: present(fullName), phone: present(phone) });
 
@@ -171,8 +181,8 @@ export async function bookEventSeat(input: {
   });
 }
 
-/** Las clases gratis que tiene reservadas, vengan por donde vengan. */
-export async function myTrialClasses(): Promise<readonly ClassBookingDto[]> {
+/** Las clases que tiene reservadas, de cualquier tipo y vengan por donde vengan. */
+export async function myBookings(): Promise<readonly ClassBookingDto[]> {
   const credential = bookingCredential();
   if (credential.kind === 'session') return fetchMyTrials();
   if (credential.kind === 'none') return [];
@@ -186,10 +196,10 @@ export async function myTrialClasses(): Promise<readonly ClassBookingDto[]> {
  * que ya sabe quién es; con solo cuenta de Google, por la ruta pública firmando
  * con el ID token.
  */
-export async function rescheduleTrialClass(input: {
+export async function rescheduleBooking(input: {
   readonly bookingId: string;
   readonly slot: ClassSlot;
-}): Promise<BookTrialDto> {
+}): Promise<BookClassDto> {
   const credential = bookingCredential();
   const date = formatPlainDate(input.slot.date);
 
@@ -210,7 +220,7 @@ export async function rescheduleTrialClass(input: {
   });
 }
 
-export async function cancelTrialClass(bookingId: string): Promise<void> {
+export async function cancelBooking(bookingId: string): Promise<void> {
   const credential = bookingCredential();
   if (credential.kind === 'session') {
     await cancelTrial(bookingId);

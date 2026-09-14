@@ -248,6 +248,7 @@ export function toClassBooking(row: ClassBookingRow): ClassBooking {
   return {
     id: asId(row.id),
     tenantId: asId(row.tenantId),
+    kind: row.kind,
     classScheduleId: row.classScheduleId === null ? null : asId(row.classScheduleId),
     userId: row.userId === null ? null : asId(row.userId),
     fullName: row.fullName,
@@ -258,6 +259,11 @@ export function toClassBooking(row: ClassBookingRow): ClassBooking {
     startTime: row.startTime,
     endTime: row.endTime,
     priceCents: toCents(row.priceCents),
+    planId: row.planId === null ? null : asId(row.planId),
+    planName: row.planName,
+    enrollmentFeeCents: toCents(row.enrollmentFeeCents),
+    chargeId: row.chargeId === null ? null : asId(row.chargeId),
+    membershipId: row.membershipId === null ? null : asId(row.membershipId),
     status: row.status,
     createdAt: row.createdAt,
   };

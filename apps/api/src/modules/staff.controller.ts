@@ -68,6 +68,8 @@ const enrollSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.')
     .optional(),
   internalAlias: z.string().max(60).optional(),
+  /** La inscripción reservada desde el directorio que este alta viene a cerrar. */
+  bookingId: z.string().uuid().optional(),
 });
 
 const resubscribeSchema = z.object({ planId: z.string().uuid() });
@@ -76,7 +78,7 @@ const resubscribeSchema = z.object({ planId: z.string().uuid() });
 const promoSchema = z.object({ code: z.string().min(1).max(40) });
 
 /**
- * Que paso con quien reservo una clase gratis.
+ * Que paso con quien reservo una clase.
  *
  * `no_show` va separado de `canceled` porque no son lo mismo para el gimnasio:
  * quien avisa que no viene sigue siendo un interesado; quien no aparece sin
@@ -84,6 +86,12 @@ const promoSchema = z.object({ code: z.string().min(1).max(40) });
  */
 const trialStatusSchema = z.object({
   status: z.enum(['booked', 'attended', 'no_show', 'canceled']),
+});
+
+/** Cobrar la clase suelta —o la prueba con precio— de quien reservó. */
+const bookingPaymentSchema = z.object({
+  rail: z.enum(['cash', 'yape', 'bank_transfer']),
+  clientId: z.string().uuid().optional(),
 });
 
 /** La respuesta del mostrador. El tope y su frase los pone `checkMessageDraft`. */
@@ -322,6 +330,27 @@ export class StaffController {
     );
   }
 
+  /**
+   * Cobra la clase suelta —o la prueba con precio— de quien reservó.
+   *
+   * Es lo que hace el mostrador cuando la persona llega: la reserva ya dice
+   * cuánto, y cobrar la marca «vino». La inscripción no pasa por aquí: se cierra
+   * con `POST /staff/members` y su `bookingId`, y se cobra en la ficha.
+   */
+  @Post('trials/:bookingId/pay')
+  payBooking(
+    @CurrentSession() session: Session,
+    @Param('bookingId', ParseUUIDPipe) bookingId: string,
+    @Body(parseWith(bookingPaymentSchema)) body: z.infer<typeof bookingPaymentSchema>,
+  ) {
+    const staff = assertStaffSession(session);
+    return this.trials.pay(staff.tenantId, bookingId, {
+      rail: body.rail,
+      staffId: staff.staffId,
+      clientId: body.clientId ?? null,
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Mensajes
   // -------------------------------------------------------------------------
@@ -400,7 +429,7 @@ export class StaffController {
     @CurrentSession() session: Session,
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
   ) {
-    return this.messaging.openForTrialBooking(assertStaffSession(session).tenantId, bookingId);
+    return this.messaging.openForBooking(assertStaffSession(session).tenantId, bookingId);
   }
 
   /** Lo mismo desde la ficha de un alumno. */

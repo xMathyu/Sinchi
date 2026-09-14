@@ -49,7 +49,8 @@ export * from './location/maps.js';
 export * from './messaging/draft.js';
 export * from './messaging/thread.js';
 
-// Reservar una clase con fecha desde el directorio
+// Reservar una clase con fecha desde el directorio: prueba, suelta o inscripcion
+export * from './booking/offer.js';
 export * from './booking/slots.js';
 export * from './booking/validate.js';
 

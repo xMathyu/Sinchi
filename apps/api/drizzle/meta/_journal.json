@@ -155,6 +155,13 @@
       "when": 1788566394119,
       "tag": "0021_la_reserva_no_es_solo_de_prueba",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788566395119,
+      "tag": "0022_clase_suelta_e_inscripcion_desde_el_directorio",
+      "breakpoints": true
     }
   ]
 }

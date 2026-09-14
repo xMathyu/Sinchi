@@ -250,8 +250,8 @@ export class EventRegistrationsService {
         .values({
           tenantId,
           subscriptionId: null,
-          // `null` cuando quien paga no entrena aqui. Es el unico tipo de cargo
-          // que lo permite (`charges_membership_unless_event`).
+          // `null` cuando quien paga no entrena aqui. Lo permiten el evento y la
+          // clase suelta (`charges_membership_unless_walk_in`).
           membershipId: row.membershipId,
           type: 'event',
           amountCents: row.priceCents,

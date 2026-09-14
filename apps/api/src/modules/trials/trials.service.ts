@@ -1,5 +1,5 @@
 /**
- * La clase gratis: el directorio publico y la reserva.
+ * El directorio publico y las reservas que salen de el.
  *
  * Es la unica parte de la api que atiende a alguien que **todavia no es de
  * ningun gimnasio**, y eso condiciona todo lo demas:
@@ -11,27 +11,42 @@
  *    para atenderla el martes;
  *  · quien SI tiene identidad Sinchi reserva con su sesion y no repite datos.
  *
- * La regla —una clase gratis por persona y por gimnasio— la decide
- * `validateTrialBooking` en `@sinchi/shared`, la misma funcion que corre la app
- * para no ofrecer lo que va a fallar. Aqui solo se le dan los hechos.
+ * Se reservan tres cosas y las tres son una clase con fecha: la de prueba, una
+ * clase suelta y la primera clase de una inscripcion (`BookingKind`). Nacio para
+ * la primera, y por eso el servicio y sus rutas se siguen llamando `trials`: las
+ * rutas las llaman las apps ya instaladas (migracion 0021).
+ *
+ * Que se ofrece lo decide `bookingOffer` y quien puede pedirlo `validateBooking`,
+ * las dos en `@sinchi/shared`: las mismas funciones que corre la app para no
+ * ofrecer lo que va a fallar. Aqui solo se les dan los hechos.
  */
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, desc, eq, gte, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, desc, eq, gte, lt, ne, not, or, sql, type SQL } from 'drizzle-orm';
+import {
+  addDays,
+  bookingMessage,
+  bookingOffer,
   formatPlainDate,
+  offersAnything,
   parsePlainDate,
   upcomingClassSlots,
-  validateTrialBooking,
-  validateTrialReschedule,
-  trialMessage,
+  validateBooking,
+  validateReschedule,
   weekdayName,
   isoWeekday,
+  type BookingDenialReason,
+  type BookingKind,
+  type ClassBooking,
   type ClassSchedule,
+  type ClassSlot,
   type Plan,
   type PlainDate,
-  type ClassBooking,
-  type TrialDenialReason,
-  type ClassSlot,
 } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import {
@@ -40,7 +55,6 @@ import {
   withContext,
   withTenant,
   withTrialAccount,
-  withUser,
   withoutTenantIsolation,
   type Database,
   type Tx,
@@ -101,6 +115,10 @@ export type TrialAccount =
 export interface BookInput {
   readonly slug: string;
   readonly account: TrialAccount;
+  /** Que se reserva. Las apps de antes de la 0022 no lo mandan: es una prueba. */
+  readonly kind: BookingKind;
+  /** Solo en una inscripcion: con que plan dice que entra. */
+  readonly planId?: string | undefined;
   /** Solo hacen falta cuando la persona no tiene ficha en ningun padron. */
   readonly fullName?: string | undefined;
   readonly phone?: string | undefined;
@@ -120,7 +138,7 @@ export type BookOutcome =
   | { readonly booked: true; readonly booking: ClassBookingView }
   | {
       readonly booked: false;
-      readonly reason: TrialDenialReason;
+      readonly reason: BookingDenialReason;
       readonly message: { readonly title: string; readonly detail: string };
     };
 
@@ -158,6 +176,16 @@ const describeDate = (date: PlainDate): string =>
  * lo ve la restriccion.
  */
 const normalizePhone = (raw: string): string => raw.replace(/[^\d+]/g, '');
+
+/**
+ * Cuantos dias sigue en «por venir» una reserva que nadie atendio.
+ *
+ * Quien reservo el martes y llega el jueves es el caso NORMAL de la inscripcion
+ * —«empiezo el martes», y el martes no pudo—, y el mostrador lo tiene que
+ * encontrar en la lista de lo que falta, no en el historial. Una semana cubre el
+ * «esta semana no pude»; mas alla, quien no vino ya no esta por venir.
+ */
+const PENDING_DAYS = 7;
 
 /** `23505` es la violacion de un indice unico en Postgres. */
 function isUniqueViolation(error: unknown): boolean {
@@ -273,7 +301,7 @@ export class TrialsService {
   }
 
   /**
-   * La pagina del gimnasio: horarios, precios y las clases que se pueden probar.
+   * La pagina del gimnasio: horarios, precios y las clases que se pueden reservar.
    *
    * Un gimnasio suspendido no se puede abrir. No es una tecnicidad: quien
    * reservara ahi se presentaria en un local que ya no opera, y la app no tiene
@@ -326,9 +354,13 @@ export class TrialsService {
         disciplines: [...new Set(schedules.map((s) => s.name))].sort(),
         plans,
         schedules,
-        // Solo si el gimnasio la ofrece: una lista de horas reservables en un
-        // local que no da clase gratis promete algo que la reserva rechazaria.
-        slots: gym.trialClassEnabled ? this.slotsFor(schedules, gym.timezone) : [],
+        // Solo si hay algo que reservar: horas con fecha en un local que no da
+        // prueba, ni vende clases sueltas, ni tiene mensualidades prometen algo
+        // que la reserva rechazaria. Con la prueba apagada SIGUEN saliendo si el
+        // local vende lo demas — si se puede probar lo dice `trialClassEnabled`.
+        slots: offersAnything(bookingOffer({ ...gym, plans }))
+          ? this.slotsFor(schedules, gym.timezone)
+          : [],
       };
     });
   }
@@ -369,8 +401,8 @@ export class TrialsService {
    * Apagarla **no cancela lo ya reservado**. Quien eligio venir el martes lo
    * hizo con una promesa delante, y borrarla por un cambio de politica lo deja
    * presentandose en un local que no lo espera. Lo que corta es lo de adelante:
-   * el gimnasio deja de ofrecer horas en el directorio y una reserva nueva
-   * vuelve con `not_offered`.
+   * una prueba nueva vuelve con `not_offered`. La clase suelta y la inscripcion
+   * no dependen de esto: salen de sus precios.
    *
    * `tenants` no lleva RLS —es la tabla que dice que gimnasios existen— asi que
    * la unica proteccion de este UPDATE es que `tenantId` salga SIEMPRE del token
@@ -404,18 +436,47 @@ export class TrialsService {
     const listed = (await this.saas.stateFor(gym.id)).listed;
 
     const outcome = await withTenant(this.db, gym.id, async (tx): Promise<BookOutcome> => {
-      const scheduleRows = await tx
-        .select()
-        .from(schema.classSchedules)
-        .where(eq(schema.classSchedules.active, true));
+      const [scheduleRows, planRows] = await Promise.all([
+        tx.select().from(schema.classSchedules).where(eq(schema.classSchedules.active, true)),
+        tx.select().from(schema.plans).where(eq(schema.plans.active, true)),
+      ]);
       const schedules = scheduleRows.map(toClassSchedule);
+      const offer = bookingOffer({ ...gym, plans: planRows.map(toPlan) });
+
+      /** Con que plan entra, si es una inscripcion y el gimnasio lo sigue vendiendo. */
+      const plan =
+        input.kind === 'enrollment'
+          ? (offer.enrollment?.plans.find((candidate) => candidate.id === input.planId) ?? null)
+          : null;
+
+      /**
+       * Con que choca, segun lo que se reserva.
+       *
+       * Tiene la misma forma que los indices unicos de la 0022, que son la
+       * ultima palabra: esto solo sirve para contestar con la reserva que ya
+       * tiene en vez de con el error del indice.
+       */
+      const clash =
+        input.kind === 'trial'
+          ? // Una por gimnasio, para siempre: la que ya uso tambien cuenta.
+            ne(schema.classBookings.status, 'canceled')
+          : input.kind === 'enrollment'
+            ? // Una PENDIENTE: la que acabo en ficha la frena `already_member`.
+              eq(schema.classBookings.status, 'booked')
+            : // La misma clase, no el mismo gimnasio: el martes y el jueves son dos.
+              and(
+                ne(schema.classBookings.status, 'canceled'),
+                eq(schema.classBookings.localDate, input.date),
+                eq(schema.classBookings.classScheduleId, input.classScheduleId),
+              )!;
 
       const [existing] = await tx
         .select()
         .from(schema.classBookings)
         .where(
           and(
-            ne(schema.classBookings.status, 'canceled'),
+            eq(schema.classBookings.kind, input.kind),
+            clash,
             person.userId === null
               ? eq(schema.classBookings.phone, person.phone)
               : or(
@@ -426,21 +487,50 @@ export class TrialsService {
         )
         .limit(1);
 
-      // Ya entrena aqui: la clase gratis es para conocer un local nuevo.
+      /**
+       * Ya entrena aqui.
+       *
+       * Para la prueba basta con tener ficha, aunque este dada de baja: la clase
+       * gratis es para conocer un local NUEVO. Para la clase suelta y la
+       * inscripcion cuenta la suscripcion VIVA: quien se dio de baja en marzo y
+       * vuelve en junio es justo a quien inscribirse desde la app tiene que
+       * dejar pasar.
+       */
       const membership =
         person.userId === null
           ? []
-          : await tx
-              .select({ id: schema.memberships.id })
-              .from(schema.memberships)
-              .where(eq(schema.memberships.userId, person.userId))
-              .limit(1);
+          : input.kind === 'trial'
+            ? await tx
+                .select({ id: schema.memberships.id })
+                .from(schema.memberships)
+                .where(eq(schema.memberships.userId, person.userId))
+                .limit(1)
+            : await tx
+                .select({ id: schema.memberships.id })
+                .from(schema.memberships)
+                .innerJoin(
+                  schema.subscriptions,
+                  eq(schema.subscriptions.membershipId, schema.memberships.id),
+                )
+                .where(
+                  and(
+                    eq(schema.memberships.userId, person.userId),
+                    ne(schema.subscriptions.status, 'canceled'),
+                  ),
+                )
+                .limit(1);
 
-      const verdict = validateTrialBooking({
+      const verdict = validateBooking({
+        kind: input.kind,
         // El gimnasio que no le paga a Sinchi no recibe reservas nuevas. Las ya
         // hechas se respetan, mismo criterio que apagar la clase gratis.
         gymActive: gym.status === 'active' && listed,
-        trialOffered: gym.trialClassEnabled,
+        offered:
+          input.kind === 'trial'
+            ? offer.trial !== null
+            : input.kind === 'drop_in'
+              ? offer.dropIn !== null
+              : plan !== null,
         alreadyMember: membership.length > 0,
         existing:
           existing === undefined
@@ -456,7 +546,11 @@ export class TrialsService {
       });
 
       if (!verdict.allowed) {
-        return { booked: false, reason: verdict.reason, message: trialMessage(verdict.reason) };
+        return {
+          booked: false,
+          reason: verdict.reason,
+          message: bookingMessage(input.kind, verdict.reason),
+        };
       }
 
       try {
@@ -464,6 +558,7 @@ export class TrialsService {
           .insert(schema.classBookings)
           .values({
             tenantId: gym.id,
+            kind: input.kind,
             classScheduleId: verdict.slot.scheduleId,
             userId: person.userId,
             firebaseUid: person.firebaseUid,
@@ -475,8 +570,17 @@ export class TrialsService {
             startTime: verdict.slot.startTime,
             endTime: verdict.slot.endTime,
             // Congelado: si el gimnasio sube la tarifa entre la reserva y el dia
-            // de la clase, se respeta lo que se le prometio a la persona.
-            priceCents: gym.trialClassPriceCents,
+            // de la clase, la lista del mostrador sigue diciendo lo que se le
+            // prometio a la persona. En la inscripcion es el primer mes del plan.
+            priceCents:
+              input.kind === 'trial'
+                ? gym.trialClassPriceCents
+                : input.kind === 'drop_in'
+                  ? (offer.dropIn?.priceCents ?? 0)
+                  : (plan?.priceCents ?? 0),
+            planId: plan?.id ?? null,
+            planName: plan?.name ?? null,
+            enrollmentFeeCents: input.kind === 'enrollment' ? gym.enrollmentFeeCents : 0,
           })
           .returning();
 
@@ -491,13 +595,13 @@ export class TrialsService {
         // unico. Aqui solo se traduce a lo que la primera habria contestado.
         if (!isUniqueViolation(error)) throw error;
 
-        const reason: TrialDenialReason = {
+        const reason: BookingDenialReason = {
           code: 'already_booked',
           date: verdict.slot.date,
           startTime: verdict.slot.startTime,
           className: verdict.slot.name,
         };
-        return { booked: false, reason, message: trialMessage(reason) };
+        return { booked: false, reason, message: bookingMessage(input.kind, reason) };
       }
     });
 
@@ -613,15 +717,18 @@ export class TrialsService {
       const recipient = destinatarios.find((row) => row.email !== null)?.email;
       if (recipient === undefined || recipient === null || !this.mail.disponible) return;
 
-      const enviado = await this.mail.notifyTrialBooking({
+      const enviado = await this.mail.notifyBooking({
         recipient,
         gym: gym.name,
+        kind: booking.kind,
         personName: booking.fullName,
         telefono: booking.phone,
         klass: booking.className,
         when: describeDate(booking.date),
         time: booking.startTime,
         priceCents: booking.priceCents,
+        planName: booking.planName,
+        enrollmentFeeCents: booking.enrollmentFeeCents,
         rescheduled,
       });
 
@@ -635,7 +742,7 @@ export class TrialsService {
       }
     } catch (error) {
       this.logger.warn(
-        `No se pudo avisar de la clase gratis: ${error instanceof Error ? error.message : error}`,
+        `No se pudo avisar de la reserva: ${error instanceof Error ? error.message : error}`,
       );
     }
   }
@@ -645,7 +752,7 @@ export class TrialsService {
   // -------------------------------------------------------------------------
 
   /**
-   * Quien viene a probar. La lista del mostrador.
+   * Quien viene. La lista del mostrador.
    *
    * Dos listas que NO se solapan, y eso es el punto: por defecto lo que falta
    * —el dueno abre esto para saber a quien espera esta semana— y con `onlyPast`
@@ -658,7 +765,10 @@ export class TrialsService {
    *
    * El corte es por DIA, no por hora: quien tenia clase hoy a las 8 sigue en «por
    * venir» hasta medianoche, porque para el mostrador sigue siendo el trabajo de
-   * hoy —confirmar que vino, marcarlo, cobrarle si toca.
+   * hoy —confirmar que vino, marcarlo, cobrarle si toca—. Y lo que nadie atendio
+   * se queda ahi `PENDING_DAYS` mas: quien reservo el martes y llega el jueves
+   * sigue siendo trabajo pendiente, no historia. Sale del historial mientras
+   * tanto, para que las dos listas sigan sin pisarse.
    */
   async forTenant(
     tenantId: string,
@@ -671,20 +781,27 @@ export class TrialsService {
         .where(eq(schema.tenants.id, tenantId))
         .limit(1);
 
-      const hoy = formatPlainDate(this.clock.today(gym?.timezone ?? 'America/Lima'));
+      const today = this.clock.today(gym?.timezone ?? 'America/Lima');
+      const hoy = formatPlainDate(today);
+
+      /** Sin atender y reciente: la reserva del martes de quien aparece el jueves. */
+      const pending = and(
+        eq(schema.classBookings.status, 'booked'),
+        gte(schema.classBookings.localDate, formatPlainDate(addDays(today, -PENDING_DAYS))),
+      )!;
 
       const rows =
         options.onlyPast === true
           ? await tx
               .select()
               .from(schema.classBookings)
-              .where(lt(schema.classBookings.localDate, hoy))
+              .where(and(lt(schema.classBookings.localDate, hoy), not(pending)))
               .orderBy(desc(schema.classBookings.localDate), schema.classBookings.startTime)
               .limit(200)
           : await tx
               .select()
               .from(schema.classBookings)
-              .where(gte(schema.classBookings.localDate, hoy))
+              .where(or(gte(schema.classBookings.localDate, hoy), pending))
               .orderBy(schema.classBookings.localDate, schema.classBookings.startTime)
               .limit(200);
 
@@ -772,6 +889,93 @@ export class TrialsService {
   }
 
   /**
+   * Cobra en el mostrador la clase que alguien reservo: la suelta, o la prueba
+   * que tiene precio.
+   *
+   * NO pasa por `recordManualPayment`, por lo mismo que la plaza de un evento:
+   * aquel arranca leyendo la vista de una MEMBRESIA, y quien viene a una clase
+   * suelta no tiene ninguna ni hay por que inventarsela. Lo que si comparte es el
+   * ledger: el cargo va a `charges` como `drop_in` —que es lo que es, el cobro de
+   * una clase— y sale en «cobrado este mes» sin sumar dos tablas.
+   *
+   * Cobrar marca «vino»: nadie paga una clase a la que no esta entrando.
+   *
+   * La inscripcion no se cobra aqui. Se convierte en ficha y se cobra en ella,
+   * con la mensualidad y la matricula de verdad: cobrada como una clase, el
+   * primer mes quedaria pagado en un sitio que el ciclo de cobro no lee.
+   */
+  async pay(
+    tenantId: string,
+    bookingId: string,
+    input: {
+      readonly rail: 'cash' | 'yape' | 'bank_transfer';
+      readonly staffId: string;
+      readonly clientId?: string | null;
+    },
+  ): Promise<ClassBooking> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(schema.classBookings)
+        .where(eq(schema.classBookings.id, bookingId))
+        .limit(1);
+
+      if (row === undefined) throw new NotFoundException('Esa reserva no existe.');
+      if (row.kind === 'enrollment') {
+        throw new BadRequestException(
+          'La inscripción se cobra en su ficha, al inscribirla: ahí están la mensualidad y la matrícula.',
+        );
+      }
+      if (row.status === 'canceled') {
+        throw new ConflictException('Esa reserva está cancelada. Si vino igual, márcala antes de cobrar.');
+      }
+      // Idempotente de verdad: el mostrador toca dos veces y no cobra dos veces.
+      if (row.chargeId !== null) return toClassBooking(row);
+      if (row.priceCents === 0) {
+        throw new BadRequestException('Esa clase es gratis: no hay nada que cobrar.');
+      }
+
+      const [charge] = await tx
+        .insert(schema.charges)
+        .values({
+          tenantId,
+          subscriptionId: null,
+          // Sin ficha a proposito, igual que la plaza de un evento: vino a una
+          // clase, no se inscribio (`charges_membership_unless_walk_in`).
+          membershipId: null,
+          type: 'drop_in',
+          amountCents: row.priceCents,
+          status: 'succeeded',
+          rail: input.rail,
+          attempt: 1,
+          recordedBy: input.staffId,
+          clientId: input.clientId ?? null,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (charge === undefined) {
+        // Choco con `charges_client_id_key`: la cola offline reintento un cobro
+        // que ya entro. Se relee la reserva, que es lo que el mostrador espera.
+        const [again] = await tx
+          .select()
+          .from(schema.classBookings)
+          .where(eq(schema.classBookings.id, bookingId))
+          .limit(1);
+        return toClassBooking(again ?? row);
+      }
+
+      const [paid] = await tx
+        .update(schema.classBookings)
+        .set({ chargeId: charge.id, status: 'attended', canceledAt: null })
+        .where(eq(schema.classBookings.id, bookingId))
+        .returning();
+
+      return toClassBooking(paid!);
+    });
+  }
+
+  /**
    * Mueve su propia reserva a otra hora.
    *
    * Antes esto no existia y la unica salida era cancelar y reservar de nuevo, lo
@@ -826,6 +1030,7 @@ export class TrialsService {
           .select({
             id: schema.classBookings.id,
             tenantId: schema.classBookings.tenantId,
+            kind: schema.classBookings.kind,
           })
           .from(schema.classBookings)
           .where(
@@ -854,7 +1059,7 @@ export class TrialsService {
           .where(eq(schema.classSchedules.active, true))
       ).map(toClassSchedule);
 
-      const verdict = validateTrialReschedule({
+      const verdict = validateReschedule({
         gymActive: gym.status === 'active' && listed,
         slots: this.slotsFor(schedules, gym.timezone),
         scheduleId: target.classScheduleId,
@@ -862,29 +1067,47 @@ export class TrialsService {
       });
 
       if (!verdict.allowed) {
-        return { booked: false, reason: verdict.reason, message: trialMessage(verdict.reason) };
+        return {
+          booked: false,
+          reason: verdict.reason,
+          message: bookingMessage(current.kind, verdict.reason),
+        };
       }
 
-      const [row] = await tx
-        .update(schema.classBookings)
-        .set({
-          classScheduleId: verdict.slot.scheduleId,
-          className: verdict.slot.name,
-          localDate: formatPlainDate(verdict.slot.date),
-          startTime: verdict.slot.startTime,
-          endTime: verdict.slot.endTime,
-          // `notified_at` tiene que decir cuando se aviso de ESTA hora, no de la
-          // vieja. Se limpia y lo vuelve a poner `notify` si el correo sale: si
-          // no, la columna afirmaria que el gimnasio sabe algo que no sabe.
-          notifiedAt: null,
-        })
-        .where(eq(schema.classBookings.id, current.id))
-        .returning();
+      try {
+        const [row] = await tx
+          .update(schema.classBookings)
+          .set({
+            classScheduleId: verdict.slot.scheduleId,
+            className: verdict.slot.name,
+            localDate: formatPlainDate(verdict.slot.date),
+            startTime: verdict.slot.startTime,
+            endTime: verdict.slot.endTime,
+            // `notified_at` tiene que decir cuando se aviso de ESTA hora, no de la
+            // vieja. Se limpia y lo vuelve a poner `notify` si el correo sale: si
+            // no, la columna afirmaria que el gimnasio sabe algo que no sabe.
+            notifiedAt: null,
+          })
+          .where(eq(schema.classBookings.id, current.id))
+          .returning();
 
-      return {
-        booked: true,
-        booking: { ...toClassBooking(row!), gymName: gym.name, gymSlug: gym.slug },
-      };
+        return {
+          booked: true,
+          booking: { ...toClassBooking(row!), gymName: gym.name, gymSlug: gym.slug },
+        };
+      } catch (error) {
+        // Una clase suelta movida a otra que ya tenia reservada: el indice de
+        // «una por clase» lo rechaza, y se contesta como lo haria reservarla.
+        if (!isUniqueViolation(error)) throw error;
+
+        const reason: BookingDenialReason = {
+          code: 'already_booked',
+          date: verdict.slot.date,
+          startTime: verdict.slot.startTime,
+          className: verdict.slot.name,
+        };
+        return { booked: false, reason, message: bookingMessage(current.kind, reason) };
+      }
     });
 
     // Se avisa SIEMPRE, y dicho como lo que es. El gimnasio tiene apuntada la

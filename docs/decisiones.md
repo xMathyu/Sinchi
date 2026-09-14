@@ -718,3 +718,109 @@ porque su gimnasio nos debe castiga a quien no debe nada.
 - **«Clase privada» no existe** como producto reservable. Lo que se reserva hoy es
   la clase de prueba y la plaza de un evento; la conversación sobre una clase
   particular entra por `drop_in` o `general` hasta que exista.
+
+---
+
+## 13. Desde el directorio también se viene a una clase suelta, y se inscribe uno
+
+Lo encontró Mathyu usando la app: en un gimnasio **sin clase de prueba**, la ficha
+del directorio no dejaba hacer nada. Quien ya había decidido entrenar ahí
+—pagando una clase, o inscribiéndose— solo podía presentarse sin avisar, y el
+gimnasio no se enteraba de que venía. §7 construyó la única puerta que abre desde
+afuera, y la hizo de un solo tamaño.
+
+### Las tres son la misma reserva
+
+Prueba, clase suelta e inscripción se piden igual —eligiendo una clase con fecha,
+que es lo que el mostrador puede preparar— y viven en la misma fila con un
+`kind`. Lo que cambia es lo que pasa en el mostrador: la prueba se marca, la clase
+suelta se cobra y la inscripción se convierte en ficha. Tres tablas habrían
+repetido tres veces reservar, mover, cancelar, la lista del mostrador y la
+política de RLS.
+
+Por eso `trial_bookings` pasó a llamarse `class_bookings` (migración 0021)
+**antes** de ensancharse (0022): con el nombre viejo, contar pruebas contaría
+inscripciones. Conservan su nombre las rutas `/trials` —las llaman apps ya
+instaladas, y sin `kind` siguen siendo la prueba— y `app_trial_account()`, que
+nombra la cuenta sin ficha y abre también eventos y chat. «Una por gimnasio» era
+regla de la prueba y se quedó en la prueba: sus índices únicos filtran por `kind`.
+
+### Qué se ofrece sale de los precios, no de interruptores
+
+`bookingOffer` lo deduce de lo que el dueño ya escribió: la prueba, de su
+interruptor; la clase suelta, del precio por clase; la inscripción, de sus
+mensualidades. Un interruptor por cada una sería pedirle que diga dos veces lo
+que dijo al poner precios, y el día que no coincidieran el directorio ofrecería
+algo que el mostrador no sabe cobrar. Apagar la prueba ya no quita las horas de
+la ficha si el gimnasio vende lo demás.
+
+El precio de la clase suelta es el del plan `drop_in` si lo hay —es el precio de
+quien no tiene mensualidad, que es quien llega por el directorio— y si no,
+`drop_in_price_cents`, que es lo que la ficha ya anunciaba como «Clase suelta».
+Una suelta a cero no se vende: eso es una prueba, con su propia regla. La
+inscripción ofrece solo mensualidades: un plan `drop_in` desde el directorio ES la
+clase suelta, y dos botones para lo mismo obligan a elegir entre iguales.
+
+### La inscripción no crea la ficha al reservar
+
+Es la decisión que ordena el resto, y Mathyu la pidió con un caso: quien dice
+«empiezo el martes» y aparece el jueves **empieza a deber el jueves**. Si reservar
+creara la membresía, la mensualidad correría desde un martes en que no estuvo, y
+quien no aparece nunca quedaría en el padrón como moroso y contando para el
+escalón del gimnasio. Además `users` exige documento, y el documento lo lee
+recepción del carné que tiene delante.
+
+Así que la reserva guarda plan, primer mes y matrícula —para que el mostrador sepa
+qué cobrar— y recepción la cierra con **Inscribir y cobrar**: el alta de siempre,
+precargada, con el documento como único campo nuevo y la fecha de hoy. La reserva
+queda `attended` con su `membership_id`, y el cobro se hace en la ficha, donde
+viven la mensualidad y la matrícula. No se cobra como clase: un primer mes
+colgado de la reserva sería un pago que el ciclo de cobro no lee
+(`class_bookings_enrollment_not_charged_here`).
+
+Tres cosas del alta desde una reserva que no son obvias:
+
+- **El documento tiene que ser de quien reservó**, si reservó con identidad.
+  Teclear el carné de otra persona ataría la inscripción —y el QR y la billetera— a
+  una ficha ajena. Se rechaza con 409 antes de crear nada.
+- **La cuenta de Google con la que se reservó pasa a abrir la ficha**, si la ficha
+  no tiene cuenta y la cuenta no abre otra. Sin esto la persona salía inscrita y
+  la app seguía en el directorio hasta dictar un código que nadie le había
+  pedido. Es la misma confianza que ese código —Firebase verificó la cuenta y
+  recepción tiene delante a la persona— y la ficha solo llega ahí si su celular o
+  su correo coincidían con los de la reserva.
+- **Quien se dio de baja y vuelve** se reinscribe en el mismo paso. La reserva lo
+  deja pasar a propósito, y mandar al mostrador a otra pantalla con la persona
+  delante es la escalera que esto ahorra.
+
+### La clase suelta se cobra sin inventar una ficha
+
+Como la plaza de un evento (§ eventos): el cargo va al mismo ledger como `drop_in`
+con `membership_id` nulo, y `charges_membership_unless_event` pasó a ser
+`charges_membership_unless_walk_in`. Cobrar marca «vino»: nadie paga una clase a la
+que no entra. La prueba con precio se cobra igual, y era un hueco propio: la lista
+decía «cobrar S/ 40» y no había dónde. La llave de idempotencia sale de la
+reserva, como la de los pagos, porque la comprobación de «ya pagada» no ve la
+petición que todavía está en vuelo.
+
+### Lo que nadie atendió sigue por venir una semana
+
+«Por venir» traía solo de hoy en adelante, así que la reserva del martes de quien
+llega el jueves estaba enterrada en el historial justo cuando hay que atenderla.
+Una reserva sin atender sigue ahora en «por venir» siete días (`PENDING_DAYS`) y
+sale del historial mientras tanto: las dos listas siguen sin pisarse. El campo
+`upcomingTrials` de los horarios cuenta ya las tres, y conserva el nombre por la
+app instalada.
+
+### Lo que no hace
+
+- **No reserva en gimnasios sin horario publicado.** Todo se pide sobre una clase
+  con fecha, así que el gimnasio de horario libre sigue sin nada que reservar
+  desde su ficha. Resolverlo pide una reserva de «día» sin clase, que la tabla hoy
+  no admite (`class_name` y la hora son obligatorios).
+- **No congela el precio del plan al inscribir.** La reserva enseña lo que el
+  gimnasio publicaba; al hacer la ficha manda la tarifa vigente. Congelarlo en una
+  reserva que puede no convertirse nunca es prometerle un precio a quien no se
+  comprometió a nada.
+- **No cobra por adelantado en la app.** Se paga en recepción, como todo en la
+  versión 1.

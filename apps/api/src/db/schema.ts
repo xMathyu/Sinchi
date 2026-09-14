@@ -145,6 +145,8 @@ export const classBookingStatusEnum = pgEnum('class_booking_status', [
   'no_show',
   'canceled',
 ]);
+/** Por que viene quien reservo. Ver `BookingKind` en `@sinchi/shared` y la 0022. */
+export const bookingKindEnum = pgEnum('booking_kind', ['trial', 'drop_in', 'enrollment']);
 /**
  * Por donde empezo una conversacion. Se congela: ver `ConversationTopic` en
  * `@sinchi/shared`.
@@ -229,7 +231,7 @@ export const accountClaims = pgTable(
      * Sin unicidad a proposito: `users.phone` es la llave del alumno en el
      * padron, pero esto todavia no es un alumno — es una cuenta a medio camino.
      * Lo unico que tiene que ser unico es la reserva por gimnasio, y de eso se
-     * encarga `class_bookings_one_per_phone`.
+     * encarga `class_bookings_one_trial_per_phone`.
      */
     phone: text('phone'),
     /** 6 digitos: se dicta en voz alta en el mostrador. */
@@ -661,15 +663,16 @@ export const charges = pgTable(
       onDelete: 'set null',
     }),
     /**
-     * `null` SOLO en un cargo de tipo `event`.
+     * `null` SOLO en un cargo de tipo `event` o `drop_in`.
      *
      * Un seminario lo paga tambien quien no entrena aqui, y esa persona no tiene
      * membresia en este local ni debe tenerla: viene a una clase, no se inscribe
      * en el padron. Su plata sigue siendo del gimnasio y sale en "cobrado este
      * mes", asi que va al MISMO ledger — dos sitios donde vive el dinero es como
-     * se dejan de cuadrar las cuentas.
+     * se dejan de cuadrar las cuentas. La clase suelta reservada desde el
+     * directorio es el mismo caso (0022).
      *
-     * `charges_membership_unless_event` mantiene la columna obligatoria para
+     * `charges_membership_unless_walk_in` mantiene la columna obligatoria para
      * todos los demas tipos.
      */
     membershipId: uuid('membership_id').references(() => memberships.id, {
@@ -1176,8 +1179,23 @@ export const classBookings = pgTable(
     localDate: date('local_date').notNull(),
     startTime: text('start_time').notNull(),
     endTime: text('end_time').notNull(),
-    /** Congelado al reservar: se respeta lo que se le prometio a la persona. */
+    /**
+     * Congelado al reservar: se respeta lo que se le prometio a la persona. En
+     * una inscripcion es el primer mes del plan elegido.
+     */
     priceCents: integer('price_cents').notNull().default(0),
+    /** Prueba, clase suelta o inscripcion. Por que son la misma fila: la 0022. */
+    kind: bookingKindEnum('kind').notNull().default('trial'),
+    /** Solo en una inscripcion. Id y nombre copiado: el plan se archiva antes del dia. */
+    planId: uuid('plan_id').references(() => plans.id, { onDelete: 'set null' }),
+    planName: text('plan_name'),
+    enrollmentFeeCents: integer('enrollment_fee_cents').notNull().default(0),
+    /** El cargo que pago la clase en el mostrador. `null` = por cobrar, o gratis. */
+    chargeId: uuid('charge_id').references(() => charges.id, { onDelete: 'set null' }),
+    /** La ficha que salio de una inscripcion al cerrarla recepcion. */
+    membershipId: uuid('membership_id').references(() => memberships.id, {
+      onDelete: 'set null',
+    }),
     status: classBookingStatusEnum('status').notNull().default('booked'),
     /** Cuando se le aviso al gimnasio. Sin esto no se sabe si el correo salio. */
     notifiedAt: timestamp('notified_at', { withTimezone: true }),
@@ -1186,18 +1204,30 @@ export const classBookings = pgTable(
   },
   (t) => [
     /**
-     * UNA por persona y por gimnasio, contada por celular.
+     * UNA prueba por persona y por gimnasio, contada por celular.
      *
      * Va en la base y no solo en el servicio: reservar dos veces desde dos
      * telefonos a la vez es justo la carrera que un `select` previo no atrapa.
-     * Parcial sobre las vigentes — cancelar libera el cupo.
+     * Parcial sobre las vigentes —cancelar libera el cupo— y sobre la PRUEBA:
+     * quien probo el martes tiene que poder inscribirse el jueves.
      */
-    uniqueIndex('class_bookings_one_per_phone')
+    uniqueIndex('class_bookings_one_trial_per_phone')
       .on(t.tenantId, t.phone)
-      .where(sql`status <> 'canceled'`),
-    uniqueIndex('class_bookings_one_per_user')
+      .where(sql`kind = 'trial' and status <> 'canceled'`),
+    uniqueIndex('class_bookings_one_trial_per_user')
       .on(t.tenantId, t.userId)
-      .where(sql`user_id is not null and status <> 'canceled'`),
+      .where(sql`kind = 'trial' and user_id is not null and status <> 'canceled'`),
+    // Una inscripcion PENDIENTE a la vez: quien no vino puede volver a pedirla.
+    uniqueIndex('class_bookings_one_enrollment_per_phone')
+      .on(t.tenantId, t.phone)
+      .where(sql`kind = 'enrollment' and status = 'booked'`),
+    uniqueIndex('class_bookings_one_enrollment_per_user')
+      .on(t.tenantId, t.userId)
+      .where(sql`kind = 'enrollment' and user_id is not null and status = 'booked'`),
+    // La clase suelta se repite; la MISMA clase no.
+    uniqueIndex('class_bookings_one_drop_in_per_class')
+      .on(t.tenantId, t.phone, t.localDate, t.classScheduleId)
+      .where(sql`kind = 'drop_in' and status <> 'canceled'`),
     // "Quien viene esta semana": la consulta del mostrador.
     index('class_bookings_tenant_date_idx').on(t.tenantId, t.localDate),
     index('class_bookings_account_idx')

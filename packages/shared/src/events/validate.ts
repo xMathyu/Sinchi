@@ -1,7 +1,7 @@
 /**
  * Quien puede coger plaza en un evento, y por que no.
  *
- * Misma forma que `validateTrialBooking` y `validateCheckIn`: un MOTIVO
+ * Misma forma que `validateBooking` y `validateCheckIn`: un MOTIVO
  * estructurado, no un booleano. "No se pudo reservar" deja a la persona sin
  * saber si llego tarde, si ya tiene su plaza o si se llenó, y cada uno tiene una
  * salida distinta — volver el mes que viene, mirar su reserva, o nada.

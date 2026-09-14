@@ -52,7 +52,7 @@ import {
   type SummaryDto,
   type ClassBookingDto,
 } from './api';
-import { myTrialClasses } from './trials';
+import { myBookings } from './trials';
 import { myConversations, threadWith } from './chat';
 import {
   gymDeletions,
@@ -1152,22 +1152,22 @@ export function useGym(slug: string): Carga<GymDetailDto | null> {
   return useCargaRemota<GymDetailDto | null>(request, null, 'No se pudo abrir este gimnasio.');
 }
 
-/** Las clases gratis que la persona tiene reservadas, con o sin ficha. */
-export function useMyTrialClasses(): Carga<readonly ClassBookingDto[]> {
+/** Las clases que la persona tiene reservadas —de cualquier tipo—, con o sin ficha. */
+export function useMyBookings(): Carga<readonly ClassBookingDto[]> {
   return useCargaRemota<readonly ClassBookingDto[]>(
-    myTrialClasses,
+    myBookings,
     [],
-    'No se pudieron traer tus clases gratis.',
+    'No se pudieron traer tus reservas.',
   );
 }
 
-/** Quién viene a probar. La lista del mostrador: o lo que falta, o lo que pasó. */
-export function useGymTrialClasses(pastOnly = false): Carga<readonly ClassBooking[]> {
+/** Quién viene desde la app. La lista del mostrador: o lo que falta, o lo que pasó. */
+export function useGymBookings(pastOnly = false): Carga<readonly ClassBooking[]> {
   const request = useCallback(() => fetchTrials(pastOnly), [pastOnly]);
   return useCargaRemota<readonly ClassBooking[]>(
     request,
     [],
-    'No se pudo traer la lista de clases gratis.',
+    'No se pudo traer la lista de reservas.',
   );
 }
 

@@ -21,7 +21,7 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | horario de clase | `ClassSchedule` |
 | asistencia | `Attendance` |
 | staff / recepción / dueño | `Staff`, `front_desk`, `owner` |
-| clase gratis reservada | `TrialBooking` |
+| clase reservada desde el directorio (prueba, suelta o inscripción) | `ClassBooking` |
 | evento con fecha (seminario, taller) | `GymEvent` |
 | plaza en un evento | `EventRegistration` |
 | rutina o técnica en video | `Routine` |
@@ -83,18 +83,33 @@ también paga el alumno CON plan que agota su cupo semanal — y ese precio vive
 | fuera de horario | `outside_schedule` |
 | marcado manual | `CheckInMethod = 'manual'` |
 
-## Conceptos de la clase gratis
+## Conceptos de las reservas del directorio
+
+Nacieron como la clase gratis y hoy son cualquier clase con fecha que alguien
+reserva desde la ficha de un gimnasio. Ojo con `trial`: sigue nombrando SOLO la
+clase de prueba —un `kind`—, aunque las rutas de la api se llamen `/trials` por
+las apps instaladas (decisiones §13).
 
 | Negocio | Código |
 |---|---|
-| clase gratis / clase de prueba | `trial` |
+| clase reservada desde el directorio | `ClassBooking` / `class_bookings` |
+| a qué viene | `BookingKind` (`trial`, `drop_in`, `enrollment`) |
+| clase gratis / clase de prueba | `kind = 'trial'` |
+| clase suelta reservada | `kind = 'drop_in'` |
+| inscripción reservada (su primera clase) | `kind = 'enrollment'` |
+| qué deja reservar un gimnasio | `BookingOffer` / `bookingOffer` |
+| precio de una clase para quien no es alumno | `dropInClassPrice` |
 | directorio de gimnasios | `directory` / `GymCard` |
-| clase concreta con fecha (lo que se reserva) | `TrialSlot` |
-| el gimnasio la ofrece | `trialClassEnabled` |
-| vino / no vino | `TrialBookingStatus` (`attended`, `no_show`) |
-| motivo de rechazo de la reserva | `TrialDenialReason` / `TrialDenialCode` |
-| ya la usó en este gimnasio | `already_booked` |
+| clase concreta con fecha (lo que se reserva) | `ClassSlot` |
+| el gimnasio ofrece la prueba | `trialClassEnabled` |
+| vino / no vino | `ClassBookingStatus` (`attended`, `no_show`) |
+| motivo de rechazo de la reserva | `BookingDenialReason` / `BookingDenialCode` |
+| ya la usó en este gimnasio / ya tiene esa | `already_booked` |
 | ya entrena aquí | `already_member` |
+| ese plan ya no se vende | `plan_unavailable` |
+| el cargo con el que se pagó | `chargeId` |
+| la ficha que salió de la inscripción | `membershipId` |
+| sin atender, sigue por venir | `PENDING_DAYS` |
 
 ## Conceptos de la biblioteca
 

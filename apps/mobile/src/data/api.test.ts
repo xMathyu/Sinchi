@@ -428,6 +428,7 @@ suite('directorio y clase gratis', () => {
     active = 'student';
     const manualOutcome = await bookTrial({
       slug: gym.slug,
+      kind: 'trial',
       classScheduleId: gym.slots[0]!.scheduleId,
       date: `${gym.slots[0]!.date.year}-${String(gym.slots[0]!.date.month).padStart(2, '0')}-${String(gym.slots[0]!.date.day).padStart(2, '0')}`,
     });

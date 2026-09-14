@@ -703,7 +703,61 @@ describe('clase gratis', () => {
     // pasan el `select` previo del servicio y solo el índice las separa.
     await expectRejection(
       () => reservar(TENANT, '+51900000001'),
-      /class_bookings_one_per_phone/,
+      /class_bookings_one_trial_per_phone/,
+    );
+  });
+
+  /**
+   * «Una por gimnasio» es la regla de la PRUEBA (0022). Sin el filtro por tipo,
+   * quien probó el martes no podría reservar su inscripción el jueves: el índice
+   * la confundiría con una segunda clase gratis.
+   */
+  it('quien ya probó puede reservar su inscripción', async () => {
+    await setContext(TENANT, null);
+    const result = await db.query(
+      `insert into class_bookings
+         (tenant_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time, kind, plan_name)
+       values ($1, 'firebase-uid-1', 'Interesado', '+51900000001', 'Fundamentos', '2026-09-03', '19:00', '20:30', 'enrollment', 'Ilimitado')
+       returning id`,
+      [TENANT],
+    );
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it('una inscripción sin plan no se puede guardar', async () => {
+    // El plan es lo que el mostrador necesita para hacer la ficha: sin él, la
+    // reserva dice «quiere inscribirse» y no dice en qué.
+    await setContext(TENANT, null);
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into class_bookings
+             (tenant_id, firebase_uid, full_name, phone, class_name, local_date, start_time, end_time, kind)
+           values ($1, 'uid-y', 'Sin Plan', '+51900000011', 'Fundamentos', '2026-09-01', '19:00', '20:30', 'enrollment')`,
+          [TENANT],
+        ),
+      /class_bookings_enrollment_has_plan/,
+    );
+  });
+
+  it('la clase suelta la paga también quien no tiene ficha', async () => {
+    await setContext(TENANT, null);
+    const paid = await db.query(
+      `insert into charges (tenant_id, membership_id, type, amount_cents, status, rail)
+       values ($1, null, 'drop_in', 2500, 'succeeded', 'cash') returning id`,
+      [TENANT],
+    );
+    expect(paid.rows).toHaveLength(1);
+
+    // La matrícula no: se cobra al inscribir, y sin ficha no hay a quién.
+    await expectRejection(
+      () =>
+        db.query(
+          `insert into charges (tenant_id, membership_id, type, amount_cents, status, rail)
+           values ($1, null, 'enrollment', 5000, 'succeeded', 'cash')`,
+          [TENANT],
+        ),
+      /charges_membership_unless_walk_in/,
     );
   });
 

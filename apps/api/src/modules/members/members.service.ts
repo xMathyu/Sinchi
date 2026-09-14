@@ -8,9 +8,20 @@
  *
  * Por eso `users` se busca por celular antes de insertar. El celular es único en
  * todo el sistema y es la llave con la que la persona se reconoce.
+ *
+ * Es también donde termina una inscripción reservada desde el directorio: la
+ * reserva trae nombre, celular y plan, y recepción pone el documento. La
+ * membresía nace ese día —el que la persona llegó— y no el que eligió en la app
+ * (migración 0022).
  */
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { and, eq, or, sql } from 'drizzle-orm';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { firstPeriod, parsePlainDate } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, withoutTenantIsolation, type Database } from '../../db/client';
@@ -32,6 +43,13 @@ export interface EnrollMemberInput {
   /** `YYYY-MM-DD`. Por defecto, hoy en la zona del gimnasio. */
   readonly startDate?: string | undefined;
   readonly internalAlias?: string | null | undefined;
+  /**
+   * La inscripción reservada desde el directorio que este alta viene a cerrar.
+   *
+   * Con ella la reserva sale de «por venir», queda apuntando a la ficha, y la
+   * cuenta de Google con la que se reservó pasa a abrir esa ficha.
+   */
+  readonly bookingId?: string | undefined;
 }
 
 export interface EnrollResult {
@@ -42,6 +60,8 @@ export interface EnrollResult {
 
 @Injectable()
 export class MembersService {
+  private readonly logger = new Logger(MembersService.name);
+
   constructor(
     @InjectDb() private readonly db: Database,
     private readonly clock: Clock,
@@ -73,6 +93,10 @@ export class MembersService {
   async enroll(tenantId: string, input: EnrollMemberInput): Promise<EnrollResult> {
     const phone = input.phone === undefined ? null : input.phone.trim();
     const documentId = input.documentId.trim();
+    const booking =
+      input.bookingId === undefined
+        ? null
+        : await this.enrollmentBooking(tenantId, input.bookingId);
 
     // La identidad se resuelve FUERA del contexto del tenant: es global.
     const { userId, reused } = await withoutTenantIsolation(this.db, async (tx) => {
@@ -94,6 +118,20 @@ export class MembersService {
             : or(eq(schema.users.phone, phone), eq(schema.users.documentId, documentId)),
         )
         .limit(1);
+
+      /**
+       * Quien reservó con su identidad tiene que ser quien trae el carné.
+       *
+       * Si el documento que teclea recepción es de OTRA persona, cerrar la
+       * reserva con él ataría la inscripción —y con ella el QR y la billetera—
+       * a una ficha que no es de quien reservó. Se para aquí, antes de crear
+       * nada, con la salida escrita: mirar el carné otra vez.
+       */
+      if (booking !== null && booking.userId !== null && existing?.id !== booking.userId) {
+        throw new ConflictException(
+          'Ese documento no es de quien reservó. Revisa su carné antes de inscribirla.',
+        );
+      }
 
       if (existing !== undefined) {
         // Reutilizando por documento, el celular no hace falta: ya se sabe.
@@ -161,6 +199,8 @@ export class MembersService {
       const plan = toPlan(planRow);
       if (!plan.active) throw new BadRequestException(`El plan "${plan.name}" no está activo.`);
 
+      // Sin fecha, HOY: con una reserva detrás es justo lo que se quiere. Quien
+      // reservó el martes y llegó el jueves empieza a deber desde el jueves.
       const start =
         input.startDate === undefined
           ? this.clock.today(tenant.timezone)
@@ -168,7 +208,7 @@ export class MembersService {
 
       const { period } = firstPeriod(start, tenant.billingDatePolicy);
 
-      const [membership] = await tx
+      const [created] = await tx
         .insert(schema.memberships)
         .values({
           userId,
@@ -179,12 +219,11 @@ export class MembersService {
         .onConflictDoNothing()
         .returning({ id: schema.memberships.id });
 
-      if (membership === undefined) {
-        // El índice único la rechazó: ya está en el padrón. Devolver solo "ya
-        // existe" es un callejón sin salida — es justo lo que pasa cuando
-        // alguien canceló y vuelve, que es el caso normal, no el raro. Se manda
-        // el `membershipId` para que el mostrador pueda abrir su ficha y
-        // reinscribirla, que es lo que hay que hacer.
+      let membershipId: string;
+      if (created !== undefined) {
+        membershipId = created.id;
+      } else {
+        // El índice único la rechazó: ya está en el padrón.
         const [existente] = await tx
           .select({ id: schema.memberships.id })
           .from(schema.memberships)
@@ -196,16 +235,51 @@ export class MembersService {
           )
           .limit(1);
 
-        throw new ConflictException({
-          message:
-            'Esa persona ya está en el padrón de este gimnasio. Si canceló, se reinscribe desde su ficha: dar de alta otra vez le partiría el historial en dos.',
-          membershipId: existente?.id ?? null,
-        });
+        /**
+         * Quien vuelve, desde el directorio.
+         *
+         * Se dio de baja en marzo y en junio reserva su inscripción en la app:
+         * es el caso que la reserva deja pasar a propósito. Mandar al mostrador a
+         * otra pantalla a reinscribirla, con la persona delante, es la escalera
+         * que esta ruta existe para ahorrar. Sin reserva detrás se sigue
+         * respondiendo como siempre, porque ahí nadie pidió volver.
+         */
+        const viva =
+          existente === undefined
+            ? []
+            : await tx
+                .select({ id: schema.subscriptions.id })
+                .from(schema.subscriptions)
+                .where(
+                  and(
+                    eq(schema.subscriptions.membershipId, existente.id),
+                    sql`${schema.subscriptions.status} <> 'canceled'`,
+                  ),
+                )
+                .limit(1);
+
+        if (existente === undefined || booking === null || viva.length > 0) {
+          // Devolver solo "ya existe" es un callejón sin salida — es justo lo que
+          // pasa cuando alguien canceló y vuelve, que es el caso normal, no el
+          // raro. Se manda el `membershipId` para que el mostrador pueda abrir su
+          // ficha y reinscribirla, que es lo que hay que hacer.
+          throw new ConflictException({
+            message:
+              'Esa persona ya está en el padrón de este gimnasio. Si canceló, se reinscribe desde su ficha: dar de alta otra vez le partiría el historial en dos.',
+            membershipId: existente?.id ?? null,
+          });
+        }
+
+        await tx
+          .update(schema.memberships)
+          .set({ status: 'active' })
+          .where(eq(schema.memberships.id, existente.id));
+        membershipId = existente.id;
       }
 
       await tx.insert(schema.subscriptions).values({
         tenantId,
-        membershipId: membership.id,
+        membershipId,
         planId: plan.id,
         pendingPlanId: null,
         // Arranca al día pero con el primer periodo por cobrar: la mensualidad
@@ -217,10 +291,85 @@ export class MembersService {
         nextBillingDate: dateToColumn(period.start),
       });
 
-      return this.views.viewInTx(tx, membership.id);
+      if (booking !== null) {
+        // La reserva sale de «por venir» y queda apuntando a la ficha que produjo:
+        // es el rastro de por dónde llegó, y lo que evita cerrarla dos veces.
+        await tx
+          .update(schema.classBookings)
+          .set({ status: 'attended', membershipId, canceledAt: null })
+          .where(eq(schema.classBookings.id, booking.id));
+      }
+
+      return this.views.viewInTx(tx, membershipId);
     });
 
+    if (booking?.firebaseUid != null) await this.linkBookingAccount(userId, booking.firebaseUid);
+
     return { view, reusedIdentity: reused };
+  }
+
+  /**
+   * La reserva de inscripción que se viene a cerrar.
+   *
+   * Tiene que ser una inscripción —una prueba no trae plan— y seguir abierta. Se
+   * acepta la marcada «no vino»: quien reservó el martes y llega el jueves es el
+   * caso normal, y el mostrador pudo haberla marcado el martes. Lo que no se
+   * acepta es cerrarla dos veces: daría dos altas de la misma reserva.
+   */
+  private async enrollmentBooking(tenantId: string, bookingId: string) {
+    const [row] = await withTenant(this.db, tenantId, (tx) =>
+      tx
+        .select({
+          id: schema.classBookings.id,
+          kind: schema.classBookings.kind,
+          status: schema.classBookings.status,
+          userId: schema.classBookings.userId,
+          firebaseUid: schema.classBookings.firebaseUid,
+          membershipId: schema.classBookings.membershipId,
+        })
+        .from(schema.classBookings)
+        .where(eq(schema.classBookings.id, bookingId))
+        .limit(1),
+    );
+
+    if (row === undefined) throw new NotFoundException('Esa reserva no existe.');
+    if (row.kind !== 'enrollment') {
+      throw new BadRequestException('Esa reserva no es una inscripción.');
+    }
+    if (row.status === 'canceled' || row.membershipId !== null) {
+      throw new ConflictException('Esa reserva ya se cerró: la persona la canceló o ya tiene su ficha.');
+    }
+    return row;
+  }
+
+  /**
+   * La cuenta de Google con la que se reservó pasa a abrir la ficha.
+   *
+   * Sin esto la persona salía del mostrador inscrita y abría la app en la misma
+   * pantalla de antes —el directorio, sin billetera ni QR— hasta dictar un código
+   * de seis dígitos que nadie le había pedido. Es la misma confianza que ese
+   * código, alcanzada por otro camino: la cuenta la verificó Firebase al
+   * reservar, y recepción tiene delante a la persona y su documento. Y la ficha
+   * solo llega aquí si su celular o su correo coincidían con los de la reserva.
+   *
+   * Solo si la ficha no tiene cuenta y la cuenta no abre otra ficha. Pisar una
+   * vinculación que ya existe le quitaría su billetera a alguien.
+   */
+  private async linkBookingAccount(userId: string, firebaseUid: string): Promise<void> {
+    try {
+      await withoutTenantIsolation(this.db, (tx) =>
+        tx
+          .update(schema.users)
+          .set({ firebaseUid })
+          .where(and(eq(schema.users.id, userId), isNull(schema.users.firebaseUid))),
+      );
+    } catch (error) {
+      // `users_firebase_uid_key`: esa cuenta ya abre otra ficha. La inscripción
+      // ya está hecha y no se deshace por esto: queda el código de siempre.
+      this.logger.warn(
+        `No se vinculó la cuenta de la reserva: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   /** Planes activos del gimnasio. Los necesita el alta y el cambio de plan. */

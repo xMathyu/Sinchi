@@ -232,7 +232,7 @@ function ScheduleRow({
                 enterarse al ver el horario publicado es tarde. */}
             {upcomingTrials > 0 && (
               <Text variant="micro" color={theme.semaphore.ok}>
-                {upcomingTrials} {upcomingTrials === 1 ? 'viene' : 'vienen'} a probar
+                {upcomingTrials} {upcomingTrials === 1 ? 'reserva' : 'reservas'}
               </Text>
             )}
             {overlaps && (

@@ -14,7 +14,7 @@
 import { Alert, Pressable, View } from 'react-native';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
-import { cents, conversationTopicLabel, formatPENShort } from '@sinchi/shared';
+import { cents, conversationTopicLabel, formatPENShort, type BookingKind } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Badge, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { ConversationRow } from '../../src/design/chat';
@@ -22,17 +22,24 @@ import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGyms, useMyConversations, useMyTrialClasses } from '../../src/data/hooks';
+import { useGyms, useMyConversations, useMyBookings } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { signOut } from '../../src/data/auth';
-import { cancelTrialClass } from '../../src/data/trials';
-import type { GymCardDto } from '../../src/data/api';
+import { cancelBooking } from '../../src/data/trials';
+import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
+
+/** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
+const KIND_LABEL: Readonly<Record<BookingKind, string>> = {
+  trial: 'Clase de prueba',
+  drop_in: 'Clase suelta',
+  enrollment: 'Inscripción',
+};
 
 export default function ExploreScreen() {
   const theme = useTheme();
   const { details: gyms, loading, error, reload } = useGyms();
-  const bookings = useMyTrialClasses();
+  const bookings = useMyBookings();
   const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
   const conversations = useMyConversations();
   // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
@@ -73,84 +80,14 @@ export default function ExploreScreen() {
 
       <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
         Escuelas y dojos de la red. Entra a cualquiera para ver sus horarios y sus
-        precios, y reserva tu primera clase.
+        precios, y reserva una clase o inscríbete.
       </Text>
 
       {upcoming.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
-          <Eyebrow>Vas a probar</Eyebrow>
+          <Eyebrow>Tus reservas</Eyebrow>
           {upcoming.map((booking) => (
-            <Card
-              key={booking.id}
-              accent={theme.semaphore.ok}
-              borderColor={withAlpha(theme.semaphore.ok, 0.26)}
-              radius={theme.radii.xl}
-            >
-              <Stack gap={7}>
-                <Text variant="bodySmall" weight="semibold">
-                  {booking.gymName}
-                </Text>
-                <Text variant="caption" color={theme.colors.textSecondary}>
-                  {booking.className} · {formatWeekdayAndDay(booking.date)} a las{' '}
-                  {booking.startTime}
-                </Text>
-                {/* Primero mover y después cancelar, y no al revés: quien no puede
-                    el martes casi siempre puede el jueves, y lo único que había
-                    aquí —cancelar— le hacía soltar el cupo para volver a pedirlo.
-                    Cancelar se queda, en gris, como lo que es: la salida de quien
-                    de verdad no va a ir. */}
-                <Row gap={16} justify="flex-start">
-                  <Pressable
-                    accessibilityRole="button"
-                    hitSlop={10}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/explore/[slug]',
-                        params: { slug: booking.gymSlug },
-                      })
-                    }
-                  >
-                    <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
-                      Cambiar la hora
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    hitSlop={10}
-                    onPress={() => {
-                      // Confirmar antes de soltar el cupo: es una sola por
-                      // gimnasio y deshacerlo exige volver a elegir hora.
-                      Alert.alert(
-                        'Cancelar tu clase de prueba',
-                        `${booking.gymName} dejará de esperarte. Podrás reservar otro día.`,
-                        [
-                          { text: 'No', style: 'cancel' },
-                          {
-                            text: 'Cancelar la clase',
-                            style: 'destructive',
-                            onPress: () => {
-                              void cancelTrialClass(booking.id)
-                                .then(() => bookings.reload())
-                                .catch((causa: unknown) => {
-                                  Alert.alert(
-                                    'No se pudo cancelar',
-                                    causa instanceof Error ? causa.message : 'Intenta de nuevo.',
-                                  );
-                                });
-                            },
-                          },
-                        ],
-                      );
-                    }}
-                  >
-                    <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                      Cancelar
-                    </Text>
-                  </Pressable>
-                </Row>
-              </Stack>
-            </Card>
+            <UpcomingCard key={booking.id} booking={booking} onCanceled={bookings.reload} />
           ))}
         </Stack>
       ) : null}
@@ -219,6 +156,108 @@ export default function ExploreScreen() {
 
       <OwnerInvitation />
     </Screen>
+  );
+}
+
+/**
+ * Una reserva en pie, fuera de la ficha de su gimnasio.
+ *
+ * Dice qué reservó —prueba, suelta o inscripción— porque aquí se leen juntas las
+ * de varios locales, y «Fundamentos, martes 19:00» no dice si se paga, cuánto ni
+ * si es para quedarse.
+ */
+function UpcomingCard({
+  booking,
+  onCanceled,
+}: {
+  readonly booking: ClassBookingDto;
+  readonly onCanceled: () => void;
+}) {
+  const theme = useTheme();
+  // `??` porque la app se actualiza sola y la api no: antes de la 0022 todo era
+  // una prueba.
+  const kind: BookingKind = booking.kind ?? 'trial';
+
+  return (
+    <Card
+      accent={theme.semaphore.ok}
+      borderColor={withAlpha(theme.semaphore.ok, 0.26)}
+      radius={theme.radii.xl}
+    >
+      <Stack gap={7}>
+        <Row>
+          <Text variant="bodySmall" weight="semibold" style={{ flex: 1 }} numberOfLines={1}>
+            {booking.gymName}
+          </Text>
+          <Text variant="micro" weight="bold" color={theme.semaphore.ok}>
+            {KIND_LABEL[kind].toUpperCase()}
+          </Text>
+        </Row>
+        <Text variant="caption" color={theme.colors.textSecondary}>
+          {booking.className} · {formatWeekdayAndDay(booking.date)} a las {booking.startTime}
+          {kind === 'enrollment' && booking.planName !== null ? ` · ${booking.planName}` : ''}
+        </Text>
+        {/* Primero mover y después cancelar, y no al revés: quien no puede
+            el martes casi siempre puede el jueves, y lo único que había
+            aquí —cancelar— le hacía soltar el cupo para volver a pedirlo.
+            Cancelar se queda, en gris, como lo que es: la salida de quien
+            de verdad no va a ir. */}
+        <Row gap={16} justify="flex-start">
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={() =>
+              router.push({
+                pathname: '/explore/[slug]',
+                params: { slug: booking.gymSlug },
+              })
+            }
+          >
+            <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+              Cambiar la hora
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={10}
+            onPress={() => {
+              // Confirmar antes de soltarla: deshacerlo exige volver a elegir
+              // hora, y en la prueba es una por gimnasio.
+              Alert.alert(
+                kind === 'trial'
+                  ? 'Cancelar tu clase de prueba'
+                  : kind === 'drop_in'
+                    ? 'Cancelar tu clase suelta'
+                    : 'Cancelar tu inscripción',
+                `${booking.gymName} dejará de esperarte. Podrás reservar otro día.`,
+                [
+                  { text: 'No', style: 'cancel' },
+                  {
+                    text: 'Cancelar la reserva',
+                    style: 'destructive',
+                    onPress: () => {
+                      void cancelBooking(booking.id)
+                        .then(onCanceled)
+                        .catch((causa: unknown) => {
+                          Alert.alert(
+                            'No se pudo cancelar',
+                            causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+                          );
+                        });
+                    },
+                  },
+                ],
+              );
+            }}
+          >
+            <Text variant="captionSmall" color={theme.colors.textTertiary}>
+              Cancelar
+            </Text>
+          </Pressable>
+        </Row>
+      </Stack>
+    </Card>
   );
 }
 

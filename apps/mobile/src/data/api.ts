@@ -35,9 +35,10 @@ import type {
   SaasTier,
   Subscription,
   Tenant,
+  BookingDenialReason,
+  BookingKind,
   ClassBooking,
   ClassBookingStatus,
-  TrialDenialReason,
   ClassSlot,
   User,
 } from '@sinchi/shared';
@@ -355,23 +356,23 @@ export interface ClassBookingDto extends ClassBooking {
 }
 
 /**
- * Resultado de reservar.
+ * Resultado de reservar una clase —de prueba, suelta o de inscripción—.
  *
  * Union discriminada porque el servidor responde 200 tambien cuando rechaza: no
  * es un error de la peticion sino el resultado del negocio, y la pantalla
  * necesita el motivo para decir si elegir otra hora o si ya la habia usado.
  */
-export type BookTrialDto =
+export type BookClassDto =
   | { readonly booked: true; readonly booking: ClassBookingDto }
   | {
       readonly booked: false;
-      readonly reason: TrialDenialReason;
+      readonly reason: BookingDenialReason;
       readonly message: { readonly title: string; readonly detail: string };
     };
 
 const reviveTrial = <T extends ClassBooking>(b: T): T => ({ ...b, createdAt: date(b.createdAt) });
 
-const reviveBooking = (out: BookTrialDto): BookTrialDto =>
+const reviveBooking = (out: BookClassDto): BookClassDto =>
   out.booked ? { ...out, booking: reviveTrial(out.booking) } : out;
 
 export const fetchGyms = (): Promise<readonly GymCardDto[]> =>
@@ -486,9 +487,13 @@ export const bookTrialAsGuest = async (input: {
   readonly classScheduleId: string;
   /** `YYYY-MM-DD`. */
   readonly date: string;
-}): Promise<BookTrialDto> =>
+  /** Qué se reserva. La ruta se llama `trial` por las apps instaladas: sin esto, es la prueba. */
+  readonly kind: BookingKind;
+  /** Solo en una inscripción. */
+  readonly planId?: string;
+}): Promise<BookClassDto> =>
   reviveBooking(
-    await request<BookTrialDto>(`/gyms/${encodeURIComponent(input.slug)}/trial`, {
+    await request<BookClassDto>(`/gyms/${encodeURIComponent(input.slug)}/trial`, {
       method: 'POST',
       anonymous: true,
       body: {
@@ -497,6 +502,8 @@ export const bookTrialAsGuest = async (input: {
         phone: input.phone,
         classScheduleId: input.classScheduleId,
         date: input.date,
+        kind: input.kind,
+        planId: input.planId,
       },
     }),
   );
@@ -506,8 +513,11 @@ export const bookTrial = async (input: {
   readonly slug: string;
   readonly classScheduleId: string;
   readonly date: string;
-}): Promise<BookTrialDto> =>
-  reviveBooking(await request<BookTrialDto>('/me/trials', { method: 'POST', body: input }));
+  readonly kind: BookingKind;
+  /** Solo en una inscripción. */
+  readonly planId?: string;
+}): Promise<BookClassDto> =>
+  reviveBooking(await request<BookClassDto>('/me/trials', { method: 'POST', body: input }));
 
 export const fetchMyTrials = async (): Promise<readonly ClassBookingDto[]> =>
   (await request<readonly ClassBookingDto[]>('/me/trials')).map(reviveTrial);
@@ -530,7 +540,7 @@ export const fetchGuestTrials = async (idToken: string): Promise<readonly ClassB
 /**
  * Mueve una reserva a otra hora.
  *
- * Devuelve un `BookTrialDto` y no un `{ moved: true }` porque el resultado es el
+ * Devuelve un `BookClassDto` y no un `{ moved: true }` porque el resultado es el
  * mismo que reservar: o la reserva con su hora nueva, o el motivo por el que esa
  * hora no sirve. La pantalla no tiene que distinguir los dos casos.
  */
@@ -539,9 +549,9 @@ export const rescheduleTrial = async (input: {
   readonly classScheduleId: string;
   /** `YYYY-MM-DD`. */
   readonly date: string;
-}): Promise<BookTrialDto> =>
+}): Promise<BookClassDto> =>
   reviveBooking(
-    await request<BookTrialDto>(`/me/trials/${input.bookingId}/reschedule`, {
+    await request<BookClassDto>(`/me/trials/${input.bookingId}/reschedule`, {
       method: 'POST',
       body: { classScheduleId: input.classScheduleId, date: input.date },
     }),
@@ -552,9 +562,9 @@ export const rescheduleGuestTrial = async (input: {
   readonly idToken: string;
   readonly classScheduleId: string;
   readonly date: string;
-}): Promise<BookTrialDto> =>
+}): Promise<BookClassDto> =>
   reviveBooking(
-    await request<BookTrialDto>(`/gyms/trials/${input.bookingId}/reschedule`, {
+    await request<BookClassDto>(`/gyms/trials/${input.bookingId}/reschedule`, {
       method: 'POST',
       anonymous: true,
       body: {
@@ -817,6 +827,11 @@ export const enrollMember = async (input: {
   readonly phone?: string;
   readonly email?: string;
   readonly planId: string;
+  /**
+   * La inscripción reservada desde la app que este alta cierra. Con ella la
+   * reserva queda apuntando a la ficha y su cuenta de Google pasa a abrirla.
+   */
+  readonly bookingId?: string;
 }): Promise<EnrollResultDto> => {
   const out = await request<EnrollResultDto>('/staff/members', { method: 'POST', body: input });
   return { ...out, view: reviveView(out.view) };
@@ -1600,6 +1615,24 @@ export const setTrialStatus = async (
     await request<ClassBooking>(`/staff/trials/${bookingId}/status`, {
       method: 'POST',
       body: { status },
+    }),
+  );
+
+/**
+ * Cobra la clase suelta —o la prueba con precio— de quien reservó.
+ *
+ * Devuelve la reserva ya pagada, con su cargo y marcada «vino»: es lo que la
+ * tarjeta del mostrador tiene que enseñar sin volver a pedir la lista.
+ */
+export const payBooking = async (
+  bookingId: string,
+  rail: 'cash' | 'yape' | 'bank_transfer',
+  clientId?: string,
+): Promise<ClassBooking> =>
+  reviveTrial(
+    await request<ClassBooking>(`/staff/trials/${bookingId}/pay`, {
+      method: 'POST',
+      body: { rail, clientId },
     }),
   );
 

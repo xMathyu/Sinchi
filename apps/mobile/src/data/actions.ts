@@ -14,9 +14,10 @@
  * Así no hay forma de tener una app "conectada" que escriba en memoria.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
-import type { CheckInMethod, ClassSchedule, PaymentRail, Plan } from '@sinchi/shared';
+import type { CheckInMethod, ClassBooking, ClassSchedule, PaymentRail, Plan } from '@sinchi/shared';
 import {
   ApiError,
+  payBooking,
   cancelMembership,
   changePlan as changePlanRemote,
   enrollMember,
@@ -945,6 +946,8 @@ export async function enrollStudent(input: {
   readonly phone?: string;
   readonly email?: string;
   readonly planId: string;
+  /** La inscripción reservada desde la app que este alta viene a cerrar. */
+  readonly bookingId?: string;
 }): Promise<{ readonly membershipId: string; readonly identidadReutilizada: boolean }> {
   const session = withServer();
   if (session === null) throw new Error('Inscribir necesita una sesión de staff.');
@@ -965,6 +968,22 @@ export async function enrollStudent(input: {
     membershipId: outcome.view.membership.id,
     identidadReutilizada: outcome.reusedIdentity,
   };
+}
+
+/**
+ * Cobra la reserva de quien llegó: su clase suelta, o su prueba con precio.
+ *
+ * La llave va derivada de la reserva, igual que la de los pagos: dos toques con
+ * la red lenta mandan la misma, y el segundo choca con `charges_client_id_key` en
+ * vez de cobrar dos veces. La api además no vuelve a cobrar una reserva pagada,
+ * pero eso no ve la petición que todavía está en vuelo.
+ */
+export async function chargeBooking(
+  bookingId: string,
+  rail: 'cash' | 'yape' | 'bank_transfer',
+): Promise<ClassBooking> {
+  exigeServidor('Cobrar una reserva');
+  return await payBooking(bookingId, rail, idempotencyKey(`reserva:${bookingId}`));
 }
 
 /**

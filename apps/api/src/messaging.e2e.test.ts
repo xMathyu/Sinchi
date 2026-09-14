@@ -57,7 +57,7 @@ const fakeMail = {
     notices.push({ audience: input.audience, recipient: input.recipient, body: input.body });
     return { enviado: true, denial: null };
   },
-  notifyTrialBooking: async () => ({ enviado: true, denial: null }),
+  notifyBooking: async () => ({ enviado: true, denial: null }),
   sendInvite: async () => ({ enviado: true, denial: null }),
 };
 

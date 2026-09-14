@@ -129,13 +129,14 @@ La misma app sirve al alumno y al staff; el rol define qué ve al abrirla. Hay *
 - La tarjeta guardada (objeto `card` de Culqi) **sobrevive a la cancelación**, así que volver debe ser un tap, sin re-ingresar datos.
 - Nota comercial: cancelar y renovar *es* pausar visto desde el alumno. La retención depende de que volver sea trivial.
 
-### 4.8 Clase gratis y directorio **[DECIDIDO al implementar]**
+### 4.8 Directorio y reservas **[DECIDIDO al implementar]**
 
 - La app lista los **gimnasios activos** de la red, sin necesidad de sesión: quien busca dojo todavía no tiene cuenta.
 - De cada uno se ven sus **horarios y sus precios**, y si ofrece la **primera clase gratis**. No todos la dan: es configuración del gimnasio —por defecto sí— y el dueño la enciende o la apaga desde la app. Apagarla no cancela lo ya reservado.
-- El interesado **elige día y hora** entre las clases reales de las próximas dos semanas y queda anotado. El gimnasio recibe un aviso por correo y la lista de quién viene, con el celular de cada uno: son sus posibles alumnos.
+- Desde la ficha se reservan tres cosas, las tres eligiendo **día y hora** entre las clases reales de las próximas dos semanas: la **clase de prueba**, una **clase suelta** si el gimnasio vende por clase, y la **inscripción** con uno de sus planes. Qué se ofrece sale de los precios del gimnasio, no de interruptores aparte.
+- El gimnasio recibe un aviso por correo y la lista de quién viene, con el celular de cada uno y **lo que hay que cobrarle**: son sus posibles alumnos.
 - Reservar exige una cuenta (Google o correo) pero **no** una ficha en ningún padrón: es justo la persona que todavía no entrena en ningún sitio.
-- Una por persona y por gimnasio. El mostrador marca quién vino y quién no.
+- La prueba es una por persona y por gimnasio. El mostrador marca quién vino, **cobra** la clase suelta o la prueba con precio, y convierte la inscripción en ficha cuando la persona llega: su **mensualidad empieza ese día**, no el que eligió al reservar. Lo que nadie atendió sigue en la lista una semana.
 - No controla aforo: ver 8.3, que sigue abierto.
 
 ---

@@ -16,10 +16,15 @@
  * en `users` —dos personas pueden compartirlo— y un tipeo en uno ajeno
  * inscribiria a un desconocido. El documento es lo que recepcion esta leyendo
  * del carne que tiene delante, y es lo que la api usa para reutilizar.
+ *
+ * Tambien es donde termina una inscripcion reservada desde la app. Llega con la
+ * reserva en los parametros —nombre, celular, correo y plan ya puestos— y a
+ * recepcion solo le queda leer el documento. La mensualidad empieza HOY, el dia
+ * que la persona vino, aunque haya reservado para otro.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { formatPEN } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
@@ -45,6 +50,8 @@ function missingSummary(problems: Readonly<Record<string, string | undefined>>):
 /** Los campos del alta, para marcarlos de uno en uno. */
 type EnrollField = 'name' | 'documentId' | 'phone' | 'plan';
 
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 export default function EnrollScreen() {
   const theme = useTheme();
   const { plans, loading: loadingPlans } = useGymPlans();
@@ -52,15 +59,25 @@ export default function EnrollScreen() {
   // y a recepción un botón que la api le va a responder 403 no le sirve de nada.
   const isOwner = useRole() === 'owner';
 
-  const [correo, setCorreo] = useState('');
+  /** La reserva de la app que esta alta viene a cerrar, si viene de una. */
+  const reserva = useLocalSearchParams<{
+    bookingId?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+    planId?: string;
+  }>();
+  const bookingId = (reserva.bookingId ?? '').length > 0 ? reserva.bookingId! : null;
+
+  const [correo, setCorreo] = useState(reserva.email ?? '');
   // `null` = todavia no se ha comprobado el correo.
   const [alreadyExists, setAlreadyExists] = useState<boolean | null>(null);
   const [comprobando, setComprobando] = useState(false);
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState(reserva.name ?? '');
   const [documentId, setDocumentId] = useState('');
-  const [phone, setPhone] = useState('+51');
-  const [planId, setPlanId] = useState<string | null>(null);
+  const [phone, setPhone] = useState(reserva.phone ?? '+51');
+  const [planId, setPlanId] = useState<string | null>(reserva.planId ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cuando la persona ya está en el padrón, la api dice cuál es su ficha. Es el
@@ -68,8 +85,31 @@ export default function EnrollScreen() {
   // mostrador leyendo "ya existe" sin un camino.
   const [existingRecord, setExistingRecord] = useState<string | null>(null);
 
+  /**
+   * Con una reserva detrás, el correo no se teclea: se comprueba solo al abrir.
+   *
+   * Es el mismo paso que da recepción a mano —¿ya hay alguien con ese correo?—
+   * y la respuesta decide lo mismo: si hace falta el nombre y el celular o basta
+   * el documento. Hacerlo tocar «Continuar» sobre un correo que no escribió es
+   * un toque que no decide nada. Sin correo en la reserva, se pide todo.
+   */
+  useEffect(() => {
+    if (bookingId === null) return;
+    const email = (reserva.email ?? '').trim();
+    if (!EMAIL.test(email)) {
+      setAlreadyExists(false);
+      return;
+    }
+    setComprobando(true);
+    void existeIdentidad(email)
+      .then(setAlreadyExists)
+      .catch(() => setAlreadyExists(false))
+      .finally(() => setComprobando(false));
+    // Solo al abrir: la reserva no cambia mientras la pantalla está abierta.
+  }, [bookingId]);
+
   const plan = plans.find((p) => p.id === planId) ?? null;
-  const correoValido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim());
+  const correoValido = EMAIL.test(correo.trim());
 
   // Reutilizando identidad no hacen falta ni el nombre ni el celular: la api ya
   // los tiene, y pedirlos otra vez es teclear para confirmar lo que ya sabe.
@@ -134,6 +174,19 @@ export default function EnrollScreen() {
         </Pressable>
       </Row>
 
+      {/* Lo que cambia viniendo de una reserva, dicho antes de que se note: por
+          qué los datos ya están puestos, qué falta, y desde cuándo cuenta la
+          mensualidad — que es la duda de quien reservó para otro día. */}
+      {bookingId === null ? null : (
+        <Card tone="sunken" radius={theme.radii.lg} style={{ marginTop: 16 }}>
+          <Text variant="captionSmall" color={theme.colors.textSecondary}>
+            Viene de su reserva en la app: su nombre, su celular y el plan que eligió ya
+            están puestos. Falta su documento, del carné que tienes delante. Su mensualidad
+            empieza hoy.
+          </Text>
+        </Card>
+      )}
+
       <Stack gap={10} style={{ marginTop: 20 }}>
         <Eyebrow>Su correo</Eyebrow>
         <Card radius={theme.radii.xl}>
@@ -175,7 +228,11 @@ export default function EnrollScreen() {
                 <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ flex: 1 }}>
                   {alreadyExists
                     ? 'Ya hay una identidad Sinchi con ese correo. Confirma su documento y se le suma este gimnasio.'
-                    : 'No hay ninguna identidad con ese correo. Hacen falta su nombre y su celular.'}
+                    : correo.trim().length === 0
+                      ? // Viene de una reserva sin correo: decir «con ese correo» sobre
+                        // un campo vacío hace buscar un correo que nadie escribió.
+                        'Su reserva no trae correo. Hacen falta su nombre y su celular.'
+                      : 'No hay ninguna identidad con ese correo. Hacen falta su nombre y su celular.'}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -335,6 +392,7 @@ export default function EnrollScreen() {
               ...(alreadyExists ? {} : { name: name.trim(), phone: phone.trim() }),
               ...(correo.trim().length > 0 ? { email: correo.trim() } : {}),
               planId: plan.id,
+              ...(bookingId === null ? {} : { bookingId }),
             })
               .then((outcome) => {
                 // A la ficha recién creada: es donde se cobra la matrícula, que

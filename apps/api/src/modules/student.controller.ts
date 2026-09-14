@@ -30,6 +30,10 @@ const trialSchema = z.object({
   slug: z.string().min(2).max(80),
   classScheduleId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
+  /** Por defecto la prueba: es lo que mandaban las apps anteriores a la 0022. */
+  kind: z.enum(['trial', 'drop_in', 'enrollment']).default('trial'),
+  /** Con que plan entra. Solo lo lee una inscripcion. */
+  planId: z.string().uuid().optional(),
 });
 /** La hora nueva. El gimnasio no se repite: sale de la reserva que se mueve. */
 const rescheduleSchema = z.object({
@@ -260,6 +264,8 @@ export class StudentController {
     return this.trials.book({
       slug: body.slug,
       account: { kind: 'user', userId: session.sub },
+      kind: body.kind,
+      planId: body.planId,
       classScheduleId: body.classScheduleId,
       date: body.date,
     });

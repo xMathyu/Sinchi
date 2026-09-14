@@ -27,14 +27,28 @@ import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import {
   useErrorDeCarga,
-  useMyTrialClasses,
+  useMyBookings,
   useRefresco,
   useStore,
   useWallet,
 } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
 import type { MembershipView } from '../../src/data/store';
+import type { ClassBookingDto } from '../../src/data/api';
 import { formatShortDate, formatWeekdayAndDay, initials, splitGymName } from '../../src/lib/format';
+
+/**
+ * La etiqueta de una reserva, en lo que se lee de un vistazo: si se paga y a qué
+ * viene. Con `??` porque contra una api anterior a la 0022 todo era una prueba.
+ */
+const bookingBadge = (booking: ClassBookingDto): string =>
+  (booking.kind ?? 'trial') === 'enrollment'
+    ? 'INSCRIPCIÓN'
+    : booking.kind === 'drop_in'
+      ? 'CLASE SUELTA'
+      : (booking.priceCents ?? 0) === 0
+        ? 'CLASE GRATIS'
+        : 'CLASE DE PRUEBA';
 
 export default function WalletScreen() {
   const theme = useTheme();
@@ -43,9 +57,9 @@ export default function WalletScreen() {
   useRefresco();
   const { error: errorDeCarga, reintentar } = useErrorDeCarga();
   const active = wallet.filter((entry) => entry.subscription.status !== 'canceled').length;
-  // Las clases gratis reservadas viven aqui y no en el directorio: es un
+  // Las clases reservadas viven aqui y no solo en el directorio: son un
   // compromiso con una fecha, y esta es la pantalla que el alumno abre.
-  const trialClasses = useMyTrialClasses().details.filter((klass) => klass.status === 'booked');
+  const trialClasses = useMyBookings().details.filter((klass) => klass.status === 'booked');
 
   return (
     <Screen scroll>
@@ -82,7 +96,7 @@ export default function WalletScreen() {
           <EmptyState
             title="Tu billetera está vacía"
             body="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
-            pie="¿Todavía no entrenas en ninguno? Mira los de la red y prueba uno gratis."
+            pie="¿Todavía no entrenas en ninguno? Mira los de la red: prueba uno, ven a una clase o inscríbete."
             accion={
               <Button label="Explorar gimnasios" onPress={() => router.push('/explore')} />
             }
@@ -99,12 +113,12 @@ export default function WalletScreen() {
 
       {trialClasses.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
-          <Eyebrow>Vas a probar</Eyebrow>
+          <Eyebrow>Tus reservas</Eyebrow>
           {trialClasses.map((klass) => (
             <Pressable
               key={klass.id}
               accessibilityRole="button"
-              accessibilityLabel={`Clase gratis en ${klass.gymName}`}
+              accessibilityLabel={`${bookingBadge(klass).toLowerCase()} en ${klass.gymName}`}
               onPress={() =>
                 router.push({ pathname: '/explore/[slug]', params: { slug: klass.gymSlug } })
               }
@@ -154,8 +168,8 @@ export default function WalletScreen() {
                   ¿Entrenas en otro gimnasio?
                 </Text>
                 <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  Mira los horarios y los precios de las escuelas de la red, y prueba una
-                  clase de prueba en la que te interese.
+                  Mira los horarios y los precios de las escuelas de la red: reserva una
+                  clase, suelta o de prueba, o inscríbete desde aquí.
                 </Text>
               </Stack>
               <Text variant="title" color={theme.colors.textFaint}>

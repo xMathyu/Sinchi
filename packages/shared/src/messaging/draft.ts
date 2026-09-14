@@ -1,7 +1,7 @@
 /**
  * Quien puede escribirle al gimnasio, y por que no.
  *
- * Misma forma que `checkPlanDraft` y `validateTrialBooking`: devuelve el MOTIVO
+ * Misma forma que `checkPlanDraft` y `validateBooking`: devuelve el MOTIVO
  * o `null`, nunca un booleano. La pantalla apaga el boton de enviar por el mismo
  * motivo exacto por el que la api responderia 400, y la persona lee una sola
  * frase que le dice que hacer.
@@ -86,7 +86,7 @@ export function checkMessageDraft(draft: MessageDraft): MessageDenial | null {
  * El rechazo, dicho a quien lo lee.
  *
  * Vive con la regla y no en la pantalla por lo mismo que `accessMessage` y
- * `trialMessage`: el mismo hecho se cuenta en la app del alumno y en la del
+ * `bookingMessage`: el mismo hecho se cuenta en la app del alumno y en la del
  * mostrador, y contarlo distinto en cada una es como se llega a dos versiones de
  * la misma verdad.
  */
