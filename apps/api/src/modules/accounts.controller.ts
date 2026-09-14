@@ -15,6 +15,7 @@ import { CurrentSession, OwnerOnly, StaffOnly } from '../auth/auth.guard';
 import { AllowedWhenReadOnly } from './saas/saas.guard';
 import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
+import { phoneSchema } from '../common/phone';
 import { loadEnv } from '../config/env';
 import { MailService } from './mail/mail.service';
 import { AccountLinkService } from '../auth/account-link.service';
@@ -32,7 +33,7 @@ const inviteSchema = z.object({
   email: z.string().email().max(254).optional(),
   /** DNI peruano: 8 digitos. CE y pasaporte no caben aqui todavia. */
   documentId: z.string().regex(/^\d{8}$/),
-  phone: z.string().min(6).max(20),
+  phone: phoneSchema,
   planId: z.string().uuid(),
   /** Ficha existente. Sin esto se crea una nueva al aceptar. */
   membershipId: z.string().uuid().optional(),

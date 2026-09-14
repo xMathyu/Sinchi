@@ -319,6 +319,35 @@ suite('reservar la clase gratis', () => {
   });
 
   /**
+   * Un celular que no sirve no tumba la entrada (decisiones §16).
+   *
+   * Viaja con el inicio de sesión como dato suelto del registro, y un 400 ahí
+   * dejaba la app colgada en el splash. Se descarta sin guardarlo; lo que sí se
+   * rechaza, con la frase de la regla, es reservar con él.
+   */
+  it('un celular sin país no se guarda, pero deja entrar', async () => {
+    const token = declareIdentity(`prospecto-${runId}-sin-pais`);
+
+    const account = await http
+      .post('/v1/auth/google')
+      .send({ idToken: token, fullName: 'Sin País', phone: '987654321' })
+      .expect(201);
+    expect(account.body.linked).toBe(false);
+    expect(account.body.claim.phone).toBeNull();
+
+    const { body } = await http
+      .post('/v1/gyms/nova-bjj/trial')
+      .send({
+        idToken: token,
+        phone: '+51 98765432',
+        classScheduleId: nova.slots[0]!.scheduleId,
+        date: iso(nova.slots[0]!.date),
+      })
+      .expect(400);
+    expect(body.message).toMatch(/9 dígitos/);
+  });
+
+  /**
    * La pregunta que no hay que hacer dos veces.
    *
    * Registrarse ya pide nombre y celular; volver a pedirlos al reservar es lo

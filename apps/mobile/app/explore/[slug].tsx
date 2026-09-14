@@ -26,12 +26,14 @@ import {
   allWeekdays,
   bookingOffer,
   cents,
+  checkPhoneNumber,
   eventBookingDenialMessage,
   formatPEN,
   formatPENShort,
   formatPlainDate,
   isDropInPlan,
   isoWeekday,
+  phoneDenialMessage,
   weekdayInitial,
   weekdayName,
   type BookingKind,
@@ -49,6 +51,7 @@ import MessageCircle from 'lucide-react-native/icons/message-circle';
 import { Badge, Button, Card, Chip, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { MarcadorDeVideo, PortadaDeVideo } from '../../src/design/video';
 import { Screen } from '../../src/design/screen';
+import { PhoneField } from '../../src/design/phone-field';
 import { OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { GymLocationBlock } from '../../src/design/gym-location';
@@ -113,7 +116,7 @@ export default function GymScreen() {
   const [planId, setPlanId] = useState<string | null>(null);
   const [slot, setSlot] = useState<ClassSlot | null>(null);
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('+51');
+  const [phone, setPhone] = useState('');
   const [submitting, setBooking] = useState(false);
   const [outcome, setOutcome] = useState<BookClassDto | null>(null);
   /** Tocó el botón apagado: se dice qué falta en vez de ignorar el toque. */
@@ -301,14 +304,21 @@ export default function GymScreen() {
             : 'general';
 
   /** Qué le falta al botón, dicho en vez de apagarlo en silencio. */
+  const phoneDenial = checkPhoneNumber(phone);
   const missing =
     kind === 'enrollment' && plan === null
       ? 'Elige tu plan.'
       : slot === null
         ? 'Elige el día y la hora en el horario.'
-        : needsDetails && (name.trim().length < 2 || phone.trim().length < 7)
-          ? 'Faltan tu nombre y tu celular.'
-          : null;
+        : needsDetails && name.trim().length < 2
+          ? phoneDenial === null
+            ? 'Falta tu nombre.'
+            : 'Faltan tu nombre y tu celular.'
+          : needsDetails && phoneDenial !== null
+            ? phoneDenial === 'missing'
+              ? 'Falta tu celular.'
+              : phoneDenialMessage(phoneDenial)
+            : null;
 
   /**
    * Mueve la que ya tiene.
@@ -624,13 +634,12 @@ export default function GymScreen() {
                     onChange={setName}
                     placeholder="Nombre y apellido"
                   />
-                  <LabeledInput
+                  <PhoneField
                     label="Tu celular"
                     value={phone}
                     onChange={setPhone}
-                    placeholder="+51987654321"
-                    keyboardType="phone-pad"
-                    pie="Es con lo que el gimnasio te reconoce al llegar."
+                    look="line"
+                    hint="Es con lo que el gimnasio te reconoce al llegar."
                   />
                 </Stack>
               </Card>
@@ -1549,14 +1558,12 @@ function LabeledInput({
   value,
   onChange,
   placeholder,
-  keyboardType,
   pie,
 }: {
   readonly label: string;
   readonly value: string;
   readonly onChange: (text: string) => void;
   readonly placeholder?: string;
-  readonly keyboardType?: 'phone-pad';
   readonly pie?: string;
 }) {
   const theme = useTheme();
@@ -1570,8 +1577,7 @@ function LabeledInput({
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
-        keyboardType={keyboardType}
-        autoCapitalize={keyboardType === 'phone-pad' ? 'none' : 'words'}
+        autoCapitalize="words"
         style={{
           color: theme.colors.ink,
           fontSize: 16,

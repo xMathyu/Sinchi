@@ -948,3 +948,45 @@ error de tipeo se quedaba para siempre.
 Mi cuenta es la pantalla que se llamaba Ajustes: los datos arriba, y debajo lo que
 ya tenía. La cuenta sin ficha entra también, y encuentra ahí cerrar sesión; lo que
 no encuentra todavía es la baja, que sigue pidiendo una sesión de `/me`.
+
+---
+
+## 16. El celular se escribe eligiendo el país
+
+Lo pidió Mathyu: en el registro, y en cualquier sitio donde se escribe un celular,
+primero el código del país con su bandera y después el número.
+
+Resultó ser más que forma. El campo era texto libre que arrancaba con «+51», y la
+api solo contaba caracteres (`min(6)`); el código del país solo lo exigía Mi
+cuenta. Quien borraba el prefijo y escribía `987654321` quedaba guardado así, y
+para todo lo que usa el celular de llave —la clase gratis por persona, el índice
+único de `users.phone`, las solicitudes de vínculo que se buscan por celular— ese
+número y `+51987654321` eran dos personas.
+
+- **Se pide en dos partes y se guarda en una.** `PhoneField` enseña la bandera y
+  el código aparte del número, y hacia la pantalla devuelve un solo valor E.164
+  (`+51987654321`), o vacío. No hay migración: es lo que ya se guardaba. Un número
+  guardado se abre separándolo por su prefijo.
+- **Una regla, dos puntas:** `checkPhoneNumber`. La app apaga el botón con ella y
+  la api la corre en cada esquema que recibe un celular (`phoneSchema`), que
+  además lo entrega normalizado: el mostrador que teclea con espacios ya no deja
+  una fila que el índice único no reconoce como repetida.
+- **La única regla por país es la de Perú:** nueve dígitos, empezando por 9. Es
+  donde están los gimnasios, y un dígito de menos es el tipeo real: parece bueno y
+  no llama a nadie. Para el resto basta E.164. La longitud de cada numeración del
+  mundo es lo que hace pesar a libphonenumber cientos de KB, y no se trajo.
+- **Los códigos compartidos se separan por código de área.** +1 es Estados
+  Unidos, Canadá y medio Caribe; sin eso, el celular de alguien de República
+  Dominicana se abría con la bandera de Estados Unidos. Canadá no se distingue
+  —tiene decenas de códigos—: si la persona lo eligió, se respeta.
+- **`/auth/google` no rechaza un celular malo: lo descarta.** Viaja con el inicio
+  de sesión como dato suelto, y un 400 ahí ya dejó una vez la app colgada en el
+  splash. La persona entra, y la primera reserva se lo pide porque falta.
+- **El 400 dice el motivo.** El pipe de Zod respondía siempre «Datos invalidos.»,
+  y la app solo enseña `message`; ahora sube la frase de una regla propia
+  (`custom`). Los mensajes por defecto de Zod siguen sin subir: están en inglés y
+  hablan de tipos, no de la persona.
+
+Lo que había en Neon al hacerlo: ningún celular sin código de país, y una cuenta
+sin ficha con un número peruano de siete dígitos, creada ese mismo día. Se deja
+como está: la app lo vuelve a pedir antes de reservar.

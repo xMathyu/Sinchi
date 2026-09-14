@@ -15,6 +15,7 @@
  * del alumno que acaba de instalar la app, y lo resuelve la recepcionista.
  */
 import * as SecureStore from 'expo-secure-store';
+import { isValidPhoneNumber, normalizePhoneNumber } from '@sinchi/shared';
 import {
   claimInvite,
   linkDevice,
@@ -172,15 +173,21 @@ async function exchangeForSinchiSession(
    * `/auth/google` respondiera 400 por «datos invalidos» — en el arranque, donde
    * ese fallo dejaba la app colgada en el splash. Un dato a medias no vale menos:
    * vale CERO, y hay que tratarlo como ausente.
+   *
+   * El celular se mide con la regla y no por su largo: un número de nueve
+   * caracteres sin país pasaba la guarda vieja, y es justo lo que la api ya no
+   * guarda (decisiones §16).
    */
   const util = (value: string | null | undefined, minimo: number): string | undefined => {
     const trimmed = (value ?? '').trim();
     return trimmed.length >= minimo ? trimmed : undefined;
   };
+  const validPhone = (value: string | null | undefined): string | undefined =>
+    value != null && isValidPhoneNumber(value) ? normalizePhoneNumber(value) : undefined;
 
   const withDetails: SignUpDetails = {
     fullName: util(details.fullName, 2) ?? util(guardado.fullName, 2),
-    phone: util(details.phone, 6) ?? util(guardado.phone, 6),
+    phone: validPhone(details.phone) ?? validPhone(guardado.phone),
   };
 
   const result = await signInWithGoogle(firebaseIdToken, withDetails);

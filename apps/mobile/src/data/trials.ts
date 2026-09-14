@@ -20,7 +20,12 @@
  * Las rutas se siguen llamando `trials` aunque reserven cualquier clase: las
  * llaman apps ya instaladas (migración 0021).
  */
-import { formatPlainDate, type BookingKind, type ClassSlot } from '@sinchi/shared';
+import {
+  formatPlainDate,
+  isValidPhoneNumber,
+  type BookingKind,
+  type ClassSlot,
+} from '@sinchi/shared';
 import {
   bookEvent,
   bookEventAsGuest,
@@ -73,7 +78,9 @@ export function askForDetails(): boolean {
   return (
     details === null ||
     (details.fullName ?? '').trim().length < 2 ||
-    (details.phone ?? '').trim().length < 6
+    // Con la regla y no por el largo: un celular sin país que quedó guardado de
+    // antes se vuelve a pedir, en vez de mandarse y rebotar en la api.
+    !isValidPhoneNumber(details.phone ?? '')
   );
 }
 

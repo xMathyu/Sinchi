@@ -10,7 +10,7 @@
  * suscripción. Así el enrutado por rol no depende de que un contexto esté montado.
  */
 import * as SecureStore from 'expo-secure-store';
-import type { AppRole } from '@sinchi/shared';
+import { isValidPhoneNumber, normalizePhoneNumber, type AppRole } from '@sinchi/shared';
 
 const TOKEN_KEY = 'sinchi.session.token.v1';
 const META_KEY = 'sinchi.session.meta.v1';
@@ -303,9 +303,10 @@ export async function saveAccountDetails(details: AccountDetails): Promise<void>
   /**
    * Un valor demasiado corto para servir no puede pisar a uno bueno.
    *
-   * El celular arranca con «+51» en los formularios, y sin esta guarda un envío
+   * El celular arrancaba con «+51» en los formularios, y sin esta guarda un envío
    * a medias dejaba eso guardado encima del número de verdad — y la siguiente
-   * reserva volvía a preguntar.
+   * reserva volvía a preguntar. El celular se mide con su regla y no por el
+   * largo: uno sin país también tiene seis caracteres (decisiones §16).
    */
   const util = (value: string | null, minimo: number): string | null => {
     const trimmed = (value ?? '').trim();
@@ -315,7 +316,10 @@ export async function saveAccountDetails(details: AccountDetails): Promise<void>
   const previo = await loadAccountDetails();
   const merged: AccountDetails = {
     fullName: util(details.fullName, 2) ?? previo.fullName,
-    phone: util(details.phone, 6) ?? previo.phone,
+    phone:
+      details.phone !== null && isValidPhoneNumber(details.phone)
+        ? normalizePhoneNumber(details.phone)
+        : previo.phone,
   };
 
   if (merged.fullName === null && merged.phone === null) return;

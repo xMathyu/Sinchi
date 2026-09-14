@@ -63,4 +63,5 @@ export * from './saas/promo.js';
 
 // Identidad tributaria
 export * from './identity/ruc.js';
+export * from './identity/phone.js';
 export * from './identity/account-details.js';

@@ -789,6 +789,20 @@ suite('validación de entrada', () => {
 
     expect(JSON.stringify(body)).toMatch(/membershipId/);
   });
+
+  it('un celular sin país no entra al padrón, y dice por qué (decisiones §16)', async () => {
+    const { body: plans } = await http.get('/v1/staff/plans').set(auth(token.frontDesk)).expect(200);
+
+    const { body } = await http
+      .post('/v1/staff/members')
+      .set(auth(token.frontDesk))
+      .send({ name: 'Sin País', documentId: '70000123', phone: '987654321', planId: plans[0].id })
+      .expect(400);
+
+    // En `message` y no solo en `issues`: la app enseña `message`, y «Datos
+    // invalidos.» no le dice al mostrador qué corregir.
+    expect(body.message).toMatch(/código del país/);
+  });
 });
 
 /**
@@ -807,10 +821,17 @@ suite('mi cuenta', () => {
   beforeAll(async () => {
     const { body: plans } = await http.get('/v1/staff/plans').set(auth(token.frontDesk)).expect(200);
     const plan = (plans as { id: string; type: string }[]).find((p) => p.type !== 'drop_in');
+    // Con espacios, como lo teclea el mostrador. Entrar con el número sin ellos
+    // solo funciona si el alta lo guardó normalizado (decisiones §16).
     await http
       .post('/v1/staff/members')
       .set(auth(token.frontDesk))
-      .send({ documentId: PERSON.dni, name: PERSON.name, phone: PERSON.phone, planId: plan!.id })
+      .send({
+        documentId: PERSON.dni,
+        name: PERSON.name,
+        phone: `+51 97${run.slice(0, 3)} ${run.slice(3)}`,
+        planId: plan!.id,
+      })
       .expect(201);
     session = await login(PERSON.phone);
   });

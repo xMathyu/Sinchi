@@ -29,8 +29,10 @@ import { useRouter } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
+import { checkPhoneNumber, phoneDenialMessage } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../src/design/screen';
+import { PhoneField } from '../src/design/phone-field';
 import {
   Button,
   Card,
@@ -60,7 +62,7 @@ export default function LoginScreen() {
   // nombre y el celular con los que se reserva una clase gratis, y por eso esa
   // pantalla ya no vuelve a preguntarlos.
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('+51');
+  const [phone, setPhone] = useState('');
   // "Entrar" o "crear cuenta": son dos vistas y no dos rutas. Los campos y los
   // handlers son los mismos, y separarlas en rutas obligaría a subir todo este
   // estado a un contexto para que sobreviviera al salto.
@@ -98,7 +100,7 @@ export default function LoginScreen() {
     }
 
     let cancelled = false;
-    void completeGoogleSignIn(idToken, { phone: phone.trim() }).then((outcome) => {
+    void completeGoogleSignIn(idToken, { phone }).then((outcome) => {
       if (cancelled) return;
       setWorking(false);
 
@@ -124,7 +126,7 @@ export default function LoginScreen() {
       email,
       password,
       creating ? 'signUp' : 'signIn',
-      creating ? { fullName: name.trim(), phone: phone.trim() } : {},
+      creating ? { fullName: name.trim(), phone } : {},
     ).then((outcome) => {
       setWorking(false);
       if (outcome.kind === 'error') {
@@ -140,7 +142,8 @@ export default function LoginScreen() {
   const emailReady = firebaseConfigured();
   // Seis es el minimo que exige Firebase; comprobarlo aqui evita un viaje de red
   // para que el servidor conteste lo mismo.
-  const completeDetails = name.trim().length >= 2 && phone.trim().length >= 8;
+  const phoneDenial = checkPhoneNumber(phone);
+  const completeDetails = name.trim().length >= 2 && phoneDenial === null;
   const canSubmit =
     email.trim().length > 3 && password.length >= 6 && (!creating || completeDetails) && !working;
 
@@ -163,8 +166,8 @@ export default function LoginScreen() {
       : password.length < 6
         ? { password: 'La contraseña va de 6 caracteres para arriba.' }
         : {}),
-    ...(creating && phone.trim().length < 8
-      ? { phone: 'Falta tu celular, con el código del país: +51987654321.' }
+    ...(creating && phoneDenial !== null
+      ? { phone: phoneDenial === 'missing' ? 'Falta tu celular.' : phoneDenialMessage(phoneDenial) }
       : {}),
   };
 
@@ -281,13 +284,10 @@ export default function LoginScreen() {
                   editable={!working}
                   error={denial('password')}
                 />
-                <Field
+                <PhoneField
                   label="Tu celular"
                   value={phone}
-                  onChangeText={setPhone}
-                  placeholder="+51987654321"
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
+                  onChange={setPhone}
                   editable={!working}
                   hint="Es con lo que el gimnasio te reconoce cuando llegas a probar."
                   error={denial('phone')}

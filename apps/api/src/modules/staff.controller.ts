@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { CurrentSession, OwnerOnly, StaffOnly } from '../auth/auth.guard';
 import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
+import { phoneSchema } from '../common/phone';
 import { MembershipViewService } from './memberships/membership-view.service';
 import { CheckInService } from './checkin/checkin.service';
 import { BillingService } from './billing/billing.service';
@@ -60,7 +61,7 @@ const paymentSchema = z.object({
 const enrollSchema = z.object({
   name: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
-  phone: z.string().min(6).max(20).optional(),
+  phone: phoneSchema.optional(),
   email: z.string().email().optional(),
   planId: z.string().uuid(),
   startDate: z

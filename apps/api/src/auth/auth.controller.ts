@@ -28,6 +28,7 @@ import {
 import { CurrentSession, Public } from './auth.guard';
 import type { Session } from './session';
 import { parseWith } from '../common/zod.pipe';
+import { signUpPhoneSchema } from '../common/phone';
 
 const googleSchema = z.object({
   /** ID token que devuelve Firebase en el cliente. */
@@ -41,7 +42,7 @@ const googleSchema = z.object({
    * tiene cuenta no los manda.
    */
   fullName: z.string().min(2).max(120).optional(),
-  phone: z.string().min(6).max(20).optional(),
+  phone: signUpPhoneSchema,
 });
 
 const devLoginSchema = z.object({

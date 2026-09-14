@@ -41,15 +41,19 @@ import {
   SAAS_GRACE_DAYS,
   SAAS_TIER_LABELS,
   SAAS_TIER_PRICES,
+  checkPhoneNumber,
   checkRuc,
   formatPEN,
   isFreeTier,
+  isValidPhoneNumber,
+  phoneDenialMessage,
   rucDenialMessage,
   type SaasTier,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
+import { PhoneField } from '../src/design/phone-field';
 import { useTheme } from '../src/design/theme';
 import { registerGym } from '../src/data/actions';
 import {
@@ -84,7 +88,7 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 type Step = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type SignUpField = 'name' | 'taxId' | 'documentId' | 'address';
+type SignUpField = 'name' | 'taxId' | 'documentId' | 'address' | 'phone';
 
 /**
  * Lo que se dice al tocar el boton apagado.
@@ -111,7 +115,7 @@ export default function GymSignUpScreen() {
   const [ruc, setRuc] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [documentId, setDocumentId] = useState('');
-  const [phone, setPhone] = useState('+51');
+  const [phone, setPhone] = useState('');
   const [escalon, setEscalon] = useState<SaasTier>('free');
   const [code, setCode] = useState('');
   const [address, setAddress] = useState('');
@@ -342,7 +346,7 @@ export default function GymSignUpScreen() {
     // sacar de la propia cuenta.
     void completeGoogleSignIn(idToken, {
       ...(ownerName.trim().length >= 2 ? { fullName: ownerName.trim() } : {}),
-      ...(phone.trim().length >= 8 ? { phone: phone.trim() } : {}),
+      ...(isValidPhoneNumber(phone) ? { phone } : {}),
     }).then((outcome) => {
       if (cancelled) return;
       setSaving(false);
@@ -382,7 +386,7 @@ export default function GymSignUpScreen() {
     const details = currentAccountDetails();
     if (details === null) return;
     setOwnerName((previo) => (previo.trim().length > 0 ? previo : (details.fullName ?? '')));
-    setPhone((previo) => (previo.trim().length > 3 ? previo : (details.phone ?? '+51')));
+    setPhone((previo) => (previo.length > 0 ? previo : (details.phone ?? '')));
   }, [step]);
 
   /**
@@ -455,6 +459,16 @@ export default function GymSignUpScreen() {
         ? 'Un poco más: calle, número y distrito.'
         : null,
   );
+  /**
+   * El celular de este paso puede quedar vacío —si lo dio al crear la cuenta, la
+   * api lo toma de ahí—, pero el que se escribe se comprueba, igual que el RUC:
+   * uno a medias haría rebotar el alta entera en la api.
+   */
+  const phoneDenial = checkPhoneNumber(phone);
+  complain(
+    'phone',
+    phoneDenial === null || phoneDenial === 'missing' ? null : phoneDenialMessage(phoneDenial),
+  );
   const ready = Object.keys(problems).length === 0;
 
   /**
@@ -504,9 +518,11 @@ export default function GymSignUpScreen() {
   );
   complainAccount(
     'phone',
-    phone.trim().length < 8
-      ? 'Falta tu celular, con el código del país: +51987654321.'
-      : null,
+    phoneDenial === null
+      ? null
+      : phoneDenial === 'missing'
+        ? 'Falta tu celular.'
+        : phoneDenialMessage(phoneDenial),
   );
   const accountReady = Object.keys(accountProblems).length === 0;
   const accountDenialFor = (field: AccountField): string | undefined =>
@@ -528,7 +544,7 @@ export default function GymSignUpScreen() {
     setSaving(true);
     void completeEmailSignIn(correo, password, 'signUp', {
       fullName: ownerName.trim(),
-      phone: phone.trim(),
+      phone,
     }).then((outcome) => {
       setSaving(false);
       if (outcome.kind === 'error') {
@@ -556,7 +572,7 @@ export default function GymSignUpScreen() {
         ...(pin === null ? {} : { latitude: pin.lat, longitude: pin.lng }),
         ownerName: ownerName.trim().length >= 2 ? ownerName.trim() : undefined,
         documentId: documentId.trim(),
-        phone: phone.trim().length >= 6 ? phone.trim() : undefined,
+        phone: phone.length > 0 ? phone : undefined,
         promoCode: code.trim().length > 0 ? code.trim() : undefined,
       });
 
@@ -782,13 +798,10 @@ export default function GymSignUpScreen() {
                   editable={!saving}
                   error={accountDenialFor('password')}
                 />
-                <Field
+                <PhoneField
                   label="Tu celular"
                   value={phone}
-                  onChangeText={setPhone}
-                  placeholder="+51987654321"
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
+                  onChange={setPhone}
                   editable={!saving}
                   hint="Es con lo que te ubicamos si algo pasa con tu cuenta."
                   error={accountDenialFor('phone')}
@@ -1093,13 +1106,12 @@ export default function GymSignUpScreen() {
             editable={!saving}
             error={denial('documentId')}
           />
-          <Field
+          <PhoneField
             label="Tu celular"
             value={phone}
-            onChangeText={setPhone}
-            placeholder="+51987654321"
-            keyboardType="phone-pad"
+            onChange={setPhone}
             editable={!saving}
+            error={denial('phone')}
           />
         </Stack>
 

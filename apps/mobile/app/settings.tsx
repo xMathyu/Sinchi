@@ -37,6 +37,7 @@ import {
   Text,
 } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
+import { PhoneField } from '../src/design/phone-field';
 import { useTheme, useThemeContext } from '../src/design/theme';
 import { useStore } from '../src/data/hooks';
 import { switchGym, switchMode, signOut } from '../src/data/auth';
@@ -609,19 +610,15 @@ function AccountDetails() {
             autoComplete="name"
             error={attempted && denial?.startsWith('name') === true ? message : undefined}
           />
-          <Field
+          <PhoneField
             label="Tu celular"
             value={phone}
-            onChangeText={(text) => {
-              setPhone(text);
+            onChange={(next) => {
+              setPhone(next);
               setNotice(null);
             }}
-            placeholder="+51987654321"
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-            autoComplete="tel"
             hint="Es con lo que los gimnasios te reconocen."
-            error={attempted && denial === 'phone_invalid' ? message : undefined}
+            error={attempted && denial !== null && !denial.startsWith('name') ? message : undefined}
           />
           {saved.documentId === null ? null : (
             <Row>

@@ -52,6 +52,7 @@ import {
   checkRuc,
   formatPlainDate,
   freeUntilFrom,
+  isValidPhoneNumber,
   normalizeRuc,
   plainDateInZone,
   rucDenialMessage,
@@ -390,7 +391,7 @@ export class OnboardingService {
         return { userId: byDocument.id, fullName: byDocument.name };
       }
 
-      if (fullName.length < 2 || phone.length < 6) {
+      if (fullName.length < 2 || !isValidPhoneNumber(phone)) {
         throw new BadRequestException('Faltan tu nombre y tu celular.');
       }
 

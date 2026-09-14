@@ -25,10 +25,11 @@
 import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatPEN } from '@sinchi/shared';
+import { checkPhoneNumber, formatPEN, phoneDenialMessage } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
+import { PhoneField } from '../src/design/phone-field';
 import { useTheme } from '../src/design/theme';
 import { useGymPlans } from '../src/data/hooks';
 import { useRole } from '../src/data/session-hooks';
@@ -83,7 +84,7 @@ export default function EnrollScreen() {
 
   const [name, setName] = useState(reserva.name ?? '');
   const [documentId, setDocumentId] = useState(reserva.documentId ?? '');
-  const [phone, setPhone] = useState(reserva.phone ?? '+51');
+  const [phone, setPhone] = useState(reserva.phone ?? '');
   const [planId, setPlanId] = useState<string | null>(reserva.planId ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,10 +121,11 @@ export default function EnrollScreen() {
 
   // Reutilizando identidad no hacen falta ni el nombre ni el celular: la api ya
   // los tiene, y pedirlos otra vez es teclear para confirmar lo que ya sabe.
+  const phoneDenial = checkPhoneNumber(phone);
   const ready =
     plan !== null &&
     documentId.trim().length >= 6 &&
-    (alreadyExists === true || (name.trim().length >= 2 && phone.trim().length >= 7));
+    (alreadyExists === true || (name.trim().length >= 2 && phoneDenial === null));
 
   /**
    * Que le falta a cada campo.
@@ -142,9 +144,14 @@ export default function EnrollScreen() {
       ? {}
       : {
           ...(name.trim().length < 2 ? { name: 'Falta su nombre completo.' } : {}),
-          ...(phone.trim().length < 7
-            ? { phone: 'Falta su celular: es su llave única en toda la red.' }
-            : {}),
+          ...(phoneDenial === null
+            ? {}
+            : {
+                phone:
+                  phoneDenial === 'missing'
+                    ? 'Falta su celular: es su llave única en toda la red.'
+                    : phoneDenialMessage(phoneDenial),
+              }),
         }),
     /**
      * Sin NINGUNA tarifa el motivo es otro, y decir «elige» seria mandar a
@@ -285,13 +292,12 @@ export default function EnrollScreen() {
                 error={denial('documentId')}
               />
               {alreadyExists ? null : (
-                <LabeledInput
+                <PhoneField
                   label="Celular"
                   value={phone}
                   onChange={setPhone}
-                  placeholder="+51 987 654 321"
-                  keyboardType="phone-pad"
-                  pie="Es su llave única en toda la red: con este número entra a su app."
+                  look="line"
+                  hint="Es su llave única en toda la red: con este número entra a su app."
                   error={denial('phone')}
                 />
               )}
@@ -396,7 +402,7 @@ export default function EnrollScreen() {
 
             void enrollStudent({
               documentId: documentId.trim(),
-              ...(alreadyExists ? {} : { name: name.trim(), phone: phone.trim() }),
+              ...(alreadyExists ? {} : { name: name.trim(), phone }),
               ...(correo.trim().length > 0 ? { email: correo.trim() } : {}),
               planId: plan.id,
               ...(bookingId === null ? {} : { bookingId }),

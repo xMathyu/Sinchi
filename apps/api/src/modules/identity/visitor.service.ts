@@ -12,6 +12,7 @@
  */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
+import { isValidPhoneNumber } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withoutTenantIsolation, type Database } from '../../db/client';
 import { AccountLinkService } from '../../auth/account-link.service';
@@ -129,7 +130,7 @@ export class VisitorService {
     ).trim();
     const phone = normalizePhone(overrides.phone ?? registro?.phone ?? '');
 
-    if (fullName.length < 2 || phone.length < 6) {
+    if (fullName.length < 2 || !isValidPhoneNumber(phone)) {
       // Nombre y celular no son burocracia: son lo unico con lo que el gimnasio
       // puede reconocer y llamar a quien dijo que vendria.
       throw new BadRequestException('Faltan tu nombre y tu celular para avisarle al gimnasio.');

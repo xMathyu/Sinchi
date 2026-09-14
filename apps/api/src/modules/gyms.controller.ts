@@ -14,6 +14,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/commo
 import { z } from 'zod';
 import { Public } from '../auth/auth.guard';
 import { parseWith } from '../common/zod.pipe';
+import { phoneSchema } from '../common/phone';
 import { FirebaseVerifier } from '../auth/firebase';
 import { TrialsService, type TrialAccount } from './trials/trials.service';
 import { OnboardingService } from './onboarding/onboarding.service';
@@ -28,7 +29,7 @@ const idTokenSchema = z.object({ idToken: z.string().min(100) });
 /** Nombre y celular solo hacen falta si la persona no tiene ficha en ningun padron. */
 const bookEventSchema = idTokenSchema.extend({
   fullName: z.string().min(2).max(120).optional(),
-  phone: z.string().min(6).max(20).optional(),
+  phone: phoneSchema.optional(),
 });
 
 /**
@@ -55,7 +56,7 @@ const signUpSchema = idTokenSchema.extend({
   longitude: z.number().min(-180).max(180).optional(),
   ownerName: z.string().min(2).max(120).optional(),
   documentId: z.string().min(6).max(20),
-  phone: z.string().min(6).max(20).optional(),
+  phone: phoneSchema.optional(),
   promoCode: z.string().max(40).optional(),
 });
 
@@ -70,7 +71,7 @@ const guestMessageSchema = idTokenSchema.extend({
   body: z.string().max(4000),
   topic: z.enum(['general', 'trial', 'drop_in', 'membership', 'event']).optional(),
   fullName: z.string().min(2).max(120).optional(),
-  phone: z.string().min(6).max(20).optional(),
+  phone: phoneSchema.optional(),
 });
 
 /** La hora nueva. El gimnasio no se repite: sale de la reserva que se mueve. */
@@ -86,7 +87,7 @@ const bookSchema = idTokenSchema.extend({
    * persona en la lista del gimnasio.
    */
   fullName: z.string().min(2).max(120).optional(),
-  phone: z.string().min(6).max(20).optional(),
+  phone: phoneSchema.optional(),
   classScheduleId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va en formato YYYY-MM-DD.'),
   /**

@@ -40,6 +40,7 @@ import {
   validateReschedule,
   weekdayName,
   isoWeekday,
+  isValidPhoneNumber,
   type BookingDenialReason,
   type BookingKind,
   type ClassBooking,
@@ -678,7 +679,7 @@ export class TrialsService {
     ).trim();
     const phone = normalizePhone(input.phone ?? registro?.phone ?? '');
 
-    if (fullName.length < 2 || phone.length < 6) {
+    if (fullName.length < 2 || !isValidPhoneNumber(phone)) {
       // Nombre y celular no son burocracia: son lo unico con lo que el gimnasio
       // puede reconocer y llamar a quien dijo que vendria.
       throw new BadRequestException('Faltan tu nombre y tu celular para avisarle al gimnasio.');

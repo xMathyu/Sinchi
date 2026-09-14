@@ -20,12 +20,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import {
   checkMessageDraft,
   conversationOpener,
+  isValidPhoneNumber,
   unansweredStreak,
   type ConversationTopic,
   type Message,
 } from '@sinchi/shared';
 import { Button, Card, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
+import { PhoneField } from '../../src/design/phone-field';
 import { OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
@@ -63,7 +65,7 @@ export default function ChatScreen() {
   const credential = bookingCredential();
   const [draft, setDraft] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('+51');
+  const [phone, setPhone] = useState('');
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [sent, setSent] = useState<readonly Message[]>([]);
@@ -95,7 +97,7 @@ export default function ChatScreen() {
    * con quién habla — y a quien ya los dio no se le vuelven a pedir.
    */
   const needsDetails = details !== null && details.conversation === null && askForDetails();
-  const missingDetails = needsDetails && (name.trim().length < 2 || phone.trim().length < 7);
+  const missingDetails = needsDetails && (name.trim().length < 2 || !isValidPhoneNumber(phone));
 
   const denial =
     details === null
@@ -200,13 +202,7 @@ export default function ChatScreen() {
                   onChange={setName}
                   placeholder="Nombre y apellido"
                 />
-                <DetailInput
-                  label="Tu celular"
-                  value={phone}
-                  onChange={setPhone}
-                  placeholder="+51987654321"
-                  phonePad
-                />
+                <PhoneField label="Tu celular" value={phone} onChange={setPhone} look="line" />
               </Stack>
             </Card>
           ) : null}
@@ -232,13 +228,11 @@ function DetailInput({
   value,
   onChange,
   placeholder,
-  phonePad = false,
 }: {
   readonly label: string;
   readonly value: string;
   readonly onChange: (text: string) => void;
   readonly placeholder: string;
-  readonly phonePad?: boolean;
 }) {
   const theme = useTheme();
   return (
@@ -251,8 +245,7 @@ function DetailInput({
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
-        autoCapitalize={phonePad ? 'none' : 'words'}
-        {...(phonePad ? { keyboardType: 'phone-pad' as const } : {})}
+        autoCapitalize="words"
         style={{
           color: theme.colors.ink,
           fontSize: 16,

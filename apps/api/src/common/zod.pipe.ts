@@ -16,7 +16,13 @@ export class ZodPipe<T> implements PipeTransform<unknown, T> {
     if (result.success) return result.data;
 
     throw new BadRequestException({
-      message: 'Datos invalidos.',
+      // Una regla nuestra (`custom`) trae su frase en español, y la app solo
+      // enseña `message`: sin esto, «Un celular de Perú tiene 9 dígitos» llegaba
+      // a la pantalla como «Datos invalidos.». Los mensajes por defecto de Zod
+      // no suben: están en inglés y hablan de tipos, no de la persona.
+      message:
+        result.error.issues.find((issue) => issue.code === 'custom')?.message ??
+        'Datos invalidos.',
       issues: result.error.issues.map((issue) => ({
         path: issue.path.join('.'),
         message: issue.message,
