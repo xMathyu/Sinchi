@@ -13,11 +13,11 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { encodeAccountQrPayload } from '@sinchi/shared';
 import { Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { LinkRequestList } from '../../src/design/link-requests';
+import { SinchiQrCode } from '../../src/design/sinchi-qr';
 import { useTheme } from '../../src/design/theme';
 import { useLinkRequests, usePolling } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
@@ -104,12 +104,7 @@ export default function AccountQrScreen() {
             opacity: expired ? 0.2 : 1,
           }}
         >
-          <QRCode
-            value={encodeAccountQrPayload(session.qrToken)}
-            size={side}
-            backgroundColor="#FFFFFF"
-            color={theme.colors.inkOnLight}
-          />
+          <SinchiQrCode value={encodeAccountQrPayload(session.qrToken)} size={side} />
         </View>
         {session.fullName === null ? null : (
           <Text variant="heading" weight="semibold">

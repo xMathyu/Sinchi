@@ -8,12 +8,11 @@
  */
 import { useMemo, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX } from '@sinchi/ui';
+import Svg, { Circle } from 'react-native-svg';
 import { semaphoreStyle } from '@sinchi/ui';
 import { Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
+import { SinchiQrCode } from '../../src/design/sinchi-qr';
 import { Screen, TintedScreen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
@@ -177,39 +176,7 @@ export default function QrScreen() {
           gap: 12,
         }}
       >
-        <View style={{ width: qr, height: qr, alignItems: 'center', justifyContent: 'center' }}>
-          {code.ready ? (
-            <QRCode
-              value={code.payload}
-              size={qr}
-              backgroundColor="#FFFFFF"
-              color={theme.colors.inkOnLight}
-              // Nivel Q: la etiqueta central tapa parte de la matriz y aun asi
-              // tiene que leerse a la primera con la camara de un celular viejo.
-              ecl="Q"
-            />
-          ) : (
-            <Text variant="caption" color="#7A7A83">
-              Preparando tu código…
-            </Text>
-          )}
-          <View
-            style={{
-              position: 'absolute',
-              width: 52,
-              height: 52,
-              borderRadius: theme.radii.md,
-              backgroundColor: '#FFFFFF',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Svg width={30} height={30} viewBox={LOGO_VIEWBOX}>
-              <Path d={LOGO_OUTLINE_PATH} fill={theme.colors.inkOnLight} />
-              <Path d={LOGO_BAR_PATH} stroke="#FFFFFF" strokeWidth={LOGO_BAR_WIDTH} />
-            </Svg>
-          </View>
-        </View>
+        <SinchiQrCode value={code.ready ? code.payload : null} size={qr} />
 
         <Row gap={12} justify="center">
           <CountdownRing
