@@ -18,6 +18,7 @@ import { SinchiQrCode } from '../../src/design/sinchi-qr';
 import { Screen, TintedScreen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
+import { AccountAvatar, TabHeader } from '../../src/design/account-avatar';
 import {
   useAccessCode,
   useCheckInPreview,
@@ -127,9 +128,12 @@ export default function QrScreen() {
             ▾
           </Text>
         </Pressable>
-        <Text variant="eyebrow" weight="bold" color={ink} style={{ opacity: 0.5 }}>
-          Mi QR
-        </Text>
+        <Row gap={12} justify="flex-end">
+          <Text variant="eyebrow" weight="bold" color={ink} style={{ opacity: 0.5 }}>
+            Mi QR
+          </Text>
+          <AccountAvatar size={34} />
+        </Row>
       </Row>
 
       {pickerOpen ? (
@@ -398,14 +402,7 @@ function RegisterPanel({
 
   return (
     <Screen scroll>
-      <Stack gap={3} style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Mi QR
-        </Text>
-        <Text variant="captionSmall" color={theme.colors.textSecondary}>
-          {intro}
-        </Text>
-      </Stack>
+      <TabHeader title="Mi QR" subtitle={intro} />
 
       {requests.details.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 20 }}>

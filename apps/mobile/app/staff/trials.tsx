@@ -47,6 +47,7 @@ import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import {
   useGymBookings,
   useTrialClassEnabled,
@@ -74,14 +75,10 @@ export default function BookingsScreen() {
 
   return (
     <Screen scroll>
-      <Stack gap={3} style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Reservas
-        </Text>
-        <Text variant="captionSmall" color={theme.colors.textSecondary}>
-          Quién viene desde la app: a probar, a una clase suelta o a inscribirse.
-        </Text>
-      </Stack>
+      <TabHeader
+        title="Reservas"
+        subtitle="Quién viene desde la app: a probar, a una clase suelta o a inscribirse."
+      />
 
       <Interruptor />
 

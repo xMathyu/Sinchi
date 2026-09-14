@@ -12,11 +12,12 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { router } from 'expo-router';
 import { conversationTopicLabel, type ConversationStatus } from '@sinchi/shared';
-import { Card, Divider, SegmentedControl, Stack, Text } from '../../src/design/primitives';
+import { Card, Divider, SegmentedControl } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { EmptyState, OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import { ConversationRow } from '../../src/design/chat';
 import { refreshUnreadBadge, useInbox, usePolling } from '../../src/data/hooks';
 
@@ -32,14 +33,10 @@ export default function StaffMessagesScreen() {
 
   return (
     <Screen scroll>
-      <Stack gap={3} style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Mensajes
-        </Text>
-        <Text variant="captionSmall" color={theme.colors.textSecondary}>
-          Lo que te preguntan tus alumnos y quien te encuentra en la app.
-        </Text>
-      </Stack>
+      <TabHeader
+        title="Mensajes"
+        subtitle="Lo que te preguntan tus alumnos y quien te encuentra en la app."
+      />
 
       <View style={{ marginTop: 18 }}>
         <SegmentedControl<ConversationStatus>

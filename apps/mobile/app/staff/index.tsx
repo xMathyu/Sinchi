@@ -31,10 +31,11 @@ import UserRoundCheck from 'lucide-react-native/icons/user-round-check';
 import type { LucideIcon } from 'lucide-react-native';
 import { TZ_LIMA, isSameDay, plainDateInZone } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Avatar, Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { EmptyState } from '../../src/design/empty';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
+import { AccountAvatar } from '../../src/design/account-avatar';
 import {
   useGymBookings,
   useRecentCheckIns,
@@ -44,7 +45,7 @@ import {
   useToday,
 } from '../../src/data/hooks';
 import { setOnline } from '../../src/data/store';
-import { formatClock, initials } from '../../src/lib/format';
+import { formatClock } from '../../src/lib/format';
 
 /** Cuántos marcados se guardan en la lista. Sobra para llenar cualquier pantalla
     y el resto se desplaza: recortar a un número fijo clipaba en las chicas. */
@@ -139,13 +140,7 @@ export default function DoorScreen() {
           </Pressable>
           {/* La unica salida del modo staff: sin esto no habia forma de cerrar
               sesion desde la puerta, que es donde se pasa el dia. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ajustes y cerrar sesión"
-            onPress={() => router.push('/settings')}
-          >
-            <Avatar initials={initials(staff.displayName)} size={34} radius={17} />
-          </Pressable>
+          <AccountAvatar size={34} />
         </Row>
       </Row>
 

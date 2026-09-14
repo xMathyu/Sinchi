@@ -29,6 +29,7 @@ import { withAlpha } from '@sinchi/ui';
 import { Screen } from '../../src/design/screen';
 import { Button, Card, Chip, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { useTheme } from '../../src/design/theme';
+import { AccountAvatar } from '../../src/design/account-avatar';
 import {
   redeemCode,
 } from '../../src/data/actions';
@@ -161,6 +162,7 @@ export default function RosterScreen() {
                 </Text>
               </Card>
             </Pressable>
+            <AccountAvatar size={34} />
           </Row>
         </Row>
 

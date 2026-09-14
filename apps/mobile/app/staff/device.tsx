@@ -15,6 +15,7 @@ import { withAlpha } from '@sinchi/ui';
 import { Button, Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import { useRoster, useStore, useToday } from '../../src/data/hooks';
 import { setOnline, syncQueue } from '../../src/data/store';
 import { formatClock } from '../../src/lib/format';
@@ -47,9 +48,7 @@ export default function DeviceScreen() {
 
   return (
     <Screen scroll>
-      <Text variant="titleSmall" weight="bold" style={{ paddingTop: 8 }}>
-        Estado del dispositivo
-      </Text>
+      <TabHeader title="Estado del dispositivo" />
 
       <View
         style={{

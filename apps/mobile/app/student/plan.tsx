@@ -23,6 +23,7 @@ import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/desi
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import { useErrorDeCarga, useStore, useToday, useWallet } from '../../src/data/hooks';
 import { railLabel, type MembershipView } from '../../src/data/store';
 import { cancelSubscription } from '../../src/data/actions';
@@ -46,12 +47,14 @@ export default function PlanScreen() {
     if (errorDeCarga !== null) {
       return (
         <Screen>
+          <TabHeader title="Plan" />
           <OfflineState error={errorDeCarga} onReintentar={reintentar} />
         </Screen>
       );
     }
     return (
       <Screen>
+        <TabHeader title="Plan" />
         <EmptyState
           title="Todavía no tienes un plan"
           body="Cuando te inscribas en un gimnasio verás aquí tu plan, tu cupo de la semana y cuándo te toca renovar."
@@ -65,11 +68,7 @@ export default function PlanScreen() {
 
   return (
     <Screen scroll>
-      <Row justify="flex-start" gap={12} style={{ paddingTop: 10 }}>
-        <Text variant="titleSmall" weight="bold">
-          {entry.tenant.name}
-        </Text>
-      </Row>
+      <TabHeader title={entry.tenant.name} />
 
       <Card radius={theme.radii.xxl} style={{ marginTop: 18 }}>
         <Stack gap={18}>

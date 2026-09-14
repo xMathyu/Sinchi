@@ -27,6 +27,7 @@ import {
 } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import { useStore, useWallet } from '../../src/data/hooks';
 import { railLabel } from '../../src/data/store';
 import { formatCheckInMoment, formatShortDate } from '../../src/lib/format';
@@ -66,9 +67,7 @@ export default function HistoryScreen() {
 
   return (
     <Screen scroll>
-      <Text variant="title" weight="bold" style={{ paddingTop: 10 }}>
-        Historial
-      </Text>
+      <TabHeader title="Historial" />
 
       <View style={{ marginTop: 16 }}>
         <SegmentedControl<Tab>

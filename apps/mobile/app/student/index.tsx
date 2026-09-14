@@ -11,7 +11,6 @@ import { Link, router } from 'expo-router';
 import { formatPENShort, type AccessLevel } from '@sinchi/shared';
 import { semaphoreStyle, withAlpha } from '@sinchi/ui';
 import {
-  Avatar,
   Badge,
   Button,
   Card,
@@ -25,6 +24,7 @@ import {
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
+import { AccountAvatar } from '../../src/design/account-avatar';
 import {
   useErrorDeCarga,
   useLinkRequests,
@@ -39,7 +39,7 @@ import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-reques
 import { LinkRequestList } from '../../src/design/link-requests';
 import type { MembershipView } from '../../src/data/store';
 import type { ClassBookingDto } from '../../src/data/api';
-import { formatShortDate, formatWeekdayAndDay, initials, splitGymName } from '../../src/lib/format';
+import { formatShortDate, formatWeekdayAndDay, splitGymName } from '../../src/lib/format';
 
 /**
  * La etiqueta de una reserva, en lo que se lee de un vistazo: si se paga y a qué
@@ -77,13 +77,7 @@ export default function WalletScreen() {
           <Logo size={28} />
           <Wordmark size={30} />
         </Row>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Mi cuenta"
-          onPress={() => router.push('/settings')}
-        >
-          <Avatar initials={initials(displayName)} size={38} radius={19} />
-        </Pressable>
+        <AccountAvatar />
       </Row>
 
       <Stack gap={2} style={{ marginTop: 18 }}>

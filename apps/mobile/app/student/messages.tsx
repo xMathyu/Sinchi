@@ -18,6 +18,7 @@ import { Screen } from '../../src/design/screen';
 import { EmptyState, OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
+import { TabHeader } from '../../src/design/account-avatar';
 import { ConversationRow } from '../../src/design/chat';
 import {
   refreshUnreadBadge,
@@ -43,14 +44,10 @@ export default function StudentMessagesScreen() {
 
   return (
     <Screen scroll>
-      <Stack gap={3} style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Mensajes
-        </Text>
-        <Text variant="captionSmall" color={theme.colors.textSecondary}>
-          Tus conversaciones con los gimnasios: el tuyo y los que estás mirando.
-        </Text>
-      </Stack>
+      <TabHeader
+        title="Mensajes"
+        subtitle="Tus conversaciones con los gimnasios: donde entrenas y los que estás mirando."
+      />
 
       {loading && conversations.length === 0 ? (
         <View style={{ minHeight: 280 }}>
