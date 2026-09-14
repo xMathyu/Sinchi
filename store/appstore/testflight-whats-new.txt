@@ -1,9 +1,12 @@
-NOVEDAD: MENSAJES
-Ahora puedes hablar con los gimnasios dentro de Sinchi, sin salir a WhatsApp.
+NOVEDADES DE ESTA VERSIÓN
 
-• Alumno: nueva pestaña Mensajes. Escríbele a tu gimnasio por una duda con tu plan, tus clases o tus pagos. También desde la pantalla de tu plan.
-• Si todavía no entrenas en ningún sitio: abre cualquier gimnasio del directorio y toca «Escríbeles» para preguntar horarios o precios sin inscribirte.
-• Gimnasio: pestaña Mensajes con lo que te preguntan tus alumnos y quien te encuentra en la app. Contesta, archiva lo resuelto y escribe primero desde una reserva de clase de prueba («Escribirle») o desde la ficha de un alumno.
+• Celular con bandera: al crear tu cuenta, y en cualquier sitio donde se escribe un celular, primero eliges el país —con buscador— y después escribes el número.
+• Mi cuenta: toca tu avatar, arriba a la derecha, desde cualquier pestaña. Ahí corriges tu nombre y tu celular, y cierras sesión.
+• Clase suelta e inscripción desde el directorio: además de la clase de prueba, en la ficha de un gimnasio puedes reservar una clase suelta o inscribirte en un plan eligiendo el día y la hora. El gimnasio lo cobra en el mostrador y cierra la inscripción ahí mismo.
+• Ya no hay código de recepción: el gimnasio te agrega escaneando tu QR (pestaña Mi QR) y tú aceptas o rechazas la solicitud. Ningún gimnasio aparece en tu billetera sin que lo aceptes.
+• Si todavía no entrenas en ningún sitio, ves la misma app que un alumno, con tu QR listo para que te inscriban.
 
 QUÉ PROBAR
-Escribe desde un lado y responde desde el otro. La respuesta aparece sola en el chat abierto, y la pestaña marca con un número lo que no has leído.
+• Crea una cuenta eligiendo otro país para el celular, o pega un número que empiece con «+».
+• Desde el directorio reserva una clase suelta o una inscripción, y desde el modo staff cóbrala o inscríbela.
+• Muestra tu Mi QR a un teléfono con sesión de staff, deja que te inscriba y acepta la solicitud en tu app.
