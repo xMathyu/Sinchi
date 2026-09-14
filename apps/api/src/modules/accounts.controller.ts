@@ -20,6 +20,8 @@ import { MailService } from './mail/mail.service';
 import { AccountLinkService } from '../auth/account-link.service';
 import { InviteService } from '../auth/invite.service';
 import { LinkRequestsService } from './identity/link-requests.service';
+import { CheckInService } from './checkin/checkin.service';
+import { IdentityService } from './identity/identity.service';
 
 const inviteSchema = z.object({
   fullName: z.string().min(2).max(120),
@@ -42,6 +44,11 @@ const accountQrSchema = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{20,64}$/),
 });
 
+const memberQrSchema = z.object({
+  /** El QR de alumno tal cual: `SINCHI1:u:<userId>:<code>`. */
+  payload: z.string().min(10).max(200),
+});
+
 @StaffOnly()
 @Controller('staff')
 export class AccountsController {
@@ -50,6 +57,8 @@ export class AccountsController {
     private readonly invites: InviteService,
     private readonly mail: MailService,
     private readonly linkRequests: LinkRequestsService,
+    private readonly checkin: CheckInService,
+    private readonly identity: IdentityService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -145,6 +154,30 @@ export class AccountsController {
   async previewAccount(@Body(parseWith(accountQrSchema)) body: z.infer<typeof accountQrSchema>) {
     const { displayName, phone, email } = await this.accountLink.previewByQrToken(body.token);
     return { displayName, phone, email };
+  }
+
+  /**
+   * Canjea el QR de alumno de quien no está en este padrón.
+   *
+   * Es el QR de la puerta y no uno aparte: la billetera promete que «tu QR
+   * funciona en cualquier local de la red», y quien ya entrena en otro gimnasio
+   * —o tuvo ficha y ninguna membresía— lo muestra en el mostrador para que lo
+   * inscriban. Devuelve también el documento, para que el alta no tenga que pedir
+   * el carné: la identidad ya existe, y es por el documento que se reutiliza.
+   *
+   * Entregarlo no es una fuga por la misma razón que el QR de la cuenta: la
+   * persona lo está mostrando delante del mostrador para eso. Y la firma se
+   * verifica, así que una captura vieja no le da a nadie el documento de otro.
+   */
+  @Post('accounts/lookup-member')
+  async previewMember(@Body(parseWith(memberQrSchema)) body: z.infer<typeof memberQrSchema>) {
+    const user = await this.identity.me(await this.checkin.verifyUserQr(body.payload));
+    return {
+      displayName: user.name,
+      phone: user.phone,
+      email: user.email,
+      documentId: user.documentId,
+    };
   }
 
   /** Cómo está la ficha frente a la app de la persona. */

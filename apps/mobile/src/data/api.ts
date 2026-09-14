@@ -1570,6 +1570,18 @@ export interface AccountPreviewDto {
 export const lookupAccountQr = (token: string): Promise<AccountPreviewDto> =>
   request('/staff/accounts/lookup', { method: 'POST', body: { token } });
 
+/** Lo que recepción recibe al escanear el QR de alumno de quien no está en su padrón. */
+export interface MemberPreviewDto {
+  readonly displayName: string;
+  readonly phone: string;
+  readonly email: string | null;
+  /** Para que el alta reutilice la identidad sin pedir el carné. */
+  readonly documentId: string;
+}
+
+export const lookupMemberQr = (payload: string): Promise<MemberPreviewDto> =>
+  request('/staff/accounts/lookup-member', { method: 'POST', body: { payload } });
+
 export type LinkRequestStatus = 'pending' | 'accepted' | 'rejected' | 'canceled';
 
 /** Cómo está una ficha frente a la app de la persona. */

@@ -402,15 +402,14 @@ iba a `logger.debug`, que Cloud Run no muestra: los logs salían vacíos. Ahora
 
 ## Dónde aterriza quien entra sin ficha
 
-En **sus pestañas**: Gimnasios, Mi QR y Mensajes (`app/visitor`).
+En **su billetera**, la misma que la del alumno: vacía, con «Explorar gimnasios»,
+y con Mi QR, Plan, Mensajes e Historial debajo.
 
 Fue primero el código de 6 dígitos, que para quien instalaba la app sin entrenar
-en ningún sitio —justo a quien el producto quiere llegar— era una pared: un
-número que solo servía si un gimnasio ya tenía su ficha hecha y alguien iba a
-confirmarlo. Después fue el directorio a secas, sin barra, con el código, los
-mensajes y cerrar sesión escondidos dentro. Son tres las cosas que hace alguien
-sin gimnasio —buscar dónde, preguntarle a un gimnasio y dejarse inscribir— y cada
-una es ahora una pestaña.
+en ningún sitio —justo a quien el producto quiere llegar— era una pared. Después
+fue el directorio a secas, y después unas pestañas propias. Las dos últimas
+tenían el mismo defecto: la misma persona veía otra app según tuviera o no una
+ficha.
 
 Crear la cuenta pide además **nombre y celular**, y esa es la única vez que se
 piden. No autentican nada —eso lo hace el token de Firebase— y no tocan `users`:
@@ -418,10 +417,12 @@ viven en `account_claims` hasta que haya una ficha a la que atarlos. Sirven para
 dos cosas: que reservar una clase no vuelva a preguntar lo que la persona acaba de
 escribir, y encontrar las solicitudes que un gimnasio le dejó por su celular.
 
-**Mi QR** es con lo que recepción la inscribe (`SINCHI1:a:<token>`). No abre la
-puerta. Vence a los diez minutos y la app lo renueva sola, y mientras la pantalla
-está abierta pide las solicitudes cada pocos segundos: la del gimnasio llega
-mientras recepción termina el alta, con la persona todavía en el mostrador.
+**Mi QR**, mientras no hay membresía, es con lo que recepción la inscribe. Sin
+ficha es el QR de la cuenta (`SINCHI1:a:<token>`): no abre la puerta, vence a los
+diez minutos y la app lo renueva sola. Con ficha es su QR de alumno de siempre, que
+el mostrador de cualquier gimnasio donde no esté canjea por sus datos. La pantalla
+pide las solicitudes cada pocos segundos: la del gimnasio llega mientras recepción
+termina el alta, con la persona todavía en el mostrador.
 
 ---
 

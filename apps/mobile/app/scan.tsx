@@ -25,7 +25,49 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Stack, Text } from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
 import { useRoster } from '../src/data/hooks';
-import { evaluarQr, lookupAccount } from '../src/data/actions';
+import { evaluarQr, lookupAccount, lookupMember } from '../src/data/actions';
+
+/**
+ * Quien mostró su QR de alumno y no está en este padrón.
+ *
+ * No es un rechazo de la puerta: es alguien que entrena en otro gimnasio de la
+ * red, o que tuvo ficha y ninguna membresía, y viene a inscribirse. El QR se
+ * canjea en el acto —el código vence a los treinta segundos— y lo que se pregunta
+ * ya lleva su nombre: el alta se abre con sus datos y su documento puestos, y a
+ * ella le llega la solicitud para aceptar.
+ */
+function offerEnrollment(payload: string, unlock: () => void): void {
+  void lookupMember(payload)
+    .then((person) => {
+      Alert.alert(
+        `${person.displayName} no está en tu padrón`,
+        'Tiene cuenta de Sinchi: puedes inscribirla con sus datos ya puestos, y le llega la solicitud a su app.',
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: unlock },
+          {
+            text: 'Inscribir',
+            onPress: () =>
+              router.push({
+                pathname: '/enroll',
+                params: {
+                  documentId: person.documentId,
+                  name: person.displayName,
+                  phone: person.phone,
+                  email: person.email ?? '',
+                },
+              }),
+          },
+        ],
+      );
+    })
+    .catch((causa: unknown) => {
+      Alert.alert(
+        'No se pudo leer ese QR',
+        causa instanceof Error ? causa.message : 'Intenta de nuevo.',
+        [{ text: 'Entendido', onPress: unlock }],
+      );
+    });
+}
 
 /** Lado del objetivo. El QR se lee mucho antes de llenarlo; es una guía, no un marco. */
 const TARGET = 288;
@@ -97,6 +139,10 @@ export default function ScanScreen() {
     // decide a quién preguntar y cae a la caché si no hay red.
     void evaluarQr(data)
       .then((outcome) => {
+        if (!outcome.ok && outcome.notInRoster === true) {
+          offerEnrollment(data, () => (locked.current = false));
+          return;
+        }
         if (!outcome.ok) {
           Alert.alert(outcome.title, outcome.detail, [
             { text: 'Entendido', onPress: () => (locked.current = false) },

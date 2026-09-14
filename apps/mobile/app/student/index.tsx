@@ -34,6 +34,7 @@ import {
   useWallet,
 } from '../../src/data/hooks';
 import { setActiveTenant } from '../../src/data/store';
+import { useSession } from '../../src/data/session-hooks';
 import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import { LinkRequestList } from '../../src/design/link-requests';
 import type { MembershipView } from '../../src/data/store';
@@ -56,6 +57,11 @@ const bookingBadge = (booking: ClassBookingDto): string =>
 export default function WalletScreen() {
   const theme = useTheme();
   const user = useStore((state) => state.user);
+  // La cuenta sin ficha tiene esta misma billetera, pero no identidad en el
+  // padrón: su nombre es el que dio al registrarse, y documento no tiene.
+  const session = useSession();
+  const unlinked = session.status === 'unlinked';
+  const displayName = session.status === 'unlinked' ? (session.fullName ?? '') : user.name;
   const wallet = useWallet();
   useRefresco();
   const { error: errorDeCarga, reintentar } = useErrorDeCarga();
@@ -76,17 +82,18 @@ export default function WalletScreen() {
           accessibilityLabel="Mi cuenta"
           onPress={() => router.push('/settings')}
         >
-          <Avatar initials={initials(user.name)} size={38} radius={19} />
+          <Avatar initials={initials(displayName)} size={38} radius={19} />
         </Pressable>
       </Row>
 
       <Stack gap={2} style={{ marginTop: 18 }}>
         <Text variant="title" weight="bold">
-          {user.name}
+          {displayName}
         </Text>
         <Text variant="caption" color={theme.colors.textSecondary}>
-          DNI {user.documentId} · {active}{' '}
-          {active === 1 ? 'membresía activa' : 'membresías activas'}
+          {unlinked
+            ? 'Todavía no estás en ningún gimnasio'
+            : `DNI ${user.documentId} · ${active} ${active === 1 ? 'membresía activa' : 'membresías activas'}`}
         </Text>
       </Stack>
 
@@ -101,7 +108,7 @@ export default function WalletScreen() {
           <EmptyState
             title="Tu billetera está vacía"
             body="Aquí van tus membresías: una por cada gimnasio al que asistas, todas bajo la misma identidad Sinchi."
-            pie="¿Todavía no entrenas en ninguno? Mira los de la red: prueba uno, ven a una clase o inscríbete."
+            pie="¿Ya elegiste gimnasio? Muestra tu QR en recepción para que te inscriban. Si no, mira los de la red: prueba uno, ven a una clase o inscríbete."
             accion={
               <Button label="Explorar gimnasios" onPress={() => router.push('/explore')} />
             }

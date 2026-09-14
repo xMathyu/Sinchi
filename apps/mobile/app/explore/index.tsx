@@ -16,18 +16,16 @@ import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
 import { cents, formatPENShort, type BookingKind } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Avatar, Badge, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { LinkRequestList } from '../../src/design/link-requests';
+import { Badge, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
-import { useGyms, useLinkRequests, useMyBookings } from '../../src/data/hooks';
+import { useGyms, useMyBookings } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { cancelBooking } from '../../src/data/trials';
-import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
-import { formatWeekdayAndDay, initials } from '../../src/lib/format';
+import { formatWeekdayAndDay } from '../../src/lib/format';
 
 /** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
 const KIND_LABEL: Readonly<Record<BookingKind, string>> = {
@@ -41,35 +39,26 @@ export default function ExploreScreen() {
   const { details: gyms, loading, error, reload } = useGyms();
   const bookings = useMyBookings();
   const upcoming = bookings.details.filter((booking) => booking.status === 'booked');
-  const requests = useLinkRequests();
-  // Con la cuenta recién creada y sin ficha, ESTA es la primera pantalla de la
-  // app, y le habla a esa persona por su nombre. Titulada «Gimnasios» a secas,
-  // quien acababa de registrarse caía en una lista sin saber si la cuenta se
-  // había creado ni qué le tocaba hacer ahora.
   const session = useSession();
-  const unlinked = session.status === 'unlinked';
-  const firstName =
-    session.status === 'unlinked' ? (session.fullName?.trim().split(/\s+/)[0] ?? '') : '';
 
   return (
     <Screen scroll>
       <Row style={{ paddingTop: 8 }}>
         <Text variant="titleSmall" weight="bold" numberOfLines={1} style={{ flex: 1 }}>
-          {firstName.length > 0 ? `Hola, ${firstName}` : 'Gimnasios'}
+          Gimnasios
         </Text>
-        {/* Esta pantalla es a veces un modal —se abre desde la billetera— y a
-            veces la primera de la app, para quien acaba de crear su cuenta. Sin
-            la segunda rama queda sin salida justo cuando acepta su primera
-            solicitud: la sesión pasa a ser de alumno y el directorio se queda
-            encima de nada. La tercera es la cuenta sin ficha, cuya única salida
-            —cerrar sesión— va en el avatar. */}
+        {/* Casi siempre se abre encima de la billetera —el alumno y la cuenta sin
+            gimnasio llegan desde «Explorar gimnasios»— y entonces se cierra. Sin
+            nada debajo, la salida es la billetera: sin ella el directorio se
+            queda encima de nada, que es como estaba quien veía aceptada su
+            primera solicitud mirando esta pantalla. */}
         {router.canGoBack() ? (
           <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
             <Text variant="body" color={theme.colors.textSecondary}>
               Cerrar
             </Text>
           </Pressable>
-        ) : session.status === 'signed_in' ? (
+        ) : session.status === 'signed_in' || session.status === 'unlinked' ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.replace('/student')}
@@ -79,33 +68,15 @@ export default function ExploreScreen() {
               Mi billetera
             </Text>
           </Pressable>
-        ) : session.status === 'unlinked' ? (
-          <AccountButton fullName={session.fullName} />
         ) : null}
       </Row>
 
       {/* «De la red» se fue: es como llamamos al conjunto por dentro, y quien
           abre la app por primera vez no sabe de qué red le hablan. */}
       <Text variant="bodySmall" color={theme.colors.textSecondary} style={{ marginTop: 8 }}>
-        {unlinked
-          ? 'Tu cuenta está lista. Elige un gimnasio para ver sus horarios y precios, y reserva una clase o inscríbete. Si te inscriben en recepción, muestra tu QR.'
-          : 'Escuelas y dojos que usan Sinchi. Entra a cualquiera para ver sus horarios y sus precios, y reserva una clase o inscríbete.'}
+        Escuelas y dojos que usan Sinchi. Entra a cualquiera para ver sus horarios y sus precios,
+        y reserva una clase o inscríbete.
       </Text>
-
-      {/* Arriba de todo: es lo único de esta pantalla que espera una respuesta, y
-          lo que llega mientras recepción termina de inscribirla. Solo sin ficha;
-          con ficha, las solicitudes viven en su billetera. */}
-      {unlinked && requests.details.length > 0 ? (
-        <Stack gap={10} style={{ marginTop: 22 }}>
-          <Eyebrow>Te agregaron</Eyebrow>
-          <LinkRequestList
-            requests={requests.details}
-            onAccept={acceptLinkRequest}
-            onReject={rejectLinkRequest}
-            onAnswered={requests.reload}
-          />
-        </Stack>
-      ) : null}
 
       {upcoming.length > 0 ? (
         <Stack gap={10} style={{ marginTop: 22 }}>
@@ -293,30 +264,6 @@ function OwnerInvitation() {
         </Pressable>
       </Stack>
     </Card>
-  );
-}
-
-/**
- * La cuenta, arriba a la derecha: donde se busca en cualquier app.
- *
- * Lleva a Mi cuenta, la misma pantalla que abre el avatar de la billetera y el
- * del mostrador: sus datos para corregirlos y cerrar sesión. Era un menú con
- * cerrar sesión y nada más, y quien se registró con el nombre mal escrito no
- * tenía dónde arreglarlo.
- */
-function AccountButton({ fullName }: { readonly fullName: string | null }) {
-  const router = useRouter();
-  const letters = initials(fullName ?? '');
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Mi cuenta"
-      hitSlop={12}
-      onPress={() => router.push('/settings')}
-    >
-      <Avatar initials={letters.length > 0 ? letters : '·'} size={38} radius={19} />
-    </Pressable>
   );
 }
 

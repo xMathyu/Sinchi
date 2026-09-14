@@ -28,7 +28,7 @@ import { restoreFirebaseAccount } from '../src/data/auth';
 import { useWelcomeState, useSession } from '../src/data/session-hooks';
 import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
-import { markHydrating, markHydrationDone } from '../src/data/store';
+import { markHydrating, markHydrationDone, resetState } from '../src/data/store';
 import { SectionLoader } from '../src/design/loading';
 
 /**
@@ -109,7 +109,6 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
           <Stack.Screen name="login" options={{ animation: 'fade' }} />
-          <Stack.Screen name="visitor" options={{ animation: 'fade' }} />
           <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
           <Stack.Screen name="explore/index" />
           <Stack.Screen name="explore/[slug]" />
@@ -175,6 +174,21 @@ function DataLoader() {
   const state = useSession();
 
   useEffect(() => {
+    /**
+     * Sin sesión de Sinchi, el store no puede conservar lo de nadie.
+     *
+     * «Cerrar sesión» ya lo vaciaba, pero la sesión también se cae sola —un 401
+     * suelta el token en `onUnauthorized`— y ese camino dejaba la billetera y el
+     * error de carga de la persona anterior. Mientras la cuenta sin ficha vivía en
+     * otra pantalla no se notaba; con la misma billetera, quien entraba después
+     * leía «Sesión inválida o expirada» de otra cuenta, y habría visto sus
+     * membresías si las tenía. Se vacía aquí porque aquí se ven todos los cambios
+     * de sesión, vengan de donde vengan. La demostración no: su store es el dato.
+     */
+    if (state.status === 'signed_out' || state.status === 'unlinked') {
+      resetState();
+      return;
+    }
     if (state.status !== 'signed_in') return;
 
     let cancelado = false;
@@ -423,27 +437,27 @@ function SessionRouter() {
 
     if (state.status === 'unlinked') {
       /**
-       * Cuenta creada y sin ficha en ningun padron: aterriza en SUS PESTAÑAS
-       * —gimnasios, su QR y sus mensajes—.
+       * Cuenta creada y sin ficha en ningun padron: aterriza en SU BILLETERA, la
+       * misma que la del alumno.
        *
        * Fue primero el codigo de seis digitos, una pared para quien todavia no
-       * entrena en ningun sitio, y despues el directorio a secas: sin barra, con
-       * el codigo, los mensajes y cerrar sesion escondidos dentro. Son las tres
-       * cosas que hace alguien sin gimnasio —buscar donde, preguntar y dejarse
-       * inscribir mostrando su QR—, y la ficha le llega como una solicitud que
-       * acepta desde ahi mismo (decisiones §14).
+       * entrena en ningun sitio; despues el directorio a secas, y despues unas
+       * pestañas propias. Las dos ultimas tenian el mismo defecto: la misma
+       * persona veia otra app segun tuviera o no una ficha. Ahora cambia solo lo
+       * que ya no puede ser igual —su QR es el de la cuenta, y la billetera esta
+       * vacia— y la ficha le llega como una solicitud (decisiones §14).
        *
        * `settings` es Mi cuenta: tambien sin ficha se corrige el nombre y se
        * cierra sesion desde ahi (decisiones §15).
        */
       if (
-        first !== 'visitor' &&
+        first !== 'student' &&
         first !== 'settings' &&
         !enDirectorio &&
         !onGymSignUp &&
         !onChat
       ) {
-        router.replace('/visitor');
+        router.replace('/student');
       }
       return;
     }

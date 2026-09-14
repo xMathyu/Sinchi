@@ -894,20 +894,27 @@ el hueco, y cuesta un proveedor.
 
 ### La app, de paso
 
-La cuenta sin ficha tenía una sola pantalla —el directorio, sin barra— con el
-código, los mensajes y cerrar sesión escondidos dentro. Ahora tiene pestañas:
-**Gimnasios**, **Mi QR** y **Mensajes**. Las solicitudes llegan arriba del
-directorio y de Mi QR, que las pide cada pocos segundos porque es la pantalla
-que se tiene en la mano mientras recepción termina el alta; a quien ya es
-alumno, arriba de su billetera. En la ficha del staff, «En su app» dice si la
-persona la aceptó, y deja reenviarla o retirarla.
+Quien no tiene gimnasio ve la MISMA app que el alumno: su billetera —vacía, con
+«Explorar gimnasios»—, Mi QR, Plan, Mensajes e Historial. Hubo antes unas
+pestañas propias para esa cuenta, y Mathyu vio lo que tenían de malo al mirarlas
+junto a la billetera: la misma persona veía otra app según tuviera o no una
+ficha. Lo único que cambia es lo que enseña Mi QR mientras no hay membresía:
+
+- **Sin ficha**, el QR de la cuenta (`SINCHI1:a:<token>`).
+- **Con ficha y sin membresías**, su QR de alumno de siempre. Y ese QR sirve
+  también en el mostrador de cualquier gimnasio donde la persona no esté —aunque
+  entrene en otro—: `/staff/accounts/lookup-member` verifica la firma y lo canjea
+  por su nombre, su celular y su documento, y el alta sale con ellos. La billetera
+  ya lo prometía: «tu QR funciona en cualquier local de la red».
+
+Las solicitudes llegan arriba de la billetera y de Mi QR, que las pide cada pocos
+segundos porque es la pantalla que se tiene en la mano mientras recepción termina
+el alta. En la ficha del staff, «En su app» dice si la persona la aceptó, y deja
+reenviarla o retirarla.
 
 ### Lo que no hace
 
 - **No avisa por push.** No hay canal: la solicitud se ve al abrir la app.
-- **No inscribe desde el QR de un alumno de otro gimnasio.** Escanearlo en un
-  local donde no está responde que no tiene membresía ahí; recepción lo inscribe
-  por su DNI y la solicitud le llega a la cuenta que ya tiene.
 - **No convierte en solicitud la invitación por correo verificado.** Quien entra
   con un correo que un gimnasio invitó sigue quedando inscrito solo
   (`claimByVerifiedEmail`). El gimnasio tuvo que conocer su correo y su DNI, y

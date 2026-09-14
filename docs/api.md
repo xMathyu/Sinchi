@@ -213,6 +213,7 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/routines/videos/:id/ready` | Solo el dueño: confirma que el archivo llegó, preguntándoselo al almacenamiento. 409 si todavía no está. |
 | `DELETE` | `/staff/routines/:id` | Solo el dueño, y solo si está sin publicar: 409 si no. |
 | `POST` | `/staff/accounts/lookup` | Canjea el QR de una cuenta `{ token }` por nombre, celular y correo. 404 si venció. |
+| `POST` | `/staff/accounts/lookup-member` | Canjea el QR de alumno `{ payload }` de quien no está en este padrón por nombre, celular, correo y documento, para inscribirlo sin pedirle el carné. Verifica la firma: 400 si el código no es de ahora. |
 | `GET` | `/staff/members/:id/link-request` | Si la persona tiene la ficha en su app: la última solicitud y si su identidad ya abre con una cuenta. |
 | `POST` | `/staff/members/:id/link-request` | Reenvía la solicitud rechazada o retirada, a la cuenta a la que iba. |
 | `DELETE` | `/staff/link-requests/:id` | Retira una solicitud sin contestar. |

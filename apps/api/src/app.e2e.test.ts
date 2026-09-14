@@ -856,3 +856,92 @@ suite('mi cuenta', () => {
     expect(JSON.stringify(sinPais.body)).toMatch(/código del país/);
   });
 });
+
+/**
+ * Inscribir con el QR de quien entrena en otro gimnasio (decisiones §14).
+ *
+ * Es el QR de la puerta, no uno aparte: el mostrador de un gimnasio donde la
+ * persona todavía no está lo canjea por sus datos y la inscribe sin pedirle el
+ * carné. Una persona propia, inscrita en Shotokan, para no tocar a las sembradas.
+ */
+suite('inscribir con el QR de quien entrena en otro gimnasio', () => {
+  const run = String(Date.now()).slice(-7);
+  const PERSON = { dni: `5${run}`, phone: `+5195${run}`, name: 'Lucía Cruz' };
+  let session = '';
+
+  const monthlyPlan = async (bearer: string): Promise<string> => {
+    const { body } = await http.get('/v1/staff/plans').set(auth(bearer)).expect(200);
+    const plan = (body as { id: string; type: string }[]).find((p) => p.type !== 'drop_in');
+    return plan!.id;
+  };
+
+  beforeAll(async () => {
+    await http
+      .post('/v1/staff/members')
+      .set(auth(token.frontDesk))
+      .send({
+        documentId: PERSON.dni,
+        name: PERSON.name,
+        phone: PERSON.phone,
+        planId: await monthlyPlan(token.frontDesk),
+      })
+      .expect(201);
+    session = await login(PERSON.phone);
+  });
+
+  it('donde no está, su QR se canjea por sus datos y el alta sale con ellos', async () => {
+    const link = await http.post('/v1/me/device').set(auth(session)).send({}).expect(201);
+    const secret = new Uint8Array(Buffer.from(link.body.secret as string, 'base64'));
+    const payload = encodeQrPayload({
+      subject: 'user',
+      id: link.body.userId as string,
+      code: generateTotp(secret, new Date(), hmacSha256),
+    });
+
+    // Iron Muay Thai no la tiene: la puerta responde que no está.
+    await http
+      .post('/v1/staff/checkin/qr')
+      .set(auth(token.owner))
+      .send({ payload, record: false })
+      .expect(404);
+
+    const { body: vista } = await http
+      .post('/v1/staff/accounts/lookup-member')
+      .set(auth(token.owner))
+      .send({ payload })
+      .expect(201);
+    expect(vista).toEqual({
+      displayName: PERSON.name,
+      phone: PERSON.phone,
+      email: null,
+      documentId: PERSON.dni,
+    });
+
+    const { body: alta } = await http
+      .post('/v1/staff/members')
+      .set(auth(token.owner))
+      .send({
+        documentId: vista.documentId,
+        name: vista.displayName,
+        phone: vista.phone,
+        planId: await monthlyPlan(token.owner),
+      })
+      .expect(201);
+    expect(alta.reusedIdentity).toBe(true);
+    expect(alta.linkRequestSent).toBe(true);
+  });
+
+  it('un código de otro secreto no entrega los datos de nadie', async () => {
+    const link = await http.post('/v1/me/device').set(auth(session)).send({}).expect(201);
+    const payload = encodeQrPayload({
+      subject: 'user',
+      id: link.body.userId as string,
+      code: generateTotp(new Uint8Array(randomBytes(32)), new Date(), hmacSha256),
+    });
+    await http
+      .post('/v1/staff/accounts/lookup-member')
+      .set(auth(token.owner))
+      .send({ payload })
+      .expect(400);
+  });
+});

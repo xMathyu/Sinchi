@@ -61,12 +61,13 @@ export default function EnrollScreen() {
 
   /**
    * De dónde viene el alta, si viene de algún sitio: la reserva de la app que
-   * cierra, o el QR de la cuenta que la persona mostró. Los dos traen nombre,
-   * celular y correo ya puestos.
+   * cierra, el QR de la cuenta que la persona mostró o su QR de alumno. Los tres
+   * traen nombre, celular y correo ya puestos; el de alumno, también el documento.
    */
   const reserva = useLocalSearchParams<{
     bookingId?: string;
     accountToken?: string;
+    documentId?: string;
     name?: string;
     phone?: string;
     email?: string;
@@ -81,7 +82,7 @@ export default function EnrollScreen() {
   const [comprobando, setComprobando] = useState(false);
 
   const [name, setName] = useState(reserva.name ?? '');
-  const [documentId, setDocumentId] = useState('');
+  const [documentId, setDocumentId] = useState(reserva.documentId ?? '');
   const [phone, setPhone] = useState(reserva.phone ?? '+51');
   const [planId, setPlanId] = useState<string | null>(reserva.planId ?? null);
   const [saving, setSaving] = useState(false);

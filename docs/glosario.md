@@ -228,7 +228,7 @@ porque renombrarla es una migración sin nada que ganar.
 | solicitud de vínculo: el gimnasio agrega, la persona acepta | `LinkRequest` / `link_requests` |
 | aceptada · rechazada · retirada por el gimnasio | `accepted` · `rejected` · `canceled` |
 | no está en su billetera hasta que acepte | `notAwaitingPerson` |
-| las pestañas de quien no tiene ficha | `visitor` |
+| canjear el QR de alumno en el mostrador de otro gimnasio | `lookupMemberQr` / `verifyUserQr` |
 
 ## Nota sobre el MD
 

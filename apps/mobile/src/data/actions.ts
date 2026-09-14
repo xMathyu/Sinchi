@@ -28,8 +28,10 @@ import {
   enrollMember,
   identityExists,
   lookupAccountQr,
+  lookupMemberQr,
   updateMyProfile,
   type AccountPreviewDto,
+  type MemberPreviewDto,
   fetchPlansFor,
   fetchSaasSubscription,
   fetchSummary,
@@ -270,7 +272,13 @@ export async function registerPayment(input: {
 
 export type ScanOutcome =
   | { readonly ok: true; readonly membershipId: string }
-  | { readonly ok: false; readonly title: string; readonly detail: string };
+  | {
+      readonly ok: false;
+      readonly title: string;
+      readonly detail: string;
+      /** El QR es de Sinchi y de alguien que no está en este padrón: puede venir a inscribirse. */
+      readonly notInRoster?: boolean;
+    };
 
 /**
  * Valida un QR leido en la puerta.
@@ -305,6 +313,16 @@ export async function evaluarQr(payload: string): Promise<ScanOutcome> {
       await refreshRoster(session);
       return { ok: true, membershipId: outcome.view.membership.id };
     } catch (causa) {
+      if (causa instanceof ApiError && causa.status === 404) {
+        // El código es bueno y la persona no está aquí. No es un rechazo de la
+        // puerta: con el mismo QR se la puede inscribir (ver `lookupMember`).
+        return {
+          ok: false,
+          title: 'No está en tu padrón',
+          detail: causa.message,
+          notInRoster: true,
+        };
+      }
       if (!(causa instanceof ApiError) || !causa.isOffline) {
         // La api responde en espanol y con el motivo concreto ("el codigo ya
         // venció", "no vinculó su dispositivo"). Reescribirlo aqui solo lo
@@ -433,6 +451,15 @@ export async function cancelSubscription(membershipId: string): Promise<void> {
 export async function lookupAccount(token: string): Promise<AccountPreviewDto> {
   exigeServidor('Inscribir con el QR de una cuenta');
   return await lookupAccountQr(token);
+}
+
+/**
+ * Canjea el QR de alumno de quien no está en este padrón por sus datos, con el
+ * documento: la identidad ya existe, y el alta la reutiliza sin pedir el carné.
+ */
+export async function lookupMember(payload: string): Promise<MemberPreviewDto> {
+  exigeServidor('Inscribir con el QR de un alumno');
+  return await lookupMemberQr(payload);
 }
 
 // ---------------------------------------------------------------------------

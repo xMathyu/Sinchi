@@ -107,9 +107,9 @@ export default function LoginScreen() {
         return;
       }
       // Cuando queda vinculado, el layout raíz enruta solo al ver la sesión.
-      // Sin ficha en ningún padrón, a sus pestañas: los gimnasios, su QR y sus
-      // mensajes.
-      if (outcome.kind === 'needs_link') router.replace('/visitor');
+      // Sin ficha en ningún padrón, a su billetera: vacía todavía, y con su QR
+      // para que la inscriban.
+      if (outcome.kind === 'needs_link') router.replace('/student');
     });
 
     return () => {
@@ -131,7 +131,7 @@ export default function LoginScreen() {
         setError(outcome.message);
         return;
       }
-      if (outcome.kind === 'needs_link') router.replace('/visitor');
+      if (outcome.kind === 'needs_link') router.replace('/student');
       // Si quedo dentro, el layout raiz enruta solo al ver la sesion.
     });
   };

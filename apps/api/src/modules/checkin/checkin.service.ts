@@ -139,6 +139,38 @@ export class CheckInService {
    * (MD 5). Lo que autentica es el código, no el id.
    */
   async evaluateQr(tenantId: string, rawPayload: string): Promise<CheckInEvaluation> {
+    const userId = await this.verifyUserQr(rawPayload);
+
+    const membershipId = await withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .select({ id: schema.memberships.id })
+        .from(schema.memberships)
+        .where(
+          and(
+            eq(schema.memberships.userId, userId),
+            eq(schema.memberships.status, 'active'),
+          ),
+        )
+        .limit(1);
+      return row?.id ?? null;
+    });
+
+    if (membershipId === null) {
+      throw new NotFoundException('Este alumno no tiene membresía activa en este local.');
+    }
+
+    return this.evaluate(tenantId, membershipId);
+  }
+
+  /**
+   * El usuario de un QR de alumno, si la firma es de ahora.
+   *
+   * Aparte de `evaluateQr` porque lo usan dos: la puerta, y el mostrador de un
+   * gimnasio donde la persona todavía no está, que escanea ese mismo QR para
+   * inscribirla (`/staff/accounts/lookup-member`). Los dos exigen el código vivo:
+   * la captura de ayer no abre la puerta, y tampoco entrega el documento de nadie.
+   */
+  async verifyUserQr(rawPayload: string): Promise<string> {
     const payload = parseQrPayload(rawPayload);
     if (payload === null || payload.subject !== 'user') {
       throw new BadRequestException('Ese código no es un QR de alumno de Sinchi.');
@@ -175,25 +207,7 @@ export class CheckInService {
       );
     }
 
-    const membershipId = await withTenant(this.db, tenantId, async (tx) => {
-      const [row] = await tx
-        .select({ id: schema.memberships.id })
-        .from(schema.memberships)
-        .where(
-          and(
-            eq(schema.memberships.userId, payload.id),
-            eq(schema.memberships.status, 'active'),
-          ),
-        )
-        .limit(1);
-      return row?.id ?? null;
-    });
-
-    if (membershipId === null) {
-      throw new NotFoundException('Este alumno no tiene membresía activa en este local.');
-    }
-
-    return this.evaluate(tenantId, membershipId);
+    return payload.id;
   }
 
   // -------------------------------------------------------------------------

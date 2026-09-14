@@ -6,11 +6,13 @@
  * `validateCheckIn`, la misma funcion que correra el escaner del staff. Si el
  * alumno lee "puedes entrar" aqui, en la puerta va a pasar.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { semaphoreStyle } from '@sinchi/ui';
-import { Dot, Row, Stack, Text } from '../../src/design/primitives';
+import { encodeAccountQrPayload } from '@sinchi/shared';
+import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
+import { LinkRequestList } from '../../src/design/link-requests';
 import { PhotoCircle } from '../../src/design/photo';
 import { SinchiQrCode } from '../../src/design/sinchi-qr';
 import { Screen, TintedScreen } from '../../src/design/screen';
@@ -20,14 +22,20 @@ import {
   useAccessCode,
   useCheckInPreview,
   useErrorDeCarga,
+  useLinkRequests,
+  usePolling,
   useStore,
   useWallet,
 } from '../../src/data/hooks';
+import { useSession } from '../../src/data/session-hooks';
+import { restoreFirebaseAccount } from '../../src/data/auth';
+import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import { setActiveTenant } from '../../src/data/store';
 import { initials, splitGymName } from '../../src/lib/format';
 
 export default function QrScreen() {
   const theme = useTheme();
+  const session = useSession();
   const user = useStore((state) => state.user);
   const activeTenantId = useStore((state) => state.activeTenantId);
   const wallet = useWallet();
@@ -57,6 +65,13 @@ export default function QrScreen() {
           <OfflineState error={errorDeCarga} onReintentar={reintentar} />
         </Screen>
       );
+    }
+    // Sin membresía, Mi QR es con lo que la inscriben. Antes decía «todavía no
+    // tienes un código» y mandaba al mostrador con el DNI en la mano, justo a
+    // quien el mostrador ya podía encontrar escaneando algo.
+    if (selected === undefined && session.status === 'unlinked') return <AccountRegisterQr />;
+    if (selected === undefined && session.status === 'signed_in') {
+      return <MemberRegisterQr code={code} name={user.name} />;
     }
     return (
       <Screen>
@@ -269,4 +284,186 @@ function CountdownRing({
       </View>
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Sin membresía: el QR para que te inscriban
+// ---------------------------------------------------------------------------
+
+/** Cada cuánto se reintenta renovar un QR de cuenta vencido si la red no respondió. */
+const RENEW_RETRY_MS = 15_000;
+
+/**
+ * La cuenta sin ficha: su QR de cuenta (`SINCHI1:a:<token>`).
+ *
+ * No abre ninguna puerta: recepción lo escanea y el alta se abre con su nombre y
+ * su celular, y a ella le llega la solicitud aquí mismo (decisiones §14). Vence a
+ * los diez minutos y se renueva solo, volviendo a entrar con la credencial
+ * guardada; con candado de tiempo, porque sin red reintentar en cada segundo del
+ * reloj sería una petición por segundo que nadie ve fallar.
+ */
+function AccountRegisterQr() {
+  const session = useSession();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const expiresAt = session.status === 'unlinked' ? session.expiresAt : 0;
+  const expired = expiresAt > 0 && expiresAt <= now;
+  const lastRenewal = useRef(0);
+  useEffect(() => {
+    if (!expired || now - lastRenewal.current < RENEW_RETRY_MS) return;
+    lastRenewal.current = now;
+    void restoreFirebaseAccount();
+  }, [expired, now]);
+
+  if (session.status !== 'unlinked') return null;
+  const secondsLeft = Math.max(0, Math.round((expiresAt - now) / 1000));
+
+  return (
+    <RegisterPanel
+      value={encodeAccountQrPayload(session.qrToken)}
+      dimmed={expired}
+      name={session.fullName}
+      intro="Muéstraselo a recepción para que te inscriban. Todavía no abre la puerta: eso llega con tu primera membresía."
+      footnote={expired ? 'Renovando tu QR…' : `Vence en ${formatCountdown(secondsLeft)} · se renueva solo`}
+      steps={[
+        'Recepción escanea tu QR y lee tu DNI.',
+        'Te llega aquí la solicitud del gimnasio.',
+        'La aceptas, y tu membresía aparece en tu billetera.',
+      ]}
+    />
+  );
+}
+
+/**
+ * Quien ya tiene ficha y ninguna membresía: su QR de siempre.
+ *
+ * Es el mismo que abre la puerta, y la billetera promete que funciona en
+ * cualquier local de la red. El mostrador de un gimnasio donde no está lo canjea
+ * por sus datos —con la firma verificada— y la inscribe sin pedirle el carné.
+ */
+function MemberRegisterQr({
+  code,
+  name,
+}: {
+  readonly code: ReturnType<typeof useAccessCode>;
+  readonly name: string;
+}) {
+  return (
+    <RegisterPanel
+      value={code.ready ? code.payload : null}
+      dimmed={false}
+      name={name}
+      intro="Todavía no estás en ningún gimnasio. Muéstraselo a recepción para que te inscriban: cuando tengas membresía, este mismo QR abre la puerta."
+      footnote={code.ready ? `Se renueva en ${code.secondsLeft} s` : 'Preparando tu código…'}
+      steps={[
+        'Recepción escanea tu QR: tus datos ya están en Sinchi.',
+        'Te llega aquí la solicitud del gimnasio.',
+        'La aceptas, y tu membresía aparece en tu billetera.',
+      ]}
+    />
+  );
+}
+
+/**
+ * La pantalla de las dos de arriba.
+ *
+ * Las solicitudes van arriba y se piden cada pocos segundos mientras está abierta:
+ * es la pantalla que se tiene en la mano en el mostrador, y la del gimnasio llega
+ * mientras recepción termina el alta. Sin esto había que salir y volver para verla.
+ */
+function RegisterPanel({
+  value,
+  dimmed,
+  name,
+  intro,
+  footnote,
+  steps,
+}: {
+  readonly value: string | null;
+  readonly dimmed: boolean;
+  readonly name: string | null;
+  readonly intro: string;
+  readonly footnote: string;
+  readonly steps: readonly string[];
+}): ReactNode {
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const requests = useLinkRequests();
+  usePolling(requests.reload, 6_000);
+  const side = Math.min(width - 120, 260);
+
+  return (
+    <Screen scroll>
+      <Stack gap={3} style={{ paddingTop: 8 }}>
+        <Text variant="titleSmall" weight="bold">
+          Mi QR
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          {intro}
+        </Text>
+      </Stack>
+
+      {requests.details.length > 0 ? (
+        <Stack gap={10} style={{ marginTop: 20 }}>
+          <Eyebrow>Te agregaron</Eyebrow>
+          <LinkRequestList
+            requests={requests.details}
+            onAccept={acceptLinkRequest}
+            onReject={rejectLinkRequest}
+            onAnswered={requests.reload}
+          />
+        </Stack>
+      ) : null}
+
+      <Stack gap={14} style={{ marginTop: 26, alignItems: 'center' }}>
+        {/* Blanco y con margen propio aunque el tema sea oscuro: una cámara de
+            mostrador lee mal un QR invertido, y peor todavía sin borde. Vencido
+            se apaga en vez de desaparecer, para que no parezca que se rompió. */}
+        <View
+          style={{
+            padding: 18,
+            borderRadius: theme.radii.xxl,
+            backgroundColor: '#FFFFFF',
+            opacity: dimmed ? 0.2 : 1,
+          }}
+        >
+          <SinchiQrCode value={value} size={side} />
+        </View>
+        {name === null || name.length === 0 ? null : (
+          <Text variant="heading" weight="semibold">
+            {name}
+          </Text>
+        )}
+        <Text variant="caption" color={theme.colors.textSecondary}>
+          {footnote}
+        </Text>
+      </Stack>
+
+      <Card tone="sunken" style={{ marginTop: 26 }}>
+        <Stack gap={10}>
+          <Eyebrow>Cómo te inscriben</Eyebrow>
+          {steps.map((step, index) => (
+            <Row key={step} gap={10} align="flex-start" justify="flex-start">
+              <Text variant="captionSmall" weight="bold" color={theme.semaphore.ok}>
+                {index + 1}
+              </Text>
+              <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ flex: 1 }}>
+                {step}
+              </Text>
+            </Row>
+          ))}
+        </Stack>
+      </Card>
+    </Screen>
+  );
+}
+
+function formatCountdown(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes === 0 ? `${rest} s` : `${minutes}:${String(rest).padStart(2, '0')}`;
 }
