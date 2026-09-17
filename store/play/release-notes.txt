@@ -1,0 +1,6 @@
+• Celular con bandera: eliges el país y luego escribes el número.
+• Mi cuenta: toca tu avatar en cualquier pestaña para corregir tu nombre y tu celular.
+• Desde el directorio reservas una clase suelta o te inscribes en un plan.
+• Fuera el código de recepción: el gimnasio escanea tu QR y tú aceptas la solicitud.
+• Sin gimnasio ves la misma app que un alumno, con tu QR listo.
+• Mensajes: hablas con tu gimnasio dentro de la app.

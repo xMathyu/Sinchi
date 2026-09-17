@@ -15,11 +15,22 @@ Eliges plataforma (`ambas`, `ios` o `android`), compila en EAS con el perfil
   **«Testers abiertos»** (el del enlace público
   https://testflight.apple.com/join/kJydEX5K) y lo envía a Beta App Review. Los
   externos lo reciben cuando Apple lo aprueba.
-- **Android → pista cerrada Alpha.** La misma que ya tiene la release 5.
+- **Android → pista cerrada Alpha.** El build entra con `eas submit` y después
+  `.github/scripts/play-release-notes.mjs` le escribe las notas de «Novedades»
+  desde `store/play/release-notes.txt`. Sin ese paso la release sale muda —la
+  versionCode 6 lleva así desde el 2026-09-08— porque la config de Android de
+  `eas submit` solo sabe de pista, estado y rollout.
 
-**Antes de disparar, actualiza `store/appstore/testflight-whats-new.txt`**, en el
-mismo commit que la función nueva: es lo que los testers leen en «Qué probar», y
-Beta App Review lo exige para externos.
+**Antes de disparar, actualiza las notas**, en el mismo commit que la función
+nueva:
+
+- `store/appstore/testflight-whats-new.txt` — lo que los testers de iOS leen en
+  «Qué probar». Beta App Review lo exige para externos, y no tiene límite de
+  largo.
+- `store/play/release-notes.txt` — lo que los de Android leen en «Novedades».
+  **Máximo 500 caracteres**, que es lo que acepta Play por idioma; el script
+  corta el envío antes de llamar a la API si te pasas. Son dos archivos por eso,
+  y porque Play no tiene un apartado de «qué probar» separado del «qué cambió».
 
 **Reenviar un build que ya compiló** —porque falló la subida, o para llevarlo a
 externos después— sin gastar otro crédito: `build_id` con el ID del build de EAS
@@ -27,8 +38,9 @@ y la plataforma de ese build (`ios` o `android`, no `ambas`).
 
     gh workflow run probar-app.yml -f plataforma=ios -f build_id=<id de EAS>
 
-El paso de externos es idempotente: correrlo otra vez sobre el mismo build no lo
-agrega dos veces al grupo ni pide dos revisiones.
+Los pasos de después del envío son idempotentes: el de externos no agrega el
+build dos veces al grupo ni pide dos revisiones, y el de las notas de Play no
+abre ninguna edición si la release ya dice exactamente eso.
 
 ## Por que Alpha y no el canal interno de Play
 
@@ -85,6 +97,21 @@ servicio de Google:
 
    Android → `production` → Google Service Account. Queda guardado en EAS y el
    runner no ve nada.
+
+Las notas de la release **no** pasan por EAS: las escribe el script contra la
+Play Developer API, y necesita un token para ella. No hay un segundo JSON ni un
+secreto en GitHub — el runner, que ya entra a Google Cloud como
+`sinchi-deployer`, se hace pasar por la cuenta de servicio:
+
+    gcloud iam service-accounts add-iam-policy-binding \
+      play-publisher@sinchi-a95913.iam.gserviceaccount.com \
+      --member="serviceAccount:sinchi-deployer@sinchi-a95913.iam.gserviceaccount.com" \
+      --role="roles/iam.serviceAccountTokenCreator"
+
+Ya está hecho. Es la **misma** `play-publisher@` cuyo JSON subiste a EAS, así que
+ese archivo sigue existiendo en un solo lugar y los permisos de Play Console se
+conceden una vez. Si algún día el script responde 401, es que el permiso se cayó
+o que a esa cuenta le quitaron el rol en Play Console.
 
 Ojo con un detalle de Play: la API **no puede crear la primera release** de una
 app. Ya esta cubierto —la release 5 se subio a mano— asi que el camino esta

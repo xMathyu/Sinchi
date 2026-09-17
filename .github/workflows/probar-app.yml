@@ -33,6 +33,17 @@ name: Enviar a testers
 # App Review lo hace `.github/scripts/testflight-external.mjs`. Las notas de «Que
 # probar» salen de `store/appstore/testflight-whats-new.txt`, que se escribe en el
 # mismo commit que la funcion que describe.
+#
+# NOTAS EN PLAY. Del lado de Android pasa lo mismo por otro motivo: la config de
+# Android de `eas submit` solo tiene pista, estado y rollout, asi que la release
+# queda muda —la versionCode 6 lleva asi desde el 2026-09-08— y quien actualiza
+# no se entera de que cambio. Se las pone `.github/scripts/play-release-notes.mjs`
+# desde `store/play/release-notes.txt`, que es OTRO archivo y no el de TestFlight
+# porque Play corta a 500 caracteres por idioma. Habla con la Play Developer API
+# impersonando `play-publisher@` —la misma cuenta de servicio cuyo JSON usa EAS
+# para subir el .aab—, no con una llave propia: `sinchi-deployer` tiene
+# `serviceAccountTokenCreator` sobre ella, y asi ese JSON sigue viviendo en un
+# solo lugar.
 
 on:
   workflow_dispatch:
@@ -162,6 +173,23 @@ jobs:
           numero=$(eas build:view "$BUILD_ID" --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s.slice(s.indexOf("{"))).appBuildVersion))')
           echo "Build $numero"
           echo "build_number=$numero" >> "$GITHUB_OUTPUT"
+
+      # El equivalente de Android del paso de «Que probar» de abajo. `eas submit`
+      # crea la release en la pista pero no sabe escribir notas, y una release
+      # muda no le dice al tester que cambio. Va por impersonacion de
+      # `play-publisher@` —la misma cuenta cuyo JSON usa EAS— y no por una llave:
+      # asi no hay un segundo JSON que rotar ni un secreto en GitHub.
+      - name: Notas de la release en Play
+        if: matrix.plataforma == 'android'
+        env:
+          PLAY_VERSION_CODE: ${{ steps.enviar.outputs.build_number }}
+          RELEASE_NOTES_PATH: store/play/release-notes.txt
+        run: |
+          token=$(gcloud auth print-access-token \
+            --impersonate-service-account=play-publisher@sinchi-a95913.iam.gserviceaccount.com \
+            --scopes=https://www.googleapis.com/auth/androidpublisher)
+          echo "::add-mask::$token"
+          PLAY_TOKEN="$token" node .github/scripts/play-release-notes.mjs
 
       - name: Testers externos
         if: matrix.plataforma == 'ios' && inputs.externos
