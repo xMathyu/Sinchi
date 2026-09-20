@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { checkPhoneNumber, formatPEN, phoneDenialMessage } from '@sinchi/shared';
-import { withAlpha } from '@sinchi/ui';
+import { mutedOn, withAlpha } from '@sinchi/ui';
 import { Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { PhoneField } from '../src/design/phone-field';
@@ -375,7 +375,7 @@ export default function EnrollScreen() {
           padding: 14,
         }}
       >
-        <Text variant="captionSmall" color="#A9C9B4">
+        <Text variant="captionSmall" color={mutedOn(theme, theme.semaphore.ok)}>
           Si ya entrena en otro local de la red, no se crea una persona nueva: se le suma
           este gimnasio a la billetera que ya tiene. Su historial no se parte en dos.
         </Text>
@@ -479,6 +479,7 @@ function LabeledInput({
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
+        keyboardAppearance={theme.scheme}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}

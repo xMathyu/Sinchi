@@ -230,6 +230,19 @@ porque renombrarla es una migración sin nada que ganar.
 | no está en su billetera hasta que acepte | `notAwaitingPerson` |
 | canjear el QR de alumno en el mostrador de otro gimnasio | `lookupMemberQr` / `verifyUserQr` |
 
+## Apariencia
+
+El tema de la app (decisiones §17). No viaja a la api: es del teléfono, no de la
+persona, así que no hay entidad ni columna — solo estos nombres.
+
+| Negocio | Código |
+|---|---|
+| apariencia (la preferencia guardada) | `AppearancePreference` |
+| automático · claro · oscuro | `'system'` · `'light'` · `'dark'` |
+| tema puesto ahora mismo, ya resuelto | `ColorScheme` / `theme.scheme` |
+| juego de colores de un tema | `Palette` / `COLORS_DARK`, `COLORS_LIGHT` |
+| pantalla teñida del color del estado | `TintedScreen` / `TINTED_PAPER` |
+
 ## Nota sobre el MD
 
 El esquema del documento de especificación (sección 5) nombra las columnas en

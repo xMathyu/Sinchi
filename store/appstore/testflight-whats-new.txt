@@ -1,12 +1,13 @@
 NOVEDADES DE ESTA VERSIÓN
 
-• Celular con bandera: al crear tu cuenta, y en cualquier sitio donde se escribe un celular, primero eliges el país —con buscador— y después escribes el número.
-• Mi cuenta: toca tu avatar, arriba a la derecha, desde cualquier pestaña. Ahí corriges tu nombre y tu celular, y cierras sesión.
-• Clase suelta e inscripción desde el directorio: además de la clase de prueba, en la ficha de un gimnasio puedes reservar una clase suelta o inscribirte en un plan eligiendo el día y la hora. El gimnasio lo cobra en el mostrador y cierra la inscripción ahí mismo.
-• Ya no hay código de recepción: el gimnasio te agrega escaneando tu QR (pestaña Mi QR) y tú aceptas o rechazas la solicitud. Ningún gimnasio aparece en tu billetera sin que lo aceptes.
-• Si todavía no entrenas en ningún sitio, ves la misma app que un alumno, con tu QR listo para que te inscriban.
+• Tema claro y tema oscuro. La app sigue al tema del teléfono y cambia con él, sin reiniciar: si tu iPhone pasa a claro al amanecer, Sinchi pasa con él.
+• Y si prefieres mandarle tú: Mi cuenta → Apariencia → Automático, Claro u Oscuro. Lo que elijas se queda puesto aunque el teléfono diga lo contrario, y es de este teléfono, no de tu cuenta.
+• El semáforo cambia de tono en claro —verde, ámbar, naranja y rojo más oscuros— para que se lea sobre fondo blanco. El significado es el mismo: verde entra, rojo no.
+• La pantalla de la puerta y tu QR se siguen pintando del color del estado en los dos temas. Eso es a propósito: ese color se lee a un metro, y tiene que ser igual de día que de noche.
+• Se retiró la paleta para daltonismo. Lo que de verdad protege sigue ahí: el motivo del rechazo siempre va escrito, nunca «acceso denegado» a secas.
 
 QUÉ PROBAR
-• Crea una cuenta eligiendo otro país para el celular, o pega un número que empiece con «+».
-• Desde el directorio reserva una clase suelta o una inscripción, y desde el modo staff cóbrala o inscríbela.
-• Muestra tu Mi QR a un teléfono con sesión de staff, deja que te inscriba y acepta la solicitud en tu app.
+• Con Apariencia en «Automático», cambia el tema en Ajustes de iOS con Sinchi abierta: tiene que cambiar en el momento.
+• Ponla en Claro con el teléfono en oscuro (y al revés), cierra la app del todo y vuelve a abrirla: tiene que recordar lo que elegiste.
+• En claro, recorre la billetera con un plan al día, uno con cupo y uno suspendido, y mira si los tres colores se distinguen de un vistazo.
+• Muestra tu Mi QR y haz que te escaneen: la pantalla del resultado tiene que verse igual que siempre, teñida del color del estado.

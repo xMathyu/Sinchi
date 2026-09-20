@@ -18,7 +18,7 @@ import {
   type IsoWeekday,
   isDropInPlan,
 } from '@sinchi/shared';
-import { semaphoreStyle, withAlpha } from '@sinchi/ui';
+import { mutedOn, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
@@ -142,7 +142,7 @@ export default function PlanScreen() {
             padding: 14,
           }}
         >
-          <Text variant="captionSmall" color="#D9CFA8">
+          <Text variant="captionSmall" color={mutedOn(theme, theme.semaphore.warn)}>
             Cambio a {entry.pendingPlan.name} programado para el{' '}
             {formatShortDate(entry.subscription.nextBillingDate)}. Hasta entonces sigues con{' '}
             {entry.plan.name}.
@@ -160,7 +160,7 @@ export default function PlanScreen() {
             padding: 14,
           }}
         >
-          <Text variant="captionSmall" color="#D9CFA8">
+          <Text variant="captionSmall" color={mutedOn(theme, theme.semaphore.warn)}>
             Subir de plan se cobra hoy solo por los días que faltan del mes, prorrateado. Bajar de
             plan se aplica en tu próxima renovación, sin devoluciones.
           </Text>
@@ -306,7 +306,7 @@ function QuotaBlock({ entry }: { readonly entry: MembershipView }) {
               flex: 1,
               height: 8,
               borderRadius: theme.radii.pill,
-              backgroundColor: index < quota.used ? usedColor : 'rgba(255,255,255,0.11)',
+              backgroundColor: index < quota.used ? usedColor : withAlpha(theme.colors.ink, 0.11),
             }}
           />
         ))}

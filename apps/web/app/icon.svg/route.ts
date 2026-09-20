@@ -9,9 +9,19 @@
  * ocupa el 66% del lienzo y se sube un 2.2%, porque la punta de lanza pesa
  * abajo —la base es lo ancho— y centrada geométricamente se *ve* baja.
  */
-import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, colors, radii } from '@sinchi/ui';
+import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, palette, radii } from '@sinchi/ui';
 
 export const dynamic = 'force-static';
+
+/**
+ * La landing no sigue al tema del navegador: es oscura y punto.
+ *
+ * La app si tiene dos temas (decisiones §17), pero esto es una pagina de venta
+ * con una sola cara, y su icono y su captura de Open Graph se hornean en el
+ * build: no hay un «tema del visitante» que consultar cuando se generan.
+ */
+const colors = palette('dark');
+
 
 const ESCALA = 0.66;
 const LEVANTE = 2.2;

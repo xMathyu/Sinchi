@@ -8,7 +8,7 @@
       "com.googleusercontent.apps.961173851857-hh0vdgp1ftton6glfm6k2bh16m0i7eam"
     ],
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#08080A",
     "ios": {
       "supportsTablet": true,

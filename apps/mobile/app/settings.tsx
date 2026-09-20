@@ -3,36 +3,34 @@
  *
  * Era Ajustes. El avatar de arriba a la derecha lleva aquí desde cualquier
  * cuenta —sin gimnasio, alumno o staff—, y arriba van sus datos para corregirlos
- * (decisiones §15). Debajo sigue lo que ya estaba, porque hacen falta dos
- * interruptores reales:
+ * (decisiones §15). Debajo van los dos interruptores que hacen falta:
  *
- *  - la paleta segura para daltonismo. En este producto el color ES la
- *    información: un recepcionista que no distingue verde de rojo no puede
- *    operar la puerta. El diseño la trae como propiedad del lienzo; en la app
- *    tiene que ser una preferencia de la persona;
+ *  - la apariencia. La app sigue al teléfono por defecto, y aquí se le
+ *    contradice (decisiones §17). Es lo único de esta pantalla que no viaja al
+ *    servidor: es de este teléfono, no de la persona;
  *  - el cambio de rol. El mismo binario sirve al alumno, a recepción y al dueño
  *    (MD 4.6). En producción el rol viene de la sesión; hasta que exista la api,
  *    este es el único camino para recorrer el modo staff.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
+import type { AppearancePreference } from '../src/data/appearance';
 import {
   accountDetailsDenialMessage,
   checkAccountDetails,
   normalizePhoneNumber,
 } from '@sinchi/shared';
-import { SEMAPHORE_COLORBLIND_SAFE, SEMAPHORE_DEFAULT } from '@sinchi/ui';
 import {
   Button,
   Card,
-  Divider,
   Dot,
   Eyebrow,
   Field,
   Logo,
   Row,
+  SegmentedControl,
   Stack,
   Text,
 } from '../src/design/primitives';
@@ -46,6 +44,17 @@ import { saveMyDetails } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
 import { loadDemo, resetState, setRole } from '../src/data/store';
 
+/**
+ * El orden importa: «Automático» primero porque es lo que trae puesto, y claro
+ * antes que oscuro porque así está en iOS y en Android — la lista que la
+ * persona ya vio en los ajustes del teléfono hace diez segundos.
+ */
+const APPEARANCES: readonly { readonly value: AppearancePreference; readonly label: string }[] = [
+  { value: 'system', label: 'Automático' },
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
+];
+
 const ROLES: readonly { readonly value: AppRole; readonly label: string; readonly hint: string }[] =
   [
     { value: 'student', label: 'Alumno', hint: 'Su plan, su QR, su historial' },
@@ -55,7 +64,7 @@ const ROLES: readonly { readonly value: AppRole; readonly label: string; readonl
 
 export default function SettingsScreen() {
   const theme = useTheme();
-  const { colorBlindSafe, setColorBlindSafe } = useThemeContext();
+  const { preference, setPreference } = useThemeContext();
   const role = useStore((state) => state.role);
   const user = useStore((state) => state.user);
   const staff = useStore((state) => state.staff);
@@ -311,53 +320,20 @@ export default function SettingsScreen() {
       )}
 
       <Stack gap={10} style={{ marginTop: 20 }}>
-        <Eyebrow>Accesibilidad</Eyebrow>
+        <Eyebrow>Apariencia</Eyebrow>
         <Card radius={theme.radii.xl}>
-          <Stack gap={14}>
-            <Row>
-              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
-                <Text variant="bodySmall" weight="semibold">
-                  Paleta para daltonismo
-                </Text>
-                <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  Cambia el verde/rojo del semáforo por azul/magenta, que se distinguen con
-                  deficiencia al rojo-verde.
-                </Text>
-              </Stack>
-              <Switch
-                value={colorBlindSafe}
-                onValueChange={setColorBlindSafe}
-                accessibilityLabel="Usar paleta segura para daltonismo"
-                trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-                thumbColor={theme.colors.ink}
-              />
-            </Row>
-            <Divider />
-            <Row justify="flex-start" gap={18}>
-              <PaletteSample
-                label="Estándar"
-                colors={[
-                  SEMAPHORE_DEFAULT.ok,
-                  SEMAPHORE_DEFAULT.warn,
-                  SEMAPHORE_DEFAULT.alert,
-                  SEMAPHORE_DEFAULT.bad,
-                ]}
-                active={!colorBlindSafe}
-              />
-              <PaletteSample
-                label="Daltonismo"
-                colors={[
-                  SEMAPHORE_COLORBLIND_SAFE.ok,
-                  SEMAPHORE_COLORBLIND_SAFE.warn,
-                  SEMAPHORE_COLORBLIND_SAFE.alert,
-                  SEMAPHORE_COLORBLIND_SAFE.bad,
-                ]}
-                active={colorBlindSafe}
-              />
-            </Row>
+          <Stack gap={12}>
+            <SegmentedControl<AppearancePreference>
+              options={APPEARANCES}
+              value={preference}
+              onChange={setPreference}
+            />
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              «Automático» sigue al tema del teléfono y cambia con él. Las otras dos lo
+              contradicen y se quedan puestas.
+            </Text>
             <Text variant="micro" color={theme.colors.textFaint}>
-              El motivo del rechazo siempre va escrito, con paleta o sin ella. El color acelera la
-              lectura, no la sustituye.
+              Es de este teléfono, no de tu cuenta: entrar desde otro no se lo lleva.
             </Text>
           </Stack>
         </Card>
@@ -652,37 +628,6 @@ function AccountDetails() {
           )}
         </Stack>
       </Card>
-    </Stack>
-  );
-}
-
-function PaletteSample({
-  label,
-  colors,
-  active,
-}: {
-  readonly label: string;
-  readonly colors: readonly string[];
-  readonly active: boolean;
-}) {
-  const theme = useTheme();
-  return (
-    <Stack gap={6}>
-      <Row gap={5} justify="flex-start">
-        {colors.map((color) => (
-          <View
-            key={color}
-            style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: color }}
-          />
-        ))}
-      </Row>
-      <Text
-        variant="captionSmall"
-        weight={active ? 'semibold' : 'regular'}
-        color={active ? theme.colors.ink : theme.colors.textTertiary}
-      >
-        {label}
-      </Text>
     </Stack>
   );
 }

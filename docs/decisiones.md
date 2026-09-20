@@ -93,7 +93,7 @@ agregó una:
 | S4 Marcado manual | Implementada |
 | S5 Cobro en mostrador | Implementada. En la versión 1 es la pantalla que sostiene el negocio |
 | S6 Offline y cola | Implementada |
-| Ajustes | **Agregada.** Hacen falta dos interruptores reales: la paleta segura para daltonismo (que el diseño trae como propiedad del lienzo) y el cambio de rol, que es el único camino para llegar al modo staff mientras no hay sesión |
+| Ajustes | **Agregada.** Hacen falta dos interruptores reales: la apariencia —el diseño es de un solo tema y la app tiene dos (§17)— y el cambio de rol, que es el único camino para llegar al modo staff mientras no hay sesión |
 
 Otras diferencias menores:
 
@@ -990,3 +990,81 @@ número y `+51987654321` eran dos personas.
 Lo que había en Neon al hacerlo: ningún celular sin código de país, y una cuenta
 sin ficha con un número peruano de siete dígitos, creada ese mismo día. Se deja
 como está: la app lo vuelve a pedir antes de reservar.
+
+---
+
+## 17. La app sigue al teléfono, y el daltónico se fue
+
+Lo pidió Mathyu: tema claro y oscuro según el dispositivo, y poder
+contradecirlo desde la app. Y borrar la paleta para daltonismo.
+
+### Los dos temas
+
+La app nació oscura y sigue siendo su cara —un dojo se entrena de noche, el
+celular se saca en la puerta— pero el tema **no es del producto, es del
+teléfono**. Quien lo tiene en claro todo el día abre Sinchi y le pega una
+pantalla negra.
+
+- **Dos paletas con las mismas llaves.** `Palette` es una interfaz, no el tipo
+  inferido de la paleta oscura, y esa es la pieza que importa: agregar un token
+  rompe la compilación hasta que el tema claro también tenga valor. Sin eso la
+  paleta clara se queda atrás a la primera prisa, y el fallo no se ve hasta que
+  alguien mira la app de día. La pantalla nunca elige paleta: elige el token.
+- **Tres valores, no un booleano:** `system`, `light`, `dark`. «Claro» y «el
+  teléfono está en claro» son dos hechos distintos —el primero quiere que la app
+  cambie sola al caer la noche, el segundo no— y guardar solo el resultado
+  perdería la diferencia. Es la misma razón por la que las reglas del dominio
+  devuelven el motivo y no un booleano.
+- **La preferencia es del teléfono, no de la cuenta.** Va al llavero, no a la
+  api: quien entra desde otro aparato no se la lleva, y eso es lo correcto — el
+  tema depende de la pantalla que se tiene en la mano.
+- **La elevación se invierte.** En oscuro una tarjeta se levanta aclarándose; en
+  claro se levanta hasta el blanco y lo que se hunde es lo que se oscurece. Por
+  eso las dos paletas no son un espejo hex por hex.
+- **El semáforo también tiene dos juegos.** El verde `#2FD16D` sobre una tarjeta
+  blanca da 1.9:1 y deja de ser texto. El juego claro son los mismos cuatro
+  matices llevados al otro extremo de la rampa, y una prueba comprueba que los
+  cuatro pasan 4.5:1 — igual que comprueba que el suelo de texto de cada tema
+  pasa AA sobre las nueve superficies de su tema.
+- **Las pantallas teñidas no siguen al tema.** El resultado de la puerta y el QR
+  del alumno se pintan del degradado del estado en los dos temas: ese color se
+  lee a un metro y es lo que el recepcionista mira antes que ninguna letra.
+  Invertirlo con el teléfono convertiría el mismo hecho en dos pantallas
+  distintas. Su tinta sale de `TINTED_PAPER` y `gradientInk`, no de
+  `colors.ink`; tomarla del tema es lo que la dejaba negra sobre negro.
+- **Ocho hex escritos a mano se fueron con esto.** `#A9C9B4`, `#D9CFA8`,
+  `#C4BB98`… eran el gris del tema tirado hacia el color de una tarjeta teñida,
+  y solo valían para el oscuro. Ahora los calcula `mutedOn`, que parte del gris
+  del tema que toque.
+- **La landing no.** `apps/web` se queda oscura y pide la paleta explícita
+  (`palette('dark')`): es una página de venta con una sola cara, y su icono y su
+  captura de Open Graph se hornean en el build, cuando no hay visitante al que
+  consultarle el tema.
+
+Lo que hay que recordar al probar: `app.json` pasó de `userInterfaceStyle:
+"dark"` a `"automatic"`, así que **hace falta `expo prebuild` para que iOS deje
+de forzar el oscuro** — sin eso `useColorScheme()` devuelve siempre `dark` y el
+«Automático» parece roto. La pantalla de arranque sigue oscura en los dos temas
+a propósito: `splash-icon.png` trae su propio fondo horneado, y la portada del
+layout raíz espera también a que el llavero conteste el tema para que el cambio
+—si la preferencia guardada contradecía al teléfono— ocurra detrás de ella.
+
+### Lo que se retiró: la paleta para daltonismo
+
+Un interruptor en Ajustes cambiaba el verde/rojo del semáforo por azul/magenta.
+El razonamiento era bueno y está escrito: en este producto el color ES la
+información, y el 8% de los hombres tiene alguna deficiencia al rojo-verde.
+
+Se retira porque **nunca fue lo que protegía a esa persona**. Lo que la protege
+es la otra mitad de aquella decisión, que se queda: el motivo del rechazo
+siempre va escrito, nunca «acceso denegado» a secas (MD 4.3), y el semáforo
+siempre viene acompañado de su título —«Puedes entrar», «Acceso suspendido»—.
+Con eso, quien no distingue verde de rojo opera la puerta leyendo, que es lo que
+de verdad hacía. La paleta alternativa solo cambiaba la velocidad de lectura de
+un dato que ya estaba escrito, y a cambio pedía mantener dos juegos de color
+—ahora habrían sido cuatro, con el tema claro— y una pantalla de ajustes que
+explicaba una decisión de accesibilidad a quien solo venía a cambiar el tema.
+
+Si vuelve, vuelve con lo que le faltaba: una forma distinta por estado, no solo
+un tono distinto. Un punto, un triángulo y una cruz se distinguen sin color y
+sin leer, que es lo que la paleta prometía y no daba.

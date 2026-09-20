@@ -215,7 +215,7 @@ export default function DoorScreen() {
                   gap={11}
                   justify="flex-start"
                   style={{
-                    backgroundColor: '#141418',
+                    backgroundColor: theme.colors.surface,
                     borderRadius: theme.radii.md,
                     paddingHorizontal: 13,
                     paddingVertical: 11,

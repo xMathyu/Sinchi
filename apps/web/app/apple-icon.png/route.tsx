@@ -10,9 +10,19 @@
  * de iOS se come las esquinas, y la punta de lanza pesa abajo.
  */
 import { ImageResponse } from 'next/og';
-import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX, colors } from '@sinchi/ui';
+import { LOGO_BAR_PATH, LOGO_BAR_WIDTH, LOGO_OUTLINE_PATH, LOGO_VIEWBOX, palette } from '@sinchi/ui';
 
 export const dynamic = 'force-static';
+
+/**
+ * La landing no sigue al tema del navegador: es oscura y punto.
+ *
+ * La app si tiene dos temas (decisiones §17), pero esto es una pagina de venta
+ * con una sola cara, y su icono y su captura de Open Graph se hornean en el
+ * build: no hay un «tema del visitante» que consultar cuando se generan.
+ */
+const colors = palette('dark');
+
 
 const LADO = 180;
 /** El glifo mide 84 de alto dentro de un viewBox de 100: el marco compensa. */

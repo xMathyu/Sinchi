@@ -11,7 +11,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 import { isoWeekday, type Attendance } from '@sinchi/shared';
-import { withAlpha } from '@sinchi/ui';
+import { mutedOn, withAlpha } from '@sinchi/ui';
 import { Button, Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
@@ -75,7 +75,10 @@ export default function DeviceScreen() {
         <Text variant="display" weight="extrabold">
           {online ? 'Todo sincronizado' : 'La puerta sigue\nfuncionando'}
         </Text>
-        <Text variant="caption" color={online ? '#A9C9B4' : '#C9A98C'}>
+        <Text
+          variant="caption"
+          color={mutedOn(theme, online ? theme.semaphore.ok : theme.semaphore.alert)}
+        >
           {online
             ? 'Cada marcado se sube al momento. El padrón en caché se refresca en segundo plano.'
             : 'Validando contra el padrón en caché. Los marcados se suben solos cuando vuelva el wifi.'}

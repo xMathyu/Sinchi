@@ -1,6 +1,4 @@
-• Celular con bandera: eliges el país y luego escribes el número.
-• Mi cuenta: toca tu avatar en cualquier pestaña para corregir tu nombre y tu celular.
-• Desde el directorio reservas una clase suelta o te inscribes en un plan.
-• Fuera el código de recepción: el gimnasio escanea tu QR y tú aceptas la solicitud.
-• Sin gimnasio ves la misma app que un alumno, con tu QR listo.
-• Mensajes: hablas con tu gimnasio dentro de la app.
+• Tema claro y tema oscuro: la app sigue al tema del teléfono y cambia con él, sin reiniciar.
+• Si prefieres mandarle tú: Mi cuenta → Apariencia → Automático, Claro u Oscuro. Se queda puesto.
+• El semáforo usa tonos más oscuros en claro para que se lea sobre fondo blanco. Verde entra, rojo no: igual que siempre.
+• La pantalla de la puerta y tu QR siguen teñidas del color del estado en los dos temas.

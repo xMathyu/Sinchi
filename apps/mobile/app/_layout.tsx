@@ -18,14 +18,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
-import { colors } from '@sinchi/ui';
+import { COLORS_DARK } from '@sinchi/ui';
 import { DISPLAY_FONTS } from '../src/design/fonts';
-import { ThemeProvider } from '../src/design/theme';
+import { ThemeProvider, useTheme } from '../src/design/theme';
 import Constants from 'expo-constants';
 import { setApiBase, setCredentialProvider } from '../src/data/api';
 import { clearSession, currentToken, restoreSession } from '../src/data/session';
 import { restoreFirebaseAccount } from '../src/data/auth';
-import { useWelcomeState, useSession } from '../src/data/session-hooks';
+import { restoreAppearance } from '../src/data/appearance';
+import { useAppearance, useWelcomeState, useSession } from '../src/data/session-hooks';
 import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
 import { markHydrating, markHydrationDone, resetState } from '../src/data/store';
@@ -87,6 +88,9 @@ export default function RootLayout() {
   useEffect(() => {
     void restoreSession(restoreFirebaseAccount);
     void restoreWelcomeState();
+    // Del mismo llavero y en la misma tanda: la portada espera a las tres, y
+    // pedirlas en fila sumaria tres esperas donde cabe una.
+    void restoreAppearance();
   }, []);
 
   if (!fontsLoaded && fontError === null) {
@@ -96,58 +100,83 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <StatusBar style="light" />
         <SessionRouter />
         <DataLoader />
         <Portada />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
-          <Stack.Screen name="login" options={{ animation: 'fade' }} />
-          <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="explore/index" />
-          <Stack.Screen name="explore/[slug]" />
-          <Stack.Screen name="chat/[slug]" />
-          <Stack.Screen name="inbox/[conversationId]" />
-          <Stack.Screen name="student" />
-          <Stack.Screen name="staff" />
-          <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="plan-change/[membershipId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="charge/[membershipId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="member/[membershipId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="enroll" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
-          {/* A pantalla completa y sin animacion lateral: es la camara, no una
-              ficha que se consulta. Se queda abierta DEBAJO del resultado para
-              que el siguiente alumno no tenga que pasar por la puerta. */}
-          <Stack.Screen
-            name="scan"
-            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
-          />
-          <Stack.Screen
-            name="result/[membershipId]"
-            options={{ presentation: 'fullScreenModal', animation: 'fade' }}
-          />
-          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-          {/* La oferta del gimnasio. Van como modal y no como pestaña porque no
-              se consultan a diario: se entra a cambiar un precio y se sale. */}
-          <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="events/edit/[eventId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="routines/index" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="routines/[routineId]" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="routines/edit/[routineId]" options={{ presentation: 'modal' }} />
-        </Stack>
+        <AppStack />
       </ThemeProvider>
     </SafeAreaProvider>
+  );
+}
+
+/**
+ * La navegacion, en su propio componente porque necesita el tema.
+ *
+ * `RootLayout` monta el `ThemeProvider`, asi que no puede leerlo: un componente
+ * no ve el contexto que el mismo pone. Este si, y de ahi salen las dos cosas
+ * que antes estaban clavadas en oscuro: la barra de estado y el fondo que el
+ * Stack ensena entre pantallas.
+ */
+function AppStack() {
+  const theme = useTheme();
+
+  return (
+    <>
+      {/* `auto` no sirve: sigue al TELEFONO, y aqui manda la preferencia de la
+          persona. Con el tema claro forzado sobre un telefono en oscuro, `auto`
+          pintaria la hora en blanco sobre la barra clara de la app. */}
+      <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'slide_from_right',
+          // El hueco que se ve mientras una pantalla entra y otra sale. Sin
+          // esto lo pinta la navegacion, que no conoce el tema y lo deja
+          // blanco: un destello de luz en cada transicion del tema oscuro.
+          contentStyle: { backgroundColor: theme.colors.canvas },
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
+        <Stack.Screen name="login" options={{ animation: 'fade' }} />
+        <Stack.Screen name="dev" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="explore/index" />
+        <Stack.Screen name="explore/[slug]" />
+        <Stack.Screen name="chat/[slug]" />
+        <Stack.Screen name="inbox/[conversationId]" />
+        <Stack.Screen name="student" />
+        <Stack.Screen name="staff" />
+        <Stack.Screen name="pay/[membershipId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="plan-change/[membershipId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="charge/[membershipId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="member/[membershipId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="enroll" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
+        {/* A pantalla completa y sin animacion lateral: es la camara, no una
+            ficha que se consulta. Se queda abierta DEBAJO del resultado para
+            que el siguiente alumno no tenga que pasar por la puerta. */}
+        <Stack.Screen
+          name="scan"
+          options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+        />
+        <Stack.Screen
+          name="result/[membershipId]"
+          options={{ presentation: 'fullScreenModal', animation: 'fade' }}
+        />
+        <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        {/* La oferta del gimnasio. Van como modal y no como pestaña porque no
+            se consultan a diario: se entra a cambiar un precio y se sale. */}
+        <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="events/edit/[eventId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="routines/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="routines/[routineId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="routines/edit/[routineId]" options={{ presentation: 'modal' }} />
+      </Stack>
+    </>
   );
 }
 
@@ -339,8 +368,10 @@ const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
  * restaurar y la carga sin empezar. La app se monta debajo, tapada.
  */
 function Portada() {
+  const theme = useTheme();
   const state = useSession();
   const welcome = useWelcomeState();
+  const appearance = useAppearance();
 
   // Solo mientras se lee el llavero, que son milisegundos. Es corto pero no
   // se puede saltar: hasta que no se sabe el rol no se sabe QUE barra de
@@ -350,10 +381,13 @@ function Portada() {
   // También mientras se resuelve si toca la bienvenida: son dos lecturas del
   // mismo llavero, lanzadas a la vez, y decidir con una sola manda al login a
   // quien iba a ver la bienvenida y lo saca un instante después.
-  if (state.status !== 'loading' && welcome !== 'cargando') return null;
+  // Y la tercera lectura es el tema: hasta que llega, la app se pinta con el
+  // del teléfono, y quien lo tiene en oscuro y eligió claro vería la app entera
+  // cambiar de color delante suyo. Detrás de la portada ese cambio no se ve.
+  if (state.status !== 'loading' && welcome !== 'cargando' && appearance !== null) return null;
 
   return (
-    <View style={styles.portada}>
+    <View style={[styles.portada, { backgroundColor: theme.colors.canvas }]}>
       <SectionLoader text="" size={52} />
     </View>
   );
@@ -494,14 +528,20 @@ function SessionRouter() {
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, backgroundColor: colors.canvas },
+  /**
+   * Oscuro SIEMPRE, aunque el tema sea claro, y no es un descuido: esto no es
+   * una pantalla de la app sino la continuacion de la de arranque nativa, que
+   * es oscura en los dos temas porque `splash-icon.png` trae su propio fondo
+   * oscuro horneado. Pintarlo del tema abriria un corte de color en medio del
+   * arranque. El color es el de `expo-splash-screen` en `app.json`.
+   */
+  splash: { flex: 1, backgroundColor: COLORS_DARK.screen },
   portada: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.canvas,
     alignItems: 'center',
     justifyContent: 'center',
     // Por encima del Stack y de la barra de pestanas.

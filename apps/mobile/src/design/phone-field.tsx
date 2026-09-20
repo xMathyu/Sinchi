@@ -190,6 +190,7 @@ export function PhoneField({
           // país, un ejemplo peruano enseñaría la forma equivocada.
           placeholder={country.iso === DEFAULT_PHONE_COUNTRY.iso ? '987 654 321' : 'Número'}
           placeholderTextColor={theme.colors.textPlaceholder}
+          keyboardAppearance={theme.scheme}
           editable={editable}
           keyboardType="phone-pad"
           autoComplete="tel"
@@ -292,6 +293,7 @@ function CountryPicker({
             onChangeText={setQuery}
             placeholder="Busca tu país o su código"
             placeholderTextColor={theme.colors.textPlaceholder}
+            keyboardAppearance={theme.scheme}
             autoCorrect={false}
             autoCapitalize="none"
             returnKeyType="search"

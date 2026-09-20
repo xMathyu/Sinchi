@@ -27,6 +27,7 @@ import Wallet from 'lucide-react-native/icons/wallet';
 import type { LucideIcon } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { withAlpha } from '@sinchi/ui';
 import { Text } from './primitives';
 import { useTheme } from './theme';
 
@@ -99,12 +100,15 @@ export function TabBarShell({ children }: { readonly children: ReactNode }) {
   return (
     <BlurView
       intensity={40}
-      tint="dark"
+      tint={theme.scheme}
       style={{
         flexDirection: 'row',
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: theme.colors.hairline,
-        backgroundColor: 'rgba(14,14,17,0.88)',
+        // Casi opaco encima del desenfoque: la barra tiene que separarse del
+        // contenido que pasa por debajo, y el desenfoque solo no basta sobre
+        // una lista con colores.
+        backgroundColor: withAlpha(theme.colors.screen, 0.88),
         paddingTop: 10,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
       }}
@@ -158,7 +162,9 @@ export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
           <View
             style={[
               styles.badge,
-              { backgroundColor: theme.semaphore.ok, borderColor: 'rgba(14,14,17,1)' },
+              // El borde recorta la insignia contra la barra, asi que es del
+              // color de la barra: opaco, no el `hairline` translucido.
+              { backgroundColor: theme.semaphore.ok, borderColor: theme.colors.screen },
             ]}
           >
             <Text

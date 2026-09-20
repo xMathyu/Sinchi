@@ -20,7 +20,7 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { parseAccountQrPayload } from '@sinchi/shared';
-import { screenPadding } from '@sinchi/ui';
+import { TINTED_PAPER, screenPadding } from '@sinchi/ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Stack, Text } from '../src/design/primitives';
 import { useTheme } from '../src/design/theme';
@@ -262,7 +262,9 @@ function Corner({
 }) {
   const size = 46;
   const border = 4;
-  const color = '#F4F1EA';
+  // Claro en los dos temas: esto va ENCIMA de la camara, y lo que hay detras es
+  // el mostrador de un gimnasio, no la pantalla de la app.
+  const color = TINTED_PAPER;
 
   const base = {
     position: 'absolute' as const,

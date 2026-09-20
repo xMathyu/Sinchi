@@ -10,7 +10,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatPENShort } from '@sinchi/shared';
-import { screenPadding, semaphoreStyle, withAlpha } from '@sinchi/ui';
+import { mutedOn, screenPadding, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Avatar, Badge, Button, Card, Eyebrow, Row, Stack, Text } from '../src/design/primitives';
 import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
@@ -145,6 +145,7 @@ export default function ManualCheckInScreen() {
           onChangeText={setQuery}
           placeholder="Nombre o documento"
           placeholderTextColor={theme.colors.textPlaceholder}
+          keyboardAppearance={theme.scheme}
           autoCorrect={false}
           autoCapitalize="words"
           accessibilityLabel="Buscar alumno por nombre o documento"
@@ -189,11 +190,20 @@ export default function ManualCheckInScreen() {
             marginTop: 1,
           }}
         >
-          <Text variant="eyebrow" weight="black" color="#2B1305" style={{ letterSpacing: 0 }}>
+          <Text
+            variant="eyebrow"
+            weight="black"
+            color={theme.semaphoreInk.alert}
+            style={{ letterSpacing: 0 }}
+          >
             !
           </Text>
         </View>
-        <Text variant="captionSmall" color="#D3B394" style={{ flex: 1 }}>
+        <Text
+          variant="captionSmall"
+          color={mutedOn(theme, theme.semaphore.alert)}
+          style={{ flex: 1 }}
+        >
           El marcado manual queda auditado con tu nombre y la hora. Úsalo solo cuando el alumno no
           tenga su celular.
         </Text>

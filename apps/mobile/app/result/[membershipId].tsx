@@ -16,7 +16,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatPEN, formatPENShort } from '@sinchi/shared';
-import { semaphoreStyle } from '@sinchi/ui';
+import { TINTED_PAPER, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Dot, Row, Stack, Text } from '../../src/design/primitives';
 import { PhotoCircle } from '../../src/design/photo';
 import { TintedScreen } from '../../src/design/screen';
@@ -44,8 +44,11 @@ export default function ScanResultScreen() {
   const message = verdict?.message ?? local.message;
   const registrado = verdict?.registered === true;
 
+  // `gradientInk` y no `ink`: esta pantalla se pinta del degradado del estado en
+  // los dos temas —ver `TINTED_PAPER`— asi que su tinta es la oscura aunque el
+  // telefono este en claro. Con `ink` salia blanco sobre amarillo.
   const semaphore = semaphoreStyle(theme, message.level);
-  const ink = semaphore.ink;
+  const ink = semaphore.gradientInk;
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export default function ScanResultScreen() {
       <View
         style={{
           marginTop: 24,
-          backgroundColor: result.allowed ? 'rgba(10,10,11,0.10)' : semaphore.ink,
+          backgroundColor: result.allowed ? 'rgba(10,10,11,0.10)' : ink,
           borderRadius: theme.radii.xxl,
           padding: 20,
           gap: 8,
@@ -108,7 +111,7 @@ export default function ScanResultScreen() {
           <Text
             variant="displaySmall"
             weight="extrabold"
-            color={result.allowed ? ink : '#FFFFFF'}
+            color={result.allowed ? ink : TINTED_PAPER}
             style={{ flex: 1 }}
           >
             {message.title}
@@ -116,7 +119,7 @@ export default function ScanResultScreen() {
         </Row>
         <Text
           variant="bodySmall"
-          color={result.allowed ? ink : '#E8D5D5'}
+          color={result.allowed ? ink : withAlpha(TINTED_PAPER, 0.82)}
           style={result.allowed ? { opacity: 0.7 } : undefined}
         >
           {message.reason}
@@ -133,15 +136,15 @@ export default function ScanResultScreen() {
                 : 'Validado en el dispositivo · se sincroniza al volver el wifi'}
             </Text>
             {error === null ? null : (
-              <Text variant="captionSmall" color={semaphore.ink} align="center">
+              <Text variant="captionSmall" color={ink} align="center">
                 {error}
               </Text>
             )}
             <Button
               label={saving ? 'Registrando…' : registrado ? 'Listo' : 'Confirmar ingreso'}
               variant="accent"
-              accentColor={semaphore.ink}
-              accentInk={theme.colors.ink}
+              accentColor={ink}
+              accentInk={TINTED_PAPER}
               disabled={saving}
               onPress={confirm}
             />
@@ -154,8 +157,8 @@ export default function ScanResultScreen() {
             <Button
               label={message.action ?? 'Registrar pago'}
               variant="accent"
-              accentColor={semaphore.ink}
-              accentInk={theme.colors.ink}
+              accentColor={ink}
+              accentInk={TINTED_PAPER}
               onPress={() =>
                 // El patron de la ruta va literal y el id dentro de `params`.
                 // Interpolarlo en `pathname` compila con las rutas tipadas hasta

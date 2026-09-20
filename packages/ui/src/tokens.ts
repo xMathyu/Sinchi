@@ -26,7 +26,12 @@ export interface SemaphorePalette {
   readonly bad: string;
 }
 
-export const SEMAPHORE_DEFAULT: SemaphorePalette = {
+/**
+ * El semaforo sobre superficies OSCURAS: brillante, que es como se lee de lejos.
+ *
+ * Es tambien el del degradado de las pantallas tenidas, en los dos temas.
+ */
+export const SEMAPHORE_ON_DARK: SemaphorePalette = {
   ok: '#2FD16D',
   warn: '#FFC94D',
   alert: '#FF8A3D',
@@ -34,26 +39,36 @@ export const SEMAPHORE_DEFAULT: SemaphorePalette = {
 };
 
 /**
- * Paleta alternativa para daltonismo.
+ * El semaforo sobre superficies CLARAS.
  *
- * No es un adorno de accesibilidad: en este producto el color ES la
- * informacion. Un recepcionista que no distingue verde de rojo no puede
- * operar la puerta, y el 8% de los hombres tiene alguna deficiencia al rojo-verde.
- * El texto del motivo siempre acompana al color por la misma razon.
+ * No es el mismo color con otro nombre: el verde de arriba sobre una tarjeta
+ * blanca da 1.9:1 y deja de ser texto. Estos cuatro son los mismos cuatro
+ * matices llevados al otro extremo de la rampa —verde, ambar, naranja, rojo— y
+ * todos pasan 4.5:1 sobre la superficie mas clara del tema. Cambia el tono, no
+ * el significado: el ok sigue siendo verde y el bad sigue siendo rojo, porque
+ * eso es lo que el recepcionista ya aprendio a leer.
  */
-export const SEMAPHORE_COLORBLIND_SAFE: SemaphorePalette = {
-  ok: '#3CB4FF',
-  warn: '#FFD166',
-  alert: '#C58BFF',
-  bad: '#FF3B6B',
+export const SEMAPHORE_ON_LIGHT: SemaphorePalette = {
+  ok: '#0E7C41',
+  warn: '#9A6400',
+  alert: '#B34A12',
+  bad: '#C42121',
 };
 
-/** Tinta oscura legible sobre cada color del semaforo. */
-export const SEMAPHORE_INK: SemaphorePalette = {
+/** Tinta oscura legible sobre el semaforo brillante (tema oscuro y degradados). */
+export const SEMAPHORE_INK_ON_DARK: SemaphorePalette = {
   ok: '#08260F',
   warn: '#2B1305',
   alert: '#2B1305',
   bad: '#380B0B',
+};
+
+/** Tinta clara legible sobre el semaforo oscuro del tema claro. */
+export const SEMAPHORE_INK_ON_LIGHT: SemaphorePalette = {
+  ok: '#F2FBF5',
+  warn: '#FDF7EC',
+  alert: '#FDF3EC',
+  bad: '#FDF0F0',
 };
 
 /** Degradado de fondo para las pantallas que se tinen del color del estado. */
@@ -65,16 +80,89 @@ export const SEMAPHORE_GRADIENT: Readonly<Record<keyof SemaphorePalette, readonl
     bad: ['#FF6161', '#C22B2B'],
   };
 
+/**
+ * El blanco calido de las pantallas tenidas, que no sigue al tema.
+ *
+ * El resultado de la puerta y el QR del alumno se pintan del color del estado en
+ * los DOS temas, y no por descuido: ese color se lee a un metro y es lo que el
+ * recepcionista mira antes que ninguna letra. Dentro de esas pantallas hay
+ * bloques oscuros —la tarjeta del motivo, la pastilla del veredicto— y su texto
+ * tiene que ser claro aunque el telefono este en modo claro. Tomarlo de
+ * `colors.ink` es lo que lo volvia negro sobre negro.
+ */
+export const TINTED_PAPER = '#F4F1EA';
+
 // ---------------------------------------------------------------------------
 // Color
 // ---------------------------------------------------------------------------
 
-export const colors = {
+/**
+ * Los dos temas de la app.
+ *
+ * La app nacio oscura y esa sigue siendo su cara: un dojo se entrena de noche y
+ * el telefono se saca en la puerta. Pero el tema no es del producto, es del
+ * TELEFONO — quien lo tiene en claro todo el dia abre Sinchi y le pega una
+ * pantalla negra— asi que hay dos paletas con las mismas llaves y la pantalla
+ * nunca elige una: elige el token, y el tema decide el hex.
+ */
+export type ColorScheme = 'light' | 'dark';
+
+/**
+ * El juego de tokens, que es identico en los dos temas.
+ *
+ * Se declara como interfaz y no se infiere de la paleta oscura a proposito: es
+ * lo que obliga a que agregar un token ahi rompa la compilacion del tema claro
+ * hasta que tambien tenga valor. Sin eso, la paleta clara se queda atras a la
+ * primera prisa y el fallo no se ve hasta que alguien mira la app de dia.
+ */
+export interface Palette {
   /** Fondo del lienzo y de la app. */
-  canvas: '#08080A',
+  readonly canvas: string;
   /** Fondo de pantalla. */
+  readonly screen: string;
+  /** Fondo de la pantalla de la puerta, un punto mas hondo que el de pantalla. */
+  readonly screenScanner: string;
+
+  readonly surface: string;
+  readonly surfaceSunken: string;
+  readonly surfaceMuted: string;
+  readonly surfaceRaised: string;
+  readonly surfaceHigh: string;
+  readonly surfaceHigher: string;
+  readonly avatar: string;
+  readonly chipActive: string;
+
+  /** La tinta del tema: el texto por defecto y el color de la marca. */
+  readonly ink: string;
+  /** Tinta sobre fondos claros FIJOS —el parche blanco del QR—, no sobre el tema. */
+  readonly inkOnLight: string;
+
+  readonly textBright: string;
+  readonly textStrong: string;
+  readonly textSecondary: string;
+  readonly textTertiary: string;
+  readonly textFaint: string;
+  readonly textPlaceholder: string;
+  readonly textDisabled: string;
+
+  readonly divider: string;
+  readonly hairline: string;
+  readonly border: string;
+  readonly borderStrong: string;
+  readonly borderDashed: string;
+
+  readonly actionPrimary: string;
+  readonly actionPrimaryInk: string;
+  readonly actionSecondary: string;
+  /** La perilla de un interruptor. Blanca en los dos temas, como en iOS. */
+  readonly controlThumb: string;
+
+  readonly scrim: string;
+}
+
+export const COLORS_DARK: Palette = {
+  canvas: '#08080A',
   screen: '#0E0E11',
-  /** Fondo de la pantalla de escaneo, un punto mas oscuro. */
   screenScanner: '#0A0A0C',
 
   surface: '#17171B',
@@ -88,7 +176,6 @@ export const colors = {
 
   /** Blanco calido: nunca `#FFFFFF`, que sobre negro puro vibra. */
   ink: '#F4F1EA',
-  /** Tinta sobre fondos claros. */
   inkOnLight: '#0A0A0B',
 
   textBright: '#C9C9D1',
@@ -130,9 +217,84 @@ export const colors = {
   actionPrimary: '#F4F1EA',
   actionPrimaryInk: '#08080A',
   actionSecondary: '#1E1E24',
+  controlThumb: '#F4F1EA',
 
   scrim: 'rgba(10,10,11,0.92)',
-} as const;
+};
+
+/**
+ * El mismo sistema con la rampa dada vuelta.
+ *
+ * Dos cosas que no son un espejo mecanico y conviene saber:
+ *
+ *  - la elevacion se invierte. En oscuro una tarjeta se levanta ACLARANDOSE
+ *    (`surfaceRaised` > `surface`); en claro se levanta hasta el blanco y lo
+ *    que se hunde es lo que se oscurece (`surfaceSunken`). Por eso los hex no
+ *    van en el mismo orden;
+ *  - el papel es calido, del mismo modo que la tinta oscura lo es. Un gris
+ *    neutro al lado del `#F4F1EA` de la marca se lee azulado.
+ *
+ * El suelo de texto es `#5A5A63` por la misma cuenta que arriba: es el gris mas
+ * CLARO que pasa 4.5:1 sobre `surfaceHigher`, la superficie mas oscura del tema.
+ * La prueba de `semaphore.test.ts` lo comprueba sobre las nueve superficies, y
+ * ya salvo un ajuste del papel que lo habia dejado en 4.43:1.
+ */
+export const COLORS_LIGHT: Palette = {
+  /**
+   * El papel va cuatro escalones por debajo del blanco, y eso no es gusto: con
+   * el lienzo casi blanco, una tarjeta blanca sobre el se apoya en el filete y
+   * en nada mas — en la bienvenida, que son tres tarjetas sueltas sin barra de
+   * color, desaparecian. En oscuro el mismo salto se ve porque el ojo separa
+   * mejor dos negros que dos blancos.
+   */
+  canvas: '#E9E6DE',
+  screen: '#F2EFE8',
+  /**
+   * La puerta tambien se aclara. Se penso en dejarla oscura siempre —es la
+   * pantalla de la camara— pero la camara la abre `scan`, no esta: aqui solo
+   * hay una lista de marcados, y dejarla negra en medio de una app clara se lee
+   * como que se colgo.
+   */
+  screenScanner: '#E6E2DA',
+
+  surface: '#FCFBF8',
+  surfaceSunken: '#E7E3DB',
+  surfaceMuted: '#EDEAE2',
+  surfaceRaised: '#FFFFFF',
+  surfaceHigh: '#E1DDD4',
+  surfaceHigher: '#DBD6CC',
+  avatar: '#D9D4CA',
+  chipActive: '#FFFFFF',
+
+  /** Carbon calido: nunca `#000000`, por lo mismo que arriba nunca es blanco puro. */
+  ink: '#1B1A17',
+  inkOnLight: '#0A0A0B',
+
+  textBright: '#2C2C34',
+  textStrong: '#38383F',
+  textSecondary: '#46464F',
+  textTertiary: '#5A5A63',
+  textFaint: '#5A5A63',
+  textPlaceholder: '#5A5A63',
+  textDisabled: '#B0ACA3',
+
+  divider: 'rgba(12,12,16,0.06)',
+  hairline: 'rgba(12,12,16,0.09)',
+  border: 'rgba(12,12,16,0.12)',
+  borderStrong: 'rgba(12,12,16,0.16)',
+  borderDashed: 'rgba(12,12,16,0.20)',
+
+  /** Sigue invertido, que es lo que lo hace el bloque de mas contraste. */
+  actionPrimary: '#1B1A17',
+  actionPrimaryInk: '#F7F5F0',
+  actionSecondary: '#FFFFFF',
+  controlThumb: '#FFFFFF',
+
+  scrim: 'rgba(242,239,232,0.92)',
+};
+
+export const palette = (scheme: ColorScheme): Palette =>
+  scheme === 'light' ? COLORS_LIGHT : COLORS_DARK;
 
 /** Fondos y bordes translucidos derivados de un color del semaforo. */
 export function tintedSurface(color: string, alpha = 0.12): string {
@@ -154,6 +316,45 @@ export function withAlpha(color: string, alpha: number): string {
   const g = Number.parseInt(full.slice(2, 4), 16);
   const b = Number.parseInt(full.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Mezcla dos colores en sRGB. `amount` es cuanto del segundo entra.
+ *
+ * Existe por un caso concreto: el texto secundario de una tarjeta tenida del
+ * color del estado. Estaba escrito a mano —`#A9C9B4`, `#D9CFA8`, `#C4BB98`,
+ * ocho hex repartidos por las pantallas— y cada uno era el gris del tema tirado
+ * un poco hacia su color. Escritos a mano solo valian para el tema oscuro: en
+ * claro eran texto pastel sobre papel. Calculados, salen del gris del tema que
+ * toque y siguen siendo el mismo gesto.
+ */
+export function mix(from: string, to: string, amount: number): string {
+  const a = channels(from);
+  const b = channels(to);
+  if (a === null || b === null) return from;
+  const blend = (start: number, end: number): string =>
+    Math.round(start + (end - start) * amount)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${blend(a[0], b[0])}${blend(a[1], b[1])}${blend(a[2], b[2])}`;
+}
+
+function channels(color: string): readonly [number, number, number] | null {
+  if (!color.startsWith('#')) return null;
+  const hex = color.slice(1);
+  const full =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : hex;
+  if (full.length !== 6) return null;
+  return [
+    Number.parseInt(full.slice(0, 2), 16),
+    Number.parseInt(full.slice(2, 4), 16),
+    Number.parseInt(full.slice(4, 6), 16),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +437,7 @@ export const radii = {
   pill: 999,
 } as const;
 
-/** Multiplos de 2 desde 2: la retícula del diseno es fina, no de 8pt. */
+/** Multiplos de 2 desde 2: la reticula del diseno es fina, no de 8pt. */
 export const spacing = {
   xxs: 2,
   xs: 6,
@@ -269,30 +470,36 @@ export const durations = {
 // ---------------------------------------------------------------------------
 
 export interface Theme {
-  readonly colors: typeof colors;
+  /** Cual de los dos temas esta puesto. Lo consultan el teclado y la barra de estado. */
+  readonly scheme: ColorScheme;
+  readonly colors: Palette;
   readonly semaphore: SemaphorePalette;
   readonly semaphoreInk: SemaphorePalette;
   readonly semaphoreGradient: typeof SEMAPHORE_GRADIENT;
+  /** Tinta sobre el degradado, que es brillante en los dos temas. */
+  readonly semaphoreGradientInk: SemaphorePalette;
   readonly fonts: typeof fonts;
   readonly typeScale: typeof typeScale;
   readonly radii: typeof radii;
   readonly spacing: typeof spacing;
-  readonly colorBlindSafe: boolean;
 }
 
-export function makeTheme(options: { readonly colorBlindSafe?: boolean } = {}): Theme {
-  const colorBlindSafe = options.colorBlindSafe ?? false;
+export function makeTheme(options: { readonly scheme?: ColorScheme } = {}): Theme {
+  const scheme = options.scheme ?? 'dark';
+  const light = scheme === 'light';
   return {
-    colors,
-    semaphore: colorBlindSafe ? SEMAPHORE_COLORBLIND_SAFE : SEMAPHORE_DEFAULT,
-    semaphoreInk: SEMAPHORE_INK,
+    scheme,
+    colors: palette(scheme),
+    semaphore: light ? SEMAPHORE_ON_LIGHT : SEMAPHORE_ON_DARK,
+    semaphoreInk: light ? SEMAPHORE_INK_ON_LIGHT : SEMAPHORE_INK_ON_DARK,
     semaphoreGradient: SEMAPHORE_GRADIENT,
+    semaphoreGradientInk: SEMAPHORE_INK_ON_DARK,
     fonts,
     typeScale,
     radii,
     spacing,
-    colorBlindSafe,
   };
 }
 
+/** El tema de arranque, y el que usa la landing: oscuro, la cara de la marca. */
 export const defaultTheme = makeTheme();

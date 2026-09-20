@@ -1577,6 +1577,7 @@ function LabeledInput({
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
+        keyboardAppearance={theme.scheme}
         autoCapitalize="words"
         style={{
           color: theme.colors.ink,

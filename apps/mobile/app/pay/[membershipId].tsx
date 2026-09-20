@@ -13,7 +13,7 @@
 import { Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatPEN, formatPENShort } from '@sinchi/shared';
-import { semaphoreStyle, withAlpha } from '@sinchi/ui';
+import { mutedOn, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import { Button, Card, Divider, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
@@ -72,7 +72,7 @@ export default function PaymentStatusScreen() {
                 ? 'Hoy es tu último día'
                 : `Te quedan ${delinquency.graceDaysLeft} ${delinquency.graceDaysLeft === 1 ? 'día' : 'días'}\npara entrenar`}
           </Text>
-          <Text variant="caption" color={suspended ? '#E8B9B9' : '#C4BB98'}>
+          <Text variant="caption" color={semaphore.mutedInk}>
             {suspended
               ? `Venció el periodo de gracia el ${formatLongDate(delinquency.suspensionDate)}. El escáner de la puerta ya no valida tu QR.`
               : `El ${formatLongDate(delinquency.suspensionDate)} tu acceso se suspende y el escáner de la puerta dejará de validar tu QR.`}
@@ -104,7 +104,7 @@ export default function PaymentStatusScreen() {
           <Text variant="display" weight="extrabold">
             No debes nada
           </Text>
-          <Text variant="caption" color="#A9C9B4">
+          <Text variant="caption" color={mutedOn(theme, theme.semaphore.ok)}>
             Tu próximo pago es el {formatLongDate(entry.subscription.nextBillingDate)} por{' '}
             {formatPENShort(entry.plan.priceCents)}.
           </Text>
@@ -186,7 +186,7 @@ export default function PaymentStatusScreen() {
             padding: 14,
           }}
         >
-          <Text variant="captionSmall" color="#A9C9B4">
+          <Text variant="captionSmall" color={mutedOn(theme, theme.semaphore.ok)}>
             Los pagos se registran en mostrador: efectivo, Yape o transferencia. Recepción escanea
             tu QR, cobra y tu acceso se libera al instante.
           </Text>

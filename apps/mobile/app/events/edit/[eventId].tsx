@@ -293,7 +293,7 @@ export default function EventEditorScreen() {
               onValueChange={setPublished}
               accessibilityLabel="Publicar el evento"
               trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-              thumbColor={theme.colors.ink}
+              thumbColor={theme.colors.controlThumb}
             />
           </Row>
         </Card>

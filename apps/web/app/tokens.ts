@@ -1,4 +1,4 @@
-import { SEMAPHORE_DEFAULT, colors, radii } from '@sinchi/ui';
+import { SEMAPHORE_ON_DARK, palette, radii } from '@sinchi/ui';
 
 /**
  * Los tokens del design system, como variables CSS.
@@ -11,7 +11,13 @@ import { SEMAPHORE_DEFAULT, colors, radii } from '@sinchi/ui';
  *
  * Van inyectados en `<head>` y no en un `.css` porque un archivo estático no
  * puede importar TypeScript: en cuanto lo escribes a mano, ya es una copia.
+ *
+ * Solo la paleta oscura: la app tiene dos temas y sigue al telefono
+ * (decisiones §17), la landing no. Un visitante con el navegador en claro ve la
+ * misma pagina oscura que todos, que es la que la marca quiere ensenar.
  */
+const colors = palette('dark');
+
 export function tokenCss(): string {
   const vars: Record<string, string> = {
     '--canvas': colors.canvas,
@@ -25,10 +31,10 @@ export function tokenCss(): string {
     '--border': colors.border,
     '--hairline': colors.hairline,
     '--divider': colors.divider,
-    '--ok': SEMAPHORE_DEFAULT.ok,
-    '--warn': SEMAPHORE_DEFAULT.warn,
-    '--alert': SEMAPHORE_DEFAULT.alert,
-    '--bad': SEMAPHORE_DEFAULT.bad,
+    '--ok': SEMAPHORE_ON_DARK.ok,
+    '--warn': SEMAPHORE_ON_DARK.warn,
+    '--alert': SEMAPHORE_ON_DARK.alert,
+    '--bad': SEMAPHORE_ON_DARK.bad,
     '--r-md': `${radii.md}px`,
     '--r-lg': `${radii.lg}px`,
     '--r-xl': `${radii.xl}px`,

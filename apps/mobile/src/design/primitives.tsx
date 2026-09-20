@@ -569,6 +569,10 @@ export function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={theme.colors.textPlaceholder}
+        // El teclado sigue al TEMA, no al telefono. `default` sigue al segundo,
+        // y con el tema claro forzado sobre un telefono en oscuro sale un
+        // teclado negro pegado a un formulario blanco.
+        keyboardAppearance={theme.scheme}
         editable={editable}
         multiline={multiline}
         secureTextEntry={secureTextEntry}

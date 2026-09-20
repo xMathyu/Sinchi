@@ -190,7 +190,7 @@ function Interruptor() {
             disabled={!esDueño || activa === null || saving}
             accessibilityLabel="Ofrecer la primera clase gratis"
             trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-            thumbColor={theme.colors.ink}
+            thumbColor={theme.colors.controlThumb}
           />
         </Row>
 

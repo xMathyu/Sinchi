@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { semaphoreStyle } from '@sinchi/ui';
+import { TINTED_PAPER, semaphoreStyle } from '@sinchi/ui';
 import { encodeAccountQrPayload } from '@sinchi/shared';
 import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { LinkRequestList } from '../../src/design/link-requests';
@@ -85,8 +85,10 @@ export default function QrScreen() {
     );
   }
 
+  // La tinta del degradado, no la del tema: esta pantalla se tine del color del
+  // estado tambien en modo claro. Ver `TINTED_PAPER`.
   const semaphore = semaphoreStyle(theme, preview.message.level);
-  const ink = semaphore.ink;
+  const ink = semaphore.gradientInk;
   const { brand } = splitGymName(selected.tenant.name);
 
   return (
@@ -229,7 +231,7 @@ export default function QrScreen() {
           }}
         >
           <Dot color={semaphore.color} size={9} />
-          <Text variant="bodySmall" weight="bold" color="#FFFFFF">
+          <Text variant="bodySmall" weight="bold" color={TINTED_PAPER}>
             {preview.message.title}
           </Text>
         </Row>
@@ -417,14 +419,18 @@ function RegisterPanel({
       ) : null}
 
       <Stack gap={14} style={{ marginTop: 26, alignItems: 'center' }}>
-        {/* Blanco y con margen propio aunque el tema sea oscuro: una cámara de
+        {/* Blanco y con margen propio sea cual sea el tema: una cámara de
             mostrador lee mal un QR invertido, y peor todavía sin borde. Vencido
-            se apaga en vez de desaparecer, para que no parezca que se rompió. */}
+            se apaga en vez de desaparecer, para que no parezca que se rompió.
+            El filete es para el tema claro: blanco sobre papel, el recuadro
+            desaparece y el QR queda flotando sin decir dónde termina. */}
         <View
           style={{
             padding: 18,
             borderRadius: theme.radii.xxl,
             backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: theme.colors.border,
             opacity: dimmed ? 0.2 : 1,
           }}
         >

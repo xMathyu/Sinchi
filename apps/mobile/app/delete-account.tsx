@@ -143,6 +143,7 @@ export default function DeleteAccountScreen() {
                 onChangeText={(v) => setDenial(v.slice(0, 500))}
                 placeholder="¿Por qué te vas? (opcional)"
                 placeholderTextColor={theme.colors.textPlaceholder}
+                keyboardAppearance={theme.scheme}
                 multiline
                 accessibilityLabel="Motivo, opcional"
                 style={{

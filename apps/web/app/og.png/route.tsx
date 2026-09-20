@@ -19,13 +19,23 @@ import {
   LOGO_BAR_WIDTH,
   LOGO_OUTLINE_PATH,
   LOGO_VIEWBOX,
-  SEMAPHORE_DEFAULT,
-  colors,
+  SEMAPHORE_ON_DARK,
+  palette,
 } from '@sinchi/ui';
 
 // Con `output: 'export'` hay que decirlo explicito: la imagen se hornea en el
 // build, no se genera por peticion.
 export const dynamic = 'force-static';
+
+/**
+ * La landing no sigue al tema del navegador: es oscura y punto.
+ *
+ * La app si tiene dos temas (decisiones §17), pero esto es una pagina de venta
+ * con una sola cara, y su icono y su captura de Open Graph se hornean en el
+ * build: no hay un «tema del visitante» que consultar cuando se generan.
+ */
+const colors = palette('dark');
+
 
 const SIZE = { width: 1200, height: 630 };
 
@@ -110,9 +120,9 @@ export function GET() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-          <div style={{ width: 15, height: 15, borderRadius: 8, background: SEMAPHORE_DEFAULT.ok, display: 'flex' }} />
+          <div style={{ width: 15, height: 15, borderRadius: 8, background: SEMAPHORE_ON_DARK.ok, display: 'flex' }} />
           <span style={{ fontSize: 25, color: colors.textTertiary }}>
-            <span style={{ color: SEMAPHORE_DEFAULT.ok }}>Primer mes gratis</span>
+            <span style={{ color: SEMAPHORE_ON_DARK.ok }}>Primer mes gratis</span>
             {/* Satori se come el espacio del principio de una cadena suelta. */}
             <span style={{ marginLeft: 9 }}>· Gimnasios y escuelas de artes marciales</span>
           </span>

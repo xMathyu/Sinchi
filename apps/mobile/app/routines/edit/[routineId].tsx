@@ -199,7 +199,7 @@ export default function RoutineEditorScreen() {
                 onValueChange={setIsPublic}
                 accessibilityLabel="Hacerla pública"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-                thumbColor={theme.colors.ink}
+                thumbColor={theme.colors.controlThumb}
               />
             </Row>
             <Text variant="micro" color={theme.colors.textFaint}>
@@ -290,7 +290,7 @@ export default function RoutineEditorScreen() {
               onValueChange={setPublished}
               accessibilityLabel="Publicar la rutina"
               trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-              thumbColor={theme.colors.ink}
+              thumbColor={theme.colors.controlThumb}
             />
           </Row>
         </Card>

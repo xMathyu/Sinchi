@@ -147,7 +147,7 @@ export default function PricingScreen() {
                 disabled={!isOwner}
                 accessibilityLabel="Dejar entrar pagando clase suelta"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-                thumbColor={theme.colors.ink}
+                thumbColor={theme.colors.controlThumb}
               />
             </Row>
 
@@ -188,7 +188,7 @@ export default function PricingScreen() {
                 disabled={!isOwner}
                 accessibilityLabel="Ofrecer clase de prueba"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
-                thumbColor={theme.colors.ink}
+                thumbColor={theme.colors.controlThumb}
               />
             </Row>
 

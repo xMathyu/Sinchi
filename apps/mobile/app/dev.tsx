@@ -164,6 +164,7 @@ export default function DevScreen() {
                 autoCorrect={false}
                 keyboardType="url"
                 placeholderTextColor={theme.colors.textPlaceholder}
+                keyboardAppearance={theme.scheme}
                 style={{
                   color: theme.colors.ink,
                   fontSize: 14,
@@ -187,6 +188,7 @@ export default function DevScreen() {
                   autoCorrect={false}
                   keyboardType="phone-pad"
                   placeholderTextColor={theme.colors.textPlaceholder}
+                  keyboardAppearance={theme.scheme}
                   style={{
                     flex: 1,
                     color: theme.colors.ink,

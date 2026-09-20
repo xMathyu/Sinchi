@@ -8,6 +8,11 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { AppRole } from '@sinchi/shared';
+import {
+  getAppearance,
+  subscribeAppearance,
+  type AppearancePreference,
+} from './appearance';
 import { getSessionState, subscribeSession, type SessionState } from './session';
 import { getWelcomeState, subscribeWelcomeState, type WelcomeState } from './welcome';
 
@@ -29,4 +34,14 @@ export function useRole(): AppRole | null {
  */
 export function useWelcomeState(): WelcomeState {
   return useSyncExternalStore(subscribeWelcomeState, getWelcomeState, getWelcomeState);
+}
+
+/**
+ * Qué tema pidió esta persona, o `null` mientras se lee el llavero.
+ *
+ * Vive aquí y no en el store por lo mismo que la bienvenida: lo lee el arranque
+ * —el `ThemeProvider` y la portada— antes de que existan los datos de nadie.
+ */
+export function useAppearance(): AppearancePreference | null {
+  return useSyncExternalStore(subscribeAppearance, getAppearance, getAppearance);
 }

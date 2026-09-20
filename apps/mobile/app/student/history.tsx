@@ -189,7 +189,9 @@ function AttendanceRow({
           borderRadius: 11,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: manual ? 'rgba(255,255,255,0.07)' : withAlpha(theme.semaphore.ok, 0.14),
+          backgroundColor: manual
+            ? withAlpha(theme.colors.ink, 0.07)
+            : withAlpha(theme.semaphore.ok, 0.14),
         }}
       >
         <Text variant="eyebrow" weight="extrabold" color={color} style={{ letterSpacing: 0.4 }}>

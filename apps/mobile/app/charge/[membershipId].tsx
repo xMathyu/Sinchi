@@ -22,7 +22,7 @@ import {
   type ChargeType,
   type PaymentRail,
 } from '@sinchi/shared';
-import { semaphoreStyle, withAlpha } from '@sinchi/ui';
+import { mutedOn, semaphoreStyle, withAlpha } from '@sinchi/ui';
 import {
   Avatar,
   Button,
@@ -180,6 +180,7 @@ export default function ChargeScreen() {
                   value={customSoles}
                   onChangeText={setCustomSoles}
                   keyboardType="decimal-pad"
+                  keyboardAppearance={theme.scheme}
                   accessibilityLabel="Monto en soles"
                   style={{
                     color: theme.colors.ink,
@@ -252,7 +253,7 @@ export default function ChargeScreen() {
           padding: 14,
         }}
       >
-        <Text variant="captionSmall" color="#A9C9B4">
+        <Text variant="captionSmall" color={mutedOn(theme, theme.semaphore.ok)}>
           {concept === 'renewal'
             ? `Al confirmar: se crea el cargo en el ledger, la renovación se extiende al ${formatLongDate(nextBilling)} y el QR de ${firstName(nameOfMember(entry))} vuelve a validar de inmediato.`
             : 'Al confirmar: se crea el cargo en el ledger a tu nombre. No cambia la fecha de renovación.'}

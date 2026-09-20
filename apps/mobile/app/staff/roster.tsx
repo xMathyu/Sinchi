@@ -385,6 +385,7 @@ export default function RosterScreen() {
         onChangeText={setQuery}
         placeholder="Buscar por nombre o documento"
         placeholderTextColor={theme.colors.textPlaceholder}
+        keyboardAppearance={theme.scheme}
         autoCapitalize="none"
         autoCorrect={false}
         style={{
@@ -604,6 +605,7 @@ function SubscriptionNotice({
               onChangeText={setCode}
               placeholder="Tu código"
               placeholderTextColor={theme.colors.textPlaceholder}
+              keyboardAppearance={theme.scheme}
               autoCapitalize="characters"
               autoCorrect={false}
               accessibilityLabel="Código de promoción"

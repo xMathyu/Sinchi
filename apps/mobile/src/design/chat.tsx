@@ -232,6 +232,7 @@ export function Composer({
           onChangeText={(text) => onChange(text.slice(0, MESSAGE_MAX_LENGTH + 200))}
           placeholder={placeholder}
           placeholderTextColor={theme.colors.textPlaceholder}
+          keyboardAppearance={theme.scheme}
           multiline
           accessibilityLabel="Mensaje"
           style={{

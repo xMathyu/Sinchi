@@ -233,6 +233,7 @@ export default function InviteScreen() {
                 editable={!working}
                 placeholder="tucorreo@ejemplo.com"
                 placeholderTextColor={theme.colors.textPlaceholder}
+                keyboardAppearance={theme.scheme}
                 style={{
                   color: theme.colors.ink,
                   fontSize: 16,
@@ -263,6 +264,7 @@ export default function InviteScreen() {
                 editable={!working}
                 placeholder="Al menos 6 caracteres"
                 placeholderTextColor={theme.colors.textPlaceholder}
+                keyboardAppearance={theme.scheme}
                 onSubmitEditing={() => {
                   if (canSubmit) accept();
                 }}
