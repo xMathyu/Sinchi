@@ -591,8 +591,22 @@ export default function GymSignUpScreen() {
        * presenta ENCIMA del padrón. Escribe su primera tarifa, cierra, y queda
        * en su padrón con el local ya usable. Un `replace('/plans')` a secas
        * dejaría un modal sin nada debajo y su «Cerrar» no tendría a dónde ir.
+       *
+       * Y ANTES, `dismissAll`. Esto se alcanzaba solo desde el login y desde el
+       * directorio, que son pantallas normales, así que el razonamiento de
+       * arriba se cumplía solo. Desde que también se llega desde Mi cuenta —que
+       * es `presentation: 'modal'`— todo lo que se apila después hereda esa
+       * hoja: el padrón quedaba DENTRO de un pop-up y Planes dentro de otro, y
+       * había que deslizar dos veces hacia abajo para salir a la misma vista de
+       * dueño que ya estaba detrás. Lo reportó Mathyu recorriéndolo entero.
+       *
+       * Cerrar las hojas ANTES de navegar hace que el destino sea el mismo se
+       * venga de donde se venga, que es lo que este bloque creía estar haciendo.
+       * Va con `canDismiss` porque desde el login no hay nada que cerrar y
+       * `dismissAll` a secas revienta ahí.
        */
       void signUp;
+      if (router.canDismiss()) router.dismissAll();
       router.replace('/staff/roster');
       router.push('/plans');
     } catch (causa: unknown) {
