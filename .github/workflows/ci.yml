@@ -236,9 +236,14 @@ jobs:
         working-directory: apps/web
         run: pnpm typecheck
 
-      - name: La landing se exporta
-        # `output: 'export'` genera HTML estatico: si algo del arbol pide un
-        # servidor, falla aqui y no en el hosting.
+      - name: La web compila
+        # Ya no es `output: 'export'`: el panel del dueno necesita servidor y la
+        # landing dejo de ser estatica del todo (decisiones §19). Lo que este
+        # paso sigue comprobando es lo mismo de antes con otra forma — que el
+        # arbol compila desde un clon recien hecho— y ademas, en su salida, que
+        # la landing SIGUE prerenderizada: `/`, `/privacidad` y
+        # `/eliminar-cuenta` con `○` y solo `/panel/*` con `ƒ`. Si alguna de las
+        # primeras se vuelve dinamica, Vercel deja de servirlas desde el CDN.
         working-directory: apps/web
         run: pnpm build
 
