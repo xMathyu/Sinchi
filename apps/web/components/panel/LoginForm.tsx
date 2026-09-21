@@ -18,7 +18,8 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { GoogleButton } from './GoogleButton';
-import { IDLE, entrar } from '../../src/panel/actions';
+import { entrar } from '../../src/panel/actions';
+import { IDLE } from '../../src/panel/form-state';
 
 export function LoginForm({
   aviso,
@@ -40,7 +41,7 @@ export function LoginForm({
         </p>
       </div>
 
-      {aviso === null ? null : (
+      {!aviso ? null : (
         <p className="panel-alert bad" role="alert">
           <strong aria-hidden>✕</strong>
           <span>{aviso}</span>
@@ -83,7 +84,7 @@ export function LoginForm({
           />
         </label>
 
-        {state.error === null ? null : (
+        {!state.error ? null : (
           <p className="panel-alert bad" role="alert">
             <strong aria-hidden>✕</strong>
             <span>{state.error}</span>

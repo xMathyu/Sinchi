@@ -15,7 +15,8 @@
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Alert } from './Pieces';
-import { IDLE, cobrar } from '../../src/panel/actions';
+import { cobrar } from '../../src/panel/actions';
+import { IDLE } from '../../src/panel/form-state';
 import { soles } from '../../src/panel/format';
 
 type Concepto = 'renewal' | 'enrollment' | 'drop_in';
@@ -110,8 +111,8 @@ export function CobrarForm({
           )}
         </div>
 
-        {state.error === null ? null : <Alert kind="bad">{state.error}</Alert>}
-        {state.ok === undefined ? null : <Alert kind="ok">{state.ok}</Alert>}
+        {!state.error ? null : <Alert kind="bad">{state.error}</Alert>}
+        {!state.ok ? null : <Alert kind="ok">{state.ok}</Alert>}
 
         <Submit
           etiqueta={

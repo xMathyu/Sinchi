@@ -3,7 +3,8 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Alert } from './Pieces';
-import { IDLE, inscribir } from '../../src/panel/actions';
+import { inscribir } from '../../src/panel/actions';
+import { IDLE } from '../../src/panel/form-state';
 import { soles } from '../../src/panel/format';
 import type { WirePlan } from '../../src/panel/types';
 
@@ -94,7 +95,7 @@ export function AltaForm({ planes }: { readonly planes: readonly WirePlan[] }) {
         </p>
       </section>
 
-      {state.error === null ? null : <Alert kind="bad">{state.error}</Alert>}
+      {!state.error ? null : <Alert kind="bad">{state.error}</Alert>}
 
       <Submit />
     </form>

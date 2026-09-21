@@ -19,15 +19,9 @@ import { redirect } from 'next/navigation';
 import { ApiError, api } from './api';
 import { FirebaseAuthError, exchangeGoogleToken, signInWithEmail } from './firebase';
 import { clearSession, writeSession } from './session';
+import type { FormState } from './form-state';
 import type { WireRoutineView } from './types';
 
-export interface FormState {
-  readonly error: string | null;
-  /** Mensaje de éxito, cuando la pantalla se queda donde está. */
-  readonly ok?: string;
-}
-
-export const IDLE: FormState = { error: null };
 
 /**
  * La respuesta de `/auth/google`, que tiene dos formas.

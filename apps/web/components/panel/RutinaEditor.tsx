@@ -16,11 +16,11 @@ import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Alert } from './Pieces';
 import {
-  IDLE,
   borrarRutina,
   cambiarEstadoRutina,
   guardarRutina,
 } from '../../src/panel/actions';
+import { IDLE } from '../../src/panel/form-state';
 import type { WireRoutineItem } from '../../src/panel/types';
 
 interface Paso {
@@ -96,7 +96,7 @@ export function RutinaEditor({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {aviso === null ? null : <Alert kind="ok">{aviso}</Alert>}
+      {!aviso ? null : <Alert kind="ok">{aviso}</Alert>}
 
       <form action={action} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {routineId === null ? null : <input type="hidden" name="routineId" value={routineId} />}
@@ -270,8 +270,8 @@ export function RutinaEditor({
           </p>
         </section>
 
-        {state.error === null ? null : <Alert kind="bad">{state.error}</Alert>}
-        {state.ok === undefined ? null : <Alert kind="ok">{state.ok}</Alert>}
+        {!state.error ? null : <Alert kind="bad">{state.error}</Alert>}
+        {!state.ok ? null : <Alert kind="ok">{state.ok}</Alert>}
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Guardar />

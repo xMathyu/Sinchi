@@ -64,7 +64,18 @@ export function Empty({ title, body }: { readonly title: string; readonly body: 
   );
 }
 
+/**
+ * Un aviso con su motivo.
+ *
+ * Se niega a pintarse SIN mensaje, y eso no es paranoia: un `IDLE` que llegaba
+ * mal al cliente dejaba un recuadro rojo vacío en la primera carga del login, con
+ * su aspa y sin una palabra. Alarma sin decir de qué, que es peor que no avisar
+ * — y un `=== null` en cada pantalla no protege de un `undefined`. El único sitio
+ * por donde pasan todos los avisos es este, así que la comprobación vive aquí.
+ */
 export function Alert({ kind, children }: { readonly kind: 'bad' | 'ok'; readonly children: React.ReactNode }) {
+  if (children === null || children === undefined || children === '') return null;
+
   return (
     <p className={`panel-alert ${kind}`} role={kind === 'bad' ? 'alert' : 'status'}>
       <strong aria-hidden>{kind === 'bad' ? '✕' : '✓'}</strong>
