@@ -1,4 +1,4 @@
-• Tema claro y tema oscuro: la app sigue al tema del teléfono y cambia con él, sin reiniciar.
-• Si prefieres mandarle tú: Mi cuenta → Apariencia → Automático, Claro u Oscuro. Se queda puesto.
-• El semáforo usa tonos más oscuros en claro para que se lea sobre fondo blanco. Verde entra, rojo no: igual que siempre.
-• La pantalla de la puerta y tu QR siguen teñidas del color del estado en los dos temas.
+• Ya puedes registrar tu gimnasio desde Mi cuenta. Antes el alta solo estaba en la pantalla de entrada y al final del directorio, y quien ya tenía cuenta no la encontraba.
+• Si ya llevas un local, la misma tarjeta dice «Abrir otro local»: cada uno tiene su padrón, sus planes y su caja.
+• El botón de «Entrar con Google» lleva ahora su logo.
+• Y si eres dueño, tu local ya tiene panel web en sinchi.fit/panel: ingresos, quién vino hoy y a quién cobrarle.

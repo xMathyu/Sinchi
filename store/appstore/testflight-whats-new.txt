@@ -1,13 +1,14 @@
 NOVEDADES DE ESTA VERSIÓN
 
-• Tema claro y tema oscuro. La app sigue al tema del teléfono y cambia con él, sin reiniciar: si tu iPhone pasa a claro al amanecer, Sinchi pasa con él.
-• Y si prefieres mandarle tú: Mi cuenta → Apariencia → Automático, Claro u Oscuro. Lo que elijas se queda puesto aunque el teléfono diga lo contrario, y es de este teléfono, no de tu cuenta.
-• El semáforo cambia de tono en claro —verde, ámbar, naranja y rojo más oscuros— para que se lea sobre fondo blanco. El significado es el mismo: verde entra, rojo no.
-• La pantalla de la puerta y tu QR se siguen pintando del color del estado en los dos temas. Eso es a propósito: ese color se lee a un metro, y tiene que ser igual de día que de noche.
-• Se retiró la paleta para daltonismo. Lo que de verdad protege sigue ahí: el motivo del rechazo siempre va escrito, nunca «acceso denegado» a secas.
+• Ya puedes registrar tu gimnasio desde tu cuenta. Antes el alta solo se alcanzaba desde la pantalla de entrada o bajando al final del directorio, así que quien ya tenía cuenta no la encontraba. Ahora está en Mi cuenta, entre tus datos y Apariencia.
+• Si ya llevas un local, la misma tarjeta dice «Abrir otro local»: cada uno tiene su propio padrón, sus planes y su caja. El tope es de cinco por cuenta, y al llegar se dice en vez de dejarte intentarlo.
+• El botón de «Entrar con Google» lleva ahora su logo. Se reconoce antes de leerlo, que es lo que hace falta en el único botón de esa pantalla que sale de la app.
+
+TAMBIÉN, FUERA DE LA APP
+• Si eres dueño, tu local ya tiene panel web en sinchi.fit/panel: los ingresos del mes con su gráfico, quién vino hoy, a quién cobrarle, quién viene siempre y quién dejó de venir, el padrón, los cobros y los materiales de clase. Se entra con la misma cuenta de la app. Es solo para dueños; si llevas recepción, tu sitio sigue siendo la app.
 
 QUÉ PROBAR
-• Con Apariencia en «Automático», cambia el tema en Ajustes de iOS con Sinchi abierta: tiene que cambiar en el momento.
-• Ponla en Claro con el teléfono en oscuro (y al revés), cierra la app del todo y vuelve a abrirla: tiene que recordar lo que elegiste.
-• En claro, recorre la billetera con un plan al día, uno con cupo y uno suspendido, y mira si los tres colores se distinguen de un vistazo.
-• Muestra tu Mi QR y haz que te escaneen: la pantalla del resultado tiene que verse igual que siempre, teñida del color del estado.
+• Entra con tu cuenta y abre Mi cuenta (el avatar de arriba a la derecha). Si no tienes gimnasio tiene que salir «¿Tienes un gimnasio?»; si ya tienes uno, «Abrir otro local».
+• Toca esa tarjeta y recorre el alta hasta el final. El local nace sin tarifas a propósito: la primera pantalla que te pide es Planes.
+• Mira el botón de Google en la pantalla de entrada, en tema claro y en oscuro: el logo tiene que leerse en los dos.
+• Si eres dueño, entra a sinchi.fit/panel con la misma cuenta y comprueba que los números cuadran con lo que ves en la app.
