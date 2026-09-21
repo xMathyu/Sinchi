@@ -11,6 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Logo } from './Brand';
+import { ThemeToggle } from './ThemeToggle';
 
 const LINKS = [
   { href: '#que-hace', label: 'Qué hace' },
@@ -69,6 +70,7 @@ export function Nav() {
             <a href="/panel" className="nav-link">
               Entrar
             </a>
+            <ThemeToggle compact />
             <a href="#contacto" className="btn-outline">
               Hablar con ventas
             </a>
@@ -102,6 +104,9 @@ export function Nav() {
         <a href="/panel" onClick={() => setOpen(false)}>
           Entrar a mi panel
         </a>
+        <div style={{ paddingTop: 4 }}>
+          <ThemeToggle />
+        </div>
         <a href="#contacto" className="btn-solid" onClick={() => setOpen(false)}>
           Hablar con ventas
         </a>

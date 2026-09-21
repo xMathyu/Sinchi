@@ -44,15 +44,30 @@ export const SEMAPHORE_ON_DARK: SemaphorePalette = {
  * No es el mismo color con otro nombre: el verde de arriba sobre una tarjeta
  * blanca da 1.9:1 y deja de ser texto. Estos cuatro son los mismos cuatro
  * matices llevados al otro extremo de la rampa —verde, ambar, naranja, rojo— y
- * todos pasan 4.5:1 sobre la superficie mas clara del tema. Cambia el tono, no
+ * todos pasan 4.5:1 sobre TODAS las superficies del tema. Cambia el tono, no
  * el significado: el ok sigue siendo verde y el bad sigue siendo rojo, porque
  * eso es lo que el recepcionista ya aprendio a leer.
+ *
+ * DECIA «sobre la superficie mas clara», y era exacto para lo que entonces
+ * habia: la app nunca pone el semaforo sobre el fondo de pagina, siempre sobre
+ * una tarjeta. La web si —su color de enlace es `--ok` sobre el fondo de la
+ * pagina— y ahi el verde daba 4.23:1.
+ *
+ * Ahora se miden contra `surfaceHigher`, que es la mas OSCURA de las nueve del
+ * tema claro y por tanto la peor. La primera correccion apunto a `canvas`, que
+ * es la que tenia delante, y la prueba ampliada la cazo a los dos minutos: hay
+ * una superficie todavia mas oscura. Medir contra la peor es lo que impide que
+ * el siguiente retoque repita esto.
+ *
+ * Bajaron entre un 7 y un 13%. Es imperceptible como tono —el ok sigue siendo
+ * verde y el bad rojo, que es lo que el recepcionista ya aprendio a leer— y a
+ * cambio la tinta clara que va ENCIMA gana contraste, no lo pierde.
  */
 export const SEMAPHORE_ON_LIGHT: SemaphorePalette = {
-  ok: '#0E7C41',
-  warn: '#9A6400',
-  alert: '#B34A12',
-  bad: '#C42121',
+  ok: '#0C6B38',
+  warn: '#815300',
+  alert: '#9C4010',
+  bad: '#B51F1F',
 };
 
 /** Tinta oscura legible sobre el semaforo brillante (tema oscuro y degradados). */

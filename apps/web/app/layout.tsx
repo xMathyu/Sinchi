@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Archivo } from 'next/font/google';
-import { tokenCss } from './tokens';
+import { THEME_BOOTSTRAP, tokenCss } from './tokens';
 import './globals.css';
 
 /**
@@ -59,16 +59,27 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * `themeColor` con media query y no un color suelto: es lo que pinta la barra
+ * del navegador en movil, y con un valor unico quedaba negra sobre una pagina
+ * clara. `colorScheme` declara que la pagina sabe hacer las dos, que es lo que
+ * hace que los controles nativos y la barra de scroll acompanen.
+ */
 export const viewport: Viewport = {
-  themeColor: '#08080A',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#08080A' },
+    { media: '(prefers-color-scheme: light)', color: '#E9E6DE' },
+  ],
+  colorScheme: 'dark light',
 };
 
 export default function RootLayout({ children }: { readonly children: React.ReactNode }) {
   return (
-    <html lang="es" className={archivo.variable}>
+    <html lang="es" className={archivo.variable} suppressHydrationWarning>
       <head>
         <style dangerouslySetInnerHTML={{ __html: tokenCss() }} />
+        {/* Antes de que se pinte nada: ver `THEME_BOOTSTRAP`. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
       <body>{children}</body>
     </html>

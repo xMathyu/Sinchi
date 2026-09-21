@@ -10,6 +10,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Logo } from '../../../components/Brand';
 import { LoginForm } from '../../../components/panel/LoginForm';
+import { ThemeToggle } from '../../../components/ThemeToggle';
 import { googleReady } from '../../../src/panel/firebase';
 import { readSession } from '../../../src/panel/session';
 
@@ -65,11 +66,17 @@ export default async function EntrarPage({
           borderRight: '1px solid var(--hairline)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Logo size={28} barColor="var(--screen)" />
-          <span className="display" style={{ fontSize: 19, letterSpacing: '-0.045em' }}>
-            SINCHI
-          </span>
+        {/* El interruptor también aquí: esta pantalla no lleva la carcasa del
+            panel, y sin él quien cierra sesión se queda sin forma de cambiar de
+            tema hasta que vuelve a entrar. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Logo size={28} barColor="var(--screen)" />
+            <span className="display" style={{ fontSize: 19, letterSpacing: '-0.045em' }}>
+              SINCHI
+            </span>
+          </div>
+          <ThemeToggle compact />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '../Brand';
 import { salir } from '../../src/panel/actions';
+import { ThemeToggle } from '../ThemeToggle';
 
 const SECCIONES = [
   { href: '/panel', label: 'Inicio', icon: 'home' },
@@ -102,6 +103,7 @@ export function PanelShell({
             <span className="panel-eyebrow">Tu local</span>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{tenantName}</span>
           </div>
+          <ThemeToggle compact />
           {/* Un form y no un `onClick`: cerrar sesión borra una cookie del
               servidor, así que es una Server Action. Y así funciona igual
               mientras el JavaScript de la página todavía no ha cargado. */}

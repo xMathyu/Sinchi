@@ -1036,10 +1036,11 @@ pantalla negra.
   `#C4BB98`… eran el gris del tema tirado hacia el color de una tarjeta teñida,
   y solo valían para el oscuro. Ahora los calcula `mutedOn`, que parte del gris
   del tema que toque.
-- **La landing no.** `apps/web` se queda oscura y pide la paleta explícita
-  (`palette('dark')`): es una página de venta con una sola cara, y su icono y su
-  captura de Open Graph se hornean en el build, cuando no hay visitante al que
-  consultarle el tema.
+- **La web también, desde §20.** Aquí decía que `apps/web` se quedaba oscura
+  «porque es una página de venta con una sola cara». Dejó de serlo cuando entró
+  el panel del dueño, que no es una página de venta sino una herramienta que se
+  abre a diario. El porqué del cambio y lo que quedó desalineado a propósito
+  —el icono y la captura de Open Graph— están en §20.
 
 Lo que hay que recordar al probar: `app.json` pasó de `userInterfaceStyle:
 "dark"` a `"automatic"`, así que **hace falta `expo prebuild` para que iOS deje
@@ -1260,3 +1261,79 @@ un clon limpio `tsc --noEmit` fallaba en TODOS los `<Link>`, incluidos los de
 rutas que sí existen — un error que parece del código recién escrito y no lo es.
 Se arregla con `next typegen` en el `pretypecheck`. Es el mismo defecto que el
 `.expo/types/router.d.ts` de la app, y falla igual de mal: el CI no lo ve.
+
+
+## 20. La web sigue al sistema, y el semáforo claro se tuvo que oscurecer
+
+§17 dejó la web fuera del tema claro con un argumento que era cierto entonces:
+«es una página de venta con una sola cara». El panel del dueño la cambió — eso
+no es una página de venta, es una herramienta que alguien abre todos los lunes a
+mirar su plata, y ahí vale el mismo argumento que en la app: **el tema no es del
+producto, es del aparato de quien mira**.
+
+Así que las dos caras, y con el mismo modelo de la app: se sigue al sistema por
+defecto y hay un interruptor de tres estados para contradecirlo. Tres y no un
+booleano por la misma razón de §17 — «claro» y «el sistema está en claro» son
+dos hechos distintos, y guardar solo el resultado perdería la diferencia.
+
+### El orden de las tres reglas CSS
+
+1. `:root` lleva el **oscuro**. Es la cara de la marca y es lo que ve quien no
+   expresa preferencia — incluido un navegador que no entienda
+   `prefers-color-scheme`, que así cae en una página entera y no en una a medio
+   pintar;
+2. el claro entra solo si el sistema lo pide **y** la persona no ha dicho lo
+   contrario (`:not([data-theme="dark"])`);
+3. el atributo explícito gana siempre: es el interruptor.
+
+Quitar el atributo —y no ponerlo en `system`— es lo que devuelve el mando al
+`@media`. Con un tercer valor ahí, ninguna regla casaría.
+
+`color-scheme` va en las tres. Sin él, el navegador pinta los controles nativos
+y la barra de scroll del tema del sistema aunque la página esté en el otro: una
+barra blanca al lado de una página negra.
+
+### El guion bloqueante, que se paga con gusto
+
+La preferencia vive en `localStorage` —es de este navegador, no de la cuenta— y
+la aplica un script inline en `<head>`, **antes de que se pinte nada**.
+Aplicarla desde React haría que quien eligió claro viera un fogonazo negro en
+cada carga. Es el único caso donde un script bloqueante vale la pena, y por eso
+son dos líneas envueltas en `try`: en una ventana privada `localStorage` puede
+lanzar al leerlo, y una excepción ahí deja la página en blanco.
+
+### Lo que queda desalineado a propósito
+
+El icono y la captura de Open Graph **se hornean oscuros en el build**, que era
+la otra mitad del argumento de §17 y esa sigue en pie: se generan sin visitante
+al que consultarle el tema. Así que la vista previa en WhatsApp sale oscura
+aunque quien abra el enlace tenga el sistema en claro. Se acepta: es una imagen
+de marca, no una pantalla de la aplicación.
+
+### EL SEMÁFORO CLARO SE TUVO QUE OSCURECER, y lo encontró una prueba
+
+`SEMAPHORE_ON_LIGHT` decía pasar 4.5:1 «sobre la superficie más clara del tema»,
+y era exacto para lo que había: la app **nunca** pone el semáforo sobre el fondo
+de página, siempre sobre una tarjeta. La web sí — su color de enlace es `--ok`
+sobre el fondo— y ahí el verde daba **4.23:1**.
+
+La corrección obvia fue apuntar a `canvas`, que era la superficie que se tenía
+delante. La prueba ampliada la cazó a los dos minutos: `screenScanner` es más
+oscura todavía, y la peor de las nueve es `surfaceHigher`. Los cuatro se
+recalcularon contra ESA, que es lo que impide que el siguiente retoque repita el
+error.
+
+Bajaron entre un 7 y un 13%: imperceptible como tono —el ok sigue siendo verde y
+el bad rojo, que es lo que el recepcionista ya aprendió a leer— y la tinta clara
+que va encima gana contraste en vez de perderlo.
+
+La prueba de `@sinchi/ui` pasó de medir contra una superficie a medir contra las
+nueve, con la lista extraída fuera para que la compartan las dos que la miran
+—el suelo de texto y el semáforo—: con una copia en cada una, ampliar la lista
+arregla solo la que uno se acuerde de tocar.
+
+### De paso, dos tokens que el panel usaba sin existir
+
+`--chip-active` y `--text-bright` se referenciaban desde el panel y `tokens.ts`
+no los emitía, así que resolvían a nada. No se veía porque los dos caían en
+sitios donde el valor heredado pasaba por bueno.

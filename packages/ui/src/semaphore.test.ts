@@ -88,6 +88,25 @@ describe('semaphoreStyle', () => {
   });
 });
 
+/**
+ * Las nueve superficies de un tema.
+ *
+ * Fuera de las pruebas y no dentro de una: las miran DOS —el suelo de texto y el
+ * semaforo— y con una copia en cada una, ampliar la lista arregla solo la que se
+ * acuerde uno de tocar.
+ */
+const SUPERFICIES = [
+  'canvas',
+  'screen',
+  'screenScanner',
+  'surface',
+  'surfaceSunken',
+  'surfaceMuted',
+  'surfaceRaised',
+  'surfaceHigh',
+  'surfaceHigher',
+] as const;
+
 describe('las dos paletas', () => {
   it('tienen exactamente los mismos tokens', () => {
     // La interfaz `Palette` ya lo obliga al compilar; esto lo sostiene tambien
@@ -95,28 +114,29 @@ describe('las dos paletas', () => {
     expect(Object.keys(COLORS_LIGHT).sort()).toEqual(Object.keys(COLORS_DARK).sort());
   });
 
-  it('el semaforo claro es legible sobre la superficie mas clara', () => {
+  it('el semaforo claro es legible sobre TODAS las superficies de su tema', () => {
     // Es la razon de existir de la segunda paleta: el verde brillante sobre una
     // tarjeta blanca da 1.9:1 y deja de ser texto.
+    //
+    // Antes esto medía solo contra `surfaceRaised`, la superficie mas CLARA, y
+    // bastaba mientras el unico consumidor era la app —que nunca pone el
+    // semaforo sobre el fondo de pagina, siempre sobre una tarjeta—. La web si
+    // lo hace: su color de enlace es `--ok` sobre `canvas`, que es la superficie
+    // mas OSCURA del tema, y ahi el verde se quedaba en 4.23:1. Medir contra la
+    // peor es lo que impide que el siguiente ajuste de la paleta lo repita.
     for (const key of ['ok', 'warn', 'alert', 'bad'] as const) {
-      expect(contrast(SEMAPHORE_ON_LIGHT[key], COLORS_LIGHT.surfaceRaised)).toBeGreaterThan(4.5);
+      for (const surface of SUPERFICIES) {
+        expect(
+          contrast(SEMAPHORE_ON_LIGHT[key], COLORS_LIGHT[surface]),
+          `${key} sobre ${surface}`,
+        ).toBeGreaterThan(4.5);
+      }
     }
   });
 
   it('el suelo de texto pasa AA sobre todas las superficies de su tema', () => {
-    const superficies = [
-      'canvas',
-      'screen',
-      'screenScanner',
-      'surface',
-      'surfaceSunken',
-      'surfaceMuted',
-      'surfaceRaised',
-      'surfaceHigh',
-      'surfaceHigher',
-    ] as const;
     for (const paleta of [COLORS_DARK, COLORS_LIGHT]) {
-      for (const superficie of superficies) {
+      for (const superficie of SUPERFICIES) {
         expect(contrast(paleta.textTertiary, paleta[superficie])).toBeGreaterThan(4.5);
       }
     }
