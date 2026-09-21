@@ -44,6 +44,7 @@ import {
   Text,
   Wordmark,
 } from '../src/design/primitives';
+import { GoogleMark } from '../src/design/google-mark';
 import { useTheme } from '../src/design/theme';
 import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
@@ -207,6 +208,7 @@ export default function LoginScreen() {
   const googleButton = (
     <Button
       label="Entrar con Google"
+      icon={<GoogleMark />}
       variant="secondary"
       disabled={request === null || working}
       onPress={() => {

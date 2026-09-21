@@ -323,6 +323,16 @@ export interface ButtonProps {
    * toque es la accion y no una explicacion.
    */
   readonly onBlockedPress?: () => void;
+  /**
+   * Icono a la izquierda de la etiqueta.
+   *
+   * `ReactNode` y no un nombre de Lucide: el unico caso que lo pide hoy es la
+   * «G» de Google, que es una marca de cuatro colores y no un trazo que se tine
+   * con la tinta del boton. Un `icon: LucideIcon` habria obligado a meterla en
+   * ese molde y a recolorearla, que es justo lo que sus condiciones de marca no
+   * permiten.
+   */
+  readonly icon?: ReactNode;
   readonly style?: StyleProp<ViewStyle>;
 }
 
@@ -334,6 +344,7 @@ export function Button({
   accentInk,
   disabled = false,
   onBlockedPress,
+  icon,
   style,
 }: ButtonProps) {
   const theme = useTheme();
@@ -380,9 +391,21 @@ export function Button({
         style,
       ]}
     >
-      <Text variant="heading" weight="semibold" color={ink}>
-        {label}
-      </Text>
+      {icon === undefined ? (
+        <Text variant="heading" weight="semibold" color={ink}>
+          {label}
+        </Text>
+      ) : (
+        // El icono NO se separa del texto con `space-between`: el conjunto va
+        // centrado como una sola pieza, que es como lo pide Google y como se lee
+        // un boton. Con el icono pegado al borde parecen dos cosas distintas.
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {icon}
+          <Text variant="heading" weight="semibold" color={ink}>
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
