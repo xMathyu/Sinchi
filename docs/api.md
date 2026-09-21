@@ -222,6 +222,35 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `DELETE` | `/staff/link-requests/:id` | Retira una solicitud sin contestar. |
 | `DELETE` | `/staff/members/:id/account` | Solo el dueño: desvincula. |
 
+### Panel de Sinchi (`/admin`)
+
+Lo que cruza gimnasios, y **solo** ahí. Quien entra no es staff de ningún local:
+es quien administra la plataforma, y su token tiene otra forma
+(`scope: 'platform'`). `AuthGuard` los mantiene excluyentes — una sesión de dueño
+recibe 403 en todo `/admin`, y una del panel recibe 403 en todo lo demás
+(decisiones §21).
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/admin/session` | Pública. Cambia un ID token de Firebase por la sesión del panel. Exige que el correo esté en `platform_admins`, venga **verificado** y sea de Google. Dura 12 h. |
+| `GET` | `/admin/me` | Quién está dentro. |
+| `GET` | `/admin/overview` | La red entera: gimnasios por estado de suscripción, lo que se facturaría al mes, alumnos, cuentas sin ficha. |
+| `GET` | `/admin/gyms` | Todos los gimnasios con su suscripción y sus números de 30 días. |
+| `GET` | `/admin/gyms/:id` | Uno entero: staff, planes, lo que nos pagó y los códigos que canjeó. |
+| `POST` | `/admin/gyms/:id` | Parche. Solo lo que viene. `status` **no** está: suspender tiene su ruta porque exige motivo. |
+| `POST` | `/admin/gyms/:id/suspend` | Lo saca de Sinchi, con un motivo de al menos 12 caracteres. Su staff deja de poder entrar. |
+| `POST` | `/admin/gyms/:id/restore` | Lo devuelve. El motivo queda en el registro. |
+| `DELETE` | `/admin/gyms/:id` | Borra en cascada. Exige estar suspendido **y** el `slug` escrito en el cuerpo. |
+| `POST` | `/admin/gyms/:id/payments` | Registra lo que pagó por su suscripción. El mismo camino que `npm run saas:pay`. |
+| `GET` `POST` | `/admin/promos` | Los códigos con sus canjes, y crear uno. |
+| `POST` | `/admin/promos/:id/status` | Lo apaga o lo enciende. No se borran: los canjes apuntan a ellos. |
+| `GET` `POST` | `/admin/admins` | Quién administra Sinchi, y dar acceso por correo. |
+| `DELETE` | `/admin/admins/:id` | Retira el acceso. Ni a ti mismo ni al último. |
+| `GET` | `/admin/actions` | El registro: qué se hizo, quién y por qué. Con `?tenantId=` filtra por gimnasio. |
+
+El acceso se relee en CADA petición (`PlatformAdminGuard`): retirárselo a alguien
+corta el token que ya tenía abierto, no espera a que caduque.
+
 ### Salud
 
 | Método | Ruta | Qué hace |
@@ -474,8 +503,10 @@ solo gimnasio podría gastar los diez usos.
 Un código mal escrito vuelve con **200 y `redeemed: false`** más el motivo, como
 el rechazo de un check-in.
 
-No hay pantalla para cobrar a propósito: con un puñado de gimnasios, quien cobra
-es una persona mirando el correo del banco una vez al mes.
+Desde el panel de Sinchi (`/admin/codigos`) se hace lo mismo con dos cosas que la
+línea de comandos no daba: quién creó cada código, y qué gimnasios lo canjearon —
+que es la pregunta que se hace cuando una campaña no cuadra. El CLI se queda: es
+lo que funciona cuando lo que está caído es la web.
 
 ### Aislamiento por tenant
 
@@ -492,6 +523,12 @@ withTenant(db, tenantId, (tx) => tx.select().from(schema.charges))
 Sin contexto, `app_current_tenant()` devuelve NULL, la comparación da NULL y no
 se ve ninguna fila. **Falla cerrado**: una consulta que olvidó el contexto
 devuelve vacío en vez de devolver todo.
+
+El panel de Sinchi **no** abre ninguna puerta aquí: para leer los números de un
+gimnasio entra con `withTenant`, el mismo contexto que usaría su mostrador, una
+transacción por gimnasio. Un `app.platform_admin` con excepción en cada política
+sería una llave maestra en el mecanismo que sostiene todo esto, a cambio de
+ahorrar consultas en una pantalla que mira una persona (decisiones §21).
 
 Una excepción, deliberada: `memberships` permite además leer las propias
 (`user_id = app_current_user()`). Sin ella, la billetera no podría ni averiguar a

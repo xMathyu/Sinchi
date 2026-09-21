@@ -63,12 +63,32 @@ export interface IssuedSession {
   readonly tenantId: string | null;
 }
 
-/** La fila de `staff` de una persona: su puesto y dónde. */
+/** La fila de `staff` de una persona: su puesto, dónde, y si ese local sigue abierto. */
 interface StaffRow {
   readonly id: string;
   readonly tenantId: string;
   readonly role: string;
+  /**
+   * Si el gimnasio está suspendido, y por qué.
+   *
+   * Viaja con el puesto y no se consulta aparte: `tenants` no lleva RLS, así que
+   * el mismo `select` que lee `staff` puede unirla sin un viaje más. Sin esto,
+   * comprobar la suspensión costaría una consulta en CADA login de staff.
+   */
+  readonly tenantStatus: 'active' | 'suspended';
+  readonly tenantSuspendedReason: string | null;
 }
+
+/**
+ * Los puestos en locales que siguen en Sinchi.
+ *
+ * Un gimnasio suspendido (panel de Sinchi, decisiones §21) no emite sesión de
+ * staff: es lo que significa estar fuera. Se filtra aquí —en un solo sitio— y no
+ * en cada uno de los tres caminos que emiten sesión de staff, porque el que se
+ * olvidara no fallaría: dejaría entrar.
+ */
+const openPosts = (rows: readonly StaffRow[]): readonly StaffRow[] =>
+  rows.filter((row) => row.tenantStatus !== 'suspended');
 
 /** Un puesto con el nombre del local puesto, que es lo que se enseña. */
 export interface StaffPost {
@@ -184,7 +204,31 @@ export class AuthService {
    * crear su local tiene que entrar como dueno sin volver a autenticarse.
    */
   async issueForUser(userId: string): Promise<IssuedSession> {
-    const staffRow = await this.primaryStaffRow(userId);
+    const posts = await this.staffRowsOf(userId);
+    const open = openPosts(posts);
+    const staffRow = open[0];
+
+    /**
+     * Trabajaba aquí, y aquí ya no está Sinchi.
+     *
+     * Se explica en vez de devolver una sesión de alumno en silencio: el dueño
+     * de un local suspendido que entra y ve una billetera vacía no tiene forma
+     * de saber qué pasó, y lo siguiente que hace es reinstalar la app.
+     *
+     * Solo cuando NO le queda otra puerta. Quien además entrena en otro
+     * gimnasio, o lleva un segundo local, entra por ahí: suspender un local no
+     * es expulsar a una persona de Sinchi.
+     */
+    if (staffRow === undefined && posts.length > 0) {
+      const suspended = posts[0]!;
+      if (!(await this.hasActiveMembership(userId))) {
+        throw new ForbiddenException(
+          suspended.tenantSuspendedReason === null
+            ? 'Tu gimnasio está suspendido en Sinchi. Escríbenos para revisarlo.'
+            : `Tu gimnasio está suspendido en Sinchi: ${suspended.tenantSuspendedReason}`,
+        );
+      }
+    }
 
     const claims: SessionClaims =
       staffRow === undefined
@@ -297,7 +341,9 @@ export class AuthService {
    * gimnasio al otro y de vuelta.
    */
   async switchToStaff(session: Session, tenantId?: string): Promise<IssuedSession> {
-    const posts = await this.staffRowsOf(session.sub);
+    // `openPosts` deja fuera los locales suspendidos: volver al puesto no puede
+    // ser la rendija por la que se entra a un gimnasio que está fuera de Sinchi.
+    const posts = openPosts(await this.staffRowsOf(session.sub));
 
     /**
      * Sin gimnasio pedido, el de siempre. Con uno pedido, tiene que ser SUYO.
@@ -360,20 +406,11 @@ export class AuthService {
    * nombre del gimnasio puesto, porque «cambiar a b3f1-…» no lo elige nadie.
    */
   async modesFor(userId: string): Promise<AvailableModes> {
-    const [posts, membership] = await Promise.all([
-      this.staffRowsOf(userId),
-      withUser(this.db, userId, (tx) =>
-        tx
-          .select({ id: schema.memberships.id })
-          .from(schema.memberships)
-          .where(
-            and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, 'active')),
-          )
-          .limit(1),
-      ).then((rows) => rows[0]),
+    const [posts, student] = await Promise.all([
+      this.staffRowsOf(userId).then(openPosts),
+      this.hasActiveMembership(userId),
     ]);
 
-    const student = membership !== undefined;
     if (posts.length === 0) return { student, staff: [] };
 
     /**
@@ -408,6 +445,26 @@ export class AuthService {
   }
 
   /**
+   * Si tiene ficha activa en algún padrón de la red.
+   *
+   * Va con contexto de IDENTIDAD: la política de `memberships` deja leer las
+   * propias sin saber el gimnasio (`user_id = app_current_user()`), que es la
+   * excepción que sostiene la billetera. Es una consulta por índice.
+   */
+  private async hasActiveMembership(userId: string): Promise<boolean> {
+    const rows = await withUser(this.db, userId, (tx) =>
+      tx
+        .select({ id: schema.memberships.id })
+        .from(schema.memberships)
+        .where(
+          and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, 'active')),
+        )
+        .limit(1),
+    );
+    return rows.length > 0;
+  }
+
+  /**
    * TODAS las filas de `staff` de esta persona, de la más antigua a la más nueva.
    *
    * Va con contexto de IDENTIDAD y no de gimnasio: el gimnasio es justo lo que
@@ -428,8 +485,13 @@ export class AuthService {
           id: schema.staff.id,
           tenantId: schema.staff.tenantId,
           role: schema.staff.role,
+          tenantStatus: schema.tenants.status,
+          tenantSuspendedReason: schema.tenants.suspendedReason,
         })
         .from(schema.staff)
+        // `tenants` no lleva RLS —el catálogo de locales es global— así que
+        // unirla aquí no necesita adoptar ningún gimnasio.
+        .innerJoin(schema.tenants, eq(schema.tenants.id, schema.staff.tenantId))
         .where(eq(schema.staff.userId, userId))
         .orderBy(schema.staff.createdAt, schema.staff.id),
     );
@@ -443,7 +505,7 @@ export class AuthService {
    * criterio sea el alta y no algo que se mueve, como el nombre.
    */
   private async primaryStaffRow(userId: string): Promise<StaffRow | undefined> {
-    return (await this.staffRowsOf(userId))[0];
+    return openPosts(await this.staffRowsOf(userId))[0];
   }
 }
 

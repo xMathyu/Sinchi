@@ -1,13 +1,18 @@
 /**
  * La suscripcion de los gimnasios a Sinchi, desde la linea de comandos.
  *
- * No hay pantalla para esto a proposito. Con un punado de gimnasios, quien cobra
- * es una persona mirando el correo del banco una vez al mes: construirle un
- * panel es trabajo que se tira cuando entre Culqi y el cobro sea automatico.
+ * Ya HAY pantalla para esto: el panel de Sinchi (`/admin`, decisiones §21). Esto
+ * se queda igualmente, y no por nostalgia — es lo que funciona cuando lo que
+ * esta caido es la web, y lo que se puede correr contra una base sin levantar
+ * nada. Las dos escriben lo mismo por el mismo sitio.
  *
  * Usa `SaasService` en vez de escribir en las tablas: si duplicara los inserts,
  * el dia que cambie el ciclo esta ruta quedaria produciendo cobros sutilmente
  * distintos a los de la api — y son los cobros de la empresa.
+ *
+ * Lo unico que NO deja este camino es rastro de quien lo hizo: `platform_actions`
+ * solo registra lo que pasa por el panel. Para un cobro puntual da igual; para
+ * suspender un gimnasio, no — y por eso eso no tiene comando.
  *
  *   npx tsx src/db/saas-cli.ts status            # todos los gimnasios
  *   npx tsx src/db/saas-cli.ts pay <slug> <transferencia|yape> [operacion]
@@ -156,9 +161,10 @@ async function pay(
 /**
  * Los codigos de promocion.
  *
- * Se crean aqui y no en una pantalla a proposito: los reparte una persona, de
- * uno en uno, y el tope de usos es la parte que importa —una promocion sin tope
- * es un agujero abierto—. `usos` acepta `ilimitado` cuando se quiere de verdad.
+ * El tope de usos es la parte que importa —una promocion sin tope es un agujero
+ * abierto— y por eso `usos` es obligatorio: acepta `ilimitado` cuando se quiere
+ * de verdad, pero hay que escribirlo. La misma regla vive en `checkPromoDraft`,
+ * que es la que corre el panel.
  */
 async function promo(db: ReturnType<typeof createDatabase>, args: readonly string[]): Promise<void> {
   const [accion, raw, rawMonths, usosRaw, ...note] = args;

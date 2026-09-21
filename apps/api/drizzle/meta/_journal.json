@@ -169,6 +169,13 @@
       "when": 1788566396119,
       "tag": "0023_solicitudes_de_vinculo",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788566397119,
+      "tag": "0024_el_panel_de_sinchi",
+      "breakpoints": true
     }
   ]
 }

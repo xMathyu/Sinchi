@@ -1212,3 +1212,115 @@ describe('conversaciones', () => {
     expect(mensaje.withcheck).toContain('app_current_tenant()');
   });
 });
+
+/**
+ * El panel de Sinchi (migracion 0024).
+ *
+ * Lo que se comprueba aqui son las dos cosas que el codigo no puede sostener
+ * solo: que el correo del administrador no pueda entrar en dos formas, y que un
+ * gimnasio suspendido no pueda quedarse sin fecha. Las dos se rompen con un
+ * UPDATE desde la consola de Neon, que es justo donde el TypeScript no llega.
+ */
+describe('quien administra Sinchi', () => {
+  it('el primer administrador nace con la migracion', async () => {
+    const { rows } = await db.query<{ email: string; revoked_at: string | null }>(
+      `select email, revoked_at from platform_admins`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.email).toBe('xmathyu@gmail.com');
+    // Nace con acceso vivo: si naciera retirado, nadie podria entrar nunca.
+    expect(rows[0]!.revoked_at).toBeNull();
+  });
+
+  it('el correo va en minusculas o no entra', async () => {
+    await expectRejection(
+      () => db.query(`insert into platform_admins (email) values ('Otro@Gmail.com')`),
+      /platform_admins_email_normalized/,
+    );
+    await expectRejection(
+      () => db.query(`insert into platform_admins (email) values ('')`),
+      /platform_admins_email_normalized/,
+    );
+  });
+
+  /**
+   * Uno por correo CONTANDO a los retirados: volver a invitar a alguien reabre
+   * su fila. Con dos filas para el mismo correo, retirarle el acceso a una
+   * dejaria la otra viva.
+   */
+  it('un correo, una fila, aunque se le haya retirado el acceso', async () => {
+    await db.query(
+      `insert into platform_admins (email, revoked_at) values ('exdev@sinchi.fit', now())`,
+    );
+    await expectRejection(
+      () => db.query(`insert into platform_admins (email) values ('exdev@sinchi.fit')`),
+      /platform_admins_email_key/,
+    );
+  });
+
+  /** El registro tiene que sobrevivir al gimnasio que nombra. */
+  it('borrar el gimnasio no borra lo que se hizo con el', async () => {
+    const admin = await db.query<{ id: string }>(
+      `select id from platform_admins where email = 'xmathyu@gmail.com'`,
+    );
+    const gym = '55555555-5555-5555-5555-555555555555';
+    await db.query(
+      `insert into tenants (id, name, tax_id, slug) values ($1, 'Se Va', '20100070970', 'se-va')`,
+      [gym],
+    );
+    await db.query(
+      `insert into platform_actions (admin_id, action, tenant_id, subject)
+       values ($1, 'gym.delete', $2, 'se-va')`,
+      [admin.rows[0]!.id, gym],
+    );
+
+    await db.query(`delete from tenants where id = $1`, [gym]);
+
+    const quedan = await db.query<{ subject: string; tenant_id: string }>(
+      `select subject, tenant_id from platform_actions where action = 'gym.delete'`,
+    );
+    expect(quedan.rows).toHaveLength(1);
+    // El uuid queda huerfano a proposito, y al lado el slug legible: es lo que
+    // se lee cuando ese gimnasio ya no existe.
+    expect(quedan.rows[0]!.subject).toBe('se-va');
+    expect(quedan.rows[0]!.tenant_id).toBe(gym);
+  });
+
+  it('no se puede borrar a un administrador que dejo rastro', async () => {
+    const admin = await db.query<{ id: string }>(
+      `select id from platform_admins where email = 'xmathyu@gmail.com'`,
+    );
+    await expectRejection(
+      () => db.query(`delete from platform_admins where id = $1`, [admin.rows[0]!.id]),
+      /violates RESTRICT setting/,
+    );
+  });
+
+  it('un gimnasio suspendido lleva su fecha, y uno activo no', async () => {
+    const gym = '66666666-6666-6666-6666-666666666666';
+    await db.query(
+      `insert into tenants (id, name, tax_id, slug) values ($1, 'Con Motivo', '20131312955', 'con-motivo')`,
+      [gym],
+    );
+
+    await expectRejection(
+      () => db.query(`update tenants set status = 'suspended' where id = $1`, [gym]),
+      /tenants_suspended_has_date/,
+    );
+    await expectRejection(
+      () => db.query(`update tenants set suspended_at = now() where id = $1`, [gym]),
+      /tenants_suspended_has_date/,
+    );
+
+    await db.query(
+      `update tenants set status = 'suspended', suspended_at = now(), suspended_reason = 'cobra por fuera'
+        where id = $1`,
+      [gym],
+    );
+    const { rows } = await db.query<{ status: string }>(
+      `select status from tenants where id = $1`,
+      [gym],
+    );
+    expect(rows[0]!.status).toBe('suspended');
+  });
+});

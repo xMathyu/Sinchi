@@ -54,6 +54,11 @@ import { MessagingService } from './modules/messaging/messaging.service';
 import { PlacesController } from './modules/places/places.controller';
 import { PlacesService } from './modules/places/places.service';
 import { SaasGuard } from './modules/saas/saas.guard';
+import { AdminController, AdminPanelController } from './modules/admin/admin.controller';
+import { PlatformAdminGuard } from './modules/admin/admin.guard';
+import { PlatformAdminService } from './modules/admin/platform-admin.service';
+import { PlatformGymsService } from './modules/admin/platform-gyms.service';
+import { PlatformPromosService } from './modules/admin/platform-promos.service';
 
 @Module({
   imports: [DbModule, CommonModule, AuthModule, ScheduleModule.forRoot()],
@@ -71,6 +76,11 @@ import { SaasGuard } from './modules/saas/saas.guard';
     InvitesController,
     LinkRequestsController,
     JobsController,
+    // El panel de Sinchi. Dos controladores con el mismo prefijo: uno para la
+    // ruta que CREA la sesion y otro para todo lo demas, que nace detras del
+    // guard por estar en esa clase (ver admin.controller.ts).
+    AdminController,
+    AdminPanelController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
@@ -100,6 +110,10 @@ import { SaasGuard } from './modules/saas/saas.guard';
     MessagingService,
     RefreshDelinquencyJob,
     RefreshSaasJob,
+    PlatformAdminService,
+    PlatformGymsService,
+    PlatformPromosService,
+    PlatformAdminGuard,
   ],
 })
 export class AppModule {}

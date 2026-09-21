@@ -230,6 +230,37 @@ porque renombrarla es una migración sin nada que ganar.
 | no está en su billetera hasta que acepte | `notAwaitingPerson` |
 | canjear el QR de alumno en el mostrador de otro gimnasio | `lookupMemberQr` / `verifyUserQr` |
 
+## Conceptos del panel de Sinchi
+
+El otro lado del producto (decisiones §21). Ojo con `Staff`: es quien trabaja EN
+un gimnasio, y su poder termina en el borde de su tenant. Esto es quien trabaja
+EN Sinchi, y suspende, edita y borra gimnasios ajenos. Son dos cosas distintas y
+por eso `platform_admins` no cuelga de `staff` ni `platform_admin` es un
+`AppRole`: con un rol más, cada ruta de gimnasio tendría que acordarse de
+excluirlo, y la que se olvidara dejaría entrar.
+
+| Negocio | Código |
+|---|---|
+| quien administra Sinchi | `PlatformAdmin` / `platform_admins` |
+| el panel interno | `/admin` (la web), `@AdminOnly()` (la api) |
+| la sesión del panel, que no es un rol de la app | `AdminClaims` / `scope: 'platform'` |
+| invitado, todavía no ha entrado | `firebaseUid = null` |
+| quién le dio el acceso | `invitedBy` |
+| acceso retirado (no borrado) | `revokedAt` / `checkAdminRevocation` |
+| lo que se hizo desde el panel | `PlatformAction` / `platform_actions` |
+| qué se hizo | `PlatformActionKind` (`gym.suspend`, `promo.create`…) |
+| lo que no se deshace | `isIrreversibleAction` |
+| gimnasio fuera de Sinchi | `tenants.status = 'suspended'` + `suspendedAt`, `suspendedReason` |
+| sacarlo / devolverlo | `suspend` / `restore` |
+| borrador de un código de promoción | `PromoDraft` / `checkPromoDraft` |
+| usos que le quedan al código | `promoUsesLeft` |
+
+`suspended` aquí **no** es el corte por impago. Aquello es `SaasStatus =
+'read_only'` y deja la puerta abierta a propósito, porque es una palanca de
+cobro; esto es una expulsión, la decide una persona y lleva motivo escrito.
+Llamarlos igual invita a copiar el comportamiento equivocado — el mismo cuidado
+que ya se tuvo con `read_only` frente a `suspended` del alumno.
+
 ## Apariencia
 
 El tema de la app (decisiones §17). No viaja a la api: es del teléfono, no de la

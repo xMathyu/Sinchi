@@ -1337,3 +1337,131 @@ arregla solo la que uno se acuerde de tocar.
 `--chip-active` y `--text-bright` se referenciaban desde el panel y `tokens.ts`
 no los emitía, así que resolvían a nada. No se veía porque los dos caían en
 sitios donde el valor heredado pasaba por bueno.
+
+---
+
+## 21. El panel de Sinchi: administrar la red sin abrir la consola de Neon
+
+Hasta aquí, todo el poder del sistema era de gimnasio hacia adentro. Lo que cruza
+gimnasios —cobrar la suscripción, repartir códigos de promoción, borrar una
+siembra de pruebas que se coló en el directorio— vivía en la línea de comandos
+(`saas-cli`, `db:purge`), y ahí estuvo bien mientras el único que lo hacía estaba
+sentado frente al repo con la cadena de Neon a mano.
+
+Tres cosas lo cambiaron a la vez:
+
+- hay que poder **suspender** a un local que abusa sin abrir un terminal;
+- hay que dejar **rastro** de quién lo hizo y por qué — un `UPDATE` a mano no lo
+  deja, y «¿quién sacó a este gimnasio?» es una pregunta que se hace tarde;
+- hay que poder darle acceso **a una segunda persona** sin darle la base de datos.
+
+### Por qué no es un rol más del `AppRole`
+
+La forma barata era `AppRole = 'student' | 'front_desk' | 'owner' |
+'platform_admin'` y un `@Roles('platform_admin')` donde hiciera falta. Se
+descartó por una asimetría que solo se ve escribiéndola: `Roles(...)` protege
+*hacia adentro* —dice quién puede entrar a esta ruta— pero no protege *hacia
+afuera*. Con un cuarto rol, cada ruta que hoy dice `StaffOnly()` tendría que
+acordarse de excluirlo, y **la que se olvide no falla: deja entrar**.
+
+Son dos tokens de formas distintas, separados por un discriminante (`scope:
+'platform'`), y `AuthGuard` los reparte en el mismo sitio donde verifica la
+firma. El resultado es simétrico y no hay nada que recordar por ruta: un token
+del panel de Sinchi no abre ninguna ruta de gimnasio, y uno de gimnasio no abre
+ninguna del panel. Las dos mitades tienen su prueba en `admin.e2e.test.ts`.
+
+`AppRole` además significa otra cosa: «con qué se abre la APP». Quien administra
+Sinchi no abre ninguna app. Meterlo ahí habría sido mentirle al nombre.
+
+### El aislamiento por tenant no se tocó
+
+La tentación evidente era una excepción en las políticas RLS —un
+`app.platform_admin` que las abriera todas— y así el panel leería la red entera
+con una consulta. Sería una llave maestra en el mecanismo que sostiene que los
+datos de un dojo no se vean desde otro, a cambio de ahorrarse unas consultas en
+una pantalla que mira **una persona**.
+
+Así que el panel entra por donde entra el mostrador: `withTenant`, una
+transacción por gimnasio. Listar N gimnasios son N transacciones, y eso está
+escrito en el archivo que lo hace. Con los gimnasios que hay, es menos que el
+arranque en frío de Cloud Run. El día que pese, la salida es una vista
+materializada que refresque el trabajo diario — no la llave maestra.
+
+Lo global (`tenants`, `saas_*`, `users`, `platform_*`) no lleva RLS y se lee de
+una vez, como ya se leía.
+
+### Suspender es una expulsión, y no se parece al corte por impago
+
+Son dos cosas distintas y el glosario las separa a propósito:
+
+| | corte por impago (`read_only`) | suspensión (`tenants.status`) |
+|---|---|---|
+| quién lo decide | el reloj | una persona, con motivo escrito |
+| la puerta | **sigue abierta**: el alumno marca | el local sale de Sinchi |
+| qué pierde | dar de alta, cobrar, el directorio | la entrada de su staff |
+| se deshace | pagando | reactivando |
+
+La promesa de que «la puerta nunca se cierra» (§8) es sobre el impago, y sigue
+intacta. Una suspensión es otra cosa: el local abusó, y su staff deja de poder
+entrar con el motivo en pantalla. Lo que **no** se toca son los datos del alumno
+—su billetera, su historial, sus pagos siguen donde estaban—: no entrena en un
+gimnasio que sacamos, pero la culpa de eso no es suya.
+
+Y quien tiene otra puerta entra por ella: si además entrena en otro lado, o lleva
+un segundo local, la suspensión de uno no lo expulsa de Sinchi.
+
+### Borrar pide dos actos deliberados
+
+`db:purge` ya tenía las dos reglas buenas y estaban en un script: **enseña antes
+de borrar** y **el identificador se escribe, sin comodines**. Subieron al dominio
+(`checkGymDeletion`, en `@sinchi/shared`) y se les sumó una tercera: **antes hay
+que suspenderlo**. Así el borrado nunca es el primer contacto —hay un motivo
+escrito, un dueño avisado y tiempo en medio para que alguien diga que no— y un
+clic en la fila equivocada no se lleva un negocio.
+
+Al estar en `shared`, la pantalla apaga el botón por el motivo exacto por el que
+la api respondería 403, que es la regla del repo para todo lo demás.
+
+La cascada de Postgres atraviesa las políticas RLS y se lleva lo de dentro con el
+rol de la api, que no tiene BYPASSRLS. Eso **no se dedujo de la documentación**:
+lo afirma una prueba de punta a punta contra Postgres de verdad, porque si no
+fuera cierto el borrado fallaría a medias.
+
+### El registro sobrevive a lo que nombra
+
+`platform_actions.tenant_id` va **sin clave foránea**, y es deliberado: la acción
+que más importa registrar es justo la que borra el gimnasio. Con `cascade` se
+borraría con él; con `restrict` impediría borrarlo. Queda el uuid suelto y, al
+lado, `subject` con el slug legible — que es lo que se lee cuando ese gimnasio ya
+no existe.
+
+Por lo mismo, a un administrador se le **retira** el acceso en vez de borrarlo:
+su fila es a quien apunta el registro.
+
+### El primero nace en la migración
+
+Arrancar el panel tiene el problema del huevo y la gallina: solo un administrador
+puede invitar a otro. El primero se inserta en `0024`, escrito y versionado. Las
+alternativas eran una variable de entorno —invisible en el repo, distinta en cada
+despliegue— o un endpoint de arranque que quedaría abierto para siempre.
+
+El correo no es un secreto: es el del autor de cada commit de este repo. Lo que
+da acceso no es conocerlo, sino **presentarlo verificado por Google**. Y solo por
+Google: es más estricto que el vínculo automático del dueño, y la diferencia es
+lo que hay detrás — allí se abre el panel de un local, aquí el que puede
+eliminarlos todos.
+
+### Retirar un acceso corta la sesión abierta
+
+El token del panel dura doce horas, no una semana: su dueño está frente a un
+navegador con Google a un clic, no en la puerta de un gimnasio sin datos. Pero la
+vida corta no basta, así que **cada petición relee la fila**
+(`PlatformAdminGuard`). Sin eso, quitarle el acceso a alguien no surtiría efecto
+hasta medio día después — medio día de poder sobre la red entera.
+
+Cuesta una consulta por petición y es el mismo razonamiento por el que
+`switch-to-staff` relee `staff` en vez de creerle al rol firmado.
+
+Dos negativas más, las dos en `shared` y las dos contra el mismo fallo: **nadie
+se retira a sí mismo** y **nadie retira al último**. De un panel con cero
+administradores no se sale desde dentro; se sale escribiendo SQL contra Neon.

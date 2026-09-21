@@ -54,8 +54,39 @@ export function assertStaffSession(session: Session): StaffSession {
   return session as StaffSession;
 }
 
+/**
+ * La sesion del panel de SINCHI, que no es un rol de la app.
+ *
+ * Va aparte de `Session` y no como un `AppRole` mas, y es la decision de
+ * seguridad de todo esto: `AppRole` nombra con que se abre la APP —alumno,
+ * recepcion, dueno— y `Roles(...)` reparte las rutas de gimnasio entre esos
+ * tres. Metiendo aqui un cuarto valor, cada ruta que hoy dice `StaffOnly()`
+ * pasaria a tener que acordarse de excluirlo, y la que se olvide no falla: deja
+ * entrar.
+ *
+ * Con dos formas separadas el guard decide UNA vez, por el discriminante
+ * `scope`, y el resultado es simetrico: un token de Sinchi no abre ninguna ruta
+ * de gimnasio, y un token de gimnasio no abre ninguna del panel de Sinchi.
+ */
+export interface AdminClaims {
+  /** Su fila en `platform_admins`. */
+  readonly sub: string;
+  readonly email: string;
+  /** El discriminante. Lo unico que distingue los dos mundos en el token. */
+  readonly scope: 'platform';
+  /** Igual que en `SessionClaims`: lo pone `jsonwebtoken` al firmar. */
+  readonly exp?: number;
+}
+
+export const isAdminClaims = (claims: unknown): claims is AdminClaims =>
+  typeof claims === 'object' &&
+  claims !== null &&
+  (claims as { scope?: unknown }).scope === 'platform';
+
 declare module 'express' {
   interface Request {
     session?: Session;
+    /** Puesta por `AuthGuard` cuando el token es del panel de Sinchi. */
+    admin?: AdminClaims;
   }
 }

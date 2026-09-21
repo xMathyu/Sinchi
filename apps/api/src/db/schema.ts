@@ -354,6 +354,20 @@ export const tenants = pgTable(
     latitude: doublePrecision('latitude'),
     longitude: doublePrecision('longitude'),
     status: tenantStatusEnum('status').notNull().default('active'),
+    /**
+     * Desde cuando esta fuera de Sinchi, y por que.
+     *
+     * Las escribe el panel de Sinchi y nadie mas (migracion 0024). Van juntas
+     * con `status` por un CHECK: un gimnasio suspendido sin fecha es uno del que
+     * nadie sabe desde cuando lo esta, y el motivo es lo unico que queda para
+     * explicarselo al dueno por telefono.
+     *
+     * Suspender no es el corte por impago. Aquello es `saas_subscriptions` y
+     * deja la puerta abierta a proposito; esto es una expulsion, y la decide una
+     * persona con un motivo escrito.
+     */
+    suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+    suspendedReason: text('suspended_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -380,6 +394,90 @@ export const tenantGateway = pgTable('tenant_gateway', {
   culqiSecretKeyEncrypted: text('culqi_secret_key_encrypted'),
   active: boolean('active').notNull().default(false),
 });
+
+// ---------------------------------------------------------------------------
+// El otro lado: quien administra Sinchi
+// ---------------------------------------------------------------------------
+
+/**
+ * Quien puede entrar al panel de Sinchi.
+ *
+ * No es `staff` con un rol mas, y la diferencia es el producto: `staff` trabaja
+ * EN un gimnasio y su poder termina en el borde de su tenant; esto trabaja EN
+ * Sinchi y suspende, edita y borra gimnasios ajenos. Colgarlo de `staff` habria
+ * puesto la llave maestra de la red a una fila de distancia del dueno de un
+ * dojo.
+ *
+ * La llave es el CORREO y no `firebase_uid`, porque se invita a gente que
+ * todavia no ha entrado nunca: el uid no existe hasta su primer login, y ahi se
+ * rellena. Lo que da acceso no es conocer el correo sino presentarlo verificado
+ * por Google (`PlatformAdminService.signIn`).
+ *
+ * Fuera de `TENANT_SCOPED_TABLES` y sin RLS, como `users`: no pertenece a ningun
+ * gimnasio. La politica que la protegeria no existe porque no hay contexto que
+ * ponerle — el login ocurre ANTES de que haya sesion.
+ */
+export const platformAdmins = pgTable(
+  'platform_admins',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Normalizado en minusculas. Un CHECK de la base lo exige. */
+    email: text('email').notNull(),
+    name: text('name'),
+    /** Con que cuenta de Google entro. `null` mientras no haya entrado. */
+    firebaseUid: text('firebase_uid'),
+    invitedBy: uuid('invited_by').references((): AnyPgColumn => platformAdmins.id, {
+      onDelete: 'set null',
+    }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    /**
+     * Cuando se le retiro el acceso. El acceso se RETIRA, no se borra: la fila
+     * es el rastro de que esa persona lo tuvo, y `platform_actions` apunta a
+     * ella.
+     */
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Uno por correo CONTANDO a los retirados: volver a invitar a alguien reabre
+    // su fila en vez de crear una segunda.
+    uniqueIndex('platform_admins_email_key').on(t.email),
+    uniqueIndex('platform_admins_firebase_uid_key')
+      .on(t.firebaseUid)
+      .where(sql`firebase_uid is not null`),
+  ],
+);
+
+/**
+ * Lo que cada administrador de Sinchi hizo.
+ *
+ * Un registro, no un cache: nada lo lee para decidir nada. Eso es lo que le
+ * permite sobrevivir a lo que nombra — `tenantId` va SIN clave foranea porque la
+ * accion que mas importa registrar es justo la que borra el gimnasio, y al lado
+ * va `subject` con el slug legible, que es lo que se lee cuando ese gimnasio ya
+ * no existe.
+ */
+export const platformActions = pgTable(
+  'platform_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    adminId: uuid('admin_id')
+      .notNull()
+      .references(() => platformAdmins.id, { onDelete: 'restrict' }),
+    /** Un `PlatformActionKind` de `@sinchi/shared`. */
+    action: text('action').notNull(),
+    tenantId: uuid('tenant_id'),
+    /** El slug del gimnasio o el codigo, legible despues de borrarlo. */
+    subject: text('subject'),
+    reason: text('reason'),
+    detail: jsonb('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('platform_actions_recent_idx').on(t.createdAt),
+    index('platform_actions_tenant_idx').on(t.tenantId),
+  ],
+);
 
 /**
  * Codigos de promocion: meses de Sinchi de regalo.
@@ -1143,7 +1241,8 @@ export const webhookEvents = pgTable(
  * Las tablas que llevan `tenant_id` y por tanto necesitan RLS.
  *
  * `users` no esta: la identidad es global. `webhook_events` tampoco: es del
- * gateway, no de un gimnasio.
+ * gateway, no de un gimnasio. Ni `platform_admins` ni `platform_actions`: son de
+ * Sinchi, y quien las lee esta por encima de los gimnasios, no dentro de uno.
  */
 export const TENANT_SCOPED_TABLES = [
   'memberships',
