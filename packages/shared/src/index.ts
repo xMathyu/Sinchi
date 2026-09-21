@@ -26,11 +26,13 @@ export * from './billing/proration.js';
 export * from './billing/plan-change.js';
 export * from './billing/dunning.js';
 export * from './billing/receivable.js';
+export * from './billing/revenue.js';
 
 // Check-in
 export * from './checkin/quota.js';
 export * from './checkin/validate.js';
 export * from './checkin/messages.js';
+export * from './checkin/ranking.js';
 
 // Eventos con fecha: seminarios, talleres, la clase del invitado
 export * from './events/draft.js';

@@ -11,6 +11,13 @@
  */
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
+import {
+  compareDates,
+  daysBetween,
+  formatPlainDate,
+  parsePlainDate,
+  type PlainDate,
+} from '@sinchi/shared';
 import { CurrentSession, OwnerOnly, StaffOnly } from '../auth/auth.guard';
 import { assertStaffSession, type Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
@@ -79,6 +86,80 @@ const resubscribeSchema = z.object({ planId: z.string().uuid() });
 
 /** El codigo se normaliza en el dominio; aqui solo se acota el tamano. */
 const promoSchema = z.object({ code: z.string().min(1).max(40) });
+
+/**
+ * `YYYY-MM-DD`, que es lo que `parsePlainDate` sabe leer.
+ *
+ * El `try` no es defensivo de más: `plainDate` LANZA con un 30 de febrero, y una
+ * excepción dentro de un `refine` sube tal cual — la ruta respondía 500 a una
+ * fecha mal escrita, que es culpar al servidor de un error del cliente. La
+ * comprobación de ida y vuelta es la que caza el 31 de abril, que sí construye.
+ */
+const civilDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha va como YYYY-MM-DD.')
+  .refine((raw) => readCivilDate(raw) !== null, 'Esa fecha no existe.');
+
+function readCivilDate(raw: string): PlainDate | null {
+  try {
+    const parsed = parsePlainDate(raw);
+    return formatPlainDate(parsed) === raw ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * El rango de un reporte.
+ *
+ * El tope de un año no es una cuota comercial: la serie por día de un rango
+ * mayor son más de 365 puntos, que ni se leen en un gráfico ni caben en el ancho
+ * de una pantalla. Y el `refine` del orden evita la consulta vacía silenciosa —
+ * `from` después de `through` devolvería cero cobros y parecería un gimnasio sin
+ * movimiento, no una petición mal escrita.
+ */
+const rangeSchema = z
+  .object({ from: civilDate, through: civilDate })
+  // Cada `refine` vuelve a leer por `readCivilDate` en vez de dar por hecho que
+  // el campo ya validó: Zod corre las reglas del objeto aunque una de sus claves
+  // haya fallado, y `parsePlainDate` a pelo volvería a lanzar el 500 de antes.
+  .refine((value) => {
+    const range = readRange(value);
+    return range === null || compareDates(range.from, range.through) <= 0;
+  }, 'El inicio del rango va antes del final.')
+  .refine((value) => {
+    const range = readRange(value);
+    return range === null || daysBetween(range.from, range.through) <= 366;
+  }, 'El rango no puede pasar de un año.');
+
+function readRange(value: { readonly from: string; readonly through: string }) {
+  const from = readCivilDate(value.from);
+  const through = readCivilDate(value.through);
+  return from === null || through === null ? null : { from, through };
+}
+
+const revenueQuerySchema = rangeSchema.and(
+  z.object({ bucket: z.enum(['day', 'month']).default('day') }),
+);
+
+/**
+ * El tope de 20 filas por lista no es paginación: es la lista misma.
+ *
+ * «Los que menos vienen» con cincuenta filas deja de ser una lista de a quién
+ * llamar y pasa a ser el padrón otra vez, ordenado de otra forma. Quien quiera
+ * el padrón entero tiene `/staff/roster`.
+ */
+const rankingQuerySchema = rangeSchema.and(
+  z.object({ limit: z.coerce.number().int().min(1).max(20).default(5) }),
+);
+
+const ledgerQuerySchema = rangeSchema.and(
+  z.object({
+    // `coerce` porque una query siempre llega como texto.
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  }),
+);
 
 /**
  * Que paso con quien reservo una clase.
@@ -608,6 +689,75 @@ export class StaffController {
   @Get('summary')
   summary(@CurrentSession() session: Session) {
     return this.billing.summary(assertStaffSession(session).tenantId);
+  }
+
+  /**
+   * Ingresos de un rango: la serie, el desglose y el cambio contra el periodo
+   * anterior.
+   *
+   * Del dueño, como `summary`, y por la misma razón: cuánto factura el local no
+   * es dato del mostrador. Recepción cobra y ve lo que cobró ella; el total del
+   * mes es otra cosa.
+   *
+   * El rango va en la query y no tiene defecto implícito: una ruta de reportes
+   * que decide sola «el mes en curso» es la que después devuelve un número que
+   * el cliente no sabe de qué periodo es. Quien pregunta dice de cuándo a cuándo.
+   */
+  @OwnerOnly()
+  @Get('reports/revenue')
+  revenue(
+    @CurrentSession() session: Session,
+    @Query(parseWith(revenueQuerySchema)) query: z.infer<typeof revenueQuerySchema>,
+  ) {
+    return this.billing.revenue(assertStaffSession(session).tenantId, {
+      from: parsePlainDate(query.from),
+      through: parsePlainDate(query.through),
+      bucket: query.bucket,
+    });
+  }
+
+  /**
+   * El ledger del rango, paginado.
+   *
+   * Por `offset` y no por cursor: se lee hacia atrás desde hoy, las páginas son
+   * de 50 y nadie baja de la tercera. Un cursor es lo correcto para una lista
+   * que crece mientras la lees —la bandeja, el padrón— y aquí el rango está
+   * cerrado, así que no crece.
+   */
+  /**
+   * Quién viene mucho y quién se está yendo.
+   *
+   * Del dueño, como los ingresos, y aquí la razón es otra: la lista de riesgo
+   * dice quién está a punto de irse, y eso es una decisión comercial —a quién
+   * se llama, a quién se le regala un mes— no una tarea del mostrador. Además
+   * la segunda lista es, en la práctica, un juicio sobre cada alumno; cuanta
+   * menos gente lo tenga delante, mejor.
+   */
+  @OwnerOnly()
+  @Get('reports/attendance')
+  attendance(
+    @CurrentSession() session: Session,
+    @Query(parseWith(rankingQuerySchema)) query: z.infer<typeof rankingQuerySchema>,
+  ) {
+    return this.checkin.attendanceRanking(assertStaffSession(session).tenantId, {
+      from: parsePlainDate(query.from),
+      through: parsePlainDate(query.through),
+      limit: query.limit,
+    });
+  }
+
+  @OwnerOnly()
+  @Get('reports/charges')
+  ledger(
+    @CurrentSession() session: Session,
+    @Query(parseWith(ledgerQuerySchema)) query: z.infer<typeof ledgerQuerySchema>,
+  ) {
+    return this.billing.chargeLedger(assertStaffSession(session).tenantId, {
+      from: parsePlainDate(query.from),
+      through: parsePlainDate(query.through),
+      limit: query.limit,
+      offset: query.offset,
+    });
   }
 
   /**

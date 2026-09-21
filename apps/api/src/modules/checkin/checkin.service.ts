@@ -15,16 +15,23 @@ import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import {
   accessMessage,
+  computeAttendanceRanking,
   isoWeekOf,
+  parsePlainDate,
   parseQrPayload,
   validateCheckIn,
   verifyTotp,
+  weeklyLimit,
   type AccessMessage,
   type Attendance,
+  type AttendanceRanking,
+  type AttendanceRecord,
   type CheckInMethod,
   type CheckInResult,
   type HmacFn,
+  type IanaTimeZone,
   type PlainDate,
+  type Plan,
 } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, withoutTenantIsolation, type Database, type Tx } from '../../db/client';
@@ -346,6 +353,105 @@ export class CheckInService {
         ...toAttendance(row.attendance),
         userName: row.userName,
       }));
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Reportes de asistencia
+  // -------------------------------------------------------------------------
+
+  /**
+   * Quién viene mucho y quién se está yendo, en un rango.
+   *
+   * Una sola consulta con agregados y un `LEFT JOIN`, no un N+1: un padrón de
+   * 150 alumnos son 150 viajes a Neon desde Cloud Run, que a 8 ms cada uno es
+   * más de un segundo de reloj sin haber pintado nada.
+   *
+   * El recorte por rango va en el `count(...) filter`, y el `max(local_date)`
+   * deliberadamente NO lo lleva: `lastVisit` mira todo el historial. Si mirara
+   * solo el rango, quien vino el día antes de `from` saldría como «nunca vino»,
+   * que es la acusación falsa que peor se recibe de un sistema.
+   *
+   * Se agrupa por `local_date` y no por `checked_in_at` porque esa columna ya
+   * guarda la fecha civil en la zona del gimnasio — existe justo por la franja
+   * de 19:00 a medianoche, que en UTC es el día siguiente y es cuando un dojo
+   * entrena.
+   */
+  async attendanceRanking(
+    tenantId: string,
+    range: { readonly from: PlainDate; readonly through: PlainDate; readonly limit?: number },
+  ): Promise<AttendanceRanking & { readonly from: PlainDate; readonly through: PlainDate }> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [tenant] = await tx
+        .select({ timezone: schema.tenants.timezone })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+
+      if (tenant === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+
+      const rows = await tx
+        .select({
+          membershipId: schema.memberships.id,
+          name: schema.users.name,
+          since: schema.subscriptions.startDate,
+          planType: schema.plans.type,
+          sessionsPerWeek: schema.plans.sessionsPerWeek,
+          allowedDays: schema.plans.allowedDays,
+          checkIns: sql<number>`count(${schema.attendance.id}) filter (
+            where ${schema.attendance.localDate} between ${dateToColumn(range.from)}
+              and ${dateToColumn(range.through)}
+          )::int`,
+          lastVisit: sql<string | null>`max(${schema.attendance.localDate})`,
+        })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .innerJoin(
+          schema.subscriptions,
+          and(
+            eq(schema.subscriptions.membershipId, schema.memberships.id),
+            sql`${schema.subscriptions.status} <> 'canceled'`,
+          ),
+        )
+        .innerJoin(schema.plans, eq(schema.plans.id, schema.subscriptions.planId))
+        .leftJoin(schema.attendance, eq(schema.attendance.membershipId, schema.memberships.id))
+        .where(eq(schema.memberships.status, 'active'))
+        .groupBy(
+          schema.memberships.id,
+          schema.users.name,
+          schema.subscriptions.startDate,
+          schema.plans.type,
+          schema.plans.sessionsPerWeek,
+          schema.plans.allowedDays,
+        );
+
+      const records: AttendanceRecord[] = rows.map((row) => ({
+        membershipId: row.membershipId,
+        name: row.name,
+        checkIns: row.checkIns,
+        lastVisit: row.lastVisit === null ? null : parsePlainDate(row.lastVisit),
+        since: parsePlainDate(row.since),
+        // El cupo sale de `weeklyLimit`, del dominio: un plan de días fijos lo
+        // deriva de cuántos días tiene asignados, y reescribir esa regla aquí
+        // es como el panel acaba diciendo un cupo que la puerta no aplica.
+        weeklyLimit: weeklyLimit({
+          type: row.planType,
+          sessionsPerWeek: row.sessionsPerWeek,
+          allowedDays: row.allowedDays,
+        } as Plan),
+      }));
+
+      return {
+        ...computeAttendanceRanking({
+          records,
+          from: range.from,
+          through: range.through,
+          today: this.clock.today(tenant.timezone as IanaTimeZone),
+          ...(range.limit === undefined ? {} : { limit: range.limit }),
+        }),
+        from: range.from,
+        through: range.through,
+      };
     });
   }
 }

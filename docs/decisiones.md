@@ -1068,3 +1068,106 @@ explicaba una decisión de accesibilidad a quien solo venía a cambiar el tema.
 Si vuelve, vuelve con lo que le faltaba: una forma distinta por estado, no solo
 un tono distinto. Un punto, un triángulo y una cruz se distinguen sin color y
 sin leer, que es lo que la paleta prometía y no daba.
+
+
+## 18. Los reportes del dueño: cuánto entró y quién viene
+
+`summary` contesta «¿cómo va el mes?» con cinco cifras y lo abre el mostrador
+cien veces al día. Lo que faltaba es la otra pregunta, la que se hace quien ya
+decidió que el sistema le sirve: **de dónde sale mi plata y cómo está usando el
+gimnasio mi gente**. Son tres rutas nuevas, todas del dueño.
+
+El cálculo vive en `packages/shared` —`computeRevenue`, `computeAttendanceRanking`—
+y la api solo trae las filas. Agregar en SQL dejaría la regla escrita donde no se
+puede probar sin levantar Postgres, y el panel tendría que creérsela sin poder
+recalcular nada.
+
+### Ingreso es lo cobrado, y nada más
+
+Un cargo `pending` es deuda: ya lo cuenta `computeReceivable`, al otro lado del
+panel. Sumarlo aquí haría que el mismo sol apareciera dos veces —una como
+cobrado y otra como por cobrar— y es exactamente así como un dueño deja de
+confiar en la pantalla. El filtro va dentro de la función pura, no en el `where`,
+para que una consulta que se olvide no pueda inventar ingresos.
+
+### El día es el del gimnasio, no el de UTC
+
+Lima es UTC−5: la mensualidad cobrada a las 8 de la noche del 31 se guarda como
+la 1 de la madrugada del 1. Agrupando por UTC, la caja de la noche —que en un
+dojo es cuando entrena casi todo el mundo, y por tanto cuando se cobra— se va al
+día siguiente, y al mes siguiente si el día era 31. El dueño que cuenta el
+efectivo al cerrar encuentra un número que no le cuadra, y tiene razón él.
+
+### La serie trae los días vacíos
+
+Lo barato es devolver solo los días con cobros. Entonces un gimnasio que cobró
+lunes, miércoles y viernes sale como tres puntos seguidos: el gráfico dibuja una
+semana constante y esconde que el martes y el jueves no entró un sol. **El hueco
+ES el dato** — es lo que hace visible el mes en que la cosa se cayó. Un año por
+día son 365 puntos; el coste está acotado.
+
+### «Los que menos vienen» no se calcula contando
+
+El panel enseña dos listas de gente. La primera —quién viene más— es contar. La
+segunda **no**, y ordenar de menos a más asistencias mezcla tres casos que piden
+acciones distintas:
+
+1. el que se inscribió anteayer y todavía no ha venido. No está a la fuga, es
+   nuevo, y llamarlo para preguntarle por qué no viene es ridículo;
+2. el de 2 veces por semana que vino 8 veces en el mes. Usó su plan al **100%**, y
+   aparecería debajo del de ilimitado que vino 12 y está flojeando. Contar sin
+   mirar el plan compara cosas que no son comparables;
+3. el que sí dejó de venir.
+
+Así que la lista de riesgo ordena por **días sin aparecer**, que es lo que de
+verdad predice una baja, con dos cotas:
+
+| Cota | Por qué |
+|---|---|
+| `NEW_MEMBER_GRACE_DAYS = 14` | Quien se inscribió el lunes y entrena los sábados lleva seis días sin aparecer y está perfectamente. Una lista de riesgo llena de recién llegados se deja de mirar. |
+| `FADING_AFTER_DAYS = 10` | Diez días cubren dos semanas de un plan de 2x: tres sesiones seguidas saltadas ya no es «ando ocupado». |
+
+Y cada fila trae su **motivo**, no un booleano «en riesgo»: `never_came` es un
+alta que falló —nadie le explicó cómo entrar, o lo inscribió alguien más— y
+`absent` es algo que pasó después. Son dos llamadas distintas, y meterlos en el
+mismo saco manda el mensaje equivocado a la mitad de la lista.
+
+El umbral es **uno solo y no uno por plan**, a propósito. Calcularlo contra el
+cupo —al de ilimitado se le avisaría a los 4 días y al de 2x a los 12— da una
+lista más fina y una que el dueño no puede explicarse a sí mismo: dos alumnos con
+la misma ausencia, uno dentro y el otro fuera. Un número que se entiende se usa.
+
+**`lastVisit` mira todo el historial, no solo el rango.** Si mirara solo el rango,
+quien vino el día antes de `from` saldría como «nunca vino», que es una acusación
+falsa y además la que peor se recibe de un sistema.
+
+El top sí es contar —«alumno del mes» significa quien más vino y todo el mundo lo
+entiende así— pero cada fila lleva su uso del cupo al lado, que es lo que deja ver
+que el segundo puesto con plan de 2x rindió más que el primero con ilimitado. En
+un plan ilimitado ese dato es `null` y no `1`: no hay cupo contra el que medir, y
+fingir uno pondría a todo el mundo al 100% o al 0% según se redondee.
+
+### El rango se pide, no se adivina
+
+Ninguna de las tres rutas tiene periodo por defecto. Una ruta de reportes que
+decide sola «el mes en curso» es la que después devuelve un número del que el
+cliente no sabe de qué periodo es. Quien pregunta dice de cuándo a cuándo; el
+defecto vive en la pantalla, que sí tiene que llegar con algo puesto.
+
+El tope de un año no es comercial: la serie por día de un rango mayor son más de
+365 puntos, que ni se leen en un gráfico ni caben en el ancho de una pantalla. Y
+`from` después de `through` se rechaza con 400 en vez de devolver cero, que
+parecería un gimnasio parado y no una petición al revés.
+
+### Lo que estrena el riesgo, y cómo se prueba
+
+Hasta ahora ninguna ruta devolvía **dinero agregado**. Un `where` que se olvide
+del tenant aquí no es una fila de más: es la facturación de un competidor. Por eso
+`reports.e2e.test.ts` cobra en otro gimnasio y comprueba que el total del primero
+no se mueve, contra Postgres con RLS y un rol sin `BYPASSRLS` — con él, esa prueba
+pasaría sin probar nada.
+
+Un fallo que encontró: `2026-02-30` respondía **500**. `plainDate` lanza con una
+fecha que no existe y la excepción subía desde dentro del `refine` de Zod, así que
+la api culpaba al servidor de un error del cliente.
+

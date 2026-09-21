@@ -190,6 +190,9 @@ celular —ya se saben—: `GET`/`POST /me/trials` y `POST /me/trials/:id/cancel
 | `POST` | `/staff/payments` | Registra un pago en mostrador. |
 | `POST` | `/staff/sync` | Sube la cola offline en un solo viaje. |
 | `GET` | `/staff/summary` | Solo el dueño: cobrado, deuda, morosos. |
+| `GET` | `/staff/reports/revenue` | Solo el dueño: ingresos de un rango — la serie por día o por mes, el desglose por tipo de cargo y por medio de pago, y el cambio contra el periodo anterior. El rango es obligatorio (`from`, `through`, `YYYY-MM-DD`), tope de un año: una ruta de reportes que decide sola «el mes en curso» devuelve un número del que nadie sabe el periodo. |
+| `GET` | `/staff/reports/charges` | Solo el dueño: el ledger del rango, paginado por `offset`. Trae quién pagó —`null` en una clase suelta o un evento de quien no está en el padrón— y quién lo registró. |
+| `GET` | `/staff/reports/attendance` | Solo el dueño: quién viene más y quién se está yendo. **La segunda lista NO es «los que menos vinieron»**: ordena por días sin aparecer, deja fuera a quien se inscribió hace menos de 14 días y distingue `never_came` de `absent`. El porqué está en `packages/shared/src/checkin/ranking.ts`. |
 | `GET` | `/staff/subscription` | Solo el dueño: su suscripción a Sinchi, cuánto le queda de mes gratis y qué pasa al terminar. |
 | `POST` | `/staff/promo` | Solo el dueño: canjea un código y suma meses gratis. Abierta en solo lectura — es por donde un gimnasio cortado vuelve. |
 | `GET` | `/staff/trials` | Quién tiene reserva —prueba, clase suelta o inscripción—, de hoy en adelante y con lo que nadie atendió en los últimos siete días. `?onlyPast=true` trae el historial. Las dos listas son disjuntas. |

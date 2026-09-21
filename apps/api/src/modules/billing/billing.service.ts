@@ -9,17 +9,32 @@
  * renovación, reactiva la suscripción y libera el check-in (MD 4.5). Cuando
  * entre Culqi, se suma un origen de cargos; el resto de este archivo no cambia.
  */
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { and, eq, gte, sql } from 'drizzle-orm';
 import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import {
+  addDays,
   applyPayment,
   cents,
+  compareRevenue,
+  computeRevenue,
   decidePlanChange,
   isDropInPlan,
+  previousRange,
+  startOfDayInZone,
   type Charge,
   type ChargeType,
+  type IanaTimeZone,
   type PaymentRail,
+  type PlainDate,
   type PlanChangeDecision,
+  type RevenueBucket,
+  type RevenueEntry,
+  type RevenueReport,
 } from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, type Database, type Tx } from '../../db/client';
@@ -402,6 +417,195 @@ export class BillingService {
       };
     });
   }
+
+  /**
+   * Ingresos de un rango, con su serie y sus desgloses.
+   *
+   * `summary` responde «¿cómo va el mes?» con una cifra; esto responde «¿de
+   * dónde sale y cómo viene?», que es la pregunta que se hace quien ya decidió
+   * que el sistema le sirve. Son distintas y por eso son dos rutas: el mostrador
+   * abre la primera cien veces al día y esta no la abre nunca.
+   *
+   * Todo el cálculo es de `computeRevenue`, en `@sinchi/shared`. Aquí solo se
+   * traen las filas: agregar dinero en SQL dejaría la regla —qué cuenta como
+   * ingreso, en qué día cae un cobro de la noche— escrita en un sitio donde no
+   * se puede probar sin levantar Postgres, y el panel tendría que confiar en
+   * ella sin poder recalcular nada.
+   */
+  async revenue(
+    tenantId: string,
+    range: { readonly from: PlainDate; readonly through: PlainDate; readonly bucket: RevenueBucket },
+  ): Promise<{
+    readonly report: RevenueReport;
+    readonly previous: { readonly deltaCents: number; readonly percent: number | null };
+    readonly from: PlainDate;
+    readonly through: PlainDate;
+    readonly bucket: RevenueBucket;
+  }> {
+    const before = previousRange(range.from, range.through);
+
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [tenantRow] = await tx
+        .select({ timezone: schema.tenants.timezone })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+
+      if (tenantRow === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      const timezone = tenantRow.timezone as IanaTimeZone;
+
+      /**
+       * Se piden los dos rangos de una vez y se reparten en memoria.
+       *
+       * Dos consultas darían lo mismo y costarían un viaje más a Neon, que desde
+       * Cloud Run es el gasto que se nota (`docs/despliegue.md`). El recorte por
+       * rango lo vuelve a hacer `computeRevenue` sobre cada mitad, así que traer
+       * de más aquí no puede inflar ninguna cifra.
+       */
+      const entries = await this.chargesBetween(tx, before.from, range.through, timezone);
+
+      const report = computeRevenue({ entries, ...range, timezone });
+      const previousReport = computeRevenue({ entries, ...before, bucket: range.bucket, timezone });
+
+      return {
+        report,
+        previous: compareRevenue(report.totalCents, previousReport.totalCents),
+        ...range,
+      };
+    });
+  }
+
+  /**
+   * El ledger: cobro a cobro, lo último arriba.
+   *
+   * El gráfico convence y esta lista es la que se audita — «¿qué son esos S/ 600
+   * del martes?» no se contesta con una barra. Trae el nombre de quien pagó por
+   * `LEFT JOIN`: un cargo de clase suelta o de evento no tiene ficha detrás (ver
+   * `charges.membership_id`), y esa fila también es plata del gimnasio.
+   */
+  async chargeLedger(
+    tenantId: string,
+    range: {
+      readonly from: PlainDate;
+      readonly through: PlainDate;
+      readonly limit: number;
+      readonly offset: number;
+    },
+  ): Promise<{
+    readonly rows: readonly LedgerRow[];
+    readonly total: number;
+  }> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [tenantRow] = await tx
+        .select({ timezone: schema.tenants.timezone })
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+
+      if (tenantRow === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+
+      const window = utcWindow(range.from, range.through, tenantRow.timezone as IanaTimeZone);
+      const where = and(
+        eq(schema.charges.status, 'succeeded'),
+        gte(schema.charges.createdAt, window.start),
+        lt(schema.charges.createdAt, window.end),
+      );
+
+      const [counted] = (await tx
+        .select({ total: sql<number>`count(*)::int` })
+        .from(schema.charges)
+        .where(where)) as [{ total: number }];
+
+      const rows = await tx
+        .select({
+          charge: schema.charges,
+          memberName: schema.users.name,
+          staffName: schema.staff.displayName,
+        })
+        .from(schema.charges)
+        .leftJoin(schema.memberships, eq(schema.memberships.id, schema.charges.membershipId))
+        .leftJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .leftJoin(schema.staff, eq(schema.staff.id, schema.charges.recordedBy))
+        .where(where)
+        .orderBy(desc(schema.charges.createdAt), desc(schema.charges.id))
+        .limit(range.limit)
+        .offset(range.offset);
+
+      return {
+        total: counted.total,
+        rows: rows.map((row) => ({
+          charge: toCharge(row.charge),
+          // `null` y no «—»: el texto de la pantalla es de la pantalla. Aquí
+          // solo se dice que no hay ficha detrás, que es un hecho distinto.
+          memberName: row.memberName,
+          recordedByName: row.staffName,
+        })),
+      };
+    });
+  }
+
+  /** Los cargos del gimnasio entre dos fechas civiles, listos para agregar. */
+  private async chargesBetween(
+    tx: Tx,
+    from: PlainDate,
+    through: PlainDate,
+    timezone: IanaTimeZone,
+  ): Promise<readonly RevenueEntry[]> {
+    const window = utcWindow(from, through, timezone);
+
+    const rows = await tx
+      .select({
+        at: schema.charges.createdAt,
+        type: schema.charges.type,
+        rail: schema.charges.rail,
+        amountCents: schema.charges.amountCents,
+        status: schema.charges.status,
+      })
+      .from(schema.charges)
+      .where(
+        and(gte(schema.charges.createdAt, window.start), lt(schema.charges.createdAt, window.end)),
+      );
+
+    return rows.map((row) => ({
+      at: row.at,
+      type: row.type,
+      rail: row.rail,
+      amountCents: cents(row.amountCents),
+      status: row.status,
+    }));
+  }
+}
+
+/** Una fila del ledger, con quién pagó y quién cobró ya resueltos. */
+export interface LedgerRow {
+  readonly charge: Charge;
+  /** `null` en una clase suelta o un evento de quien no está en el padrón. */
+  readonly memberName: string | null;
+  /** `null` si el cargo no lo registró nadie a mano. */
+  readonly recordedByName: string | null;
+}
+
+/**
+ * El intervalo UTC que cubre esos días civiles en la zona del gimnasio.
+ *
+ * La consulta filtra por `timestamptz` y el rango que pide el panel son fechas
+ * civiles, así que la conversión tiene que pasar en algún sitio. Pasa aquí, una
+ * vez, y con el mismo criterio que usa `computeRevenue` para decidir el bucket —
+ * si los dos no coincidieran, el gráfico mostraría un día que la consulta no
+ * trajo.
+ *
+ * Medio abierto (`>= start`, `< end`): con `<=` sobre el fin del día, un cobro
+ * exactamente a medianoche caería en los dos días.
+ */
+function utcWindow(
+  from: PlainDate,
+  through: PlainDate,
+  timezone: IanaTimeZone,
+): { readonly start: Date; readonly end: Date } {
+  return {
+    start: startOfDayInZone(from, timezone),
+    end: startOfDayInZone(addDays(through, 1), timezone),
+  };
 }
 
 function startOfMonthUtc(now: Date): Date {
