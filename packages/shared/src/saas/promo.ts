@@ -98,3 +98,82 @@ export function describePromo(outcome: PromoOutcome): string {
     ? 'Un mes más de Sinchi gratis.'
     : `${outcome.freeMonths} meses más de Sinchi gratis.`;
 }
+
+// ---------------------------------------------------------------------------
+// El codigo antes de existir
+// ---------------------------------------------------------------------------
+
+/**
+ * Un codigo tal como lo escribe quien administra Sinchi.
+ *
+ * Nacio para la linea de comandos (`saas:promo new`), donde la validacion era
+ * un `throw` con su frase. Desde que hay pantalla hace falta lo mismo en los dos
+ * lados: el formulario apaga el boton por el mismo motivo por el que la api
+ * responde 400, o se llenan cuatro campos para que te digan que no al final.
+ */
+export interface PromoDraft {
+  readonly code: string;
+  readonly freeMonths: number;
+  /** `null` = sin tope de usos, y tiene que ser una decision (ver abajo). */
+  readonly maxRedemptions: number | null;
+  /** Hasta cuando se puede canjear. `null` = no vence. */
+  readonly expiresOn: PlainDate | null;
+}
+
+export type PromoDraftDenial =
+  | 'malformed_code'
+  | 'months_out_of_range'
+  | 'max_redemptions_invalid'
+  | 'already_expired';
+
+/** `null` si el codigo se puede crear; el motivo si no. */
+export function checkPromoDraft(draft: PromoDraft, today: PlainDate): PromoDraftDenial | null {
+  if (!isWellFormedPromoCode(draft.code)) return 'malformed_code';
+
+  if (!Number.isInteger(draft.freeMonths)) return 'months_out_of_range';
+  if (draft.freeMonths < 1 || draft.freeMonths > PROMO_MAX_FREE_MONTHS) {
+    return 'months_out_of_range';
+  }
+
+  /**
+   * El tope: un entero positivo, o `null` a proposito.
+   *
+   * `null` es «sin tope», y es una promocion que regala meses a todo el que pase
+   * el codigo a un grupo de WhatsApp. Se acepta —a veces es lo que se quiere—
+   * pero tiene que escribirse, no salir de un campo vacio.
+   */
+  if (draft.maxRedemptions !== null) {
+    if (!Number.isInteger(draft.maxRedemptions) || draft.maxRedemptions < 1) {
+      return 'max_redemptions_invalid';
+    }
+  }
+
+  // Un codigo que ya vencio se puede crear sin que nada falle y no canjea nunca:
+  // se reparte, nadie lo puede usar, y el dia que alguien se queja hay que
+  // mirar la columna para entender por que.
+  if (draft.expiresOn !== null && isAfter(today, draft.expiresOn)) return 'already_expired';
+
+  return null;
+}
+
+export function promoDraftDenialMessage(reason: PromoDraftDenial): string {
+  switch (reason) {
+    case 'malformed_code':
+      return `El código va entre ${PROMO_CODE_MIN_LENGTH} y ${PROMO_CODE_MAX_LENGTH} letras o números.`;
+    case 'months_out_of_range':
+      return `Los meses de regalo van de 1 a ${PROMO_MAX_FREE_MONTHS}.`;
+    case 'max_redemptions_invalid':
+      return 'El tope de usos es un número entero de 1 en adelante, o sin tope.';
+    case 'already_expired':
+      return 'Esa fecha de vencimiento ya pasó: el código no se podría canjear nunca.';
+  }
+}
+
+/** Cuántos usos le quedan, o `null` si no tiene tope. */
+export function promoUsesLeft(promo: {
+  readonly maxRedemptions: number | null;
+  readonly redeemedCount: number;
+}): number | null {
+  if (promo.maxRedemptions === null) return null;
+  return Math.max(0, promo.maxRedemptions - promo.redeemedCount);
+}

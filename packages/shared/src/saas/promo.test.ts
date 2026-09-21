@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  checkPromoDraft,
   describePromo,
   extendedFreeUntil,
   isWellFormedPromoCode,
   normalizePromoCode,
   promoDenialMessage,
+  promoDraftDenialMessage,
+  promoUsesLeft,
 } from './promo.js';
 import { plainDate } from '../time/plain-date.js';
 
@@ -75,5 +78,64 @@ describe('textos', () => {
     expect(promoDenialMessage('not_found')).toContain('bien escrito');
     expect(promoDenialMessage('exhausted')).toContain('todas las veces');
     expect(promoDenialMessage('already_used')).toContain('Ya usaste');
+  });
+});
+
+describe('checkPromoDraft', () => {
+  const HOY = plainDate(2026, 9, 21);
+  const base = { code: 'VERANO2026', freeMonths: 1, maxRedemptions: 20, expiresOn: null };
+
+  it('deja crear un codigo normal', () => {
+    expect(checkPromoDraft(base, HOY)).toBeNull();
+    // Sin tope es una decision legitima: se acepta cuando se escribe.
+    expect(checkPromoDraft({ ...base, maxRedemptions: null }, HOY)).toBeNull();
+  });
+
+  it('exige un codigo con forma de codigo', () => {
+    expect(checkPromoDraft({ ...base, code: 'AB' }, HOY)).toBe('malformed_code');
+    // Normalizado son 4 letras, asi que pasa: es el mismo codigo escrito feo.
+    expect(checkPromoDraft({ ...base, code: 've-ra' }, HOY)).toBeNull();
+  });
+
+  it('acota los meses de regalo', () => {
+    expect(checkPromoDraft({ ...base, freeMonths: 0 }, HOY)).toBe('months_out_of_range');
+    expect(checkPromoDraft({ ...base, freeMonths: 13 }, HOY)).toBe('months_out_of_range');
+    expect(checkPromoDraft({ ...base, freeMonths: 1.5 }, HOY)).toBe('months_out_of_range');
+  });
+
+  it('el tope es un entero positivo', () => {
+    expect(checkPromoDraft({ ...base, maxRedemptions: 0 }, HOY)).toBe('max_redemptions_invalid');
+    expect(checkPromoDraft({ ...base, maxRedemptions: -3 }, HOY)).toBe('max_redemptions_invalid');
+  });
+
+  /**
+   * Un codigo vencido se crea sin que nada falle y no canjea nunca: se reparte,
+   * nadie lo puede usar, y el dia que alguien se queja hay que mirar la columna
+   * para entender por que.
+   */
+  it('no deja crear un codigo que ya nacio vencido', () => {
+    expect(checkPromoDraft({ ...base, expiresOn: plainDate(2026, 9, 20) }, HOY)).toBe(
+      'already_expired',
+    );
+    // Hoy todavia vale: vence AL terminar el dia.
+    expect(checkPromoDraft({ ...base, expiresOn: HOY }, HOY)).toBeNull();
+  });
+
+  it('cada motivo tiene su frase', () => {
+    expect(promoDraftDenialMessage('malformed_code')).toContain('letras');
+    expect(promoDraftDenialMessage('months_out_of_range')).toContain('1 a 12');
+    expect(promoDraftDenialMessage('max_redemptions_invalid')).toContain('tope');
+    expect(promoDraftDenialMessage('already_expired')).toContain('vencimiento');
+  });
+});
+
+describe('promoUsesLeft', () => {
+  it('cuenta lo que queda, y no baja de cero', () => {
+    expect(promoUsesLeft({ maxRedemptions: 10, redeemedCount: 3 })).toBe(7);
+    expect(promoUsesLeft({ maxRedemptions: 10, redeemedCount: 12 })).toBe(0);
+  });
+
+  it('sin tope no hay cuenta que llevar', () => {
+    expect(promoUsesLeft({ maxRedemptions: null, redeemedCount: 40 })).toBeNull();
   });
 });

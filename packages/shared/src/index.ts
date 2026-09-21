@@ -68,3 +68,6 @@ export * from './saas/locales.js';
 export * from './identity/ruc.js';
 export * from './identity/phone.js';
 export * from './identity/account-details.js';
+
+// Quien administra Sinchi: el otro lado del producto
+export * from './platform/admin.js';
