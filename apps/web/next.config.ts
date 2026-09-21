@@ -1,13 +1,26 @@
 import type { NextConfig } from 'next';
 
 /**
- * La landing es estatica: no tiene datos, ni sesion, ni formularios que envien
- * nada. `output: 'export'` lo hace explicito — cualquier hosting de archivos la
- * sirve, y si algun dia alguien anade un endpoint, el build falla en vez de
- * arrastrar un servidor sin querer.
+ * La landing nacio estatica (`output: 'export'`) y dejo de serlo al entrar el
+ * panel del dueno. Conviene decir por que, porque el comentario anterior pedia
+ * explicitamente que nadie arrastrara un servidor sin querer.
+ *
+ * El panel necesita sesion, y la sesion se guarda en una cookie `httpOnly`: el
+ * JWT de Sinchi abre la caja del gimnasio entero, asi que no puede quedar al
+ * alcance de `document.cookie`. Una cookie `httpOnly` no la puede leer el
+ * navegador — y tampoco la puede MANDAR a Cloud Run, que esta en otro dominio.
+ * De ahi sale toda la forma del panel: quien habla con la api es el servidor de
+ * Next, leyendo la cookie; los Server Components pintan ya con los datos y las
+ * mutaciones van por Server Actions. En el navegador no hay cliente de api, ni
+ * token, ni CORS que abrir.
+ *
+ * Lo que NO se pierde: la landing sigue siendo estatica. Sus paginas no leen
+ * cookies ni cabeceras, asi que el App Router las prerenderiza en el build y
+ * Vercel las sirve desde el CDN igual que antes. Lo que cambia es que ahora,
+ * ademas, hay rutas que corren en el servidor — y eso es deliberado, no un
+ * descuido: esta escrito en `docs/decisiones.md` §18.
  */
 const nextConfig: NextConfig = {
-  output: 'export',
   images: { unoptimized: true },
   typedRoutes: true,
   // Next 16 escribe un AGENTS.md y un CLAUDE.md propios en cada arranque. Las

@@ -63,6 +63,12 @@ export function Nav() {
                 {link.label}
               </a>
             ))}
+            {/* El panel es para quien YA es cliente, asi que va como enlace y
+                no como boton: el boton de esta barra tiene que seguir siendo el
+                de ventas, que es a lo que la pagina viene. */}
+            <a href="/panel" className="nav-link">
+              Entrar
+            </a>
             <a href="#contacto" className="btn-outline">
               Hablar con ventas
             </a>
@@ -93,6 +99,9 @@ export function Nav() {
             </a>
           ))}
         </nav>
+        <a href="/panel" onClick={() => setOpen(false)}>
+          Entrar a mi panel
+        </a>
         <a href="#contacto" className="btn-solid" onClick={() => setOpen(false)}>
           Hablar con ventas
         </a>

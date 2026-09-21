@@ -1171,3 +1171,92 @@ Un fallo que encontró: `2026-02-30` respondía **500**. `plainDate` lanza con u
 fecha que no existe y la excepción subía desde dentro del `refine` de Zod, así que
 la api culpaba al servidor de un error del cliente.
 
+## 19. El panel del dueño vive en la web, y por eso la landing dejó de ser estática
+
+`apps/web` nació como una landing con `output: 'export'`, y su `next.config.ts`
+lo decía en voz alta: «si algún día alguien añade un endpoint, el build falla en
+vez de arrastrar un servidor sin querer». Ese aviso se ha cobrado ahora, a
+propósito. Conviene dejar escrito a cambio de qué.
+
+La especificación siempre puso el panel aquí (MD 9: «`/web` Next.js — panel del
+gimnasio», y la fase 2 del orden de construcción). Lo que se construyó primero
+fue la app, así que la web se quedó de landing. El panel entra cuando el dueño
+pide sentarse a mirar sus números en una pantalla grande: el mostrador es la app
+y siempre lo será, pero el corte de caja, el ranking de asistencia y el editor de
+la biblioteca no se hacen de pie con un teléfono.
+
+### La cookie decide la arquitectura entera
+
+El JWT de Sinchi lleva `tenantId`, `staffId` y `role` firmados: abre el padrón,
+la caja y la biblioteca del local. En la app vive en el llavero del teléfono. En
+un navegador no hay equivalente —`localStorage` lo lee cualquier script que llegue
+a la página— así que va en cookie **`httpOnly`**.
+
+Y ahí está la consecuencia que da forma a todo lo demás: **una cookie `httpOnly`
+de `sinchi.fit` tampoco se puede mandar a Cloud Run**, que está en otro dominio.
+Quien habla con la api es el servidor de Next, leyendo la cookie. De eso salen
+tres cosas, ninguna opcional:
+
+- los Server Components pintan ya con los datos, así que en el navegador **no hay
+  cliente de api, ni token, ni URL de la api**;
+- las escrituras van por **Server Actions**, no por rutas propias: una Route
+  Handler inventaría un segundo contrato HTTP —el del panel con su propio
+  servidor— que habría que documentar, versionar y validar aparte;
+- **no hace falta abrir CORS a nadie.** El `enableCors` de la api sigue apuntando
+  a `/\.sinchi\.pe$/`, que además es el dominio equivocado (hoy es `sinchi.fit`);
+  se deja como está porque ningún navegador llama a la api, y arreglarlo «por si
+  acaso» abriría una puerta que nadie usa.
+
+`src/panel/api.ts` importa `server-only`: si alguien lo mete en un componente de
+cliente, el build falla en vez de publicar el token.
+
+### Lo que NO se pierde
+
+La landing **sigue siendo estática**. Sus páginas no leen cookies ni cabeceras,
+así que el App Router las prerenderiza en el build y Vercel las sirve desde el
+CDN igual que antes. Se comprueba en la salida de `next build`: `/`,
+`/privacidad` y `/eliminar-cuenta` salen con `○` (estáticas) y solo `/panel/*`
+con `ƒ`. Lo que cambió es que ahora, además, hay rutas que corren en el servidor.
+
+### Dos puertas, un solo tramo común
+
+Se entra con Google o con correo, como en la app, y por la misma razón: el dueño
+dio de alta su gimnasio con Google —es lo que su vínculo automático por
+`email_verified` necesita (`autenticacion.md`)— así que es la puerta que va a
+usar. El botón lo dibuja Google Identity Services y **solo aparece si hay cliente
+OAuth configurado**, igual que `googleAuthReady()` en la app: enseñar un botón
+que lleva a `OPERATION_NOT_ALLOWED` es la forma más cara de decir «falta
+configurar».
+
+La credencial la obtiene el navegador —no hay forma de que la obtenga el
+servidor: el botón y el consentimiento son de Google— pero el canje por el ID
+token de Firebase (`signInWithIdp`) y por la sesión de Sinchi pasa en el
+servidor. Al navegador no vuelve ningún token.
+
+Las dos puertas comparten `abrirSesion`, y eso importa: lo que decide ahí —que la
+cuenta tenga ficha, que sea dueño, cuánto dura la cookie— tiene que valer igual
+por las dos. Dos copias de esa comprobación es como una de ellas acaba dejando
+entrar a recepción.
+
+### El panel es del dueño, y recepción no entra
+
+`requireOwner` rebota a recepción al login con un motivo escrito. No es celo: el
+menú entero —ganancias, materiales, el ranking— son rutas que la api le responde
+con 403, y este producto ya conoce ese defecto: una acción que invita a algo que
+la api va a rechazar. Su sitio es la app, de pie en el mostrador.
+
+### El nombre del local viaja con la sesión
+
+No hay ruta que devuelva solo el tenant: habría que traerse el padrón entero para
+pintar una línea de la barra lateral. Se resuelve una vez al entrar, desde
+`/auth/modes` —que ya trae los puestos con el nombre puesto, justo para que nadie
+tenga que elegir entre dos uuid— y se guarda con la sesión. Si el dueño le cambia
+el nombre a su local, la barra se entera cuando vuelva a entrar.
+
+### Una trampa del typecheck
+
+`typedRoutes: true` genera el manifiesto de rutas **durante el build**, así que en
+un clon limpio `tsc --noEmit` fallaba en TODOS los `<Link>`, incluidos los de
+rutas que sí existen — un error que parece del código recién escrito y no lo es.
+Se arregla con `next typegen` en el `pretypecheck`. Es el mismo defecto que el
+`.expo/types/router.d.ts` de la app, y falla igual de mal: el CI no lo ve.

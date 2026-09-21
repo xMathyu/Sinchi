@@ -8,7 +8,7 @@
     "prebuild": "node scripts/build-packages.mjs",
     "build": "next build",
     "start": "next start",
-    "pretypecheck": "node scripts/build-packages.mjs",
+    "pretypecheck": "node scripts/build-packages.mjs && next typegen",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

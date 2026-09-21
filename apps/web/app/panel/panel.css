@@ -1,0 +1,427 @@
+/*
+ * Estilos del panel.
+ *
+ * Aparte de `globals.css` a proposito: aquello es una pagina de venta —titulares
+ * de 80px, animaciones de entrada, secciones de 84px de aire— y esto es una
+ * herramienta que alguien abre todos los lunes a contar su plata. Compartir hoja
+ * obligaria a desactivar la mitad en cada regla.
+ *
+ * Lo que SI se comparte son los tokens: los colores y los radios salen de las
+ * variables que inyecta `app/tokens.ts` desde `@sinchi/ui`, las mismas que pinta
+ * la app. Un panel con su propio verde es un producto que parece de otra marca.
+ */
+
+.panel {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  background: var(--canvas);
+}
+
+@media (max-width: 900px) {
+  .panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   El menú
+   --------------------------------------------------------------------------- */
+
+.panel-aside {
+  border-right: 1px solid var(--hairline);
+  padding: 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  background: var(--screen);
+  /* Se queda mientras el contenido baja: en el ledger de un año se scrollea
+     mucho, y perder el menú obliga a subir del todo para cambiar de sección. */
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+
+@media (max-width: 900px) {
+  .panel-aside {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--hairline);
+  }
+}
+
+.panel-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@media (max-width: 900px) {
+  .panel-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    /* El foco no se recorta al llegar al borde del carrusel. */
+    padding-bottom: 4px;
+  }
+}
+
+.panel-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.panel-link:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* `aria-current` y no una clase: el estado activo tiene que existir para el
+   lector de pantalla, no solo para el ojo. Si lo pinta, es porque está ahí. */
+.panel-link[aria-current='page'] {
+  background: var(--surface-high);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.panel-main {
+  padding: 30px 34px 64px;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .panel-main {
+    padding: 22px 18px 48px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Piezas
+   --------------------------------------------------------------------------- */
+
+.panel h1 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.panel h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.panel-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  padding: 18px;
+}
+
+.panel-grid {
+  display: grid;
+  gap: 14px;
+  /* `auto-fit` con un mínimo: las cifras del día son 3 en escritorio, 2 en
+     tablet y 1 en el móvil sin escribir un solo breakpoint. */
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.panel-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.panel-stat b {
+  font-family: var(--font-display), sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.panel-stat span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   Tablas
+
+   Tabla de verdad y no una rejilla de `div`: es una lista de datos con
+   cabeceras, y un lector de pantalla necesita saber que la celda «S/ 149»
+   pertenece a la columna «monto» y a la fila «Rosa».
+   --------------------------------------------------------------------------- */
+
+.panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.panel-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.panel-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--divider);
+  vertical-align: middle;
+}
+
+.panel-table tbody tr:hover {
+  background: var(--surface);
+}
+
+.panel-table .num {
+  text-align: right;
+  /* Las cifras se comparan de un vistazo columna abajo: con ancho variable, el
+     ojo tiene que leer cada una en vez de ver cuál sobresale. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.panel-scroll {
+  overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Chips, botones y formularios
+   --------------------------------------------------------------------------- */
+
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.panel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  flex: none;
+}
+
+.panel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: var(--ok);
+  color: #07130C;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.14s ease;
+}
+
+.panel-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.panel-btn:disabled {
+  /* Apagado y no escondido: quien busca el botón que usó ayer tiene que
+     encontrarlo y entender por qué no responde, no creer que se lo imaginó. */
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.panel-btn.ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+.panel-btn.danger {
+  background: transparent;
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.panel-input,
+.panel-select,
+.panel-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.panel-textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.panel-input:focus-visible,
+.panel-select:focus-visible,
+.panel-textarea:focus-visible {
+  outline: 2px solid var(--ok);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Avisos
+
+   El error va con borde y color, y además con el icono textual: en este
+   producto el color nunca es la única forma de leer un estado
+   (decisiones §17).
+   --------------------------------------------------------------------------- */
+
+.panel-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  border: 1px solid;
+}
+
+.panel-alert.bad {
+  border-color: rgba(255, 92, 92, 0.4);
+  background: rgba(255, 92, 92, 0.08);
+  color: var(--bad);
+}
+
+.panel-alert.ok {
+  border-color: rgba(47, 209, 109, 0.4);
+  background: rgba(47, 209, 109, 0.08);
+  color: var(--ok);
+}
+
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: center;
+  text-align: center;
+  padding: 46px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------------------
+   El gráfico de ingresos
+
+   Barras en CSS, sin librería. Una serie de un año son 365 valores de una sola
+   dimensión: cargar Recharts —y con él React en el cliente, en un panel que por
+   lo demás es HTML servido— para dibujar rectángulos es un peaje que nadie cobra.
+   --------------------------------------------------------------------------- */
+
+.panel-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 168px;
+  padding-top: 12px;
+}
+
+.panel-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  /* El hover llega hasta abajo aunque la barra sea corta: apuntar a 3px de
+     altura para leer un día es un ratón que nadie tiene. */
+  background: linear-gradient(transparent, transparent);
+  transition: background 0.12s ease;
+}
+
+.panel-bar:hover {
+  background: var(--surface);
+}
+
+.panel-bar > i {
+  display: block;
+  width: 100%;
+  background: var(--ok);
+  border-radius: 3px 3px 0 0;
+  /* Un día con cobros nunca es invisible: sin el mínimo, S/ 5 al lado de
+     S/ 5,000 es cero píxeles y se lee como un día muerto, que es mentira. */
+  min-height: 2px;
+}
+
+.panel-bar[data-empty='true'] > i {
+  background: var(--divider);
+  min-height: 1px;
+}
+
+.panel-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+  margin-top: 4px;
+}
+
+/* La barra de reparto: un desglose de 3 o 4 trozos se lee mejor así que en una
+   torta, porque lo que se compara es proporción sobre un total, no ángulos. */
+.panel-split {
+  display: flex;
+  height: 9px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--divider);
+}
+
+.panel-split > i {
+  display: block;
+  height: 100%;
+}
