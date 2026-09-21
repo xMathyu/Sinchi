@@ -62,6 +62,7 @@ export * from './security/totp.js';
 // Suscripcion del gimnasio a Sinchi
 export * from './saas/subscription.js';
 export * from './saas/promo.js';
+export * from './saas/locales.js';
 
 // Identidad tributaria
 export * from './identity/ruc.js';

@@ -16,10 +16,12 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
+import { withAlpha } from '@sinchi/ui';
 import type { AppearancePreference } from '../src/data/appearance';
 import {
   accountDetailsDenialMessage,
   checkAccountDetails,
+  checkNewGym,
   normalizePhoneNumber,
 } from '@sinchi/shared';
 import {
@@ -143,6 +145,16 @@ export default function SettingsScreen() {
    * hacerle tomar dos decisiones para volver de una.
    */
   const tenantActual = session.status === 'signed_in' ? session.session.tenantId : null;
+  /**
+   * Si puede abrir un local, y con qué texto.
+   *
+   * `null` mientras `modes` no ha contestado: la tarjeta no se pinta a medias.
+   * Cuenta TODAS sus filas de `staff`, no solo las de dueño, porque es lo que
+   * cuenta la api — si contaran distinto, la app habilitaría un botón que el
+   * servidor niega.
+   */
+  const nuevoGimnasio = modes === null ? null : checkNewGym(modes.staff.length);
+
   const otherGyms =
     modes === null || !isStaffSession
       ? []
@@ -316,6 +328,69 @@ export default function SettingsScreen() {
             Cada local lleva su propio padrón, sus planes y su caja. Cambiar tampoco alarga la
             sesión.
           </Text>
+        </Stack>
+      )}
+
+      {/* Registrar un gimnasio, desde la cuenta.
+          La otra puerta —el final del directorio— se queda, y su comentario
+          explica por qué está ahí: quien evalúa Sinchi para su dojo llega
+          mirando qué otros gimnasios ya lo usan. Pero ese comentario también
+          decía que en Ajustes «no la encontraría nadie», y eso resultó falso
+          para OTRA persona: la que ya tiene cuenta y un día decide abrir su
+          local. Esa no va a recorrer el directorio de gimnasios ajenos — mira
+          en su cuenta, no encuentra nada y se va. Pasó de verdad.
+
+          Son dos momentos distintos de dos personas distintas, así que son dos
+          puertas y no una mudanza.
+
+          El texto y el botón salen de `checkNewGym`, la misma regla que corre
+          la api: en el tope no se ofrece, se explica. Ofrecer aquí lo que el
+          servidor responde con 409 es el defecto que este producto ya se
+          conoce. Mientras `modes` es null no se pinta nada: un botón que
+          aparece y cambia de texto al segundo es peor que uno que tarda. */}
+      {nuevoGimnasio !== null && (
+        <Stack gap={10} style={{ marginTop: 20 }}>
+          <Eyebrow>{nuevoGimnasio.hasGyms ? 'Otro local' : 'Tu gimnasio'}</Eyebrow>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              nuevoGimnasio.allowed
+                ? nuevoGimnasio.hasGyms
+                  ? 'Abrir otro local en Sinchi'
+                  : 'Registrar mi gimnasio en Sinchi'
+                : 'No puedes abrir más locales'
+            }
+            disabled={!nuevoGimnasio.allowed}
+            onPress={() => router.push('/gym-signup')}
+            style={{ opacity: nuevoGimnasio.allowed ? 1 : 0.55 }}
+          >
+            <Card
+              radius={theme.radii.xl}
+              borderColor={
+                nuevoGimnasio.allowed ? withAlpha(theme.semaphore.ok, 0.3) : theme.colors.border
+              }
+            >
+              <Row gap={12}>
+                <Stack gap={2} style={{ flex: 1 }}>
+                  <Text variant="bodySmall" weight="semibold">
+                    {nuevoGimnasio.hasGyms ? 'Abrir otro local' : '¿Tienes un gimnasio?'}
+                  </Text>
+                  <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                    {nuevoGimnasio.reason !== null
+                      ? nuevoGimnasio.reason.message
+                      : nuevoGimnasio.hasGyms
+                        ? 'Cada local lleva su propio padrón, sus planes y su caja.'
+                        : 'Regístralo en Sinchi: el primer mes es gratis, y hasta 10 alumnos no pagas nunca.'}
+                  </Text>
+                </Stack>
+                {nuevoGimnasio.allowed && (
+                  <Text variant="body" color={theme.colors.textSecondary}>
+                    ›
+                  </Text>
+                )}
+              </Row>
+            </Card>
+          </Pressable>
         </Stack>
       )}
 

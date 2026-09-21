@@ -227,11 +227,17 @@ function UpcomingCard({
 /**
  * La otra mitad del directorio: quien lo mira no siempre busca dónde entrenar.
  *
- * Es la única puerta de entrada al alta de un gimnasio, y va al final del
- * directorio a propósito. Arriba competiría con la lista —que es lo que casi
- * todo el mundo viene a ver— y en Ajustes no la encontraría nadie: quien está
- * evaluando Sinchi para su dojo llega mirando qué otros gimnasios ya lo usan,
- * y termina justo aquí.
+ * Es UNA de las dos puertas al alta de un gimnasio, y va al final del directorio
+ * a propósito. Arriba competiría con la lista, que es lo que casi todo el mundo
+ * viene a ver; aquí la encuentra quien está evaluando Sinchi para su dojo, que
+ * llega mirando qué otros gimnasios ya lo usan y termina justo en este punto.
+ *
+ * Decía además que «en Ajustes no la encontraría nadie», y esa parte resultó
+ * falsa — para OTRA persona. Quien ya tiene cuenta y un día decide abrir su
+ * local no recorre el directorio de gimnasios ajenos: mira en su cuenta. Y ahí
+ * no había nada, así que se iba. Por eso ahora también está en Mi cuenta
+ * (`app/settings.tsx`), y esta se queda: son dos momentos de dos personas
+ * distintas, no una mudanza.
  */
 function OwnerInvitation() {
   const theme = useTheme();

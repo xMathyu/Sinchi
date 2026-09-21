@@ -49,6 +49,7 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import {
+  checkNewGym,
   checkRuc,
   formatPlainDate,
   freeUntilFrom,
@@ -73,14 +74,6 @@ import {
 import { AuthService, type IssuedSession } from '../../auth/auth.service';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { SaasService } from '../saas/saas.service';
-
-/**
- * Tope de locales por persona. Ver `assertGymsAvailable`.
- *
- * Es un tope de ABUSO, no un escalon comercial: lo que se cobra sigue saliendo
- * del padron de cada local, uno por uno.
- */
-const MAX_GYMS_PER_PERSON = 5;
 
 /**
  * Lo minimo que se acepta como direccion: diez caracteres.
@@ -477,12 +470,11 @@ export class OnboardingService {
         .where(eq(schema.staff.userId, userId)),
     );
 
-    if (suyos.length >= MAX_GYMS_PER_PERSON) {
-      throw new ConflictException(
-        `Ya llevas ${MAX_GYMS_PER_PERSON} locales en Sinchi, que es el máximo por cuenta. ` +
-          'Si necesitas más, escríbenos.',
-      );
-    }
+    // La regla vive en `@sinchi/shared` para que la app pueda apagar su boton
+    // por el MISMO motivo por el que esto responderia 409. La api no confia en
+    // que lo haya hecho: vuelve a correrla aqui, que es la autoridad final.
+    const decision = checkNewGym(suyos.length);
+    if (!decision.allowed) throw new ConflictException(decision.reason!.message);
   }
 
   /** Dos «Dojo Kaizen» en la red no pueden compartir dirección. */
