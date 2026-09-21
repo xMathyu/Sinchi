@@ -1,4 +1,2 @@
-• Ya puedes registrar tu gimnasio desde Mi cuenta. Antes el alta solo estaba en la pantalla de entrada y al final del directorio, y quien ya tenía cuenta no la encontraba.
-• Si ya llevas un local, la misma tarjeta dice «Abrir otro local»: cada uno tiene su padrón, sus planes y su caja.
-• El botón de «Entrar con Google» lleva ahora su logo.
-• Y si eres dueño, tu local ya tiene panel web en sinchi.fit/panel: ingresos, quién vino hoy y a quién cobrarle.
+• Arreglado: al registrar un gimnasio desde tu cuenta se apilaban dos ventanas y había que deslizar dos veces para salir. Ahora el alta termina en tu padrón, con Planes como una sola hoja encima.
+• Ya estaba en la versión anterior: registrar tu gimnasio desde Mi cuenta (o «Abrir otro local» si ya llevas uno), el logo de Google en el botón de entrar, y el panel web del dueño en sinchi.fit/panel.

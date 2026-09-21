@@ -1,14 +1,13 @@
 NOVEDADES DE ESTA VERSIÓN
 
-• Ya puedes registrar tu gimnasio desde tu cuenta. Antes el alta solo se alcanzaba desde la pantalla de entrada o bajando al final del directorio, así que quien ya tenía cuenta no la encontraba. Ahora está en Mi cuenta, entre tus datos y Apariencia.
-• Si ya llevas un local, la misma tarjeta dice «Abrir otro local»: cada uno tiene su propio padrón, sus planes y su caja. El tope es de cinco por cuenta, y al llegar se dice en vez de dejarte intentarlo.
-• El botón de «Entrar con Google» lleva ahora su logo. Se reconoce antes de leerlo, que es lo que hace falta en el único botón de esa pantalla que sale de la app.
+• Arreglado: al registrar un gimnasio desde tu cuenta se apilaban dos hojas, una encima de otra. El padrón quedaba dentro de un pop-up y había que deslizar dos veces hacia abajo para salir a la misma vista que ya estaba detrás. Ahora el alta termina en tu padrón, con Planes como una sola hoja encima.
 
-TAMBIÉN, FUERA DE LA APP
-• Si eres dueño, tu local ya tiene panel web en sinchi.fit/panel: los ingresos del mes con su gráfico, quién vino hoy, a quién cobrarle, quién viene siempre y quién dejó de venir, el padrón, los cobros y los materiales de clase. Se entra con la misma cuenta de la app. Es solo para dueños; si llevas recepción, tu sitio sigue siendo la app.
+SI VIENES DE LA VERSIÓN ANTERIOR, ESTO YA ESTABA
+• Registrar tu gimnasio desde Mi cuenta, entre tus datos y Apariencia. Si ya llevas un local, la misma tarjeta dice «Abrir otro local»; el tope es de cinco por cuenta.
+• El logo de Google en el botón de entrar.
+• Y fuera de la app: si eres dueño, tu local tiene panel web en sinchi.fit/panel —ingresos, quién vino hoy, a quién cobrarle, quién viene siempre y quién dejó de venir—. Se entra con la misma cuenta.
 
 QUÉ PROBAR
-• Entra con tu cuenta y abre Mi cuenta (el avatar de arriba a la derecha). Si no tienes gimnasio tiene que salir «¿Tienes un gimnasio?»; si ya tienes uno, «Abrir otro local».
-• Toca esa tarjeta y recorre el alta hasta el final. El local nace sin tarifas a propósito: la primera pantalla que te pide es Planes.
-• Mira el botón de Google en la pantalla de entrada, en tema claro y en oscuro: el logo tiene que leerse en los dos.
-• Si eres dueño, entra a sinchi.fit/panel con la misma cuenta y comprueba que los números cuadran con lo que ves en la app.
+• Lo de arriba, entero y sin prisa: Mi cuenta → «¿Tienes un gimnasio?» → completa el alta → escribe tu primera tarifa en Planes → ciérrala. Tienes que quedar en tu padrón a pantalla completa, sin ninguna hoja de por medio y sin deslizar dos veces.
+• Repítelo desde la otra puerta, para comprobar que da lo mismo por dónde entres: cierra sesión, y en la pantalla de entrada toca «Registra tu gimnasio».
+• Si ya tienes un local, entra por Mi cuenta → «Abrir otro local» y comprueba que acabas en el padrón del local NUEVO, no en el viejo.
