@@ -18,7 +18,7 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { GoogleButton } from './GoogleButton';
-import { entrar } from '../../src/panel/actions';
+import { entrar, entrarConGoogle } from '../../src/panel/actions';
 import { IDLE } from '../../src/panel/form-state';
 
 export function LoginForm({
@@ -50,7 +50,7 @@ export function LoginForm({
 
       {googleClientId === null ? null : (
         <>
-          <GoogleButton clientId={googleClientId} />
+          <GoogleButton clientId={googleClientId} onCredential={entrarConGoogle} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ height: 1, flexGrow: 1, background: 'var(--hairline)' }} />
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>o con tu correo</span>

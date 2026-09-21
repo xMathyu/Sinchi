@@ -17,9 +17,16 @@
  * El componente no existe si no hay cliente OAuth configurado — quien decide eso
  * es `googleReady()` en el servidor, y por eso llega como prop: leer la variable
  * aquí obligaría a exponerla aunque no se use.
+ *
+ * QUÉ SE HACE CON LA CREDENCIAL también llega como prop, y por eso este botón
+ * sirve a las dos puertas: la del dueño (`/panel`) y la de quien administra
+ * Sinchi (`/admin`). Lo que cambia entre ellas es a qué ruta de la api se canjea
+ * el token, y eso pasa en el servidor. Copiar el componente habría duplicado la
+ * carga del script de GIS y las condiciones de marca de Google, para cambiar una
+ * línea.
  */
 import { useEffect, useRef, useState } from 'react';
-import { entrarConGoogle } from '../../src/panel/actions';
+import type { FormState } from '../../src/panel/form-state';
 
 /** Lo que GIS le pasa al callback. Solo se usa `credential`. */
 interface CredentialResponse {
@@ -46,7 +53,14 @@ declare global {
 
 const SCRIPT = 'https://accounts.google.com/gsi/client';
 
-export function GoogleButton({ clientId }: { readonly clientId: string }) {
+export function GoogleButton({
+  clientId,
+  onCredential,
+}: {
+  readonly clientId: string;
+  /** La Server Action que canjea la credencial. Redirige si sale bien. */
+  readonly onCredential: (credential: string) => Promise<FormState>;
+}) {
   const slot = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -73,7 +87,7 @@ export function GoogleButton({ clientId }: { readonly clientId: string }) {
           // La acción redirige al panel cuando sale bien, así que solo vuelve
           // aquí si falló: el `setWorking(false)` del final no es alcanzable en
           // el camino feliz, y tampoco molesta.
-          void entrarConGoogle(credential)
+          void onCredential(credential)
             .then((state) => {
               if (state.error !== null) setError(state.error);
             })
@@ -127,7 +141,7 @@ export function GoogleButton({ clientId }: { readonly clientId: string }) {
       cancelled = true;
       script.removeEventListener('load', render);
     };
-  }, [clientId]);
+  }, [clientId, onCredential]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -15,7 +15,7 @@ gimnasios a los que asiste.
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio, clase gratis y biblioteca de rutinas) |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (239 tests, 146 de punta a punta) |
-| `apps/web` — panel Next.js | **No empezado** |
+| `apps/web` — landing + los dos paneles | **Completo**: la landing, `/panel` (el dueño de un gimnasio) y `/admin` (el interno de Sinchi: la red, suspensiones, códigos y quién administra) |
 | Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
 | Alta de gimnasio | **Desde la app, y el local queda usable el mismo día**: nace con tarifas y el dueño escribe su horario |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |
@@ -196,7 +196,7 @@ la cola offline.
 /apps
   /mobile        Expo — la app (alumno + staff)
   /api           NestJS + Drizzle — dominio, cobro, check-in
-  /web           Next.js — panel del gimnasio (pendiente)
+  /web           Next.js — landing, /panel (el dueño) y /admin (Sinchi)
 /packages
   /shared        tipos, reglas puras (prorrateo, cupos, fechas, dunning)
   /ui            design system iOS-flavored
@@ -288,21 +288,20 @@ Las cuatro reglas que sostienen el producto:
 
 1. **Conectar la app a la api.** Reemplazar `apps/mobile/src/data/store.ts` por
    llamadas HTTP contra `/v1`. Las pantallas y el dominio no cambian.
-2. **`apps/web` — panel del gimnasio.** La superficie que el cliente que paga usa
-   a diario: alta de alumnos, planes, registro de pago manual, lista de morosos.
-   La api ya expone todo lo que necesita.
-3. **Activar el proveedor de Google en la consola de Firebase.** Tres clics; es
+2. **Activar el proveedor de Google en la consola de Firebase.** Tres clics; es
    lo único que falta para que la autenticación funcione de punta a punta. Ver
    [docs/autenticacion.md](docs/autenticacion.md).
-4. **Notificaciones.** El cron de morosidad ya detecta cuándo alguien entra en
+3. **Notificaciones.** El cron de morosidad ya detecta cuándo alguien entra en
    gracia o se suspende; falta el canal. La reserva de clase gratis avisa al
    dueño por correo porque no puede esperar a que ese canal exista — un
    interesado del que el gimnasio se entera tarde no es un interesado.
-5. **Culqi.** Antes de construir encima: sandbox completo (tokenizar, cobrar,
-   cobrar con tarjeta rechazada, recibir webhook) y anotar los códigos de error
-   reales para corregir la tabla de `billing/dunning.ts`, que hoy sale de la
-   documentación pública. Evaluar tokenización desde React Native: Culqi tiene
-   librerías nativas de iOS y Android pero no SDK oficial de RN.
-6. **Verificación de firma del QR offline** en el dispositivo del staff. La api
+4. **Culqi.** Hoy el gimnasio paga por transferencia y alguien lo registra a
+   mano, desde `/admin` o con `npm run saas:pay`. Antes de construir encima:
+   sandbox completo (tokenizar, cobrar, cobrar con tarjeta rechazada, recibir
+   webhook) y anotar los códigos de error reales para corregir la tabla de
+   `billing/dunning.ts`, que hoy sale de la documentación pública. Evaluar
+   tokenización desde React Native: Culqi tiene librerías nativas de iOS y
+   Android pero no SDK oficial de RN.
+5. **Verificación de firma del QR offline** en el dispositivo del staff. La api
    ya la verifica; lo que falta es que el equipo de la puerta pueda hacerlo sin
    conexión, y eso exige decidir si cachea las claves del padrón.

@@ -1,0 +1,91 @@
+/*
+ * Lo poco que el panel de Sinchi tiene y el del dueño no.
+ *
+ * Todo lo demás sale de `panel.css`: son la misma herramienta para dos personas
+ * distintas, y tener una sola hoja es lo que impide que dentro de un año una de
+ * las dos tenga las tablas bien y la otra no.
+ */
+
+/*
+ * La marca de que esto NO es el panel de un gimnasio.
+ *
+ * Las dos pantallas se parecen mucho a propósito, y ese parecido es justo el
+ * riesgo: quien administra Sinchi es también dueño de un dojo, y un botón de
+ * «eliminar» pulsado creyendo estar en el otro panel no tiene vuelta. La franja
+ * está siempre visible en la barra lateral.
+ */
+.admin-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/*
+ * La zona de lo que no tiene vuelta.
+ *
+ * Separada y en rojo, al final de la página y nunca al lado de «guardar»: lo que
+ * hay dentro elimina un negocio entero. El borde no decora — marca dónde termina
+ * lo que se puede deshacer.
+ */
+.admin-danger {
+  border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 5%, transparent);
+  border-radius: var(--r-xl);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-danger h2 {
+  color: var(--bad);
+}
+
+/* Una fila del registro: quién, qué y cuándo, sin que el «cuándo» se pierda. */
+.admin-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.admin-log > li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 13px;
+}
+
+.admin-log > li:last-child {
+  border-bottom: none;
+}
+
+.admin-log time {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lo irreversible se lee distinto en el registro: un borrado no es una edición. */
+.admin-log > li[data-irreversible='true'] strong {
+  color: var(--bad);
+}
+
+/* Dos columnas en escritorio, una en el teléfono. Para el detalle del gimnasio. */
+.admin-split {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}

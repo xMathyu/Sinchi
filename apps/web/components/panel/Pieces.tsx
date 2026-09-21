@@ -89,7 +89,10 @@ export function SectionHeader({
   title,
   action,
 }: {
-  readonly eyebrow?: string;
+  // `ReactNode` y no `string`: el panel de Sinchi pone aquí la miga de pan —un
+  // enlace de vuelta más el identificador— y partir el encabezado en dos
+  // componentes por eso habría sido duplicar el mismo `<header>`.
+  readonly eyebrow?: React.ReactNode;
   readonly title: string;
   readonly action?: React.ReactNode;
 }) {
