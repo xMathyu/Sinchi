@@ -96,6 +96,18 @@ const locationSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable().default(null),
 });
 
+/**
+ * La web y las redes, como las tecleo el dueno. La forma se acota aqui; si cada
+ * una es de verdad un perfil de su red lo decide `checkGymLink`, con su frase.
+ */
+const linkField = z.string().max(400).nullable().default(null);
+const linksSchema = z.object({
+  website: linkField,
+  instagram: linkField,
+  facebook: linkField,
+  tiktok: linkField,
+});
+
 /** Lo que multer deja en memoria. Solo se lee `buffer`: el tipo sale de los bytes. */
 interface UploadedLogo {
   readonly buffer: Buffer;
@@ -314,6 +326,25 @@ export class OfferingController {
     @Body(parseWith(locationSchema)) body: z.infer<typeof locationSchema>,
   ) {
     return this.settings.writeLocation(assertStaffSession(session).tenantId, body);
+  }
+
+  // -------------------------------------------------------------------------
+  // La web y las redes
+  // -------------------------------------------------------------------------
+
+  /** Las lee todo el staff, como la direccion. */
+  @Get('links')
+  links(@CurrentSession() session: Session) {
+    return this.settings.readLinks(assertStaffSession(session).tenantId);
+  }
+
+  @OwnerOnly()
+  @Post('links')
+  setLinks(
+    @CurrentSession() session: Session,
+    @Body(parseWith(linksSchema)) body: z.infer<typeof linksSchema>,
+  ) {
+    return this.settings.writeLinks(assertStaffSession(session).tenantId, body);
   }
 
   // -------------------------------------------------------------------------

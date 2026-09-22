@@ -40,6 +40,8 @@ import type {
   ClassBooking,
   ClassBookingStatus,
   ClassSlot,
+  GymLinkKind,
+  GymLinks,
   User,
 } from '@sinchi/shared';
 import { gymLogoPath } from '@sinchi/shared';
@@ -392,6 +394,8 @@ export interface GymDetailDto extends GymCardDto {
   readonly routines: readonly RoutineListItem[];
   /** Cuántas hay solo para alumnos. El número vende; los títulos no se dan. */
   readonly membersOnlyRoutines: number;
+  /** Su web y sus redes. Ausente contra una api anterior a la 0026: sin enlaces. */
+  readonly links?: GymLinks;
 }
 
 export interface ClassBookingDto extends ClassBooking {
@@ -1586,6 +1590,8 @@ export interface SignUpGymInput {
   readonly documentId: string;
   readonly phone?: string;
   readonly promoCode?: string;
+  /** Su web y sus redes, como las tecleó. Solo las que llenó: vacías no viajan. */
+  readonly links?: Partial<Record<GymLinkKind, string>>;
 }
 
 export interface SignUpGymDto {
@@ -1741,6 +1747,14 @@ export interface GymLogoRefDto {
 }
 
 export const fetchGymLogo = (): Promise<GymLogoRefDto> => request('/staff/logo');
+
+/** La web y las redes del local. Las lee todo el staff; cambiarlas es del dueño. */
+export const fetchGymLinks = (): Promise<GymLinks> => request('/staff/links');
+
+/** Las cuatro de una vez, como las tecleó: vacía es borrarla. */
+export const saveGymLinksRequest = (
+  links: Readonly<Record<GymLinkKind, string>>,
+): Promise<GymLinks> => request('/staff/links', { method: 'POST', body: links });
 
 /**
  * Sube el logo, YA achicado a 512 píxeles (`prepareGymLogo`).

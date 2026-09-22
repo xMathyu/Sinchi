@@ -384,6 +384,23 @@ cabecera de la imagen (`readImageHeader`, sin decodificarla) y los juzga con
 tope de píxeles es el que importa: un PNG liso de 20.000 × 20.000 pesa casi nada y
 al abrirlo ocupa gigas en el teléfono de quien mira el directorio.
 
+### La web y las redes: se guarda la dirección que arma Sinchi
+
+```jsonc
+// GET  /staff/links     todo el staff   → { "website", "instagram", "facebook", "tiktok" }
+// POST /staff/links     solo el dueño   las cuatro, como las tecleó; vacía o null = borrarla
+```
+
+También entran en el alta (`POST /gyms/signup`, campo `links`, todas
+opcionales), y la ficha pública (`GET /gyms/:slug`) las devuelve en `links`.
+
+Lo que se guarda **no es lo que llegó**: `normalizeGymLink` convierte `@midojo`,
+`midojo` o el enlace del perfil con su rastreo en la dirección canónica del
+perfil, y lo que no sabe convertir en un perfil responde 400 con el motivo (una
+publicación, un enlace corto de TikTok, una red pegada en el campo de la web).
+Un `CHECK` por columna repite la forma en la base: la ficha dice «Instagram» al
+lado del enlace, y tiene que abrir Instagram. Detalles en decisiones §23.
+
 `logoId` viaja en la tarjeta y en la ficha del directorio (`GymCard`) y en el
 `tenant` de cada vista de membresía, que es de donde lo leen la billetera y la
 puerta. La dirección la arma el cliente: `gymLogoPath(logoId)` contra su base de

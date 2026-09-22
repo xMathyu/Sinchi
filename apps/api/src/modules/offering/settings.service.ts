@@ -22,7 +22,16 @@
  */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { PLAN_PRICE_MAX_CENTS, type QuotaOverflowPolicy } from '@sinchi/shared';
+import {
+  checkGymLink,
+  gymLinkDenialMessage,
+  normalizeGymLink,
+  GYM_LINK_KINDS,
+  PLAN_PRICE_MAX_CENTS,
+  type GymLinkKind,
+  type GymLinks,
+  type QuotaOverflowPolicy,
+} from '@sinchi/shared';
 import { InjectDb } from '../../db/db.module';
 import { schema, withTenant, type Database } from '../../db/client';
 
@@ -50,6 +59,48 @@ export interface GymLocation {
   readonly latitude: number | null;
   readonly longitude: number | null;
 }
+
+/** Lo que llega del formulario: cada campo como lo tecleo el dueno, o nada. */
+export type GymLinksInput = Partial<Record<GymLinkKind, string | null | undefined>>;
+
+/**
+ * Comprueba y normaliza la web y las redes, o responde 400 con el motivo.
+ *
+ * Una sola funcion para el alta y para «Logo y redes»: el mismo enlace mal
+ * pegado tiene que leerse igual entre por donde entre. Lo que se guarda es lo
+ * que arma `normalizeGymLink`, nunca el texto que llego — es lo que deja que la
+ * ficha diga «Instagram» al lado del enlace sabiendo que abre Instagram.
+ */
+export function parseGymLinks(input: GymLinksInput): GymLinks {
+  const out: Record<GymLinkKind, string | null> = {
+    website: null,
+    instagram: null,
+    facebook: null,
+    tiktok: null,
+  };
+  for (const kind of GYM_LINK_KINDS) {
+    const raw = input[kind] ?? '';
+    const denial = checkGymLink(kind, raw);
+    if (denial !== null) throw new BadRequestException(gymLinkDenialMessage(denial));
+    out[kind] = normalizeGymLink(kind, raw);
+  }
+  return out;
+}
+
+/** Las columnas de `tenants`, con los nombres del dominio. */
+export const gymLinkColumns = (links: GymLinks) => ({
+  websiteUrl: links.website,
+  instagramUrl: links.instagram,
+  facebookUrl: links.facebook,
+  tiktokUrl: links.tiktok,
+});
+
+const LINK_SELECTION = {
+  website: schema.tenants.websiteUrl,
+  instagram: schema.tenants.instagramUrl,
+  facebook: schema.tenants.facebookUrl,
+  tiktok: schema.tenants.tiktokUrl,
+};
 
 /** Lo minimo que se acepta: «Lima» son cuatro letras y no lleva a una puerta. */
 const ADDRESS_MIN = 10;
@@ -122,6 +173,39 @@ export class GymSettingsService {
           longitude: schema.tenants.longitude,
         });
 
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
+
+  /** La web y las redes. Las lee todo el staff: se las preguntan por telefono. */
+  async readLinks(tenantId: string): Promise<GymLinks> {
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .select(LINK_SELECTION)
+        .from(schema.tenants)
+        .where(eq(schema.tenants.id, tenantId))
+        .limit(1);
+      if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
+      return row;
+    });
+  }
+
+  /**
+   * Reemplaza las cuatro de una vez: lo que llega vacio o `null` se borra.
+   *
+   * Las cuatro y no una por una porque se editan en la misma pantalla, y un
+   * guardar que solo mandara la que cambio dejaria sin forma de borrar la que el
+   * dueno vacio a proposito.
+   */
+  async writeLinks(tenantId: string, input: GymLinksInput): Promise<GymLinks> {
+    const links = parseGymLinks(input);
+    return withTenant(this.db, tenantId, async (tx) => {
+      const [row] = await tx
+        .update(schema.tenants)
+        .set(gymLinkColumns(links))
+        .where(eq(schema.tenants.id, tenantId))
+        .returning(LINK_SELECTION);
       if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
       return row;
     });

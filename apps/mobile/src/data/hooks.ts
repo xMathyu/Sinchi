@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import type { ConversationStatus, ClassBooking } from '@sinchi/shared';
+import type { ConversationStatus, ClassBooking, GymLinks } from '@sinchi/shared';
 import {
   TZ_LIMA,
   encodeQrPayload,
@@ -70,6 +70,7 @@ import {
   gymPricing,
   gymLocation,
   gymLogo,
+  gymLinks,
   gymEvents,
   gymEvent,
   eventSeats,
@@ -1013,6 +1014,36 @@ export function useGymLogo(): {
   }, [attempt]);
 
   return { logoId, error, reload: () => setAttempt((n) => n + 1) };
+}
+
+/** La web y las redes del local, como las ve su dueño para cambiarlas. */
+export function useGymLinks(): {
+  readonly links: GymLinks | null;
+  readonly error: string | null;
+  readonly reload: () => void;
+} {
+  const [links, setLinks] = useState<GymLinks | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void gymLinks()
+      .then((fetched) => {
+        if (!cancelado) setLinks(fetched);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudieron traer tus redes.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [attempt]);
+
+  return { links, error, reload: () => setAttempt((n) => n + 1) };
 }
 
 /**

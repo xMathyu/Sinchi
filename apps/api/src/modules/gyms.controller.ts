@@ -69,6 +69,16 @@ const signUpSchema = idTokenSchema.extend({
   documentId: z.string().min(6).max(20),
   phone: phoneSchema.optional(),
   promoCode: z.string().max(40).optional(),
+  // Su web y sus redes, todas opcionales. Aqui solo se acota el tamano: si cada
+  // una es de verdad un perfil de su red lo decide `checkGymLink`, con su frase.
+  links: z
+    .object({
+      website: z.string().max(400).optional(),
+      instagram: z.string().max(400).optional(),
+      facebook: z.string().max(400).optional(),
+      tiktok: z.string().max(400).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -190,6 +200,7 @@ export class GymsController {
       documentId: body.documentId,
       phone: body.phone,
       promoCode: body.promoCode,
+      links: body.links,
     });
   }
 

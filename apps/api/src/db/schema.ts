@@ -361,6 +361,17 @@ export const tenants = pgTable(
      * muchos sitios, y cada lectura arrastraria los bytes. Ver la migracion 0025.
      */
     logoId: uuid('logo_id').references((): AnyPgColumn => gymLogos.id, { onDelete: 'set null' }),
+    /**
+     * Su web y sus redes, si las dio. Todas opcionales.
+     *
+     * Direcciones CANÓNICAS armadas por `normalizeGymLink`, nunca lo que pegó el
+     * dueño: la ficha dice «Instagram» al lado del enlace, y un CHECK por
+     * columna garantiza que abre Instagram. Ver la migración 0026.
+     */
+    websiteUrl: text('website_url'),
+    instagramUrl: text('instagram_url'),
+    facebookUrl: text('facebook_url'),
+    tiktokUrl: text('tiktok_url'),
     status: tenantStatusEnum('status').notNull().default('active'),
     /**
      * Desde cuando esta fuera de Sinchi, y por que.

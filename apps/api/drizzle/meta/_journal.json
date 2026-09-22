@@ -183,6 +183,13 @@
       "when": 1788566398119,
       "tag": "0025_el_logo_del_gimnasio",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788566399119,
+      "tag": "0026_la_web_y_las_redes_del_gimnasio",
+      "breakpoints": true
     }
   ]
 }

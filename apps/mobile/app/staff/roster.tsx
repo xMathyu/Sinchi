@@ -307,18 +307,18 @@ export default function RosterScreen() {
       {isOwner && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Tu logo"
-          onPress={() => router.push('/gym-logo')}
+          accessibilityLabel="Logo y redes"
+          onPress={() => router.push('/gym-brand')}
         >
           <Card radius={theme.radii.lg} tone="sunken">
             <Row>
               <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
                 <Text variant="bodySmall" weight="semibold">
-                  Tu logo
+                  Logo y redes
                 </Text>
                 <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  Lo que ven tus alumnos en su billetera y quien te encuentra en el
-                  directorio. Es opcional.
+                  Tu logo, tu web y tus redes: lo que ve quien te encuentra en el
+                  directorio. Todo es opcional.
                 </Text>
               </Stack>
               <Text variant="body" color={theme.colors.textTertiary}>

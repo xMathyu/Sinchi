@@ -1017,6 +1017,45 @@ describe('rutinas', () => {
 
 });
 
+describe('la web y las redes del gimnasio', () => {
+  const setLink = (column: string, value: string | null) =>
+    db.query(`update tenants set ${column} = $1 where id = $2`, [value, TENANT]);
+
+  it('acepta las direcciones canónicas, y vacío', async () => {
+    await setLink('website_url', 'https://midojo.pe/horarios');
+    await setLink('instagram_url', 'https://www.instagram.com/mi.dojo_lince');
+    await setLink('tiktok_url', 'https://www.tiktok.com/@midojo');
+    await setLink('facebook_url', 'https://www.facebook.com/profile.php?id=100089123456789');
+    for (const column of ['website_url', 'instagram_url', 'tiktok_url', 'facebook_url']) {
+      await setLink(column, null);
+    }
+  });
+
+  /**
+   * La ficha dice «Instagram» al lado del enlace. Una fila escrita por otro
+   * camino no puede poner ahí una dirección que abra otra cosa.
+   */
+  it('cada red solo abre su red', async () => {
+    await expectRejection(
+      () => setLink('instagram_url', 'https://otro.com/midojo'),
+      /tenants_instagram_url_valid/,
+    );
+    await expectRejection(
+      () => setLink('tiktok_url', 'https://www.tiktok.com/midojo'),
+      /tenants_tiktok_url_valid/,
+    );
+    await expectRejection(
+      () => setLink('facebook_url', 'https://facebook.com.otro.pe/midojo'),
+      /tenants_facebook_url_valid/,
+    );
+  });
+
+  it('la web es http o https, nunca un script', async () => {
+    await expectRejection(() => setLink('website_url', 'javascript:alert(1)'), /tenants_website_url_valid/);
+    await expectRejection(() => setLink('website_url', 'https://midojo.pe@otro.com'), /tenants_website_url_valid/);
+  });
+});
+
 describe('logo del gimnasio', () => {
   /** Un gimnasio propio por prueba: el logo es uno por local. */
   const newGym = async (): Promise<string> => {

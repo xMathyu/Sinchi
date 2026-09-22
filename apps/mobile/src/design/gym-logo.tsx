@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, View } from 'react-native';
+import ImagePlus from 'lucide-react-native/icons/image-plus';
 import { Row, Stack, Text } from './primitives';
 import { useTheme } from './theme';
 import { gymLogoUrl } from '../data/api';
@@ -48,6 +49,7 @@ export function GymLogo({
   const radius = Math.round(size * 0.26);
 
   if (uri === null || failed) {
+    const letters = initials(name);
     return (
       <View
         style={{
@@ -59,13 +61,20 @@ export function GymLogo({
           justifyContent: 'center',
         }}
       >
-        <Text
-          weight="bold"
-          color={theme.colors.textStrong}
-          style={{ fontSize: Math.max(10, size * 0.34), lineHeight: Math.max(12, size * 0.4) }}
-        >
-          {initials(name)}
-        </Text>
+        {/* Sin nombre todavía —el alta, antes de escribirlo— un ícono y no
+            unas iniciales de relleno: «TG» de «Tu gimnasio» se leía como el
+            logo de alguien. */}
+        {letters.length === 0 ? (
+          <ImagePlus size={size * 0.36} color={theme.colors.textTertiary} />
+        ) : (
+          <Text
+            weight="bold"
+            color={theme.colors.textStrong}
+            style={{ fontSize: Math.max(10, size * 0.34), lineHeight: Math.max(12, size * 0.4) }}
+          >
+            {letters}
+          </Text>
+        )}
       </View>
     );
   }
@@ -101,8 +110,8 @@ export function GymLogo({
  * El logo con sus dos botones: elegir (o cambiar) y quitar.
  *
  * Lo usan el alta —donde el logo espera en el teléfono hasta que el gimnasio
- * exista— y «Tu logo», donde se sube al momento. Qué hacer al elegir lo decide
- * cada pantalla; aquí solo se dibuja.
+ * exista— y «Logo y redes», donde se sube al momento. Qué hacer al elegir lo
+ * decide cada pantalla; aquí solo se dibuja.
  */
 export function GymLogoField({
   name,
@@ -128,7 +137,7 @@ export function GymLogoField({
 
   return (
     <Row gap={14} align="center" justify="flex-start">
-      <GymLogo name={name.trim().length > 0 ? name : 'Tu gimnasio'} logoId={logoId} localUri={localUri} size={72} />
+      <GymLogo name={name} logoId={logoId} localUri={localUri} size={72} />
       <Stack gap={8} style={{ flex: 1 }}>
         {hint === undefined ? null : (
           <Text variant="captionSmall" color={theme.colors.textSecondary}>

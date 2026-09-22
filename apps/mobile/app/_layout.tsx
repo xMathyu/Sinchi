@@ -169,7 +169,7 @@ function AppStack() {
         <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="gym-logo" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="gym-brand" options={{ presentation: 'modal' }} />
         <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="events/edit/[eventId]" options={{ presentation: 'modal' }} />
@@ -348,9 +348,9 @@ const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     // Donde queda el local. Del staff: recepcion la LEE —se la preguntan por
     // telefono tanto como el precio— y dentro se apaga para que no la escriba.
     'location',
-    // Su logo. Del staff por lo mismo que `location`: recepción lo ve, y dentro
-    // se apaga para que no lo cambie.
-    'gym-logo',
+    // Su logo, su web y sus redes. Del staff por lo mismo que `location`:
+    // recepción las ve, y dentro se apaga para que no las cambie.
+    'gym-brand',
     // Un hilo de la bandeja. La lista es pestana (`staff/messages`); el hilo se
     // presenta encima, y sin esto rebotaba a la puerta al tocar una conversacion.
     'inbox',

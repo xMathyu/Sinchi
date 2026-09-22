@@ -59,6 +59,13 @@ import { registerGym, saveGymLogo } from '../src/data/actions';
 import { pickGymLogo, type PickedGymLogo } from '../src/data/gym-logo-file';
 import { GymLogoField } from '../src/design/gym-logo';
 import {
+  EMPTY_LINKS_DRAFT,
+  GymLinksFields,
+  linksDraftDenial,
+  type GymLinksDraft,
+} from '../src/design/gym-links';
+import { GYM_LINK_KINDS, type GymLinkKind } from '@sinchi/shared';
+import {
   completeEmailSignIn,
   completeGoogleSignIn,
   firebaseSigningToken,
@@ -90,7 +97,7 @@ const PASTILLA: Readonly<Record<SaasTier, string>> = {
 type Step = 'oferta' | 'cuenta' | 'plan' | 'datos';
 
 /** Los campos del ultimo paso que pueden estar mal, para marcarlos uno a uno. */
-type SignUpField = 'name' | 'taxId' | 'documentId' | 'address' | 'phone';
+type SignUpField = 'name' | 'taxId' | 'documentId' | 'address' | 'phone' | 'links';
 
 /**
  * Lo que se dice al tocar el boton apagado.
@@ -269,6 +276,19 @@ export default function GymSignUpScreen() {
   const [logoError, setLogoError] = useState<string | null>(null);
   /** Qué está haciendo el botón, para decirlo: son dos esperas distintas. */
   const [savingLogo, setSavingLogo] = useState(false);
+
+  /**
+   * Su web y sus redes, plegadas hasta que las pida.
+   *
+   * Son cuatro campos opcionales en un paso que ya tiene siete, y casi nadie
+   * tiene las cuatro. Plegadas no alargan el formulario de quien no tiene
+   * ninguna; quien las tiene las abre con un toque.
+   */
+  const [links, setLinks] = useState<GymLinksDraft>(EMPTY_LINKS_DRAFT);
+  const [linksOpen, setLinksOpen] = useState(false);
+  // Con algo escrito no se pliega: esconder un campo lleno es esconder lo que
+  // se va a mandar, y a veces lo que está mal.
+  const linksVisible = linksOpen || GYM_LINK_KINDS.some((kind) => links[kind].trim().length > 0);
 
   const pickLogo = async (): Promise<void> => {
     setLogoError(null);
@@ -497,6 +517,7 @@ export default function GymSignUpScreen() {
     'phone',
     phoneDenial === null || phoneDenial === 'missing' ? null : phoneDenialMessage(phoneDenial),
   );
+  complain('links', linksDraftDenial(links));
   const ready = Object.keys(problems).length === 0;
 
   /**
@@ -602,6 +623,14 @@ export default function GymSignUpScreen() {
         documentId: documentId.trim(),
         phone: phone.length > 0 ? phone : undefined,
         promoCode: code.trim().length > 0 ? code.trim() : undefined,
+        // Solo las que llenó: vacías no viajan, y la api entiende ausente como
+        // «no tiene», que es lo que son.
+        links: Object.fromEntries(
+          GYM_LINK_KINDS.filter((kind) => links[kind].trim().length > 0).map((kind) => [
+            kind,
+            links[kind].trim(),
+          ]),
+        ) as Partial<Record<GymLinkKind, string>>,
       });
 
       /**
@@ -651,7 +680,7 @@ export default function GymSignUpScreen() {
           await new Promise<void>((resolve) =>
             Alert.alert(
               'Tu gimnasio quedó creado',
-              'Pero el logo no se pudo subir. Ponlo cuando quieras desde el padrón, en «Tu logo».',
+              'Pero el logo no se pudo subir. Ponlo cuando quieras desde el padrón, en «Logo y redes».',
               [{ text: 'Entendido', onPress: () => resolve() }],
               { cancelable: false },
             ),
@@ -1086,6 +1115,32 @@ export default function GymSignUpScreen() {
               </Text>
             )}
           </Stack>
+
+          {linksVisible ? (
+            <Stack gap={10}>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                Tu web y tus redes
+              </Text>
+              <GymLinksFields
+                values={links}
+                onChange={setLinks}
+                editable={!saving}
+                showAll={attempted}
+              />
+            </Stack>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Agregar tu web y tus redes"
+              onPress={() => setLinksOpen(true)}
+              hitSlop={8}
+              style={{ height: 44, justifyContent: 'center' }}
+            >
+              <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
+                + Agregar tu web y tus redes (opcional)
+              </Text>
+            </Pressable>
+          )}
         </Stack>
 
         {/* Antes el directorio listaba dojos sin decir DONDE estan, que es la

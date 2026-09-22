@@ -46,6 +46,7 @@ import {
   type ClassBooking,
   type ClassSchedule,
   type ClassSlot,
+  type GymLinks,
   type Plan,
   type PlainDate,
 } from '@sinchi/shared';
@@ -101,6 +102,11 @@ export interface GymCard {
 }
 
 export interface GymDetail extends GymCard {
+  /**
+   * Su web y sus redes, si las dio. En la ficha y no en la tarjeta: se abren
+   * para conocer el local, y eso es lo que se hace despues de elegirlo.
+   */
+  readonly links: GymLinks;
   readonly timezone: string;
   readonly enrollmentFeeCents: number;
   readonly dropInPriceCents: number | null;
@@ -357,6 +363,12 @@ export class TrialsService {
         latitude: gym.latitude,
         longitude: gym.longitude,
         logoId: gym.logoId,
+        links: {
+          website: gym.websiteUrl,
+          instagram: gym.instagramUrl,
+          facebook: gym.facebookUrl,
+          tiktok: gym.tiktokUrl,
+        },
         // Sin la clase suelta, por lo mismo que en `aggregates`: este numero se
         // lee "al mes" y el `drop_in` es el precio de una clase.
         fromPriceCents: plans.find((plan) => plan.type !== 'drop_in')?.priceCents ?? null,
@@ -1234,6 +1246,10 @@ export class TrialsService {
           latitude: schema.tenants.latitude,
           longitude: schema.tenants.longitude,
           logoId: schema.tenants.logoId,
+          websiteUrl: schema.tenants.websiteUrl,
+          instagramUrl: schema.tenants.instagramUrl,
+          facebookUrl: schema.tenants.facebookUrl,
+          tiktokUrl: schema.tenants.tiktokUrl,
         })
         .from(schema.tenants)
         .where(condition)

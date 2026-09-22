@@ -74,6 +74,7 @@ import {
 import { AuthService, type IssuedSession } from '../../auth/auth.service';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { SaasService } from '../saas/saas.service';
+import { gymLinkColumns, parseGymLinks, type GymLinksInput } from '../offering/settings.service';
 
 /**
  * Lo minimo que se acepta como direccion: diez caracteres.
@@ -135,6 +136,11 @@ export interface SignUpGymInput {
   readonly documentId: string;
   readonly phone?: string | undefined;
   readonly promoCode?: string | undefined;
+  /**
+   * Su web y sus redes, si las dio. Opcionales todas: el alta las ofrece
+   * plegadas, y quien no las tiene a mano las pone despues en «Logo y redes».
+   */
+  readonly links?: GymLinksInput | undefined;
 }
 
 export interface SignUpGymResult {
@@ -257,6 +263,10 @@ export class OnboardingService {
       throw new BadRequestException('Ese punto no está en el mapa.');
     }
 
+    // Antes de crear nada: un enlace mal pegado no puede dejar un gimnasio a
+    // medias, ni una cuenta vinculada a un alta que despues rebota.
+    const links = parseGymLinks(input.links ?? {});
+
     const persona = await this.resolveOwner(input);
 
     await this.assertGymsAvailable(persona.userId);
@@ -275,6 +285,7 @@ export class OnboardingService {
           // Sin pin se dejan nulas, que es lo que la columna espera: el local
           // sale igual en el directorio y «como llegar» busca su direccion.
           ...(hasPin ? { latitude: input.latitude, longitude: input.longitude } : {}),
+          ...gymLinkColumns(links),
         })
         .returning({ id: schema.tenants.id });
 

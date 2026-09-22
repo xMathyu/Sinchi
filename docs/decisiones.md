@@ -1471,7 +1471,7 @@ administradores no se sale desde dentro; se sale escribiendo SQL contra Neon.
 Hasta aquí un dojo era su nombre en letras: en la billetera del alumno, en el
 directorio, en la puerta. El dueño que ya tiene una marca —el escudo del club, el
 letrero del local— no tenía dónde ponerla. Ahora la pone al darse de alta, o
-después desde el padrón («Tu logo»).
+después desde el padrón («Logo y redes»).
 
 **Es opcional de punta a punta.** El profesor que arranca con doce alumnos no
 tiene logo y no tiene por qué inventarse uno. Sin logo se ven sus iniciales en la
@@ -1541,5 +1541,59 @@ tiene los logos de la base de pruebas.
 La baldosa del logo es blanca también en el tema oscuro. Casi todo logo se diseñó
 sobre papel blanco y muchos llegan con el fondo transparente: sobre la superficie
 oscura, un escudo negro desaparece. El caso contrario —un logo blanco sobre
-transparente— se pierde en el blanco, y por eso la pantalla «Tu logo» lo avisa
+transparente— se pierde en el blanco, y por eso la pantalla «Logo y redes» lo avisa
 antes de subirlo en vez de intentar adivinarlo.
+
+## 23. La web y las redes del gimnasio: la dirección la arma Sinchi
+
+Junto al logo, el dueño puede poner su página web, su Instagram, su Facebook y su
+TikTok. Todo opcional: muchos dojos no tienen web, pero casi todos tienen alguna
+red, y ahí es donde se ve cómo entrenan. Van en el alta (plegadas, para no
+alargar el paso 2 a quien no tiene ninguna) y en «Logo y redes»; se ven en la
+ficha del directorio, cada una abriendo la suya.
+
+**WhatsApp no está, a propósito.** Con el alumno se habla por el chat de Sinchi
+(§12), y un botón de WhatsApp en la ficha se llevaría la conversación fuera.
+
+### Se guarda la dirección canónica, no lo que pegó el dueño
+
+La forma barata era un campo de texto por red. Se descartó por lo que muestra la
+ficha: la etiqueta «Instagram» al lado de un enlace promete que abre Instagram, y
+un campo libre con esa etiqueta es un sitio donde cabe cualquier dirección
+disfrazada. Así que `normalizeGymLink` entiende las formas en que la gente lo
+escribe —`@midojo`, `midojo`, el enlace del perfil con el rastreo que Instagram
+pega detrás— y **arma** la dirección del perfil; lo que no sabe convertir en un
+perfil lo rechaza con su motivo. Un `CHECK` por columna repite la forma en la
+base.
+
+Casos que salieron escribiéndolo, cada uno con su prueba en
+`gym-links.test.ts`:
+
+- el enlace de una **publicación** no es el perfil: se dice así, en vez de
+  guardarlo y que la ficha abra un reel;
+- el **enlace corto** de TikTok (`vm.tiktok.com/…`, lo que da «Compartir
+  perfil») redirige, pero la dirección no dice a quién, y no se puede comprobar
+  sin seguirla: se pide el usuario;
+- Facebook es la única red donde la página **no siempre tiene usuario**:
+  `profile.php?id=…`, `/p/Nombre-123` y `/share/…` se aceptan con su ruta, porque
+  son la única dirección que esa página tiene;
+- una red pegada en el campo de la web se manda a su campo: si no, la ficha diría
+  lo mismo dos veces;
+- `https://midojo.pe@otro.com` abre `otro.com`. Ni la regla ni el `CHECK` dejan
+  nada entre el host y la ruta.
+
+### Guardar sin tocar no cambia nada
+
+«Logo y redes» vuelve a mostrar lo guardado como lo escribiría el dueño
+(`editableGymLink`): `@midojo`, `facebook.com/pagina`. A la web solo se le quita
+el `https://`, no el `www.` ni un `http://`: al volver a guardar sin tocarla,
+cualquiera de los dos cambiaría la dirección, y hay sitios que solo responden con
+`www.` o sin certificado. Una prueba recorre direcciones guardadas y comprueba que
+editar y guardar devuelve exactamente la misma.
+
+### Cuatro columnas y no una tabla de enlaces
+
+Son cuatro y fijas, y cada una lleva su propia regla. Con una tabla genérica
+(red, dirección), la garantía de que la fila de Instagram abre Instagram sería un
+`CASE` dentro de un `CHECK`, y añadir una red dejaría de ser una migración que se
+lee de un vistazo.

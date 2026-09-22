@@ -154,7 +154,7 @@ Ojo con `member`: aquí significa **suscripción viva en ese gimnasio, aunque
 deba**. No es `Membership.status`, que existe y engaña —nada en el producto la
 pone en `inactive`—. La baja de un gimnasio es una suscripción cancelada.
 
-## El logo del gimnasio
+## El logo, la web y las redes del gimnasio
 
 | Negocio | Código |
 |---|---|
@@ -165,6 +165,11 @@ pone en `inactive`—. La baja de un gimnasio es una suscripción cancelada.
 | a qué tamaño se deja | `gymLogoTargetSize`, `GYM_LOGO_MAX_SIDE` |
 | tope de peso | `GYM_LOGO_MAX_BYTES` |
 | lo que dicen los bytes | `readImageHeader` |
+| web y redes del gimnasio | `GymLinks` (`website`, `instagram`, `facebook`, `tiktok`) |
+| la dirección que se guarda | `normalizeGymLink` (canónica, nunca lo pegado) |
+| cómo se lee en la ficha | `displayGymLink` |
+| cómo se vuelve a editar | `editableGymLink` |
+| enlace corto / publicación / no es un perfil | `GymLinkDenialCode` (`short_link`, `post_not_profile`, `not_a_profile`) |
 
 ## Conceptos del chat
 

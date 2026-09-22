@@ -19,7 +19,15 @@ import {
   checkAccountDetails,
   normalizePhoneNumber,
 } from '@sinchi/shared';
-import type { CheckInMethod, ClassBooking, ClassSchedule, PaymentRail, Plan } from '@sinchi/shared';
+import type {
+  CheckInMethod,
+  ClassBooking,
+  ClassSchedule,
+  GymLinkKind,
+  GymLinks,
+  PaymentRail,
+  Plan,
+} from '@sinchi/shared';
 import {
   ApiError,
   payBooking,
@@ -53,6 +61,8 @@ import {
   fetchGymLogo,
   uploadGymLogo,
   deleteGymLogo,
+  fetchGymLinks,
+  saveGymLinksRequest,
   type GymLogoRefDto,
   editSchedule,
   archiveSchedule,
@@ -735,6 +745,19 @@ export async function saveGymLogo(logo: {
 export async function removeGymLogo(): Promise<GymLogoRefDto> {
   exigeServidor('Quitar el logo');
   return await deleteGymLogo();
+}
+
+/** La web y las redes del local. */
+export async function gymLinks(): Promise<GymLinks> {
+  exigeServidor('Ver tu web y tus redes');
+  return await fetchGymLinks();
+}
+
+export async function saveGymLinks(
+  links: Readonly<Record<GymLinkKind, string>>,
+): Promise<GymLinks> {
+  exigeServidor('Guardar tu web y tus redes');
+  return await saveGymLinksRequest(links);
 }
 
 export async function gymPricing(): Promise<GymPricing> {

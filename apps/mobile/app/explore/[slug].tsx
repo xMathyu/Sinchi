@@ -57,6 +57,7 @@ import { SectionLoader } from '../../src/design/loading';
 import { GymLocationBlock } from '../../src/design/gym-location';
 import { useTheme } from '../../src/design/theme';
 import { GymLogo } from '../../src/design/gym-logo';
+import { GymLinksList } from '../../src/design/gym-links';
 import { useGym, useMyBookings, useToday, useWallet } from '../../src/data/hooks';
 import {
   rescheduleBooking,
@@ -539,6 +540,12 @@ export default function GymScreen() {
           longitude: gym.longitude ?? null,
         }}
       />
+
+      {/* --- Web y redes -----------------------------------------------------
+          Pegado a «Dónde queda» porque responde a lo mismo —¿cómo es este
+          lugar?— y antes del horario, que es lo largo de leer. Quien duda entre
+          dos dojos mira sus videos antes de reservar. */}
+      <GymLinksList links={gym.links} />
 
       {/* --- Cómo quiere venir ---------------------------------------------
           Solo si hay entre qué elegir. La tarjeta dice el precio que le toca,

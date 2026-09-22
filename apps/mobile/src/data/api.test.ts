@@ -21,6 +21,7 @@ import {
   ApiError,
   bookTrial,
   fetchGym,
+  fetchGymLinks,
   fetchGymLogo,
   fetchGyms,
   gymLogoUrl,
@@ -418,6 +419,8 @@ suite('directorio y clase gratis', () => {
     const gym = await fetchGym(withClasses.slug);
 
     expect(gym.plans.length).toBeGreaterThan(0);
+    // Las cuatro siempre, aunque sea en null: la ficha pinta solo las que hay.
+    expect(Object.keys(gym.links ?? {}).sort()).toEqual(['facebook', 'instagram', 'tiktok', 'website']);
     expect(gym.schedules.length).toBeGreaterThan(0);
 
     if (gym.trialClassEnabled) {
@@ -489,6 +492,12 @@ suite('rutinas', () => {
    * llamarse de otro modo, el gancho de la ficha pública dejaría de contar nada
    * y nadie se enteraría.
    */
+  it('el mostrador lee la web y las redes del local', async () => {
+    active = 'staff';
+    const links = await fetchGymLinks();
+    expect(Object.keys(links).sort()).toEqual(['facebook', 'instagram', 'tiktok', 'website']);
+  });
+
   it('el mostrador lee el logo del local, aunque no lo pueda cambiar', async () => {
     active = 'staff';
     const logo = await fetchGymLogo();
