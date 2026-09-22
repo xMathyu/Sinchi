@@ -1,5 +1,6 @@
 /**
- * Lo que el local cobra aparte de los planes.
+ * Lo que el local cobra aparte de los planes. Es la tercera pestaña de «Clases
+ * y precios» (`app/offering.tsx`).
  *
  * Son cuatro números que hasta ahora solo existían en el seed y que deciden
  * plata todos los días. Van juntos porque se leen juntos: son la respuesta a
@@ -15,14 +16,11 @@
  * Por eso el texto dice "el que se pasa de su cupo" y no "clase suelta" a secas.
  */
 import { useEffect, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
-import { router } from 'expo-router';
-import { Button, Card, Divider, Eyebrow, Field, Row, Stack, Text } from '../src/design/primitives';
-import { Screen } from '../src/design/screen';
-import { useTheme } from '../src/design/theme';
-import { useGymPricing } from '../src/data/hooks';
-import { useRole } from '../src/data/session-hooks';
-import { saveGymPricing } from '../src/data/actions';
+import { Switch, View } from 'react-native';
+import { Button, Card, Divider, Eyebrow, Field, Row, Stack, Text } from './primitives';
+import { useTheme } from './theme';
+import { useGymPricing } from '../data/hooks';
+import { saveGymPricing } from '../data/actions';
 
 /** Soles escritos a mano → céntimos enteros. Vacío es `null`, que es "no se ofrece". */
 function aCentimos(text: string): number | null {
@@ -36,11 +34,8 @@ function aCentimos(text: string): number | null {
 const enSoles = (centimos: number | null): string =>
   centimos === null ? '' : String(centimos / 100);
 
-export default function PricingScreen() {
+export function PricingPanel({ isOwner }: { readonly isOwner: boolean }) {
   const theme = useTheme();
-  // De la sesión: el del store llega con el padrón, y estas pantallas se
-  // abren solas desde un enlace.
-  const isOwner = useRole() === 'owner';
   const { pricing, reload } = useGymPricing();
 
   const [enrollmentFee, setEnrollmentFee] = useState('');
@@ -51,6 +46,7 @@ export default function PricingScreen() {
   const [saving, setSaving] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (pricing === null) return;
@@ -60,6 +56,14 @@ export default function PricingScreen() {
     setPruebaActiva(pricing.trialClassEnabled);
     setTrialPrice(enSoles(pricing.trialClassPriceCents));
   }, [pricing]);
+
+  /** Tocar cualquier campo después de guardar borra el «Guardado»: ya no es cierto. */
+  const edit =
+    <T,>(set: (value: T) => void) =>
+    (value: T): void => {
+      setSaved(false);
+      set(value);
+    };
 
   const dropInCents = aCentimos(dropInPrice);
 
@@ -73,6 +77,7 @@ export default function PricingScreen() {
   async function save(): Promise<void> {
     setSaving(true);
     setError(null);
+    setSaved(false);
     try {
       await saveGymPricing({
         enrollmentFeeCents: aCentimos(enrollmentFee) ?? 0,
@@ -82,7 +87,10 @@ export default function PricingScreen() {
         trialClassPriceCents: aCentimos(trialPrice) ?? 0,
       });
       reload();
-      router.back();
+      // Se queda en la pestaña y lo DICE. Antes esto era una pantalla y cerrarla
+      // era la confirmación; dentro de «Clases y precios» cerrar se llevaría
+      // también los planes y los horarios de delante.
+      setSaved(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar.');
     } finally {
@@ -91,17 +99,11 @@ export default function PricingScreen() {
   }
 
   return (
-    <Screen scroll>
-      <Row style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Lo que cobras aparte
-        </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
-          <Text variant="body" color={theme.colors.textSecondary}>
-            Cerrar
-          </Text>
-        </Pressable>
-      </Row>
+    <View>
+      <Text variant="captionSmall" color={theme.colors.textSecondary} style={{ marginTop: 6 }}>
+        Lo que se cobra fuera de los planes: al inscribirse, al pasarse del cupo y al venir a
+        conocer.
+      </Text>
 
       {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
@@ -118,7 +120,7 @@ export default function PricingScreen() {
           <Field
             label="Matrícula en soles"
             value={enrollmentFee}
-            onChangeText={setEnrollmentFee}
+            onChangeText={edit(setEnrollmentFee)}
             placeholder="0"
             keyboardType="decimal-pad"
             editable={isOwner}
@@ -143,7 +145,7 @@ export default function PricingScreen() {
               </Stack>
               <Switch
                 value={allowOverflow}
-                onValueChange={setAllowOverflow}
+                onValueChange={edit(setAllowOverflow)}
                 disabled={!isOwner}
                 accessibilityLabel="Dejar entrar pagando clase suelta"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
@@ -156,7 +158,7 @@ export default function PricingScreen() {
             <Field
               label="Precio de esa clase, en soles"
               value={dropInPrice}
-              onChangeText={setDropInPrice}
+              onChangeText={edit(setDropInPrice)}
               placeholder="25"
               keyboardType="decimal-pad"
               editable={isOwner}
@@ -184,7 +186,7 @@ export default function PricingScreen() {
               </Stack>
               <Switch
                 value={pruebaActiva}
-                onValueChange={setPruebaActiva}
+                onValueChange={edit(setPruebaActiva)}
                 disabled={!isOwner}
                 accessibilityLabel="Ofrecer clase de prueba"
                 trackColor={{ true: theme.semaphore.ok, false: theme.colors.surfaceHigh }}
@@ -197,7 +199,7 @@ export default function PricingScreen() {
             <Field
               label="Precio de la primera clase, en soles"
               value={trialPrice}
-              onChangeText={setTrialPrice}
+              onChangeText={edit(setTrialPrice)}
               placeholder="0"
               keyboardType="decimal-pad"
               editable={isOwner && pruebaActiva}
@@ -238,11 +240,20 @@ export default function PricingScreen() {
             >
               Falta el precio de la clase suelta, marcado arriba en rojo.
             </Text>
+          ) : saved ? (
+            <Text
+              variant="caption"
+              color={theme.semaphore.ok}
+              align="center"
+              style={{ marginTop: 10 }}
+            >
+              Guardado. Vale para los cobros de aquí en adelante.
+            </Text>
           ) : null}
         </>
       )}
 
       <View style={{ height: 32 }} />
-    </Screen>
+    </View>
   );
 }

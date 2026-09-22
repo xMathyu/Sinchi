@@ -166,9 +166,8 @@ function AppStack() {
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         {/* La oferta del gimnasio. Van como modal y no como pestaña porque no
             se consultan a diario: se entra a cambiar un precio y se sale. */}
-        <Stack.Screen name="plans/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="offering" options={{ presentation: 'modal' }} />
         <Stack.Screen name="plans/[planId]" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="pricing" options={{ presentation: 'modal' }} />
         <Stack.Screen name="gym-brand" options={{ presentation: 'modal' }} />
         <Stack.Screen name="events/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="events/[eventId]" options={{ presentation: 'modal' }} />
@@ -336,11 +335,12 @@ const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
     'enroll',
     'manual',
     'scan',
-    // La oferta del local. Del staff y no compartidas: el alumno no tiene nada
-    // que hacer en la pantalla donde se escriben los precios. Dentro, `plans` y
-    // `pricing` se apagan solas para recepcion, que las lee pero no las toca.
+    // La oferta del local: «Clases y precios» y los editores de cada plan y de
+    // cada clase. Del staff y no compartidas: el alumno no tiene nada que hacer
+    // donde se escriben los precios. Dentro, cada pestaña se apaga sola para
+    // recepcion, que la lee pero no la toca.
+    'offering',
     'plans',
-    'pricing',
     // Sin esto la ruta se redirige EN SILENCIO —sin error, sin pantalla— y la
     // pantalla queda escrita para nadie. Ya se pagó una vez con `plans`.
     'events',

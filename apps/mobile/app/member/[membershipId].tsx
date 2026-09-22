@@ -546,9 +546,9 @@ function Reactivar({
               nuevo y vuelve aquí.
             </Text>
             <Button
-              label="Ir a Planes y precios"
+              label="Ir a Clases y precios"
               variant="secondary"
-              onPress={() => router.push('/plans')}
+              onPress={() => router.push('/offering')}
             />
           </Stack>
         </Card>

@@ -105,8 +105,8 @@ el video no cobra nada. La baja sí. Ver
 Desde el directorio, «¿Tienes un gimnasio?» abre el alta: nombre, RUC —opcional,
 y comprobado con dígito verificador si lo da—, escalón, **su dirección**, sus
 datos y, si lo tiene, un código de promoción. Al terminar entra como dueño, con
-su mes gratis corriendo, y aterriza en **Planes y precios** para escribir su
-primera tarifa.
+su mes gratis corriendo, y aterriza en **Clases y precios** con una guía de dos
+pasos: su primera tarifa y después su horario.
 
 Es la única ruta pública que crea un gimnasio, así que va con cuenta de Google
 verificada y **un gimnasio por persona**.
@@ -123,7 +123,7 @@ cobra distinto por 2 y por 3 veces por semana y a menudo distinto por modalidad
 —tai chi, sanda, lucha—, y resumir eso en un número es lo que acababa publicado.
 
 Ahora **el alta no escribe ninguna tarifa** y la primera pantalla del dueño es
-Planes y precios, con el botón de escribir la primera. Es un paso más y a cambio
+Clases y precios, con el botón de escribir la primera. Es un paso más y a cambio
 nada de lo que se publica lo escribimos nosotros: la tarjeta de un local sin
 tarifas dice «Precios en el local», que es verdad. Las dos pantallas que dependen
 de que haya alguna —el directorio y el alta de un alumno— dicen que faltan y

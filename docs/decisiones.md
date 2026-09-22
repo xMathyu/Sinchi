@@ -1597,3 +1597,29 @@ Son cuatro y fijas, y cada una lleva su propia regla. Con una tabla genérica
 (red, dirección), la garantía de que la fila de Instagram abre Instagram sería un
 `CASE` dentro de un `CHECK`, y añadir una red dejaría de ser una migración que se
 lee de un vistazo.
+
+## 24. Clases y precios: una puerta para todo lo que el gimnasio ofrece
+
+El dueño tenía lo que ofrece repartido en tres pantallas con dos entradas
+separadas en el padrón: «Horarios» arriba, «Planes y precios» abajo del todo —con
+cuatro filas en medio— y la matrícula, la clase suelta y la clase de prueba
+dentro de la segunda. Responden a la misma pregunta, «¿qué ofrezco?», y
+separadas fallaban en el peor momento: al darse de alta, la app lo llevaba a
+Planes y nada lo llevaba después al horario. Sin horario, su gimnasio sale en el
+directorio como «0 clases por semana» y nadie puede reservar.
+
+Ahora es **una fila, «Clases y precios», con tres pestañas**: Planes, Horarios y
+Otros cobros. Al crear el gimnasio se abre en modo guía (`?setup=1`): «Paso 1 de
+2 · Tus planes», y con el primer plan escrito, «Siguiente: tu horario». El
+horario se puede dejar para después y el botón lo dice («Lo hago después»): no
+tenerlo no impide inscribir a nadie, y retener al dueño ahí es peor que dejarlo
+salir sabiendo lo que le falta.
+
+**Pestañas y no una pantalla larga.** Se leen distinto —los planes por precio, el
+horario por día— y en una sola lista cada una le estorbaría a la otra. Las tres
+quedan montadas aunque no se vean: cambiar de pestaña no puede borrar la
+matrícula a medio escribir. Los editores de cada plan y de cada clase siguen
+siendo sus propias pantallas.
+
+Consecuencia pequeña: «Otros cobros» ya no cierra al guardar, porque cerrar se
+llevaría también las otras dos pestañas. Se queda y dice «Guardado».

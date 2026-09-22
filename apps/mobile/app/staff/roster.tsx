@@ -240,29 +240,29 @@ export default function RosterScreen() {
           plata, no configuración: el dueño llega al padrón preguntándose cuánto
           entró, y "cuánto cobro" es la misma pregunta un paso antes.
 
+          UNA fila para planes, horario y cobros aparte. Eran dos —«Horarios»
+          arriba y «Planes y precios» abajo del todo— y el dueño tenía que saber
+          que lo que ofrece estaba repartido en dos sitios. El horario sigue
+          siendo lo que más le falta a un local recién dado de alta, y por eso
+          esta fila va la primera: el horario vacío es lo que lo deja anunciado
+          como «0 clases por semana».
+
           Por ROL y no por `resumen === null`: ese llega tarde y la fila
           aparecía y se esfumaba sola al cargar el resumen. */}
-      {/* El primero de los cuatro, y no por orden alfabético: un local recién
-          dado de alta nace con su mensualidad —la escribe el dueño en el alta— y
-          con el horario EN BLANCO, y el horario vacío es lo que lo deja
-          anunciado como «0 clases por semana» y sin una sola hora que alguien
-          pueda reservar. Debajo de eventos y rutinas quedaba fuera de pantalla,
-          que para lo único que le falta al dueño nuevo es como no estar. */}
       {isOwner && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Horarios"
-          onPress={() => router.push('/schedules')}
+          accessibilityLabel="Clases y precios"
+          onPress={() => router.push('/offering')}
         >
           <Card radius={theme.radii.lg} tone="sunken">
             <Row>
               <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
                 <Text variant="bodySmall" weight="semibold">
-                  Horarios
+                  Clases y precios
                 </Text>
                 <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  Las clases de cada semana. Es lo que ve quien te busca y lo que valida la
-                  puerta.
+                  Tus planes, tu horario de la semana y lo que cobras aparte.
                 </Text>
               </Stack>
               <Text variant="body" color={theme.colors.textTertiary}>
@@ -273,11 +273,11 @@ export default function RosterScreen() {
         </Pressable>
       )}
 
-      {/* Va pegada a Horarios y por la misma razón: son las dos cosas que un
-          local recién dado de alta necesita para que su ficha sirva de algo. Sin
-          horario no hay ni una hora que reservar; sin dirección, quien lo
-          encuentra en el directorio no sabe si le queda a diez cuadras o a una
-          hora, que es la pregunta que decide si va. */}
+      {/* Va pegada a Clases y precios y por la misma razón: son las dos cosas
+          que un local recién dado de alta necesita para que su ficha sirva de
+          algo. Sin horario no hay ni una hora que reservar; sin dirección, quien
+          lo encuentra en el directorio no sabe si le queda a diez cuadras o a
+          una hora, que es la pregunta que decide si va. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Dónde queda"
@@ -379,29 +379,6 @@ export default function RosterScreen() {
         </Card>
       </Pressable>
 
-      {isOwner && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Planes y precios"
-          onPress={() => router.push('/plans')}
-        >
-          <Card radius={theme.radii.lg} tone="sunken">
-            <Row>
-              <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
-                <Text variant="bodySmall" weight="semibold">
-                  Planes y precios
-                </Text>
-                <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                  Lo que cobras por entrenar aquí.
-                </Text>
-              </Stack>
-              <Text variant="body" color={theme.colors.textTertiary}>
-                ›
-              </Text>
-            </Row>
-          </Card>
-        </Pressable>
-      )}
 
       <Row gap={8} justify="flex-start">
         <Chip label="Activos" selected={!viendoBajas} onPress={() => setViendoBajas(false)} />

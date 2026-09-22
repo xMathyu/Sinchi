@@ -1,5 +1,6 @@
 /**
- * Planes y precios: lo que el gimnasio vende.
+ * Planes y precios: lo que el gimnasio vende. Es la primera pestaña de «Clases
+ * y precios» (`app/offering.tsx`).
  *
  * Faltaba entera, y su ausencia dejaba un agujero raro en el producto: un local
  * podía darse de alta desde la app en dos minutos y después no tenía forma de
@@ -19,41 +20,37 @@
  *
  * Es solo del dueño: la api responde 403 a recepción, y una pantalla que se abre
  * para enseñar un error no debería poder abrirse.
+ *
+ * Los datos los trae la pantalla y no el panel: la guía del alta necesita saber
+ * cuántos planes hay para dejar pasar al paso de los horarios, y pedirlos dos
+ * veces es dos listas que pueden no coincidir.
  */
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatPEN, planPriceUnit, planShape, weekdayInitial, type Cents } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { Screen } from '../../src/design/screen';
-import { useTheme } from '../../src/design/theme';
-import { useOwnerPlans } from '../../src/data/hooks';
-import { useRole } from '../../src/data/session-hooks';
-import type { PlanWithUsage } from '../../src/data/api';
+import { Button, Card, Eyebrow, Row, Stack, Text } from './primitives';
+import { useTheme } from './theme';
+import type { PlanWithUsage } from '../data/api';
 
-export default function PlansScreen() {
+export function PlansPanel({
+  isOwner,
+  plans,
+  error,
+  loading,
+}: {
+  readonly isOwner: boolean;
+  readonly plans: readonly PlanWithUsage[] | null;
+  readonly error: string | null;
+  readonly loading: boolean;
+}) {
   const theme = useTheme();
-  // De la sesión: el del store llega con el padrón, y estas pantallas se
-  // abren solas desde un enlace.
-  const isOwner = useRole() === 'owner';
-  const { plans, error, loading } = useOwnerPlans();
 
   const active = plans?.filter((p) => p.plan.active) ?? [];
   const archivados = plans?.filter((p) => !p.plan.active) ?? [];
 
   return (
-    <Screen scroll>
-      <Row style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Planes y precios
-        </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
-          <Text variant="body" color={theme.colors.textSecondary}>
-            Cerrar
-          </Text>
-        </Pressable>
-      </Row>
-
+    <View>
       {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
@@ -125,34 +122,10 @@ export default function PlansScreen() {
             </Stack>
           )}
 
-          <Stack gap={10} style={{ marginTop: 26 }}>
-            <Eyebrow>Aparte de los planes</Eyebrow>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push('/pricing')}
-            >
-              <Card radius={theme.radii.lg}>
-                <Row>
-                  <Stack gap={2} style={{ flex: 1, paddingRight: 12 }}>
-                    <Text variant="bodySmall" weight="semibold">
-                      Matrícula, clase suelta y clase de prueba
-                    </Text>
-                    <Text variant="captionSmall" color={theme.colors.textSecondary}>
-                      Lo que se cobra al inscribirse, al pasarse del cupo y al venir a conocer.
-                    </Text>
-                  </Stack>
-                  <Text variant="body" color={theme.colors.textTertiary}>
-                    ›
-                  </Text>
-                </Row>
-              </Card>
-            </Pressable>
-          </Stack>
-
           <View style={{ height: 24 }} />
         </>
       )}
-    </Screen>
+    </View>
   );
 }
 

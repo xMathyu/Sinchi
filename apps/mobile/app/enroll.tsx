@@ -165,7 +165,7 @@ export default function EnrollScreen() {
       ? {
           plan:
             !loadingPlans && plans.length === 0
-              ? 'Este gimnasio todavía no tiene tarifas: se escriben en Planes y precios.'
+              ? 'Este gimnasio todavía no tiene tarifas: se escriben en Clases y precios.'
               : 'Elige con qué plan entra.',
         }
       : {}),
@@ -327,10 +327,10 @@ export default function EnrollScreen() {
                 decir en cuál entra.
               </Text>
               {isOwner ? (
-                <Button label="Escribir la primera" onPress={() => router.push('/plans')} />
+                <Button label="Escribir la primera" onPress={() => router.push('/offering')} />
               ) : (
                 <Text variant="captionSmall" color={theme.colors.textFaint}>
-                  Los precios los escribe el dueño, desde Planes y precios.
+                  Los precios los escribe el dueño, desde Clases y precios.
                 </Text>
               )}
             </Stack>

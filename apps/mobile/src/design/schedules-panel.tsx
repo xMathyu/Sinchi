@@ -1,5 +1,6 @@
 /**
- * El horario del gimnasio: cuándo se entrena aquí.
+ * El horario del gimnasio: cuándo se entrena aquí. Es la segunda pestaña de
+ * «Clases y precios» (`app/offering.tsx`), que es quien trae los datos.
  *
  * Faltaba entera, y su ausencia dejaba al gimnasio nuevo en un callejón sin
  * salida silencioso. Los bloques de horario solo los sabía escribir un script
@@ -30,36 +31,28 @@ import {
   type IsoWeekday,
 } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
-import { Button, Card, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
-import { Screen } from '../../src/design/screen';
-import { useTheme } from '../../src/design/theme';
-import { useOwnerSchedules } from '../../src/data/hooks';
-import { useRole } from '../../src/data/session-hooks';
-import type { ScheduleWithUsage } from '../../src/data/api';
+import { Button, Card, Eyebrow, Row, Stack, Text } from './primitives';
+import { useTheme } from './theme';
+import type { ScheduleWithUsage } from '../data/api';
 
-export default function SchedulesScreen() {
+export function SchedulesPanel({
+  isOwner,
+  schedules,
+  error,
+  loading,
+}: {
+  readonly isOwner: boolean;
+  readonly schedules: readonly ScheduleWithUsage[] | null;
+  readonly error: string | null;
+  readonly loading: boolean;
+}) {
   const theme = useTheme();
-  // De la sesión: el del store llega con el padrón, y estas pantallas se
-  // abren solas desde un enlace.
-  const isOwner = useRole() === 'owner';
-  const { schedules, error, loading } = useOwnerSchedules();
 
   const activeBlocks = schedules?.filter((h) => h.active) ?? [];
   const archivados = schedules?.filter((h) => !h.active) ?? [];
 
   return (
-    <Screen scroll>
-      <Row style={{ paddingTop: 8 }}>
-        <Text variant="titleSmall" weight="bold">
-          Horarios
-        </Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
-          <Text variant="body" color={theme.colors.textSecondary}>
-            Cerrar
-          </Text>
-        </Pressable>
-      </Row>
-
+    <View>
       {!isOwner ? (
         <Card tone="sunken" style={{ marginTop: 20 }}>
           <Text variant="bodySmall" color={theme.colors.textSecondary}>
@@ -144,7 +137,7 @@ export default function SchedulesScreen() {
           <View style={{ height: 32 }} />
         </>
       )}
-    </Screen>
+    </View>
   );
 }
 

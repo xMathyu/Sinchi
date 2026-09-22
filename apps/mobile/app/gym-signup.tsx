@@ -635,19 +635,23 @@ export default function GymSignUpScreen() {
 
       /**
        * Se entra directo —el alta deja la sesión de dueño puesta— pero a
-       * PLANES, y encima del padrón.
+       * CLASES Y PRECIOS en modo guía, y encima del padrón: primero sus planes,
+       * después su horario.
        *
        * El local nace SIN tarifas, a propósito: un gimnasio cobra distinto por
        * 2 y por 3 veces por semana, y a menudo distinto por modalidad, así que
        * ninguna cifra que le pidiéramos en el alta sería su precio. Lo que no
        * puede pasar es que se quede sin ninguna sin enterarse: inscribir a un
        * alumno pide en qué plan lo pone, y el padrón vacío no dice que lo que
-       * falta está en otra pantalla.
+       * falta está en otra pantalla. Lo mismo el horario: antes la guía acababa
+       * en los planes y nada llevaba al horario, y sin él el local sale en el
+       * directorio como «0 clases por semana».
        *
-       * Las DOS navegaciones y en este orden: Planes es un modal, así que se
-       * presenta ENCIMA del padrón. Escribe su primera tarifa, cierra, y queda
-       * en su padrón con el local ya usable. Un `replace('/plans')` a secas
-       * dejaría un modal sin nada debajo y su «Cerrar» no tendría a dónde ir.
+       * Las DOS navegaciones y en este orden: Clases y precios es un modal, así
+       * que se presenta ENCIMA del padrón. Escribe su tarifa y su horario,
+       * cierra, y queda en su padrón con el local ya usable. Un
+       * `replace('/offering')` a secas dejaría un modal sin nada debajo y su
+       * «Cerrar» no tendría a dónde ir.
        *
        * Y ANTES, `dismissAll`. Esto se alcanzaba solo desde el login y desde el
        * directorio, que son pantallas normales, así que el razonamiento de
@@ -692,7 +696,8 @@ export default function GymSignUpScreen() {
 
       if (router.canDismiss()) router.dismissAll();
       router.replace('/staff/roster');
-      router.push('/plans');
+      // La guía: primero sus planes y después su horario, en «Clases y precios».
+      router.push({ pathname: '/offering', params: { setup: '1' } });
     } catch (causa: unknown) {
       setError(causa instanceof Error ? causa.message : 'No se pudo crear el gimnasio.');
     } finally {
