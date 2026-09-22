@@ -342,6 +342,59 @@
   color: var(--ok);
 }
 
+/* ---------------------------------------------------------------------------
+   La espera
+
+   Una acción que tarda y no se nota es una acción que se pide dos veces. Pasó
+   al entrar con Google en las dos puertas: entre la credencial y el panel hay
+   dos viajes al servidor y una navegación, la pantalla del login se quedaba
+   igual, y quien entraba lo leía como que no había prendido y volvía a pulsar.
+
+   El aviso va ENCIMA del botón y es opaco a propósito: además de contar la
+   espera, es lo que hace imposible el segundo clic.
+   --------------------------------------------------------------------------- */
+
+.panel-waiting {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--screen);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.panel-spinner {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--hairline);
+  border-top-color: var(--ok);
+  animation: panel-spin 0.7s linear infinite;
+}
+
+@keyframes panel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Más lento, no quieto. Un aro congelado al lado de «Entrando…» se lee como
+     que la pantalla se colgó, que es justo lo que este aro está aquí para
+     desmentir. */
+  .panel-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .panel-empty {
   display: flex;
   flex-direction: column;
