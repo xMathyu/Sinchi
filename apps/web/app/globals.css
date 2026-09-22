@@ -37,10 +37,10 @@ a { color: var(--ok); text-decoration: none; }
    --------------------------------------------------------------------------- */
 :root {
   --gutter: 96px;
-  --bar-h: 82px;
+  --bar-h: 72px;
 }
 @media (max-width: 1180px) { :root { --gutter: 56px; } }
-@media (max-width: 900px)  { :root { --gutter: 26px; --bar-h: 70px; } }
+@media (max-width: 900px)  { :root { --gutter: 26px; --bar-h: 64px; } }
 @media (max-width: 420px)  { :root { --gutter: 20px; } }
 
 .section { padding: clamp(52px, 6.5vw, 84px) var(--gutter); }
@@ -122,48 +122,136 @@ a { color: var(--ok); text-decoration: none; }
 .bar {
   position: sticky; top: 0; z-index: 40;
   border-bottom: 1px solid transparent;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* `saturate` además del desenfoque, que es la receta del cristal de iOS: solo
+     con `blur`, el halo verde de la portada cruza por debajo lavado y la barra
+     parece una gasa gris. */
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 .bar-inner {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; height: var(--bar-h); padding: 0 var(--gutter);
 }
 .brand { display: flex; align-items: center; gap: 11px; color: var(--ink); }
-.brand .display { font-size: 23px; letter-spacing: 0.02em; }
+.brand .display { font-size: 22px; letter-spacing: 0.02em; }
 
-.nav-desktop { display: flex; gap: 30px; align-items: center; }
+.nav-sections { display: flex; align-items: center; gap: 2px; }
+
+/* Las utilidades —tema, cuenta y la acción— van detrás de una raya, que es lo
+   que dice que no son más secciones a las que bajar. Es la misma separación que
+   hace una barra de herramientas del sistema, y sale gratis: un pseudoelemento,
+   no un `<span>` que el lector de pantalla tendría que saltarse. */
+.nav-utils { display: flex; align-items: center; gap: 8px; }
+.nav-utils::before {
+  content: ''; flex: none; width: 1px; height: 20px;
+  background: var(--divider); margin-right: 6px;
+}
+
+/* El aire entre enlaces lo pone su propio relleno y no el `gap` del padre,
+   porque ese relleno es también la pastilla que se enciende al señalarlos: con
+   el hueco fuera, la pastilla queda flotando y se ve despegada de la palabra.
+   `inline-flex` y no el `inline` de un `<a>`, o el relleno vertical se sale de
+   la línea sin empujar nada y la pastilla pisa la barra por arriba. */
 .nav-link {
-  font-size: 15px; color: var(--text-secondary); position: relative; padding: 4px 0;
-  transition: color 0.2s ease;
+  display: inline-flex; align-items: center;
+  font-size: 14px; color: var(--text-secondary); white-space: nowrap;
+  padding: 8px 13px; border-radius: var(--r-pill);
+  transition: color 0.22s ease, background-color 0.22s ease;
 }
-.nav-link::after {
-  content: ''; position: absolute; left: 0; bottom: 0; height: 1.5px; width: 100%;
-  background: var(--ok); transform: scaleX(0); transform-origin: left;
-  transition: transform 0.28s cubic-bezier(0.22, 0.8, 0.24, 1);
-}
-.nav-link:hover { color: var(--ink); }
-.nav-link:hover::after { transform: scaleX(1); }
+.nav-link:hover { color: var(--ink); background: var(--surface); }
 
 .btn-outline {
-  border: 1px solid var(--border); border-radius: 12px; padding: 10px 18px;
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--border); border-radius: var(--r-pill); padding: 9px 18px;
   font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.22s ease, background-color 0.22s ease,
+              transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
-.btn-outline:hover { border-color: var(--ok); background: rgba(47, 209, 109, 0.08); }
+.btn-outline:hover { border-color: var(--ok); background: var(--surface); }
+/* Hundirse al pulsar y no solo al soltar: en un móvil el `:hover` no existe y
+   sin esto el botón no acusa el dedo hasta que la página ya ha saltado. */
+.btn-outline:active { transform: scale(0.97); }
 
 .btn-solid {
-  background: var(--ink); color: var(--canvas); border-radius: 14px;
+  background: var(--ink); color: var(--canvas); border-radius: var(--r-pill);
   padding: 15px 22px; font-size: 16px; font-weight: 700; text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   El interruptor de tema
+
+   Vive aquí y no en línea dentro de `ThemeToggle` por una razón sola: un estilo
+   en línea no escribe `:hover` ni `:focus-visible`. Lo carga el layout raíz, así
+   que estas reglas llegan también al panel y a /admin, que montan el mismo
+   componente.
+   --------------------------------------------------------------------------- */
+.theme-switch {
+  --pad: 3px;
+  position: relative;
+  display: inline-flex;
+  padding: var(--pad);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  /* El carril va en `surface-high` y no en `surface`: en claro, `surface` es
+     #FCFBF8 y la pastilla es blanca, así que el control entero se veía como una
+     sola mancha blanca y no había forma de saber qué casilla estaba puesta. */
+  background: var(--surface-high);
+}
+/* La pastilla se coloca por CASILLA (`--casilla`, del componente) y no por
+   píxeles: con las palabras puestas los tres botones no miden lo mismo en todos
+   los tipos de letra, y un desplazamiento calculado a mano se descuadra en el
+   primer navegador que no tenga la fuente. */
+.theme-switch-thumb {
+  position: absolute;
+  top: var(--pad); bottom: var(--pad); left: var(--pad);
+  width: calc((100% - var(--pad) * 2) / 3);
+  border-radius: var(--r-pill);
+  background: var(--chip-active);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  transform: translateX(calc(var(--casilla) * 100%));
+}
+/* Solo se anima una vez montado: ver el porqué en `ThemeToggle`. */
+.theme-switch[data-montado] .theme-switch-thumb {
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-switch[data-montado] .theme-switch-thumb { transition: none; }
+}
+.theme-switch button {
+  /* Encima de la pastilla, que es hermana y va antes en el marcado. */
+  position: relative; z-index: 1;
+  flex: 1 1 0; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 7px 14px;
+  border: none; background: transparent; border-radius: var(--r-pill);
+  color: var(--text-tertiary);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1;
+  cursor: pointer;
+  transition: color 0.22s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-switch button svg { width: 16px; height: 16px; flex: none; }
+.theme-switch button:hover { color: var(--text-secondary); }
+.theme-switch button[aria-checked='true'] { color: var(--ink); }
+/* El `:focus-visible` global redondea a 4 px, que en una cápsula deja el anillo
+   con las esquinas cortadas. */
+.theme-switch button:focus-visible { border-radius: var(--r-pill); outline-offset: 1px; }
+
+.theme-switch[data-compact] button { flex: none; width: 31px; height: 26px; padding: 0; }
+/* Fuera de la vista, NO `display:none`: el nombre del botón tiene que seguir
+   siendo «Claro» para quien navega por voz o lo escucha. */
+.theme-switch[data-compact] .theme-switch-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 
 .burger {
   display: none; width: 44px; height: 44px; padding: 0; cursor: pointer;
   flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  background: transparent; border: 1px solid var(--border); border-radius: 13px;
-  transition: border-color 0.2s ease;
+  background: transparent; border: 1px solid var(--border); border-radius: var(--r-pill);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
-.burger:hover { border-color: var(--text-tertiary); }
+.burger:hover { border-color: var(--text-tertiary); background: var(--surface); }
 .burger span {
   display: block; width: 18px; height: 2px; border-radius: 2px; background: var(--ink);
   transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.18s ease;
@@ -191,15 +279,29 @@ a { color: var(--ok); text-decoration: none; }
   font-size: clamp(30px, 9vw, 42px); color: var(--ink);
   padding: 13px 0; border-bottom: 1px solid var(--hairline);
 }
+/* Suelto, «Entrar a mi panel» se quedaba con el verde de `a` de la hoja y, a
+   tamaño de párrafo debajo de tres titulares, parecía el pie de la lista y no
+   una puerta. Aquí abajo sí es un botón —el de la barra no, para no competir
+   con el de ventas—: en el menú no hay nada con lo que competir, y un dedo
+   necesita un blanco de 44 px. */
+.menu-btn {
+  justify-content: center; width: 100%;
+  padding: 14px 22px; font-size: 16px; font-weight: 700;
+}
+
+/* Aquí el interruptor sí lleva las palabras y ocupa el ancho: no compite con
+   nada, y con tres casillas de 33% el dedo acierta sin mirar. */
+.menu .theme-switch { display: flex; width: 100%; }
 .menu[data-open='true'] nav a { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) both; }
 .menu[data-open='true'] nav a:nth-child(1) { animation-delay: 0.06s; }
 .menu[data-open='true'] nav a:nth-child(2) { animation-delay: 0.12s; }
 .menu[data-open='true'] nav a:nth-child(3) { animation-delay: 0.18s; }
-.menu[data-open='true'] .btn-solid { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) 0.24s both; }
+.menu[data-open='true'] .menu-btn { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) 0.24s both; }
+.menu[data-open='true'] .btn-solid { animation: rise 0.45s cubic-bezier(0.22, 0.8, 0.24, 1) 0.3s both; }
 
 @media (max-width: 900px) {
   .burger { display: flex; }
-  .nav-desktop { display: none; }
+  .nav-sections, .nav-utils { display: none; }
 }
 @media (min-width: 901px) {
   .menu { display: none; }

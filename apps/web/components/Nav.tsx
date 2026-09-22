@@ -58,23 +58,30 @@ export function Nav() {
             <span className="display">SINCHI</span>
           </a>
 
-          <nav className="nav-desktop" aria-label="Secciones">
+          <nav className="nav-sections" aria-label="Secciones">
             {LINKS.map((link) => (
               <a key={link.href} href={link.href} className="nav-link">
                 {link.label}
               </a>
             ))}
-            {/* El panel es para quien YA es cliente, asi que va como enlace y
-                no como boton: el boton de esta barra tiene que seguir siendo el
-                de ventas, que es a lo que la pagina viene. */}
+          </nav>
+
+          {/* Lo de la derecha NO son tres enlaces más: son el tema, la cuenta y
+              la acción, y por eso van detrás de una raya y no dentro del `<nav>`
+              de las secciones. «Entrar» puesto en fila con «Planes» decía que
+              era otro sitio de la página al que bajar, y no lo es — es la puerta
+              de quien YA es cliente. Sigue siendo un enlace y no un botón: el
+              botón de esta barra tiene que seguir siendo el de ventas, que es a
+              lo que la página viene. */}
+          <div className="nav-utils">
+            <ThemeToggle compact />
             <a href="/panel" className="nav-link">
               Entrar
             </a>
-            <ThemeToggle compact />
             <a href="#contacto" className="btn-outline">
               Hablar con ventas
             </a>
-          </nav>
+          </div>
 
           <button
             type="button"
@@ -101,12 +108,13 @@ export function Nav() {
             </a>
           ))}
         </nav>
-        <a href="/panel" onClick={() => setOpen(false)}>
+        {/* El mismo orden que en la barra —tema, cuenta, acción— y los dos
+            botones juntos al final: arriba el de quien ya es cliente, abajo el
+            de quien todavía no. */}
+        <ThemeToggle />
+        <a href="/panel" className="btn-outline menu-btn" onClick={() => setOpen(false)}>
           Entrar a mi panel
         </a>
-        <div style={{ paddingTop: 4 }}>
-          <ThemeToggle />
-        </div>
         <a href="#contacto" className="btn-solid" onClick={() => setOpen(false)}>
           Hablar con ventas
         </a>
