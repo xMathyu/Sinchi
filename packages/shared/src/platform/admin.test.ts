@@ -194,6 +194,10 @@ describe('platformActionLabel', () => {
       'promo.disable',
       'admin.invite',
       'admin.revoke',
+      'person.update',
+      'person.ban',
+      'person.unban',
+      'person.delete',
     ];
     for (const kind of kinds) expect(platformActionLabel(kind), kind).not.toBe('');
   });

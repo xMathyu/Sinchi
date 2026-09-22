@@ -51,12 +51,18 @@ export function normalizeAdminEmail(raw: string): string {
  * del RFC: la comprobación que de verdad importa no es sintáctica sino que quien
  * entra presente ese correo VERIFICADO por Google. Una expresión regular
  * estricta solo agrega falsos rechazos a direcciones legítimas raras.
+ *
+ * Es la misma para el correo de quien administra Sinchi y para el de una
+ * persona que se corrige desde el panel: dos reglas para «esto parece un
+ * correo» es cómo una pantalla acaba aceptando lo que la otra rechaza.
  */
-export function isWellFormedAdminEmail(raw: string): boolean {
+export function isWellFormedEmail(raw: string): boolean {
   const email = normalizeAdminEmail(raw);
   if (email.length === 0 || email.length > ADMIN_EMAIL_MAX) return false;
   return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email);
 }
+
+export const isWellFormedAdminEmail = isWellFormedEmail;
 
 export type AdminInviteDenial = 'malformed_email' | 'already_admin';
 
@@ -235,7 +241,11 @@ export type PlatformActionKind =
   | 'promo.create'
   | 'promo.disable'
   | 'admin.invite'
-  | 'admin.revoke';
+  | 'admin.revoke'
+  | 'person.update'
+  | 'person.ban'
+  | 'person.unban'
+  | 'person.delete';
 
 /** Cómo se lee cada acción en el registro. En pasado: ya ocurrió. */
 export function platformActionLabel(kind: PlatformActionKind): string {
@@ -258,6 +268,14 @@ export function platformActionLabel(kind: PlatformActionKind): string {
       return 'dio acceso al panel';
     case 'admin.revoke':
       return 'quitó el acceso al panel';
+    case 'person.update':
+      return 'corrigió los datos de una persona';
+    case 'person.ban':
+      return 'baneó a una persona';
+    case 'person.unban':
+      return 'levantó el baneo de una persona';
+    case 'person.delete':
+      return 'eliminó una cuenta';
   }
 }
 
@@ -269,7 +287,10 @@ export function platformActionLabel(kind: PlatformActionKind): string {
  * no ayuda a encontrar el día que algo se perdió.
  */
 export const isIrreversibleAction = (kind: PlatformActionKind): boolean =>
-  kind === 'gym.delete' || kind === 'promo.create' || kind === 'gym.payment';
+  kind === 'gym.delete' ||
+  kind === 'promo.create' ||
+  kind === 'gym.payment' ||
+  kind === 'person.delete';
 
 // ---------------------------------------------------------------------------
 // Fin del acceso
