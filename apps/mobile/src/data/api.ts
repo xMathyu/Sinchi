@@ -149,20 +149,12 @@ export class ApiError extends Error {
 interface RequestOptions {
   readonly method?: 'GET' | 'POST' | 'DELETE';
   readonly body?: unknown;
-  /** Un archivo, en multipart en vez de JSON. Hoy solo lo usa el logo. */
-  readonly form?: FormData;
   /** Rutas públicas: `/auth/google`, `/gyms/signup`, el directorio. */
   readonly anonymous?: boolean;
-  /** Para lo que sube un archivo: diez segundos no alcanzan con datos móviles. */
-  readonly timeoutMs?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  // Con un formulario NO se pone `Content-Type`: lo escribe `fetch` junto con el
-  // separador de las partes, y puesto a mano sale sin él y la api no encuentra
-  // dónde empieza la imagen.
-  const headers: Record<string, string> =
-    options.form === undefined ? { 'Content-Type': 'application/json' } : {};
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
   if (options.anonymous !== true) {
     const token = credentials.getToken();
@@ -176,7 +168,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // petición se queda colgada sin resolver ni fallar, y la pantalla se queda
   // esperando para siempre.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -186,8 +178,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // El balanceador de Google rechaza un POST sin `Content-Length`, así que
       // los POST sin datos van con un objeto vacío en vez de sin cuerpo.
       body:
-        options.form ??
-        (options.method === 'POST' ? JSON.stringify(options.body ?? {}) : undefined),
+        options.method === 'POST'
+          ? JSON.stringify(options.body ?? {})
+          : undefined,
       signal: controller.signal,
     });
   } catch (error) {
@@ -223,6 +216,46 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(response.status, messageFrom(payload) ?? response.statusText, payload);
   }
   return payload as T;
+}
+
+/**
+ * Un formulario multipart con un archivo del teléfono. Hoy solo lo usa el logo.
+ *
+ * Por `XMLHttpRequest` y no por `fetch`, y no es preferencia: el `fetch` global
+ * de Expo no entiende la parte `{ uri, name, type }` de un `FormData` —que es
+ * como React Native adjunta un archivo del disco— y falla con «Unsupported
+ * FormDataPart implementation» sin llegar a salir del teléfono. `request()` lo
+ * convertía en «No se pudo conectar con la api», que parecía un problema de red.
+ * Lo encontró el QA en el simulador; ninguna prueba corre ese camino. El XHR de
+ * React Native sí la entiende: lee el archivo del disco y lo manda.
+ *
+ * Sin `Content-Type` a mano: lo pone el XHR junto con el separador de las
+ * partes, y escrito a mano saldría sin él.
+ */
+function requestForm<T>(path: string, form: FormData, timeoutMs: number): Promise<T> {
+  const token = credentials.getToken();
+  if (token === null) return Promise.reject(new ApiError(401, 'No hay sesión activa.'));
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${apiBase}${path}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.timeout = timeoutMs;
+    xhr.onload = () => {
+      const text = xhr.responseText ?? '';
+      const payload: unknown = text.length === 0 ? null : safeParse(text);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload as T);
+        return;
+      }
+      // Mismo criterio que `request()`: un 401 del servidor suelta la sesión.
+      if (xhr.status === 401) credentials.onUnauthorized?.();
+      reject(new ApiError(xhr.status, messageFrom(payload) ?? `Error ${xhr.status}`, payload));
+    };
+    xhr.onerror = () => reject(new ApiError(0, 'No se pudo conectar con la api.'));
+    xhr.ontimeout = () => reject(new ApiError(0, 'La api no respondió a tiempo.'));
+    xhr.send(form);
+  });
 }
 
 function safeParse(text: string): unknown {
@@ -1715,7 +1748,8 @@ export const fetchGymLogo = (): Promise<GymLogoRefDto> => request('/staff/logo')
  * En multipart y por su `uri`: el puente nativo lee el archivo del disco y lo
  * manda, sin pasar la imagen entera por JavaScript como texto en base64. Un
  * minuto de margen porque son decenas de KB, pero por datos móviles en un
- * sótano diez segundos no siempre alcanzan.
+ * sótano diez segundos no siempre alcanzan. Va por `requestForm`, que dice por
+ * qué no puede ir por `fetch`.
  */
 export const uploadGymLogo = (input: {
   readonly fileUri: string;
@@ -1727,7 +1761,7 @@ export const uploadGymLogo = (input: {
     name: input.contentType === 'image/png' ? 'logo.png' : 'logo.jpg',
     type: input.contentType,
   } as unknown as Blob);
-  return request('/staff/logo', { method: 'POST', form, timeoutMs: 60_000 });
+  return requestForm('/staff/logo', form, 60_000);
 };
 
 export const deleteGymLogo = (): Promise<GymLogoRefDto> =>

@@ -12,6 +12,7 @@
  * tirar el 99 %, y además exigía una librería nativa en la imagen de la api.
  */
 import * as ImagePicker from 'expo-image-picker';
+import { requireOptionalNativeModule } from 'expo';
 import {
   checkGymLogo,
   gymLogoDenialMessage,
@@ -78,19 +79,21 @@ export async function prepareGymLogo(
   mimeType: string | undefined,
 ): Promise<PickedGymLogo> {
   /**
-   * Se carga en diferido por lo mismo que `expo-location` en `map-picker`: es un
-   * módulo NATIVO, y un binario que no lo trae —el cliente de desarrollo de
-   * antes de este cambio, o una app vieja— reventaría al importarlo. Así lo que
-   * se pierde es subir el logo, con una frase que lo dice; la pantalla sigue.
+   * Se PREGUNTA si el módulo nativo está antes de cargarlo, y no con un
+   * `try` alrededor del `require`.
+   *
+   * Un binario que no lo trae —el cliente de desarrollo de antes de este cambio—
+   * revienta al importarlo. Y el `try` no lo ataja: cuando un `require` falla en
+   * tiempo de ejecución, Metro no le pasa la excepción a quien lo llamó, la
+   * reporta como error FATAL y devuelve `undefined`. Se vio en el simulador:
+   * pantalla roja, y la frase de abajo nunca salía. `requireOptionalNativeModule`
+   * devuelve `null` sin lanzar nada.
    */
-  let manipulator: typeof import('expo-image-manipulator');
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    manipulator = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
-  } catch {
+  if (requireOptionalNativeModule('ExpoImageManipulator') === null) {
     throw new Error('Esta versión de la app no puede preparar imágenes. Actualízala para subir tu logo.');
   }
-  const { ImageManipulator, SaveFormat } = manipulator;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ImageManipulator, SaveFormat } = require('expo-image-manipulator') as typeof import('expo-image-manipulator');
 
   const asPhoto = mimeType !== undefined && PHOTO_TYPES.has(mimeType);
   const contentType: GymLogoContentType = asPhoto ? 'image/jpeg' : 'image/png';
