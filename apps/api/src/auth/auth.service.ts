@@ -42,6 +42,7 @@ import {
   type PendingClaim,
 } from './account-link.service';
 import { InviteService } from './invite.service';
+import { AccountBans } from './account-bans';
 
 /**
  * La cuenta de Google es valida pero no esta vinculada a ninguna ficha del
@@ -134,6 +135,7 @@ export class AuthService {
     private readonly firebase: FirebaseVerifier,
     private readonly accountLink: AccountLinkService,
     private readonly invites: InviteService,
+    private readonly bans: AccountBans,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -204,6 +206,16 @@ export class AuthService {
    * crear su local tiene que entrar como dueno sin volver a autenticarse.
    */
   async issueForUser(userId: string): Promise<IssuedSession> {
+    /**
+     * Una ficha baneada no recibe sesión.
+     *
+     * `FirebaseVerifier` ya para a la cuenta de Google baneada, pero no a la
+     * ficha que se baneó ANTES de que su dueño instalara la app: su cuenta se
+     * vincula en este mismo login, y la lista de baneos todavía no la conoce.
+     * Sin esta línea entraría una vez, con una sesión de siete días.
+     */
+    await this.bans.assertNotBanned({ userId });
+
     const posts = await this.staffRowsOf(userId);
     const open = openPosts(posts);
     const staffRow = open[0];

@@ -22,6 +22,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
@@ -34,6 +35,9 @@ import {
   ADMIN_NAME_MAX,
   PROMO_CODE_MAX_LENGTH,
   PROMO_MAX_FREE_MONTHS,
+  BAN_REASON_MAX,
+  BAN_REASON_MIN,
+  DOCUMENT_ID_MAX,
 } from '@sinchi/shared';
 import { AdminOnly, CurrentAdmin, Public } from '../../auth/auth.guard';
 import type { AdminClaims } from '../../auth/session';
@@ -52,6 +56,14 @@ import {
   type PlatformOverview,
 } from './platform-gyms.service';
 import { PlatformPromosService, type PromoView } from './platform-promos.service';
+import {
+  PlatformPeopleService,
+  type AccountDetail,
+  type DeletionOutcome,
+  type IdentityDetail,
+  type PeoplePage,
+  type PendingDeletion,
+} from './platform-people.service';
 
 const sessionSchema = z.object({
   idToken: z.string().min(100).max(4096),
@@ -114,6 +126,38 @@ const promoSchema = z.object({
 
 const promoStatusSchema = z.object({ active: z.boolean() });
 
+/**
+ * Los cuatro datos de una ficha, completos.
+ *
+ * No es un parche como el del gimnasio: la regla (`checkPersonDetails`) juzga la
+ * ficha entera —un celular vale o no vale junto al resto—, y el formulario manda
+ * siempre los cuatro. Los topes finos los pone esa regla; estos solo impiden que
+ * alguien mande un documento de un megabyte.
+ */
+const personSchema = z.object({
+  name: z.string().max(200),
+  phone: z.string().max(40),
+  documentId: z.string().max(DOCUMENT_ID_MAX * 2),
+  email: z.string().max(ADMIN_EMAIL_MAX).default(''),
+});
+
+const banSchema = z.object({
+  reason: z.string().min(BAN_REASON_MIN).max(BAN_REASON_MAX),
+});
+
+/** Lo que se escribe para confirmar. En el cuerpo, igual que el slug del gimnasio. */
+const confirmSchema = z.object({
+  confirm: z.string().min(1).max(ADMIN_EMAIL_MAX),
+});
+
+/**
+ * Un uid de Firebase: 28 caracteres alfanuméricos en la práctica.
+ *
+ * Se valida la forma antes de llevarlo a una consulta, por lo mismo que los
+ * uuid pasan por `ParseUUIDPipe`: un parámetro de ruta es texto del navegador.
+ */
+const firebaseUidSchema = z.string().regex(/^[A-Za-z0-9_-]{6,128}$/, 'Esa cuenta no existe.');
+
 const inviteSchema = z.object({
   email: z.string().min(3).max(ADMIN_EMAIL_MAX),
   name: z.string().max(ADMIN_NAME_MAX).nullable().optional(),
@@ -156,6 +200,7 @@ export class AdminPanelController {
     private readonly admins: PlatformAdminService,
     private readonly gyms: PlatformGymsService,
     private readonly promos: PlatformPromosService,
+    private readonly people: PlatformPeopleService,
   ) {}
 
   /** Quién soy, para que el panel se pinte sin volver a leer la cookie. */
@@ -272,6 +317,103 @@ export class AdminPanelController {
   }
 
   // -------------------------------------------------------------------------
+  // Personas
+  // -------------------------------------------------------------------------
+
+  /** Una página de personas. `kind=account` son las cuentas sin ficha. */
+  @Get('people')
+  listPeople(
+    @Query('kind') kind?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+  ): Promise<PeoplePage> {
+    return this.people.list({
+      kind: kind === 'account' ? 'account' : 'identity',
+      ...(q === undefined ? {} : { q: q.slice(0, 100) }),
+      page: Number.isFinite(Number(page)) ? Number(page) : 1,
+    });
+  }
+
+  /**
+   * Las bajas pedidas sin ejecutar. Declarada ANTES de `people/:userId`: Nest
+   * empareja en orden, y al revés esta ruta se leería como la ficha de alguien
+   * llamado «deletion-requests».
+   */
+  @Get('people/deletion-requests')
+  pendingDeletions(): Promise<readonly PendingDeletion[]> {
+    return this.people.pendingDeletions();
+  }
+
+  @Get('people/:userId')
+  identity(@Param('userId', new ParseUUIDPipe()) userId: string): Promise<IdentityDetail> {
+    return this.people.identityDetail(userId);
+  }
+
+  @Post('people/:userId')
+  updateIdentity(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(parseWith(personSchema)) body: z.infer<typeof personSchema>,
+  ): Promise<IdentityDetail> {
+    return this.people.updateIdentity(admin.sub, userId, body);
+  }
+
+  @Post('people/:userId/ban')
+  async banIdentity(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(parseWith(banSchema)) body: z.infer<typeof banSchema>,
+  ): Promise<{ readonly banned: true }> {
+    await this.people.ban(admin.sub, { userId }, body.reason);
+    return { banned: true };
+  }
+
+  @Delete('people/:userId')
+  removeIdentity(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(parseWith(confirmSchema)) body: z.infer<typeof confirmSchema>,
+  ): Promise<DeletionOutcome> {
+    return this.people.removeIdentity(admin.sub, userId, body.confirm);
+  }
+
+  @Get('accounts/:firebaseUid')
+  account(
+    @Param('firebaseUid', parseWith(firebaseUidSchema)) firebaseUid: string,
+  ): Promise<AccountDetail> {
+    return this.people.accountDetail(firebaseUid);
+  }
+
+  @Post('accounts/:firebaseUid/ban')
+  async banAccount(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('firebaseUid', parseWith(firebaseUidSchema)) firebaseUid: string,
+    @Body(parseWith(banSchema)) body: z.infer<typeof banSchema>,
+  ): Promise<{ readonly banned: true }> {
+    await this.people.ban(admin.sub, { firebaseUid }, body.reason);
+    return { banned: true };
+  }
+
+  @Delete('accounts/:firebaseUid')
+  removeAccount(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('firebaseUid', parseWith(firebaseUidSchema)) firebaseUid: string,
+    @Body(parseWith(confirmSchema)) body: z.infer<typeof confirmSchema>,
+  ): Promise<DeletionOutcome> {
+    return this.people.removeAccount(admin.sub, firebaseUid, body.confirm);
+  }
+
+  /** Levantar un baneo. Por su id: una persona puede tener varios en su historia. */
+  @Post('bans/:banId/lift')
+  async liftBan(
+    @CurrentAdmin() admin: AdminClaims,
+    @Param('banId', new ParseUUIDPipe()) banId: string,
+  ): Promise<{ readonly lifted: true }> {
+    await this.people.lift(admin.sub, banId);
+    return { lifted: true };
+  }
+
+  // -------------------------------------------------------------------------
   // El equipo
   // -------------------------------------------------------------------------
 
@@ -297,13 +439,17 @@ export class AdminPanelController {
     return { revoked: true };
   }
 
-  /** El registro. Con `tenantId`, solo lo de ese gimnasio. */
+  /**
+   * El registro. Con `tenantId`, solo lo de ese gimnasio; con `subject`, solo lo
+   * de esa persona (su `users.id`, o el uid de su cuenta sin ficha).
+   */
   @Get('actions')
   actions(
     @Query('limit') limit?: string,
     @Query('tenantId') tenantId?: string,
+    @Query('subject') subject?: string,
   ): Promise<readonly PlatformActionView[]> {
     const parsed = Number(limit ?? '50');
-    return this.admins.actions(Number.isFinite(parsed) ? parsed : 50, tenantId);
+    return this.admins.actions(Number.isFinite(parsed) ? parsed : 50, tenantId, subject);
   }
 }

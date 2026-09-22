@@ -271,6 +271,21 @@ excluirlo, y la que se olvidara dejaría entrar.
 | sacarlo / devolverlo | `suspend` / `restore` |
 | borrador de un código de promoción | `PromoDraft` / `checkPromoDraft` |
 | usos que le quedan al código | `promoUsesLeft` |
+| persona con ficha (está en algún padrón) | `kind = 'identity'` / `users` |
+| persona sin ficha (entró con Google, no entrena en ningún sitio) | `kind = 'account'` / `account_claims` |
+| corregir sus datos desde el panel | `checkPersonDetails` / `updateIdentity` |
+| baneo: pierde la app, conserva sus datos | `AccountBan` / `account_bans` / `checkPersonBan` |
+| levantar un baneo (no se borra) | `lift` / `liftedAt` |
+| lo que se escribe para confirmar una baja | `personConfirmationKey` |
+| baja pedida y su plazo de 30 días | `pendingDeletions` / `deletionDaysLeft` |
+| cobro que se queda sin decir de quién | `charges.anonymized_at` |
+
+Ojo con **banear** y **eliminar**: no son dos grados de lo mismo. Banear le
+quita la app a la persona y no toca nada suyo —su ficha sigue en el padrón y su
+gimnasio la puede seguir marcando a mano—; se deshace. Eliminar cumple lo que
+promete `/eliminar-cuenta`: se va todo lo que la identifica, y los pagos se
+quedan en la caja del gimnasio sin su nombre. No se deshace. Y un baneo
+sobrevive a la baja, o eliminarse la cuenta sería la forma de quitárselo.
 
 `suspended` aquí **no** es el corte por impago. Aquello es `SaasStatus =
 'read_only'` y deja la puerta abierta a propósito, porque es una palanca de

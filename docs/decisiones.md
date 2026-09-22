@@ -1623,3 +1623,114 @@ siendo sus propias pantallas.
 
 Consecuencia pequeña: «Otros cobros» ya no cierra al guardar, porque cerrar se
 llevaría también las otras dos pestañas. Se queda y dice «Guardado».
+
+---
+
+## 25. Las personas desde el panel: corregir, banear y cumplir las bajas
+
+Lo pidió Mathyu: ver la lista de usuarios, corregir sus datos, banearlos y
+eliminar sus cuentas. Las tres cosas chocaron con algo que ya existía, y cada
+choque dio una decisión.
+
+### Una persona tiene dos formas, y las dos se atienden
+
+**Con ficha** es una fila en `users`: está en el padrón de algún gimnasio, tenga
+o no la app. **Sin ficha** es una cuenta de Google que entró a la app y no está
+en ningún padrón (`account_claims`) — el curioso del directorio. La segunda no se
+podía dejar fuera: es justo la que reserva clases que nunca viene a tomar y le
+escribe a los gimnasios, que son los dos abusos que motivan un baneo. Por eso
+hay dos pestañas y no una tabla: mezclarlas invitaría a buscar un documento que
+la mitad de las filas no tiene.
+
+### Corregir reusa el camino de la propia persona
+
+Nombre y celular pasan por `IdentityService.updateDetails` —el mismo que usa la
+app cuando la persona se corrige sola (§15)— y por `checkAccountDetails`. Así el
+celular sigue comparándose normalizado y el nombre se corrige también en cada
+mostrador donde trabaja. El panel agrega lo que la persona NO puede tocar: el
+documento (el caso real es el DNI mal tecleado en un mostrador) y el correo (el
+caso real es el dueño que no puede entrar porque su correo se escribió mal en el
+alta). Lo corrige quien vio el carné, y queda en el registro quién fue.
+
+El registro guarda **qué campos** cambiaron, no sus valores. Con un gimnasio se
+guardaba el antes y el después; con una persona eso sería conservar para siempre
+los datos que la política promete borrar con su cuenta.
+
+### El baneo muerde en dos puertas, y solo en esas dos
+
+Toda la api se entra por uno de dos sitios: `AuthGuard` (una sesión de Sinchi) o
+`FirebaseVerifier.verify` (un token de Google — el login, la reserva desde el
+directorio, el chat, el alta de un local). El baneo se comprueba en esos dos y en
+ningún otro. La alternativa eran las dieciocho llamadas a `verify` repartidas por
+los controladores, que son dieciocho sitios donde olvidarlo — y el olvido no
+falla: deja entrar.
+
+El guard corre en cada petición de la app, incluida cada marca en la puerta, así
+que no podía costar un viaje a Neon. `AccountBans` carga la lista de baneos vivos
+—son pocos, es una medida contra abusos— y la reusa medio minuto. El precio: un
+baneo tarda hasta 30 segundos en llegar a las otras instancias de Cloud Run (la
+que lo puso se entera al instante). Se paga.
+
+Una sesión abierta de un baneado responde **401**, no 403. La app suelta la
+sesión ante un 401 y no hace nada ante un 403: con un 403 la persona se quedaría
+dentro viendo un error en cada pantalla. Con 401 vuelve al login, intenta entrar,
+y ahí `verify` le responde 403 con el motivo. No hizo falta tocar la app.
+
+Banear **no toca nada de la persona**: su ficha sigue en el padrón, sus pagos en
+la caja, y su gimnasio la puede seguir marcando a mano. Pierde la app. Si trabaja
+en un gimnasio, el panel lo avisa antes con los nombres: para sacar a un local lo
+correcto es suspender el gimnasio, no a su dueño.
+
+### Eliminar tenía que cumplir una promesa que el esquema no dejaba cumplir
+
+`sinchi.fit/eliminar-cuenta` promete, desde el 4 de septiembre, borrar todo lo
+que identifica a la persona y **conservar los pagos sin decir de quién**, porque
+el gimnasio tiene que cuadrar su caja y responder ante la SUNAT. La 0016 dejó la
+solicitud de baja esperando a «quien puede comprobar que corresponde», y nadie la
+ejecutaba. Al escribir el borrado aparecieron tres cosas que lo impedían, y las
+tres las arregla la migración 0027:
+
+- **`charges.membership_id` era CASCADE.** Borrar la ficha se llevaba la caja
+  entera del gimnasio. El borrado suelta los cobros ANTES de borrar la ficha.
+- **`charges_membership_unless_walk_in` exigía ficha** en toda mensualidad y
+  matrícula. Se relajó solo para el cobro anonimizado con fecha
+  (`anonymized_at`): en cualquier otro caso, una mensualidad sin ficha sigue
+  siendo un error y el CHECK lo sigue parando.
+- **La solicitud de baja colgaba de la persona con CASCADE**: ejecutarla borraba
+  la prueba de haberla ejecutado, que era justo para lo que la 0016 guardó
+  `resolved_at`. Ahora pasa a `set null` y la fila se queda con sus dos fechas.
+
+Y una cuarta que solo apareció corriendo la prueba: una invitación ya usada
+guarda el nombre, el documento y el correo de quien la usó, y un CHECK exige que
+diga quién fue. No podía soltarse; tenía que irse, y es lo que la política pide.
+
+El borrado entra gimnasio por gimnasio con `adoptTenant`, en UNA transacción: el
+aislamiento por tenant no se toca (§21), y una transacción por gimnasio dejaría
+una baja a medias si fallara la tercera. Reservas, inscripciones y
+conversaciones se borran aunque su ficha pase a null sola, porque copian el
+nombre y el celular al crearse.
+
+Quien trabaja en un gimnasio no se elimina desde aquí: su fila de `staff` es la
+que abre ese local. Primero sale del equipo, o se elimina el gimnasio.
+
+### Firebase, al final y sin deshacer nada
+
+La política promete borrar también «la cuenta con la que entras», y esa vive en
+Firebase. Borrarla necesita credenciales que escriben, y este servicio nació solo
+para verificar. Así que se intenta DESPUÉS de la transacción, y si falla no
+deshace nada: la pantalla lo dice con el uid, porque falta un paso a mano en la
+consola de Firebase y ese es el único momento en que alguien lo va a ver.
+
+### El baneo sobrevive a la baja
+
+Borrar el usuario de Firebase hace que la misma cuenta de Google vuelva con un
+uid NUEVO. Con solo el uid, eliminarse la cuenta sería la forma de quitarse un
+baneo. Por eso `account_bans` guarda también el correo verificado de la cuenta de
+Google —sacado de `account_claims`, que lo copió del token, y no de
+`users.email`, que lo teclea el mostrador y podría ser de otra persona— y se
+queda después de la baja.
+
+Es la única cosa que sobrevive a una baja y dice algo de la persona: su correo y
+un motivo, en una fila de baneo. **La política publicada no lo menciona.** Es una
+excepción razonable —prevenir el abuso es un interés legítimo— pero es una
+excepción, y la página de `/eliminar-cuenta` debería decirlo.

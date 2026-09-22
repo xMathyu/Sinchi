@@ -366,7 +366,11 @@ export class PlatformAdminService {
   }
 
   /** Lo último que se hizo en el panel, de lo más nuevo a lo más viejo. */
-  async actions(limit = 50, tenantId?: string): Promise<readonly PlatformActionView[]> {
+  async actions(
+    limit = 50,
+    tenantId?: string,
+    subject?: string,
+  ): Promise<readonly PlatformActionView[]> {
     const rows = await withoutTenantIsolation(this.db, (tx) =>
       tx
         .select({
@@ -385,7 +389,10 @@ export class PlatformAdminService {
           eq(schema.platformAdmins.id, schema.platformActions.adminId),
         )
         .where(
-          tenantId === undefined ? undefined : eq(schema.platformActions.tenantId, tenantId),
+          and(
+            tenantId === undefined ? undefined : eq(schema.platformActions.tenantId, tenantId),
+            subject === undefined ? undefined : eq(schema.platformActions.subject, subject),
+          ),
         )
         .orderBy(desc(schema.platformActions.createdAt))
         .limit(Math.min(Math.max(limit, 1), 200)),

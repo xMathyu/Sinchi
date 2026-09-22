@@ -246,10 +246,25 @@ recibe 403 en todo `/admin`, y una del panel recibe 403 en todo lo demás
 | `POST` | `/admin/promos/:id/status` | Lo apaga o lo enciende. No se borran: los canjes apuntan a ellos. |
 | `GET` `POST` | `/admin/admins` | Quién administra Sinchi, y dar acceso por correo. |
 | `DELETE` | `/admin/admins/:id` | Retira el acceso. Ni a ti mismo ni al último. |
-| `GET` | `/admin/actions` | El registro: qué se hizo, quién y por qué. Con `?tenantId=` filtra por gimnasio. |
+| `GET` | `/admin/people` | Personas, 50 por página. `kind=identity` (con ficha, por defecto) o `account` (sin ficha); `q` busca en nombre, correo, celular y documento. |
+| `GET` | `/admin/people/deletion-requests` | Las bajas pedidas sin ejecutar, con los días que les quedan de los 30 prometidos. |
+| `GET` | `/admin/people/:userId` | Una ficha: sus gimnasios y si viene, dónde trabaja, lo que dejó en el directorio, baneos y bajas. |
+| `POST` | `/admin/people/:userId` | Corrige nombre, celular, documento y correo. Nombre y celular por el mismo camino que la app (§15). |
+| `POST` | `/admin/people/:userId/ban` | La banea, con motivo. Pierde la app; conserva sus datos. |
+| `DELETE` | `/admin/people/:userId` | La elimina como promete `/eliminar-cuenta`. Exige `confirm` con su documento; no a quien trabaja en un gimnasio. |
+| `GET` `POST` `DELETE` | `/admin/accounts/:firebaseUid` (`/ban`) | Lo mismo para una cuenta sin ficha. `confirm` es su correo. 409 si ya tiene ficha. |
+| `POST` | `/admin/bans/:banId/lift` | Levanta un baneo. No lo borra: queda en su historia. |
+| `GET` | `/admin/actions` | El registro: qué se hizo, quién y por qué. Con `?tenantId=` filtra por gimnasio; con `?subject=`, por persona. |
 
 El acceso se relee en CADA petición (`PlatformAdminGuard`): retirárselo a alguien
 corta el token que ya tenía abierto, no espera a que caduque.
+
+Un baneo se comprueba en las dos únicas puertas de la api —`AuthGuard` y
+`FirebaseVerifier.verify`— contra una lista en memoria que se refresca cada 30
+segundos. Una sesión abierta de alguien baneado responde **401** con
+`code: 'account_banned'` (la app suelta la sesión y vuelve al login); el login y
+las rutas con token de Google responden **403** con el mismo código y el motivo
+(decisiones §25).
 
 ### Salud
 
@@ -364,7 +379,7 @@ gimnasio— están en `packages/shared/src/routines/upload.ts`.
 
 ### El logo sí pasa por la api, y vive en la base
 
-Al revés que el video, y a propósito (decisiones §22): el teléfono lo manda ya
+Al revés que el video, y a propósito (decisiones §25): el teléfono lo manda ya
 achicado a 512 píxeles por lado —decenas de KB— y la api lo guarda en
 `gym_logos`. No depende de `VIDEO_BUCKET`, que en producción no está puesto.
 

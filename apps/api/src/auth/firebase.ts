@@ -19,6 +19,10 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { loadEnv } from '../config/env';
+import { AccountBans } from './account-bans';
+
+/** Qué pasó al intentar borrar la cuenta de Firebase de alguien. */
+export type FirebaseDeletion = 'deleted' | 'not_found' | 'unavailable';
 
 export interface VerifiedIdentity {
   /** UID de Firebase. Es la llave estable de la cuenta. */
@@ -35,6 +39,8 @@ export interface VerifiedIdentity {
 export class FirebaseVerifier {
   private readonly logger = new Logger(FirebaseVerifier.name);
   private app: App | null = null;
+
+  constructor(private readonly bans: AccountBans) {}
 
   /**
    * La app de Firebase se crea perezosamente.
@@ -84,6 +90,35 @@ export class FirebaseVerifier {
    * en días de gracia, la diferencia no importa.
    */
   async verify(idToken: string): Promise<VerifiedIdentity> {
+    const identity = await this.decode(idToken);
+
+    /**
+     * El baneo muerde AQUÍ, y es el único sitio donde puede hacerlo bien.
+     *
+     * Todo lo que entra con un token de Google pasa por esta línea: el login, la
+     * reserva desde el directorio, el chat con un gimnasio, el alta de un local.
+     * Son dieciocho llamadas repartidas por los controladores; comprobar el baneo
+     * en cada una serían dieciocho sitios donde olvidarlo, y el olvido no falla:
+     * deja entrar. Ver `AccountBans`.
+     *
+     * Se mira el correo además del uid porque borrar al usuario de Firebase hace
+     * que la misma cuenta de Google vuelva con un uid nuevo.
+     */
+    await this.bans.assertNotBanned({
+      firebaseUid: identity.uid,
+      email: identity.emailVerified ? identity.email : null,
+    });
+
+    return identity;
+  }
+
+  /**
+   * Solo la parte de Google: firma, caducidad y a quién pertenece el token.
+   *
+   * Aparte de `verify` para que las pruebas puedan falsear ESTO —lo único que de
+   * verdad necesita a Google— y seguir probando el baneo de verdad.
+   */
+  async decode(idToken: string): Promise<VerifiedIdentity> {
     // `getApp()` va FUERA del try a proposito. Dentro, su excepcion de
     // configuracion —"falta FIREBASE_PROJECT_ID"— la capturaba el catch de
     // abajo y salia como "sesion invalida o expirada": el mensaje acusaba al
@@ -115,5 +150,32 @@ export class FirebaseVerifier {
       displayName: typeof decoded.name === 'string' ? decoded.name : null,
       provider,
     };
+  }
+
+  /**
+   * Borra el usuario de Firebase. Lo intenta, y dice qué pasó.
+   *
+   * La política publicada promete borrar «la cuenta con la que entras», y esa
+   * vive en Firebase, no en nuestra base. Pero borrarla necesita credenciales que
+   * ESCRIBEN en Firebase, y este servicio nació solo para verificar: en un
+   * despliegue sin ellas, esto no puede hacerse desde aquí.
+   *
+   * Por eso NO lanza. Lo nuestro —la ficha, el historial, la cuenta sin ficha—
+   * ya se borró en la base, y que falle Firebase no puede dejarlo a medias ni
+   * devolver un error a quien acaba de cumplir una baja. Lo que hace es decir
+   * qué pasó, y el panel lo enseña: si quedó `unavailable`, falta borrarlo a
+   * mano en la consola de Firebase.
+   */
+  async deleteAccount(uid: string): Promise<{ readonly outcome: FirebaseDeletion; readonly detail?: string }> {
+    try {
+      await getAuth(this.getApp()).deleteUser(uid);
+      return { outcome: 'deleted' };
+    } catch (error) {
+      const code = (error as { code?: unknown }).code;
+      if (code === 'auth/user-not-found') return { outcome: 'not_found' };
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`No se pudo borrar el usuario de Firebase ${uid}: ${detail}`);
+      return { outcome: 'unavailable', detail };
+    }
   }
 }

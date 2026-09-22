@@ -533,6 +533,46 @@ export const platformActions = pgTable(
 );
 
 /**
+ * Quién no puede usar Sinchi, y por qué.
+ *
+ * Tabla propia y no una columna en `users`: hay que poder banear a quien no
+ * tiene ficha —la cuenta de Google que entró sin estar en ningún padrón—, que es
+ * justo la que reserva clases falsas y escribe a los gimnasios desde el
+ * directorio. Basta una de las tres llaves; el correo está porque borrar el
+ * usuario de Firebase hace que la misma cuenta de Google vuelva con uid nuevo
+ * (migración 0027).
+ *
+ * Global y sin RLS, como `users`: una persona no pertenece a ningún gimnasio.
+ */
+export const accountBans = pgTable(
+  'account_bans',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    firebaseUid: text('firebase_uid'),
+    /** Normalizado en minúsculas. Lo exige un CHECK. */
+    email: text('email'),
+    reason: text('reason').notNull(),
+    bannedBy: uuid('banned_by')
+      .notNull()
+      .references(() => platformAdmins.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Se levanta, no se borra: es historia que alguien va a preguntar. */
+    liftedAt: timestamp('lifted_at', { withTimezone: true }),
+    liftedBy: uuid('lifted_by').references(() => platformAdmins.id, { onDelete: 'restrict' }),
+  },
+  (t) => [
+    uniqueIndex('account_bans_one_live_per_user')
+      .on(t.userId)
+      .where(sql`lifted_at is null and user_id is not null`),
+    uniqueIndex('account_bans_one_live_per_account')
+      .on(t.firebaseUid)
+      .where(sql`lifted_at is null and firebase_uid is not null`),
+    index('account_bans_live_idx').on(t.createdAt).where(sql`lifted_at is null`),
+  ],
+);
+
+/**
  * Codigos de promocion: meses de Sinchi de regalo.
  *
  * Un codigo mueve `free_until` hacia adelante; no descuenta el precio. Asi el
@@ -910,6 +950,15 @@ export const charges = pgTable(
     recordedBy: uuid('recorded_by').references(() => staff.id, { onDelete: 'set null' }),
     /** Idempotencia de la cola offline del dispositivo de mostrador. */
     clientId: uuid('client_id'),
+    /**
+     * Cuándo se le quitó la ficha porque la persona eliminó su cuenta.
+     *
+     * El asiento se queda —el gimnasio tiene que cuadrar su caja y responder ante
+     * la SUNAT— y lo que se va es de quién era (migración 0027). Es lo único que
+     * deja existir una mensualidad sin ficha: en cualquier otro caso sigue siendo
+     * un error, y el CHECK lo sigue parando.
+     */
+    anonymizedAt: timestamp('anonymized_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -1477,9 +1526,12 @@ export const accountDeletionRequests = pgTable(
   'account_deletion_requests',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * `null` cuando la baja ya se ejecutó. Era CASCADE y borrar a la persona se
+     * llevaba la prueba de haberla borrado (migración 0027): ahora la fila se
+     * queda con sus dos fechas y sin a quién apuntar.
+     */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     status: accountDeletionStatusEnum('status').notNull().default('pending'),
     requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
     /** Cuando se ejecuto o se cancelo. Sin esto no se puede probar el plazo. */

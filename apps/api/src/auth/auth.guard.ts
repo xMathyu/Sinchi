@@ -24,6 +24,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { AppRole } from '@sinchi/shared';
+import { AccountBans } from './account-bans';
 import {
   isAdminClaims,
   toSession,
@@ -89,6 +90,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly reflector: Reflector,
+    private readonly bans: AccountBans,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -138,6 +140,19 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesión de staff sin gimnasio asignado.');
     }
     request.session = session;
+
+    /**
+     * Un token de siete días no puede sobrevivir a un baneo.
+     *
+     * La sesión del alumno dura una semana a propósito (abre la app en la puerta,
+     * a veces sin datos), así que esperar a que caduque sería una semana más de
+     * app para alguien a quien acabamos de sacar. Se mira contra la lista en
+     * memoria de `AccountBans`: no cuesta un viaje a la base por petición.
+     *
+     * Responde 401 y no 403: es lo que hace que la app suelte la sesión y lleve
+     * a la persona al login, donde sí lee el motivo (ver `assertSessionNotBanned`).
+     */
+    await this.bans.assertSessionNotBanned(session.sub);
 
     const allowed = this.reflector.getAllAndOverride<readonly AppRole[]>(ROLES_KEY, handlers);
     if (allowed !== undefined && !allowed.includes(session.role)) {

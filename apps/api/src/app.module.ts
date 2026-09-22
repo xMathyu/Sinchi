@@ -60,6 +60,7 @@ import { PlatformAdminGuard } from './modules/admin/admin.guard';
 import { PlatformAdminService } from './modules/admin/platform-admin.service';
 import { PlatformGymsService } from './modules/admin/platform-gyms.service';
 import { PlatformPromosService } from './modules/admin/platform-promos.service';
+import { PlatformPeopleService } from './modules/admin/platform-people.service';
 
 @Module({
   imports: [DbModule, CommonModule, AuthModule, ScheduleModule.forRoot()],
@@ -115,6 +116,7 @@ import { PlatformPromosService } from './modules/admin/platform-promos.service';
     PlatformAdminService,
     PlatformGymsService,
     PlatformPromosService,
+    PlatformPeopleService,
     PlatformAdminGuard,
   ],
 })
