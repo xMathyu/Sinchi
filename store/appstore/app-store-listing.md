@@ -11,7 +11,13 @@ Idioma principal: Spanish (Mexico)
 - Content Rights: sí, tiene los derechos del contenido de terceros
 - Age Rating: 9+ (172 países), 12+ en Vietnam/Brasil, ALL en Corea
 
-## Versión 1.0
+## Versión 1.0.0
+Enviada a revisión el 2026-09-22 con el **build 10**. La cadena de versión en App
+Store Connect decía `1.0` y el binario `1.0.0`: Apple no deja elegir un build
+cuya versión corta no coincide con la de la ficha, así que no se podía asociar
+ninguno. Manda `app.json`, que es lo que compila EAS — la ficha se corrigió a
+`1.0.0`, no al revés.
+
 - Promotional Text:
   El padrón, la asistencia y el cobro de tu gimnasio en una sola app. Tus alumnos entran con su QR; tú ves quién está al día y quién debe.
 - Keywords:
@@ -19,6 +25,10 @@ Idioma principal: Spanish (Mexico)
 - Support URL / Marketing URL: https://www.sinchi.fit
 - Copyright: 2026 Mathyu's Solutions
 - Release: manual (tú decides cuándo sale, una vez aprobada)
+- Datos del revisor: la contraseña de `revisor@sinchi.fit` vivía solo en la ficha
+  de TestFlight (`betaAppReviewDetail`) y en la de la tienda estaba vacía. Son
+  dos campos distintos y ninguno hereda del otro; el de la tienda es el que ve
+  App Review.
 
 ### Description
 Sinchi (quechua: fuerte, valiente) es la app con la que un gimnasio o una escuela de artes marciales lleva su padrón, marca la asistencia y registra los pagos. Para el alumno es su billetera de membresías: una sola identidad con sus suscripciones en todos los gimnasios donde entrena.
