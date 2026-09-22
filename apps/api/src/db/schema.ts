@@ -19,6 +19,7 @@ import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
+  customType,
   date,
   doublePrecision,
   foreignKey,
@@ -353,6 +354,13 @@ export const tenants = pgTable(
      */
     latitude: doublePrecision('latitude'),
     longitude: doublePrecision('longitude'),
+    /**
+     * El logo, si el dueno subio uno. `null` = se ven las iniciales.
+     *
+     * Aqui va el puntero y la imagen en `gym_logos`: esta fila se lee entera en
+     * muchos sitios, y cada lectura arrastraria los bytes. Ver la migracion 0025.
+     */
+    logoId: uuid('logo_id').references((): AnyPgColumn => gymLogos.id, { onDelete: 'set null' }),
     status: tenantStatusEnum('status').notNull().default('active'),
     /**
      * Desde cuando esta fuera de Sinchi, y por que.
@@ -374,7 +382,41 @@ export const tenants = pgTable(
     uniqueIndex('tenants_slug_key').on(t.slug),
     // Un dia fijo de cobro exige el dia, y solo entre 1 y 28.
     index('tenants_billing_mode_idx').on(t.billingMode),
+    uniqueIndex('tenants_logo_id_key').on(t.logoId).where(sql`logo_id is not null`),
   ],
+);
+
+/** `bytea` de Postgres. `pg` ya lo entrega como `Buffer`. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'bytea',
+});
+
+/**
+ * La imagen del logo. Una por gimnasio, y opcional: sin fila, iniciales.
+ *
+ * En la base y no en el bucket de los videos: el bucket es opcional y en
+ * produccion no existe, un logo es publico y un video no, y a 512 pixeles por
+ * lado pesa decenas de KB. El porque entero esta en la migracion 0025.
+ *
+ * Cambiar el logo es borrar esta fila y crear otra con OTRO id, nunca
+ * actualizarla: el id va en la direccion (`gymLogoPath`), y es lo que deja que
+ * el telefono la guarde en cache para siempre.
+ */
+export const gymLogos = pgTable(
+  'gym_logos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references((): AnyPgColumn => tenants.id, { onDelete: 'cascade' }),
+    contentType: text('content_type').notNull(),
+    bytes: bytea('bytes').notNull(),
+    /** Leidas de la cabecera por la api, no declaradas por el cliente. */
+    width: smallint('width').notNull(),
+    height: smallint('height').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('gym_logos_tenant_key').on(t.tenantId)],
 );
 
 /**
@@ -1260,6 +1302,7 @@ export const TENANT_SCOPED_TABLES = [
   'routines',
   'routine_items',
   'routine_videos',
+  'gym_logos',
 ] as const;
 
 /**

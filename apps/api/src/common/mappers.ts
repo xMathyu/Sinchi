@@ -99,6 +99,7 @@ export function toTenant(row: TenantRow): Tenant {
     quotaOverflowPolicy: row.quotaOverflowPolicy,
     dropInPriceCents: row.dropInPriceCents === null ? null : toCents(row.dropInPriceCents),
     status: row.status,
+    logoId: row.logoId,
   };
 }
 

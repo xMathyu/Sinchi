@@ -120,6 +120,14 @@ export interface Tenant {
   readonly quotaOverflowPolicy: QuotaOverflowPolicy;
   readonly dropInPriceCents: Cents | null;
   readonly status: 'active' | 'suspended';
+  /**
+   * El logo, si el dueño subió uno. `null` = se muestran las iniciales.
+   *
+   * Es el id y no la dirección: cada cliente la arma con `gymLogoPath` contra la
+   * api con la que ya habla. Opcional en el tipo porque una api anterior a la
+   * migración 0025 no lo manda, y eso también significa «sin logo».
+   */
+  readonly logoId?: string | null;
 }
 
 export type StaffRole = 'owner' | 'front_desk';

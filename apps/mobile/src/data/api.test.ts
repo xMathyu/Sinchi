@@ -21,7 +21,9 @@ import {
   ApiError,
   bookTrial,
   fetchGym,
+  fetchGymLogo,
   fetchGyms,
+  gymLogoUrl,
   fetchMe,
   fetchModes,
   fetchMyTrials,
@@ -386,7 +388,25 @@ suite('directorio y clase gratis', () => {
       expect(gymRow.name).toBeTruthy();
       expect(typeof gymRow.trialClassEnabled).toBe('boolean');
       expect(typeof gymRow.weeklyClasses).toBe('number');
+      // Presente siempre, aunque sea `null`: ausente es una api vieja, y la app
+      // lo trata igual, pero esta api ya no tiene por qué omitirlo.
+      expect(gymRow).toHaveProperty('logoId');
     }
+  });
+
+  /**
+   * La dirección del logo la arma el cliente con `gymLogoUrl`, y la sirve una
+   * ruta que no conoce la app. Si una de las dos cambia, el directorio se llena
+   * de iniciales sin que nada falle: por eso se pide de verdad.
+   */
+  it('el logo de un gimnasio se sirve sin sesión donde la app lo busca', async () => {
+    active = 'none';
+    const conLogo = (await fetchGyms()).find((gymRow) => gymRow.logoId != null);
+    if (conLogo === undefined) return; // ningún gimnasio de la base subió logo
+
+    const response = await fetch(gymLogoUrl(conLogo.logoId!));
+    expect(response.status).toBe(200);
+    expect(['image/png', 'image/jpeg']).toContain(response.headers.get('content-type'));
   });
 
   it('la página del gimnasio trae precios, horarios y clases con fecha', async () => {
@@ -469,6 +489,13 @@ suite('rutinas', () => {
    * llamarse de otro modo, el gancho de la ficha pública dejaría de contar nada
    * y nadie se enteraría.
    */
+  it('el mostrador lee el logo del local, aunque no lo pueda cambiar', async () => {
+    active = 'staff';
+    const logo = await fetchGymLogo();
+    expect(logo).toHaveProperty('logoId');
+    expect(logo.logoId === null || typeof logo.logoId === 'string').toBe(true);
+  });
+
   it('el mostrador lee la biblioteca del local', async () => {
     active = 'staff';
     const biblioteca = await fetchRoutines();

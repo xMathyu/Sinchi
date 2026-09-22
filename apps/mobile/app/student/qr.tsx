@@ -33,6 +33,7 @@ import { restoreFirebaseAccount } from '../../src/data/auth';
 import { acceptLinkRequest, rejectLinkRequest } from '../../src/data/link-requests';
 import { setActiveTenant } from '../../src/data/store';
 import { initials, splitGymName } from '../../src/lib/format';
+import { GymLogo } from '../../src/design/gym-logo';
 
 export default function QrScreen() {
   const theme = useTheme();
@@ -109,20 +110,28 @@ export default function QrScreen() {
             borderRadius: theme.radii.pill,
           }}
         >
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 7,
-              backgroundColor: 'rgba(10,10,11,0.75)',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text variant="eyebrow" weight="extrabold" color="#FFFFFF" style={{ letterSpacing: 0 }}>
-              {initials(selected.tenant.name)}
-            </Text>
-          </View>
+          {/* Con logo, el logo. Sin él quedan las iniciales como estaban, en la
+              tinta de esta pantalla: la baldosa gris de `GymLogo` está pensada
+              para el fondo del tema, y esta pastilla va sobre el degradado del
+              semáforo, que cambia de color con el estado. */}
+          {selected.tenant.logoId == null ? (
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 7,
+                backgroundColor: 'rgba(10,10,11,0.75)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text variant="eyebrow" weight="extrabold" color="#FFFFFF" style={{ letterSpacing: 0 }}>
+                {initials(selected.tenant.name)}
+              </Text>
+            </View>
+          ) : (
+            <GymLogo name={selected.tenant.name} logoId={selected.tenant.logoId} size={22} />
+          )}
           <Text variant="caption" weight="semibold" color={ink}>
             {brand}
           </Text>

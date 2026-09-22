@@ -362,6 +362,34 @@ que cien alumnos miren tres veces un video de 100 MB son 30 GB de salida a
 $0,12/GB. Las dos palancas —el tope por video y cuántos videos publica un
 gimnasio— están en `packages/shared/src/routines/upload.ts`.
 
+### El logo sí pasa por la api, y vive en la base
+
+Al revés que el video, y a propósito (decisiones §22): el teléfono lo manda ya
+achicado a 512 píxeles por lado —decenas de KB— y la api lo guarda en
+`gym_logos`. No depende de `VIDEO_BUCKET`, que en producción no está puesto.
+
+```jsonc
+// GET    /staff/logo            todo el staff     → { "logoId": "…" | null }
+// POST   /staff/logo            solo el dueño     multipart, la imagen en el campo `logo`
+// DELETE /staff/logo            solo el dueño     → { "logoId": null }
+// GET    /gyms/logos/:logoId    sin sesión        la imagen, con un año de caché
+```
+
+El gimnasio sale del token: ninguna de las tres rutas de staff lleva id, así que
+un dueño no puede tocar el logo de otro local.
+
+**La api no se cree el tipo ni el tamaño que declara el cliente.** Los lee de la
+cabecera de la imagen (`readImageHeader`, sin decodificarla) y los juzga con
+`checkGymLogo`: solo PNG o JPEG, hasta 1 MB y **hasta 512 píxeles por lado**. El
+tope de píxeles es el que importa: un PNG liso de 20.000 × 20.000 pesa casi nada y
+al abrirlo ocupa gigas en el teléfono de quien mira el directorio.
+
+`logoId` viaja en la tarjeta y en la ficha del directorio (`GymCard`) y en el
+`tenant` de cada vista de membresía, que es de donde lo leen la billetera y la
+puerta. La dirección la arma el cliente: `gymLogoPath(logoId)` contra su base de
+la api. Cambiar el logo crea otro id —la dirección vieja responde 404—, y por eso
+la imagen se puede servir `immutable`.
+
 ### Un rechazo de check-in devuelve 200
 
 Lo mismo vale para la reserva de una clase gratis: `booked: false` con el motivo

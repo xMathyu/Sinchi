@@ -25,7 +25,7 @@
  * dinero — y por eso el texto no lo trata como una decision grave.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
@@ -55,7 +55,9 @@ import { Button, Card, Eyebrow, Field, Row, Stack, Text } from '../src/design/pr
 import { Screen } from '../src/design/screen';
 import { PhoneField } from '../src/design/phone-field';
 import { useTheme } from '../src/design/theme';
-import { registerGym } from '../src/data/actions';
+import { registerGym, saveGymLogo } from '../src/data/actions';
+import { pickGymLogo, type PickedGymLogo } from '../src/data/gym-logo-file';
+import { GymLogoField } from '../src/design/gym-logo';
 import {
   completeEmailSignIn,
   completeGoogleSignIn,
@@ -254,6 +256,32 @@ export default function GymSignUpScreen() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * El logo, si eligió uno. Opcional: no todo dojo tiene.
+   *
+   * Espera en el TELÉFONO hasta que el gimnasio exista: subirlo exige una sesión
+   * de dueño, y esa sesión es justo lo que produce «Crear mi gimnasio». Se sube
+   * detrás del alta, en el mismo toque.
+   */
+  const [logo, setLogo] = useState<PickedGymLogo | null>(null);
+  const [preparingLogo, setPreparingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  /** Qué está haciendo el botón, para decirlo: son dos esperas distintas. */
+  const [savingLogo, setSavingLogo] = useState(false);
+
+  const pickLogo = async (): Promise<void> => {
+    setLogoError(null);
+    setPreparingLogo(true);
+    try {
+      const picked = await pickGymLogo();
+      if (picked !== null) setLogo(picked);
+    } catch (causa: unknown) {
+      setLogoError(causa instanceof Error ? causa.message : 'No se pudo usar esa imagen.');
+    } finally {
+      setPreparingLogo(false);
+    }
+  };
 
   /** Sin cuenta de ningun tipo: hay que crearla antes de nada. */
   const needsAccount = session.status === 'signed_out';
@@ -606,6 +634,33 @@ export default function GymSignUpScreen() {
        * `dismissAll` a secas revienta ahí.
        */
       void signUp;
+
+      /**
+       * El logo, con la sesión de dueño que el alta acaba de dejar puesta.
+       *
+       * Si falla, el gimnasio YA existe y no se deshace por una imagen: se dice
+       * dónde ponerla después y se sigue. Quedarse en este formulario con el
+       * error invitaría a tocar «Crear» otra vez, y eso ya no crea nada — el
+       * documento del dueño ya tiene su local.
+       */
+      if (logo !== null) {
+        setSavingLogo(true);
+        try {
+          await saveGymLogo(logo);
+        } catch {
+          await new Promise<void>((resolve) =>
+            Alert.alert(
+              'Tu gimnasio quedó creado',
+              'Pero el logo no se pudo subir. Ponlo cuando quieras desde el padrón, en «Tu logo».',
+              [{ text: 'Entendido', onPress: () => resolve() }],
+              { cancelable: false },
+            ),
+          );
+        } finally {
+          setSavingLogo(false);
+        }
+      }
+
       if (router.canDismiss()) router.dismissAll();
       router.replace('/staff/roster');
       router.push('/plans');
@@ -1006,6 +1061,31 @@ export default function GymSignUpScreen() {
             hint="Si ya lo tienes, va en las boletas de tus alumnos. Si no, déjalo vacío y lo pones después."
             error={denial('taxId')}
           />
+          {/* Opcional, como el RUC, y el rótulo lo dice: el que no tiene logo
+              no tiene por qué inventarse uno para empezar. Sin logo se ven sus
+              iniciales, que es lo que la baldosa ya enseña mientras tanto. */}
+          <Stack gap={6}>
+            <Text variant="captionSmall" color={theme.colors.textSecondary}>
+              Logo (opcional)
+            </Text>
+            <GymLogoField
+              name={name}
+              localUri={logo?.uri ?? null}
+              busy={preparingLogo}
+              onPick={() => void pickLogo()}
+              onRemove={() => setLogo(null)}
+              hint={
+                logo === null
+                  ? 'Sale en el directorio y en la billetera de tus alumnos. Si no tienes, se ven tus iniciales.'
+                  : 'Así se va a ver. Lo cambias cuando quieras desde el padrón.'
+              }
+            />
+            {logoError === null ? null : (
+              <Text variant="micro" color={theme.semaphore.bad}>
+                {logoError}
+              </Text>
+            )}
+          </Stack>
         </Stack>
 
         {/* Antes el directorio listaba dojos sin decir DONDE estan, que es la
@@ -1131,9 +1211,11 @@ export default function GymSignUpScreen() {
 
         <Stack gap={12} style={{ marginTop: 'auto', paddingTop: 26 }}>
           <Button
-            label={saving ? 'Creando…' : 'Crear mi gimnasio'}
+            label={savingLogo ? 'Subiendo tu logo…' : saving ? 'Creando…' : 'Crear mi gimnasio'}
             onPress={() => void create()}
-            disabled={!ready || saving}
+            // Mientras prepara la imagen tampoco: el alta saldría sin el logo
+            // que acaba de elegir.
+            disabled={!ready || saving || preparingLogo}
             onBlockedPress={saving ? undefined : () => setAttempted(true)}
           />
           {attempted && !ready ? (

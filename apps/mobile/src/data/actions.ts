@@ -50,6 +50,10 @@ import {
   createSchedule,
   fetchLocation,
   saveLocation,
+  fetchGymLogo,
+  uploadGymLogo,
+  deleteGymLogo,
+  type GymLogoRefDto,
   editSchedule,
   archiveSchedule,
   deleteSchedule,
@@ -711,6 +715,26 @@ export async function saveGymLocation(
 ): Promise<GymLocation> {
   exigeServidor('Guardar la dirección');
   return await saveLocation(location);
+}
+
+/** El logo del local. Lo lee todo el staff; cambiarlo es del dueño. */
+export async function gymLogo(): Promise<GymLogoRefDto> {
+  exigeServidor('Ver el logo de tu gimnasio');
+  return await fetchGymLogo();
+}
+
+/** Sube el logo ya preparado por `pickGymLogo`. Reemplaza al que hubiera. */
+export async function saveGymLogo(logo: {
+  readonly uri: string;
+  readonly contentType: string;
+}): Promise<GymLogoRefDto> {
+  exigeServidor('Subir el logo');
+  return await uploadGymLogo({ fileUri: logo.uri, contentType: logo.contentType });
+}
+
+export async function removeGymLogo(): Promise<GymLogoRefDto> {
+  exigeServidor('Quitar el logo');
+  return await deleteGymLogo();
 }
 
 export async function gymPricing(): Promise<GymPricing> {

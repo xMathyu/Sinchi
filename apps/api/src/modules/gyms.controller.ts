@@ -10,7 +10,17 @@
  * misma razon que lo exige `/invites/:token/claim`: sin una cuenta detras, la
  * lista del mostrador se llena de reservas inventadas y deja de servir.
  */
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { Public } from '../auth/auth.guard';
 import { parseWith } from '../common/zod.pipe';
@@ -22,6 +32,7 @@ import { EventsService } from './events/events.service';
 import { EventRegistrationsService } from './events/registrations.service';
 import { RoutinesService } from './routines/routines.service';
 import { MessagingService } from './messaging/messaging.service';
+import { GymLogoService } from './offering/logo.service';
 
 /** El mismo ID token de Firebase que consume `/auth/google`. */
 const idTokenSchema = z.object({ idToken: z.string().min(100) });
@@ -110,6 +121,7 @@ export class GymsController {
     private readonly registrations: EventRegistrationsService,
     private readonly routines: RoutinesService,
     private readonly messaging: MessagingService,
+    private readonly logos: GymLogoService,
   ) {}
 
   /**
@@ -122,6 +134,32 @@ export class GymsController {
   @Get()
   directory() {
     return this.trials.directory();
+  }
+
+  /**
+   * La imagen del logo de un gimnasio. La dirección la arma `gymLogoPath`.
+   *
+   * Pública por lo mismo que el directorio: el logo sale en la tarjeta a quien
+   * todavía no tiene cuenta.
+   *
+   * Un año en caché y `immutable`: el id cambia con cada imagen nueva, así que
+   * esta dirección no va a devolver nunca otra cosa. Sin eso, cada vez que
+   * alguien abre la billetera o el directorio se volvería a pedir cada logo.
+   *
+   * `nosniff` para que ningún navegador adivine otro tipo que el declarado. Los
+   * bytes ya se comprobaron al subirlos, pero esta ruta sirve contenido que puso
+   * un tercero, y esa cabecera es gratis.
+   */
+  @Public()
+  @Get('logos/:logoId')
+  async logo(@Param('logoId', ParseUUIDPipe) logoId: string, @Res() res: Response) {
+    const logo = await this.logos.serve(logoId);
+    if (logo === null) throw new NotFoundException('Ese logo ya no existe.');
+    res.setHeader('Content-Type', logo.contentType);
+    res.setHeader('Content-Length', String(logo.bytes.length));
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(logo.bytes);
   }
 
   /**

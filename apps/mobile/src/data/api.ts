@@ -42,6 +42,7 @@ import type {
   ClassSlot,
   User,
 } from '@sinchi/shared';
+import { gymLogoPath } from '@sinchi/shared';
 /**
  * De dónde salen las credenciales.
  *
@@ -148,12 +149,20 @@ export class ApiError extends Error {
 interface RequestOptions {
   readonly method?: 'GET' | 'POST' | 'DELETE';
   readonly body?: unknown;
+  /** Un archivo, en multipart en vez de JSON. Hoy solo lo usa el logo. */
+  readonly form?: FormData;
   /** Rutas públicas: `/auth/google`, `/gyms/signup`, el directorio. */
   readonly anonymous?: boolean;
+  /** Para lo que sube un archivo: diez segundos no alcanzan con datos móviles. */
+  readonly timeoutMs?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Con un formulario NO se pone `Content-Type`: lo escribe `fetch` junto con el
+  // separador de las partes, y puesto a mano sale sin él y la api no encuentra
+  // dónde empieza la imagen.
+  const headers: Record<string, string> =
+    options.form === undefined ? { 'Content-Type': 'application/json' } : {};
 
   if (options.anonymous !== true) {
     const token = credentials.getToken();
@@ -167,7 +176,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   // petición se queda colgada sin resolver ni fallar, y la pantalla se queda
   // esperando para siempre.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -177,9 +186,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // El balanceador de Google rechaza un POST sin `Content-Length`, así que
       // los POST sin datos van con un objeto vacío en vez de sin cuerpo.
       body:
-        options.method === 'POST'
-          ? JSON.stringify(options.body ?? {})
-          : undefined,
+        options.form ??
+        (options.method === 'POST' ? JSON.stringify(options.body ?? {}) : undefined),
       signal: controller.signal,
     });
   } catch (error) {
@@ -322,6 +330,8 @@ export interface GymCardDto {
   readonly id: string;
   readonly slug: string;
   readonly name: string;
+  /** El logo, si tiene. Ausente contra una api anterior a la 0025: lo mismo que `null`. */
+  readonly logoId?: string | null;
   readonly trialClassEnabled: boolean;
   /** Lo que cuesta la clase de prueba. 0 = gratis. */
   readonly trialClassPriceCents: number;
@@ -1687,6 +1697,50 @@ export const fetchLocation = (): Promise<GymLocation> => request('/staff/locatio
 
 export const saveLocation = (input: GymLocation): Promise<GymLocation> =>
   request('/staff/location', { method: 'POST', body: input });
+
+/**
+ * El logo del local. `null` = se ven sus iniciales.
+ *
+ * Lo lee todo el staff; subirlo y quitarlo es del dueño.
+ */
+export interface GymLogoRefDto {
+  readonly logoId: string | null;
+}
+
+export const fetchGymLogo = (): Promise<GymLogoRefDto> => request('/staff/logo');
+
+/**
+ * Sube el logo, YA achicado a 512 píxeles (`prepareGymLogo`).
+ *
+ * En multipart y por su `uri`: el puente nativo lee el archivo del disco y lo
+ * manda, sin pasar la imagen entera por JavaScript como texto en base64. Un
+ * minuto de margen porque son decenas de KB, pero por datos móviles en un
+ * sótano diez segundos no siempre alcanzan.
+ */
+export const uploadGymLogo = (input: {
+  readonly fileUri: string;
+  readonly contentType: string;
+}): Promise<GymLogoRefDto> => {
+  const form = new FormData();
+  form.append('logo', {
+    uri: input.fileUri,
+    name: input.contentType === 'image/png' ? 'logo.png' : 'logo.jpg',
+    type: input.contentType,
+  } as unknown as Blob);
+  return request('/staff/logo', { method: 'POST', form, timeoutMs: 60_000 });
+};
+
+export const deleteGymLogo = (): Promise<GymLogoRefDto> =>
+  request('/staff/logo', { method: 'DELETE' });
+
+/**
+ * Dónde se ve un logo, contra la api con la que habla esta app.
+ *
+ * La api manda el id y no la dirección entera: en local, la dirección pública
+ * que ella conoce apunta al servicio desplegado, que no tiene los logos de la
+ * base de pruebas. Ver `gymLogoPath`.
+ */
+export const gymLogoUrl = (logoId: string): string => `${apiBase}${gymLogoPath(logoId)}`;
 
 export const fetchTrialSettings = (): Promise<{ readonly trialClassEnabled: boolean }> =>
   request('/staff/trials/settings');

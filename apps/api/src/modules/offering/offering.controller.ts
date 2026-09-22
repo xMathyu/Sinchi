@@ -11,12 +11,26 @@
  * archivo y las cuatro escrituras en otro es como se le olvida a alguien que
  * archivar tambien tiene que sacar el plan de esta lista.
  */
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { z } from 'zod';
+import { GYM_LOGO_MAX_BYTES } from '@sinchi/shared';
 import { CurrentSession, OwnerOnly, StaffOnly } from '../../auth/auth.guard';
 import { assertStaffSession, type Session } from '../../auth/session';
 import { parseWith } from '../../common/zod.pipe';
 import { MembersService } from '../members/members.service';
+import { GymLogoService } from './logo.service';
 import { GymSettingsService } from './settings.service';
 import { PlansService } from './plans.service';
 import { SchedulesService } from './schedules.service';
@@ -82,6 +96,11 @@ const locationSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable().default(null),
 });
 
+/** Lo que multer deja en memoria. Solo se lee `buffer`: el tipo sale de los bytes. */
+interface UploadedLogo {
+  readonly buffer: Buffer;
+}
+
 const pricingSchema = z.object({
   enrollmentFeeCents: z.number().int(),
   dropInPriceCents: z.number().int().nullable(),
@@ -98,6 +117,7 @@ export class OfferingController {
     private readonly settings: GymSettingsService,
     private readonly members: MembersService,
     private readonly schedules: SchedulesService,
+    private readonly logos: GymLogoService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -294,5 +314,40 @@ export class OfferingController {
     @Body(parseWith(locationSchema)) body: z.infer<typeof locationSchema>,
   ) {
     return this.settings.writeLocation(assertStaffSession(session).tenantId, body);
+  }
+
+  // -------------------------------------------------------------------------
+  // El logo
+  // -------------------------------------------------------------------------
+
+  /** Lo lee todo el staff, igual que la dirección: es la cara del local. */
+  @Get('logo')
+  logo(@CurrentSession() session: Session) {
+    return this.logos.read(assertStaffSession(session).tenantId);
+  }
+
+  /**
+   * Sube el logo, o lo cambia. Multipart, con la imagen en el campo `logo`.
+   *
+   * Pasa por la api y no directo a un bucket como los videos, y aquí eso está
+   * bien: el teléfono la manda ya achicada a 512 píxeles, que son decenas de KB.
+   * El tope de multer es holgado a propósito —cuatro veces el del dominio— y
+   * solo está para cortar a quien mande megas sin parar; el de verdad lo aplica
+   * `checkGymLogo` en el servicio, con una frase en español.
+   */
+  @OwnerOnly()
+  @Post('logo')
+  @UseInterceptors(
+    FileInterceptor('logo', { limits: { fileSize: GYM_LOGO_MAX_BYTES * 4, files: 1 } }),
+  )
+  setLogo(@CurrentSession() session: Session, @UploadedFile() file: UploadedLogo | undefined) {
+    if (file === undefined) throw new BadRequestException('Falta la imagen del logo.');
+    return this.logos.replace(assertStaffSession(session).tenantId, file.buffer);
+  }
+
+  @OwnerOnly()
+  @Delete('logo')
+  removeLogo(@CurrentSession() session: Session) {
+    return this.logos.remove(assertStaffSession(session).tenantId);
   }
 }

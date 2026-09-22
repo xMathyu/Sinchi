@@ -91,6 +91,13 @@ export interface GymCard {
   /** El pin del mapa, si el dueno lo puso. Los dos, o ninguno. */
   readonly latitude: number | null;
   readonly longitude: number | null;
+  /**
+   * El logo, si tiene. `null` = iniciales. Se sirve en `gymLogoPath(logoId)`.
+   *
+   * En la TARJETA y no solo en la ficha: en una lista de cinco dojos, el logo es
+   * lo que hace que quien ya los conoce encuentre el suyo sin leer.
+   */
+  readonly logoId: string | null;
 }
 
 export interface GymDetail extends GymCard {
@@ -249,6 +256,7 @@ export class TrialsService {
           address: schema.tenants.address,
           latitude: schema.tenants.latitude,
           longitude: schema.tenants.longitude,
+          logoId: schema.tenants.logoId,
         })
         .from(schema.tenants)
         .where(eq(schema.tenants.status, 'active'))
@@ -348,6 +356,7 @@ export class TrialsService {
         address: gym.address,
         latitude: gym.latitude,
         longitude: gym.longitude,
+        logoId: gym.logoId,
         // Sin la clase suelta, por lo mismo que en `aggregates`: este numero se
         // lee "al mes" y el `drop_in` es el precio de una clase.
         fromPriceCents: plans.find((plan) => plan.type !== 'drop_in')?.priceCents ?? null,
@@ -1224,6 +1233,7 @@ export class TrialsService {
           address: schema.tenants.address,
           latitude: schema.tenants.latitude,
           longitude: schema.tenants.longitude,
+          logoId: schema.tenants.logoId,
         })
         .from(schema.tenants)
         .where(condition)

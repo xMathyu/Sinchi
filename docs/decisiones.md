@@ -1465,3 +1465,81 @@ Cuesta una consulta por petición y es el mismo razonamiento por el que
 Dos negativas más, las dos en `shared` y las dos contra el mismo fallo: **nadie
 se retira a sí mismo** y **nadie retira al último**. De un panel con cero
 administradores no se sale desde dentro; se sale escribiendo SQL contra Neon.
+
+## 22. El logo del gimnasio: opcional, en la base y achicado en el teléfono
+
+Hasta aquí un dojo era su nombre en letras: en la billetera del alumno, en el
+directorio, en la puerta. El dueño que ya tiene una marca —el escudo del club, el
+letrero del local— no tenía dónde ponerla. Ahora la pone al darse de alta, o
+después desde el padrón («Tu logo»).
+
+**Es opcional de punta a punta.** El profesor que arranca con doce alumnos no
+tiene logo y no tiene por qué inventarse uno. Sin logo se ven sus iniciales en la
+misma baldosa, como un alumno sin foto: una lista donde unos tienen baldosa y
+otros un hueco se lee como una lista rota.
+
+### En la base, no en el bucket de los videos
+
+Lo natural parecía reusar la subida firmada de los videos (migración 0015). Se
+descartó porque no comparten nada de lo que aquella resolvió:
+
+- **el bucket en producción no existe.** `VIDEO_BUCKET` es opcional y hoy no
+  está puesto: colgar el logo de él era soltar una función que en producción
+  responde «no configurado»;
+- **un video de alumnos es privado y se sirve firmado; un logo es público**, sale
+  en el directorio a quien no tiene cuenta. Una URL firmada que caduca en dos
+  horas es justo lo contrario de lo que quiere una imagen que el teléfono debería
+  guardar en caché para siempre;
+- **pesa poco.** A 512 píxeles por lado son decenas de KB: mil gimnasios con logo
+  son decenas de megas en Postgres.
+
+Va en su propia tabla (`gym_logos`) con un puntero en `tenants.logo_id`, y no
+como una columna `bytea` en `tenants`: esa fila se lee entera en muchos sitios, y
+cada lectura arrastraría la imagen. El puntero sí va en `tenants` porque ahí se
+lee todo lo demás del gimnasio: la billetera, el padrón y el directorio ya traen
+esa fila, y el logo viaja con ella sin una consulta más.
+
+### Achicado en el teléfono, comprobado en la api
+
+Una foto del letrero sale del celular con 12 megapíxeles y cuatro megas. Hay dos
+sitios donde achicarla, y se eligió el teléfono (`expo-image-manipulator`):
+
+- en la api habría que subir los cuatro megas por datos móviles para tirar el
+  99 %;
+- y habría que meter `sharp` —nativo— en una imagen alpine construida con
+  `npm ci --ignore-scripts`, con un lockfile generado en macOS. Si su binario no
+  cargara, no fallaría la subida del logo: fallaría el arranque de la api.
+
+El teléfono no es de fiar, así que la api **no se cree nada de lo que declara**:
+lee el tipo y las dimensiones de los bytes (`readImageHeader`, solo la cabecera,
+sin decodificar) y los juzga con la misma regla que usó el teléfono,
+`checkGymLogo`. Solo PNG y JPEG.
+
+### El tope que importa es el de píxeles
+
+Un PNG de un solo color comprime a casi nada: 20.000 × 20.000 píxeles caben en
+menos de un mega y, al abrirlos, son 1,6 GB de memoria. Con un tope solo de
+bytes, un archivo así en el directorio cerraría la app de todo el que lo mire.
+Por eso `GYM_LOGO_MAX_SIDE` (512) está en el dominio, en la api y en un `CHECK`
+de la base, y por eso la api mide sin decodificar: abrir la imagen para medirla
+sería caer justo en lo que el tope evita.
+
+### Una dirección que nunca cambia de contenido
+
+El logo se sirve en `GET /v1/gyms/logos/:logoId` con un año de caché e
+`immutable`. Funciona porque cambiar el logo **no actualiza la fila: la borra y
+crea otra con otro id**. La dirección vieja deja de responder y la nueva es otra
+dirección, así que ningún teléfono se queda con el logo anterior en caché.
+
+La api manda el `logoId` y no la dirección entera: cada cliente la arma con
+`gymLogoPath` contra la api con la que ya habla. Si la mandara entera tendría que
+usar `PUBLIC_BASE_URL`, que en local apunta al servicio desplegado — y ese no
+tiene los logos de la base de pruebas.
+
+### Blanco en los dos temas
+
+La baldosa del logo es blanca también en el tema oscuro. Casi todo logo se diseñó
+sobre papel blanco y muchos llegan con el fondo transparente: sobre la superficie
+oscura, un escudo negro desaparece. El caso contrario —un logo blanco sobre
+transparente— se pierde en el blanco, y por eso la pantalla «Tu logo» lo avisa
+antes de subirlo en vez de intentar adivinarlo.

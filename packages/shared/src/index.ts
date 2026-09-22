@@ -47,6 +47,9 @@ export * from './routines/upload.js';
 // Donde queda el gimnasio, y como llegar
 export * from './location/maps.js';
 
+// La marca del gimnasio: su logo
+export * from './brand/gym-logo.js';
+
 // Hablar con el gimnasio
 export * from './messaging/draft.js';
 export * from './messaging/thread.js';

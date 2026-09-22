@@ -1017,6 +1017,102 @@ describe('rutinas', () => {
 
 });
 
+describe('logo del gimnasio', () => {
+  /** Un gimnasio propio por prueba: el logo es uno por local. */
+  const newGym = async (): Promise<string> => {
+    const { rows } = await db.query<{ id: string }>(
+      `insert into tenants (name, slug) values ('Dojo Logo', 'dojo-logo-' || gen_random_uuid())
+       returning id`,
+    );
+    return rows[0]!.id;
+  };
+
+  const insertLogo = (
+    tenantId: string,
+    overrides: { contentType?: string; hex?: string; width?: number; height?: number } = {},
+  ) =>
+    db.query<{ id: string }>(
+      `insert into gym_logos (tenant_id, content_type, bytes, width, height)
+       values ($1, $2, decode($3, 'hex'), $4, $5) returning id`,
+      [
+        tenantId,
+        overrides.contentType ?? 'image/png',
+        overrides.hex ?? '89504e470d0a1a0a',
+        overrides.width ?? 512,
+        overrides.height ?? 256,
+      ],
+    );
+
+  it('quitar el logo devuelve al gimnasio a sus iniciales, sin error', async () => {
+    const gym = await newGym();
+    const logo = (await insertLogo(gym)).rows[0]!.id;
+    await db.query(`update tenants set logo_id = $1 where id = $2`, [logo, gym]);
+
+    await db.query(`delete from gym_logos where id = $1`, [logo]);
+
+    const { rows } = await db.query<{ logo_id: string | null }>(
+      `select logo_id from tenants where id = $1`,
+      [gym],
+    );
+    expect(rows[0]!.logo_id).toBeNull();
+  });
+
+  /**
+   * El caso que el tope de bytes deja pasar: un PNG de un color comprime a casi
+   * nada y al abrirlo ocupa gigas.
+   */
+  it('rechaza una imagen de más de 512 por lado', async () => {
+    const gym = await newGym();
+    await expectRejection(() => insertLogo(gym, { width: 20000 }), /gym_logos_dimensions_valid/);
+    await expectRejection(() => insertLogo(gym, { height: 513 }), /gym_logos_dimensions_valid/);
+  });
+
+  it('solo PNG o JPEG, y nunca vacío', async () => {
+    const gym = await newGym();
+    await expectRejection(
+      () => insertLogo(gym, { contentType: 'image/svg+xml' }),
+      /gym_logos_content_type_valid/,
+    );
+    await expectRejection(() => insertLogo(gym, { hex: '' }), /gym_logos_size_valid/);
+  });
+
+  it('uno por gimnasio', async () => {
+    const gym = await newGym();
+    await insertLogo(gym);
+    await expectRejection(() => insertLogo(gym), /gym_logos_tenant_key/);
+  });
+
+  it('dos gimnasios no comparten un logo', async () => {
+    const first = await newGym();
+    const second = await newGym();
+    const logo = (await insertLogo(first)).rows[0]!.id;
+    await db.query(`update tenants set logo_id = $1 where id = $2`, [logo, first]);
+    await expectRejection(
+      () => db.query(`update tenants set logo_id = $1 where id = $2`, [logo, second]),
+      /tenants_logo_id_key/,
+    );
+  });
+
+  /**
+   * Las dos claves se apuntan una a la otra: la del logo borra en cascada y la
+   * del gimnasio pone `null`. Borrar el gimnasio tiene que poder con las dos a la
+   * vez, que es lo que hacen el panel de Sinchi y la limpieza de las pruebas.
+   */
+  it('borrar el gimnasio se lleva su logo', async () => {
+    const gym = await newGym();
+    const logo = (await insertLogo(gym)).rows[0]!.id;
+    await db.query(`update tenants set logo_id = $1 where id = $2`, [logo, gym]);
+
+    await db.query(`delete from tenants where id = $1`, [gym]);
+
+    const { rows } = await db.query<{ total: number }>(
+      `select count(*)::int as total from gym_logos where id = $1`,
+      [logo],
+    );
+    expect(rows[0]!.total).toBe(0);
+  });
+});
+
 describe('aislamiento por tenant', () => {
   it('las políticas quedan creadas y forzadas', async () => {
     const { rows } = await db.query<{
@@ -1054,6 +1150,7 @@ describe('aislamiento por tenant', () => {
       'routine_videos',
       'conversations',
       'messages',
+      'gym_logos',
     ]) {
       const entry = byTable.get(table);
       expect(entry, `${table} debería tener RLS`).toBeDefined();

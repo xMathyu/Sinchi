@@ -36,6 +36,7 @@ import { EmptyState } from '../../src/design/empty';
 import { Screen } from '../../src/design/screen';
 import { useTheme } from '../../src/design/theme';
 import { AccountAvatar } from '../../src/design/account-avatar';
+import { GymLogo } from '../../src/design/gym-logo';
 import {
   useGymBookings,
   useRecentCheckIns,
@@ -96,6 +97,12 @@ export default function DoorScreen() {
   return (
     <Screen background={theme.colors.screenScanner}>
       <Row style={{ paddingTop: 8 }} gap={10}>
+        {/* Solo si hay logo. Las iniciales del propio local no le dicen nada a
+            quien trabaja en él, y en esta fila cada punto de ancho se le quita
+            al nombre. */}
+        {tenant?.logoId == null ? null : (
+          <GymLogo name={tenant.name} logoId={tenant.logoId} size={40} />
+        )}
         {/* `flex: 1` y una sola linea: sin ellos, el nombre del gimnasio hace
             crecer esta columna, la linea se parte en dos y empuja el indicador
             de conexion y el avatar fuera de la pantalla. */}

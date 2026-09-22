@@ -154,6 +154,18 @@ Ojo con `member`: aquí significa **suscripción viva en ese gimnasio, aunque
 deba**. No es `Membership.status`, que existe y engaña —nada en el producto la
 pone en `inactive`—. La baja de un gimnasio es una suscripción cancelada.
 
+## El logo del gimnasio
+
+| Negocio | Código |
+|---|---|
+| logo del gimnasio | `GymLogo` / `gym_logos` |
+| el logo vigente de un local | `tenants.logo_id` / `Tenant.logoId` |
+| dónde se ve un logo | `gymLogoPath` (api) / `gymLogoUrl` (app) |
+| qué se acepta | `checkGymLogo`, `GymLogoDenial` |
+| a qué tamaño se deja | `gymLogoTargetSize`, `GYM_LOGO_MAX_SIDE` |
+| tope de peso | `GYM_LOGO_MAX_BYTES` |
+| lo que dicen los bytes | `readImageHeader` |
+
 ## Conceptos del chat
 
 Ojo con `person`: es el lado de quien le escribe al gimnasio, y **no** se llama

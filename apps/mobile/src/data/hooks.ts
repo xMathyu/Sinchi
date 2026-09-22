@@ -69,6 +69,7 @@ import {
   ownerSchedules,
   gymPricing,
   gymLocation,
+  gymLogo,
   gymEvents,
   gymEvent,
   eventSeats,
@@ -982,6 +983,36 @@ export function useGymLocation(): {
   }, [attempt]);
 
   return { location, error, reload: () => setAttempt((n) => n + 1) };
+}
+
+/** El logo del local, como lo ve su dueño para cambiarlo. `undefined` = cargando. */
+export function useGymLogo(): {
+  readonly logoId: string | null | undefined;
+  readonly error: string | null;
+  readonly reload: () => void;
+} {
+  const [logoId, setLogoId] = useState<string | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelado = false;
+    setError(null);
+    void gymLogo()
+      .then((fetched) => {
+        if (!cancelado) setLogoId(fetched.logoId);
+      })
+      .catch((e: unknown) => {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : 'No se pudo traer el logo.');
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [attempt]);
+
+  return { logoId, error, reload: () => setAttempt((n) => n + 1) };
 }
 
 /**

@@ -25,6 +25,7 @@ import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { useTheme } from '../../src/design/theme';
 import { AccountAvatar } from '../../src/design/account-avatar';
+import { GymLogo } from '../../src/design/gym-logo';
 import {
   useErrorDeCarga,
   useLinkRequests,
@@ -221,6 +222,7 @@ function GymCard({ entry }: { readonly entry: MembershipView }) {
         >
           <Stack gap={10}>
             <Row align="flex-start" style={{ gap: 10 }}>
+              <GymLogo name={entry.tenant.name} logoId={entry.tenant.logoId} size={44} />
               <Text variant="heading" weight="semibold" style={{ flex: 1 }}>
                 {brand}
                 {area === '' ? '' : `\n${area}`}

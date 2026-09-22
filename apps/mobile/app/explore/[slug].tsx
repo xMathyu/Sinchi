@@ -56,6 +56,7 @@ import { OfflineState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { GymLocationBlock } from '../../src/design/gym-location';
 import { useTheme } from '../../src/design/theme';
+import { GymLogo } from '../../src/design/gym-logo';
 import { useGym, useMyBookings, useToday, useWallet } from '../../src/data/hooks';
 import {
   rescheduleBooking,
@@ -455,14 +456,17 @@ export default function GymScreen() {
       {/* El nombre entero, sin partirlo en marca y distrito: quien abre esta
           pantalla todavía no conoce el gimnasio y el nombre es lo único que
           tiene para reconocerlo. */}
-      <Stack gap={3} style={{ marginTop: 18 }}>
-        <Text variant="title" weight="bold">
-          {gym.name}
-        </Text>
-        <Text variant="caption" color={theme.colors.textSecondary}>
-          {gym.weeklyClasses} {gym.weeklyClasses === 1 ? 'clase' : 'clases'} por semana
-        </Text>
-      </Stack>
+      <Row gap={14} align="center" justify="flex-start" style={{ marginTop: 18 }}>
+        <GymLogo name={gym.name} logoId={gym.logoId} size={64} />
+        <Stack gap={3} style={{ flex: 1 }}>
+          <Text variant="title" weight="bold">
+            {gym.name}
+          </Text>
+          <Text variant="caption" color={theme.colors.textSecondary}>
+            {gym.weeklyClasses} {gym.weeklyClasses === 1 ? 'clase' : 'clases'} por semana
+          </Text>
+        </Stack>
+      </Row>
 
       {gym.disciplines.length > 0 ? (
         <Row justify="flex-start" style={{ marginTop: 14, flexWrap: 'wrap', gap: 8 }}>

@@ -21,6 +21,7 @@ import { Screen } from '../../src/design/screen';
 import { OfflineState, EmptyState } from '../../src/design/empty';
 import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
+import { GymLogo } from '../../src/design/gym-logo';
 import { useGyms, useMyBookings } from '../../src/data/hooks';
 import { useSession } from '../../src/data/session-hooks';
 import { cancelBooking } from '../../src/data/trials';
@@ -297,6 +298,9 @@ function GymCard({ gym }: { readonly gym: GymCardDto }) {
               importa: «Asociación Deportiva Club Kaizen» salía como
               «Asociación Deportiva C…» con «Kaizen» de subtítulo. */}
           <Row align="flex-start" style={{ gap: 10 }}>
+            {/* El logo, o sus iniciales: todos llevan baldosa, y así la del que
+                tiene logo destaca en vez de ser la única que no está alineada. */}
+            <GymLogo name={gym.name} logoId={gym.logoId} size={44} />
             <Stack gap={2} style={{ flex: 1 }}>
               <Text variant="heading" weight="bold" numberOfLines={2}>
                 {gym.name}

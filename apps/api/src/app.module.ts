@@ -41,6 +41,7 @@ import { OfferingController } from './modules/offering/offering.controller';
 import { PlansService } from './modules/offering/plans.service';
 import { SchedulesService } from './modules/offering/schedules.service';
 import { GymSettingsService } from './modules/offering/settings.service';
+import { GymLogoService } from './modules/offering/logo.service';
 import { EventsController } from './modules/events/events.controller';
 import { EventsService } from './modules/events/events.service';
 import { EventRegistrationsService } from './modules/events/registrations.service';
@@ -100,6 +101,7 @@ import { PlatformPromosService } from './modules/admin/platform-promos.service';
     PlansService,
     SchedulesService,
     GymSettingsService,
+    GymLogoService,
     EventsService,
     EventRegistrationsService,
     RoutinesService,
