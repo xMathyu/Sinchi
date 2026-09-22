@@ -162,3 +162,112 @@ export interface WireAction {
   readonly detail: unknown;
   readonly createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Personas
+// ---------------------------------------------------------------------------
+
+/** Con ficha (`users`) o sin ella (una cuenta de Google que no está en ningún padrón). */
+export type WirePersonKind = 'identity' | 'account';
+
+export interface WirePersonRow {
+  readonly kind: WirePersonKind;
+  /** `users.id` con ficha; el uid de Firebase sin ella. */
+  readonly id: string;
+  readonly name: string | null;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly documentId: string | null;
+  readonly hasApp: boolean;
+  readonly createdAt: string;
+  readonly banned: boolean;
+  readonly deletionRequestedAt: string | null;
+}
+
+export interface WirePeoplePage {
+  readonly rows: readonly WirePersonRow[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface WireBan {
+  readonly id: string;
+  readonly reason: string;
+  readonly bannedByEmail: string;
+  readonly createdAt: string;
+  readonly liftedAt: string | null;
+  readonly liftedByEmail: string | null;
+}
+
+export interface WireFootprint {
+  readonly bookings: number;
+  readonly conversations: number;
+  readonly eventRegistrations: number;
+}
+
+export interface WireIdentityDetail {
+  readonly kind: 'identity';
+  readonly id: string;
+  readonly name: string;
+  readonly email: string | null;
+  readonly phone: string;
+  readonly documentId: string;
+  readonly firebaseUid: string | null;
+  readonly createdAt: string;
+  readonly memberships: readonly {
+    readonly id: string;
+    readonly tenantId: string;
+    readonly tenantName: string;
+    readonly status: string;
+    readonly since: string;
+    readonly checkIns: number;
+    readonly lastCheckInAt: string | null;
+  }[];
+  readonly staff: readonly {
+    readonly tenantId: string;
+    readonly tenantName: string;
+    readonly role: string;
+  }[];
+  readonly footprint: WireFootprint;
+  readonly bans: readonly WireBan[];
+  readonly deletionRequests: readonly {
+    readonly status: string;
+    readonly requestedAt: string;
+    readonly resolvedAt: string | null;
+    readonly reason: string | null;
+    readonly daysLeft: number | null;
+  }[];
+  readonly confirmationKey: string;
+}
+
+export interface WireAccountDetail {
+  readonly kind: 'account';
+  readonly id: string;
+  readonly name: string | null;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly createdAt: string;
+  readonly footprint: WireFootprint;
+  readonly bans: readonly WireBan[];
+  readonly confirmationKey: string;
+}
+
+export interface WirePendingDeletion {
+  readonly userId: string;
+  readonly name: string;
+  readonly email: string | null;
+  readonly requestedAt: string;
+  readonly reason: string | null;
+  /** Negativo = la promesa de 30 días ya se rompió. */
+  readonly daysLeft: number;
+}
+
+export interface WireDeletionOutcome {
+  readonly memberships: number;
+  readonly chargesAnonymized: number;
+  readonly bookings: number;
+  readonly conversations: number;
+  readonly eventRegistrations: number;
+  readonly firebase: 'deleted' | 'not_found' | 'unavailable' | null;
+}

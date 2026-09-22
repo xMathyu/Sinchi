@@ -17,7 +17,8 @@ import { ApiError, adminApi } from './api';
 import { exchangeGoogleToken, FirebaseAuthError } from '../panel/firebase';
 import { clearAdminSession, writeAdminSession } from './session';
 import type { FormState } from '../panel/form-state';
-import type { WireGymDetail } from './types';
+import type { DeletionState } from './deletion-state';
+import type { WireDeletionOutcome, WireGymDetail } from './types';
 
 interface WireAdminSession {
   readonly accessToken: string;
@@ -346,6 +347,112 @@ export async function quitarAdministrador(adminId: string): Promise<FormState> {
 
   revalidatePath('/admin/equipo');
   return { error: null, ok: 'Acceso retirado.' };
+}
+
+// ---------------------------------------------------------------------------
+// Personas
+// ---------------------------------------------------------------------------
+
+/** La ruta de la api y la del panel para una persona, con o sin ficha. */
+function rutas(kind: string, id: string): { readonly api: string; readonly panel: string } {
+  return kind === 'account'
+    ? { api: `/admin/accounts/${id}`, panel: `/admin/usuarios/cuenta/${id}` }
+    : { api: `/admin/people/${id}`, panel: `/admin/usuarios/${id}` };
+}
+
+/**
+ * Corrige la ficha. Manda los cuatro campos: la regla los juzga juntos
+ * (`checkPersonDetails`), y un formulario que mandara solo lo cambiado haría
+ * que el celular se validara sin el resto.
+ */
+export async function guardarPersona(_previous: FormState, form: FormData): Promise<FormState> {
+  const userId = String(form.get('userId') ?? '');
+
+  try {
+    await adminApi(`/admin/people/${userId}`, {
+      method: 'POST',
+      body: {
+        name: String(form.get('name') ?? ''),
+        phone: String(form.get('phone') ?? ''),
+        documentId: String(form.get('documentId') ?? ''),
+        email: String(form.get('email') ?? ''),
+      },
+    });
+  } catch (error) {
+    return { error: mensaje(error) };
+  }
+
+  revalidatePath(`/admin/usuarios/${userId}`);
+  revalidatePath('/admin/usuarios');
+  return { error: null, ok: 'Guardado. Sus gimnasios ya ven los datos nuevos.' };
+}
+
+export async function banearPersona(_previous: FormState, form: FormData): Promise<FormState> {
+  const kind = String(form.get('kind') ?? 'identity');
+  const id = String(form.get('id') ?? '');
+  const reason = String(form.get('reason') ?? '').trim();
+  const { api, panel } = rutas(kind, id);
+
+  try {
+    await adminApi(`${api}/ban`, { method: 'POST', body: { reason } });
+  } catch (error) {
+    return { error: mensaje(error) };
+  }
+
+  revalidatePath(panel);
+  revalidatePath('/admin/usuarios');
+  return { error: null, ok: 'Baneada. Pierde la app en menos de un minuto en todos los servidores.' };
+}
+
+export async function levantarBaneo(
+  banId: string,
+  kind: string,
+  id: string,
+): Promise<FormState> {
+  try {
+    await adminApi(`/admin/bans/${banId}/lift`, { method: 'POST' });
+  } catch (error) {
+    return { error: mensaje(error) };
+  }
+
+  revalidatePath(rutas(kind, id).panel);
+  revalidatePath('/admin/usuarios');
+  return { error: null, ok: 'Baneo levantado.' };
+}
+
+/**
+ * Elimina la cuenta, con lo escrito tal cual.
+ *
+ * Devuelve el RESULTADO y no redirige, y es a propósito: lo que la pantalla
+ * tiene que enseñar después —cuántas fichas se fueron, cuántos cobros se
+ * quedaron sin nombre y, sobre todo, si su usuario de Firebase se pudo borrar—
+ * no cabe en una redirección. Si Firebase quedó sin borrar, falta un paso a mano
+ * y quien lo hizo tiene que leerlo en ese momento.
+ *
+ * No revalida la ficha: ya no existe, y volver a pintarla daría un 404 encima
+ * del resultado que había que leer.
+ */
+export async function eliminarPersona(
+  _previous: DeletionState,
+  form: FormData,
+): Promise<DeletionState> {
+  const kind = String(form.get('kind') ?? 'identity');
+  const id = String(form.get('id') ?? '');
+  const confirm = String(form.get('confirm') ?? '').trim();
+
+  let outcome: WireDeletionOutcome;
+  try {
+    outcome = await adminApi<WireDeletionOutcome>(rutas(kind, id).api, {
+      method: 'DELETE',
+      body: { confirm },
+    });
+  } catch (error) {
+    return { error: mensaje(error), outcome: null };
+  }
+
+  revalidatePath('/admin/usuarios');
+  revalidatePath('/admin');
+  return { error: null, outcome };
 }
 
 /**

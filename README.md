@@ -15,7 +15,7 @@ gimnasios a los que asiste.
 | `packages/ui` — design system | **Completo** (tokens, semáforo, marca; 9 tests) |
 | `apps/mobile` — app Expo, modo alumno y modo staff | **Completo** (11 pantallas del diseño + ajustes + directorio, clase gratis y biblioteca de rutinas) |
 | `apps/api` — NestJS + Postgres (Neon) | **Completo y conectado a Neon** (239 tests, 146 de punta a punta) |
-| `apps/web` — landing + los dos paneles | **Completo**: la landing, `/panel` (el dueño de un gimnasio) y `/admin` (el interno de Sinchi: la red, suspensiones, códigos y quién administra) |
+| `apps/web` — landing + los dos paneles | **Completo**: la landing, `/panel` (el dueño de un gimnasio) y `/admin` (el interno de Sinchi: la red, gimnasios, usuarios —corregir, banear, cumplir bajas—, códigos y quién administra) |
 | Cobro SaaS al gimnasio | **Plan gratis hasta 10, mes de regalo, corte a solo lectura, códigos de promoción.** Cobro manual; Culqi pendiente |
 | Alta de gimnasio | **Desde la app, y el local queda usable el mismo día**: nace con tarifas y el dueño escribe su horario |
 | Despliegue | api en **Cloud Run** (us-east4), contra Neon |

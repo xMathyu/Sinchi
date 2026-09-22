@@ -21,6 +21,7 @@ import { salirDelPanelDeSinchi } from '../../src/admin/actions';
 const SECCIONES = [
   { href: '/admin', label: 'Resumen', icon: 'home' },
   { href: '/admin/gimnasios', label: 'Gimnasios', icon: 'building' },
+  { href: '/admin/usuarios', label: 'Usuarios', icon: 'person' },
   { href: '/admin/codigos', label: 'Códigos', icon: 'tag' },
   { href: '/admin/equipo', label: 'Equipo', icon: 'users' },
 ] as const;
@@ -33,6 +34,12 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" />
       <path d="M15 21V11h3a2 2 0 0 1 2 2v8" />
       <path d="M9 7h2M9 11h2M9 15h2" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
     </>
   ),
   tag: (
