@@ -161,3 +161,50 @@ Chrome abierto vale headless, y tarda lo que tarda arrancar:
 
 WebP sería el término medio —lo entiende todo desde 2020— y `sharp` también lo
 escribe; se descartó por no sostener tres formatos para ahorrar diez kilobytes.
+
+## Las de la ficha de App Store
+
+Las ocho que había en `store/appstore/` eran **dibujos**: una reconstrucción de
+la app con los tokens de `@sinchi/ui`, no la app. En la landing ese argumento ya
+se había caído (ver el commit que las cambió); en la tienda se cae más fuerte,
+porque quien instala esperando lo que vio en las capturas y encuentra otra cosa
+desinstala, y esa desinstalación cuenta.
+
+Ahora son las **mismas capturas del simulador** que usa la landing, compuestas
+con un titular encima. Se rehacen con:
+
+```bash
+cd store/appstore/fuente && npm i sharp && node generar.mjs
+```
+
+Y salen las diez de `store/appstore/`: cinco de `iphone67` (1290×2796) y cinco
+de `ipad13` (2064×2752).
+
+Las diez PNG de `store/appstore/` son **las que están publicadas**, byte por
+byte. `generar.mjs` las reconstruye desde `fuente/*.jpg` y el resultado no es
+idéntico —el JPEG mueve algo los degradados oscuros del fondo, y a simple vista
+no se distingue—, así que si algún día hay que volver a subirlas, se suben las
+que salgan del generador y se commitean esas mismas.
+
+**Las fuentes son `fuente/*.jpg`**, el original de 1206 px de ancho en JPEG de
+calidad 94. En PNG pesaban 4,5 MB y aquí no aportan nada: se muestran reducidas
+a 1046 px (iPhone) y 1000 px (iPad), así que siempre se reduce y nunca se
+amplía. Si hay que sacar capturas nuevas, la receta entera —los datos sembrados,
+quién entra a cada pantalla, cómo se navega sin poder tocar el simulador— es la
+de arriba en este mismo archivo.
+
+**Dos trampas del render, las dos costaron una tarde:**
+
+- **Chrome se cuelga, sin error y sin log, si la página trae un PNG de 2 MB.**
+  Siempre en la misma lámina, que era justo la de la captura más pesada. El
+  síntoma engaña porque parece lentitud —la primera lámina sí sale— y se va
+  reduciendo la imagen al tamaño en que de verdad se muestra antes de dárselo.
+- **Los cuerpos de letra van en píxeles, no en fracción del ancho.** El lienzo
+  de iPad es 1,6 veces más ancho que el de iPhone y casi igual de alto: con
+  tipografía proporcional al ancho, el titular de iPad crecía hasta empujar el
+  subtítulo por debajo del teléfono y lo dejaba cortado a media frase.
+
+Y **las cinco se rinden en una sola tira** que se corta después con `sharp`:
+arrancar Chrome cuesta cerca de un minuto en esta Mac y dibujar la página no
+cuesta nada, así que cinco arranques por plataforma eran diez minutos de reloj
+para algo que tarda dos.

@@ -1,0 +1,11 @@
+# Los intermedios del render, y el sharp que la receta instala al vuelo.
+node_modules/
+package.json
+package-lock.json
+.perfil/
+.tira-*
+.billetera-*
+.corte-*
+.plan-*
+.qr-*
+.roster-*
