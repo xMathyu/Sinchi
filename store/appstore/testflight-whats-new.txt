@@ -1,13 +1,16 @@
 NOVEDADES DE ESTA VERSIÓN
 
-• Arreglado: al registrar un gimnasio desde tu cuenta se apilaban dos hojas, una encima de otra. El padrón quedaba dentro de un pop-up y había que deslizar dos veces hacia abajo para salir a la misma vista que ya estaba detrás. Ahora el alta termina en tu padrón, con Planes como una sola hoja encima.
+• Tu gimnasio puede tener logo. Lo eliges al registrarlo o después, en el padrón → «Logo y redes». Sale en el directorio, en la ficha del gimnasio, en la billetera y el QR de tus alumnos y en tu puerta. Es opcional: sin logo se ven tus iniciales.
+• Tu web y tus redes: página web, Instagram, Facebook y TikTok, todas opcionales. Puedes escribir @tuusuario o pegar el enlace del perfil. Salen en tu ficha del directorio y cada una abre la suya.
+• Clases y precios: tus planes, tu horario y lo que cobras aparte (matrícula, clase suelta y clase de prueba) ahora están juntos, en una sola pantalla con pestañas. Al registrar un gimnasio la app te guía: primero tus planes y después tu horario.
 
 SI VIENES DE LA VERSIÓN ANTERIOR, ESTO YA ESTABA
-• Registrar tu gimnasio desde Mi cuenta, entre tus datos y Apariencia. Si ya llevas un local, la misma tarjeta dice «Abrir otro local»; el tope es de cinco por cuenta.
-• El logo de Google en el botón de entrar.
-• Y fuera de la app: si eres dueño, tu local tiene panel web en sinchi.fit/panel —ingresos, quién vino hoy, a quién cobrarle, quién viene siempre y quién dejó de venir—. Se entra con la misma cuenta.
+• Registrar tu gimnasio desde Mi cuenta termina en tu padrón, sin hojas apiladas.
+• El panel web del dueño en sinchi.fit/panel.
 
 QUÉ PROBAR
-• Lo de arriba, entero y sin prisa: Mi cuenta → «¿Tienes un gimnasio?» → completa el alta → escribe tu primera tarifa en Planes → ciérrala. Tienes que quedar en tu padrón a pantalla completa, sin ninguna hoja de por medio y sin deslizar dos veces.
-• Repítelo desde la otra puerta, para comprobar que da lo mismo por dónde entres: cierra sesión, y en la pantalla de entrada toca «Registra tu gimnasio».
-• Si ya tienes un local, entra por Mi cuenta → «Abrir otro local» y comprueba que acabas en el padrón del local NUEVO, no en el viejo.
+• Registra un gimnasio (Mi cuenta → «¿Tienes un gimnasio?»). En el último paso elige un logo de tus fotos —prueba con una foto tomada con el celular y con un logo de fondo transparente— y abre «+ Agregar tu web y tus redes». Pega el enlace de tu Instagram tal como lo copia la app de Instagram.
+• Al terminar deberías caer en «Clases y precios», Paso 1 de 2. Escribe un plan, toca «Siguiente: tu horario», publica una clase y toca «Listo».
+• En el padrón → «Logo y redes»: cambia el logo, quítalo y guarda tus redes. Busca tu gimnasio en el directorio y toca cada red: tiene que abrir la tuya.
+• Si entrenas en un gimnasio que tiene logo, míralo en tu billetera y en tu QR.
+• Cuéntanos si alguna imagen sale cortada, borrosa o de lado.

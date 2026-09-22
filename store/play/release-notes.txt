@@ -1,2 +1,3 @@
-• Arreglado: al registrar un gimnasio desde tu cuenta se apilaban dos ventanas y había que deslizar dos veces para salir. Ahora el alta termina en tu padrón, con Planes como una sola hoja encima.
-• Ya estaba en la versión anterior: registrar tu gimnasio desde Mi cuenta (o «Abrir otro local» si ya llevas uno), el logo de Google en el botón de entrar, y el panel web del dueño en sinchi.fit/panel.
+• Tu gimnasio puede tener logo: lo eliges al registrarlo o en el padrón → «Logo y redes». Sale en el directorio y en la billetera de tus alumnos.
+• Tu web, Instagram, Facebook y TikTok, opcionales, en tu ficha del directorio.
+• Clases y precios: planes, horario y cobros aparte en una sola pantalla. Al registrar tu gimnasio, la app te guía: primero tus planes y después tu horario.
