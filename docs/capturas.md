@@ -121,15 +121,43 @@ xcrun simctl status_bar booted override --time "$(date +%H:%M)" \
 ## Cómo se preparan para la web
 
 El marco de la landing mide 242 px de contenido, así que 500 px de ancho son
-los dos píxeles por punto que pide una pantalla retina y ni uno más. Sale con
-`sips`, que ya está en la Mac — no hace falta instalar nada:
+los dos píxeles por punto que pide una pantalla retina y ni uno más. Van en dos
+formatos: AVIF, que pesa la mitad que el JPEG y lo entiende todo lo que no sea
+un Safari anterior al 16.4, y JPEG de suelo para ese.
+
+**Con `sharp`, no con `sips`.** Es la trampa que costó una portada publicada en
+blanco y merece las tres líneas: el AVIF que escribe `sips` no es una imagen,
+es un **mosaico de tres tiles con un ítem `grid`**, y Chrome se lo descarga
+entero y lo pinta VACÍO. No hay red de seguridad que lo ataje — `<picture>`
+elige la fuente por el `type` que declara, no por si el navegador consiguió
+decodificarla, así que el JPEG de debajo no entra nunca. El síntoma es
+exactamente cuatro marcos de teléfono vacíos, con el alto correcto.
+
+`sharp` no es dependencia de nadie aquí; se instala al vuelo en un directorio
+de usar y tirar:
 
 ```bash
-sips -Z 1087 -s format avif -s formatOptions 75 captura.png --out roster-dark.avif
-sips -Z 1087 -s format jpeg -s formatOptions 82 captura.png --out roster-dark.jpg
+mkdir -p /tmp/enc && cd /tmp/enc && npm install sharp
+node -e '
+const sharp = require("sharp");
+for (const n of ["roster", "plan", "qr", "denied"])
+  for (const t of ["dark", "light"]) {
+    const base = sharp(`/ruta/a/${n}-${t}.png`).resize({ width: 500 });
+    base.clone().avif({ quality: 58, effort: 6 }).toFile(`${n}-${t}.avif`);
+    base.clone().jpeg({ quality: 82, mozjpeg: true }).toFile(`${n}-${t}.jpg`);
+  }
+'
 ```
 
-Los dos formatos, no uno: el AVIF pesa un tercio y lo entiende todo lo que no
-sea un Safari anterior al 16.4, y el JPEG es el suelo para ese. `sips` **no**
-sabe escribir WebP, que sería el término medio; si algún día hace falta, hay que
-traer un codificador de fuera.
+**Y se miran en Chrome antes de subirlas**, que es el paso que faltaba. Sin
+Chrome abierto vale headless, y tarda lo que tarda arrancar:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --disable-gpu --no-first-run --virtual-time-budget=4000 \
+  --user-data-dir=/tmp/cp --window-size=1060,620 \
+  --screenshot=/tmp/prueba.png "file:///tmp/prueba.html"
+```
+
+WebP sería el término medio —lo entiende todo desde 2020— y `sharp` también lo
+escribe; se descartó por no sostener tres formatos para ahorrar diez kilobytes.

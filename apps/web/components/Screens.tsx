@@ -55,7 +55,14 @@ function Shot({
       {TEMAS.map((tema) => (
         /* AVIF primero y JPEG debajo: un Safari anterior al 16.4 no entiende el
            primero, y en una página que existe para convencer, un hueco donde va
-           el producto es peor que 80 kB de más. Solo se descarga uno. */
+           el producto es peor que 40 kB de más. Solo se descarga uno.
+
+           Y OJO CON ESE «SOLO SE DESCARGA UNO»: `<picture>` elige la fuente por
+           el `type`, no por si el navegador CONSIGUE pintarla. Un AVIF que se
+           baja entero y no decodifica no cae al JPEG — deja el marco en blanco,
+           que es como estuvo la portada publicada. Los AVIF de `sips` son un
+           mosaico de tres tiles y Chrome los pinta vacíos; los escribe `sharp`
+           por eso. Una captura nueva se mira en Chrome ANTES de subirla. */
         <picture key={tema} className={`shot-${tema}`}>
           <source srcSet={`/screenshots/${name}-${tema}.avif`} type="image/avif" />
           <img
