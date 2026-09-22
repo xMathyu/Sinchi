@@ -85,6 +85,38 @@ a { color: var(--ok); text-decoration: none; }
 }
 
 /* ---------------------------------------------------------------------------
+   Las capturas de la app
+
+   De cada pantalla van las dos caras en el marcado y se enseña una. Podría
+   hacerlo la propia `<picture>` con `prefers-color-scheme` y bajaría la mitad
+   de bytes, pero entonces no se enteraría del interruptor de la barra —que
+   escribe un atributo en el `<html>`, no cambia lo que pide el sistema— y quien
+   eligiera claro a mano se quedaría con cuatro teléfonos negros dentro de una
+   página blanca.
+
+   El orden de las reglas es el de `tokens.ts` y por el mismo motivo: oscuro de
+   salida, claro si el sistema lo pide y nadie ha dicho lo contrario, y el
+   atributo explícito por encima de los dos.
+   --------------------------------------------------------------------------- */
+.shot-dark { display: block; }
+.shot-light { display: none; }
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .shot-dark { display: none; }
+  :root:not([data-theme='dark']) .shot-light { display: block; }
+}
+
+:root[data-theme='light'] .shot-dark { display: none; }
+:root[data-theme='light'] .shot-light { display: block; }
+:root[data-theme='dark'] .shot-dark { display: block; }
+:root[data-theme='dark'] .shot-light { display: none; }
+
+/* El alto lo pone la captura. Con el `width` y el `height` declarados en el
+   `<img>`, el navegador reserva el hueco antes de que llegue y la portada no da
+   el salto al cargarla. */
+.phone-shell img { display: block; width: 100%; height: auto; }
+
+/* ---------------------------------------------------------------------------
    Barra y menú
    --------------------------------------------------------------------------- */
 .bar {
@@ -176,15 +208,16 @@ a { color: var(--ok); text-decoration: none; }
 /* ---------------------------------------------------------------------------
    Movimiento
 
-   Tres capas, y las tres se ganan el sitio.
+   Dos capas, y las dos se ganan el sitio.
 
    1. La portada entra POR TIEMPO: cuando se carga la página todavía no hay
       scroll, así que un `view()` la dejaría animándose sola en el sitio.
    2. Las secciones entran AL ENTRAR EN PANTALLA, con `animation-timeline:
       view()`. Donde el navegador no lo soporta no pasa nada: el contenido se
       queda visible, que es el fallo correcto.
-   3. El anillo del QR es la única en bucle, y no decora: el código del alumno
-      rota de verdad cada 30 segundos.
+
+   Hubo una tercera —el anillo del QR, girando sus 30 segundos— y se fue con el
+   dibujo que la sostenía: en una captura el contador está quieto.
    --------------------------------------------------------------------------- */
 @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
 @keyframes rise-soft { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -241,13 +274,6 @@ a { color: var(--ok); text-decoration: none; }
   .bar { background: color-mix(in srgb, var(--canvas) 82%, transparent); border-bottom-color: var(--hairline); }
 }
 
-@keyframes drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 88; } }
-@keyframes tick { from { transform: translateY(0); } to { transform: translateY(-390px); } }
-
-.ring { animation: drain 30s linear infinite; }
-.counter { height: 13px; overflow: hidden; }
-.counter > div { animation: tick 30s steps(30) infinite; }
-
 /* El hover no es una animación: es la respuesta a que estás señalando algo. */
 .lift { transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.24, 1), border-color 0.3s ease; }
 .lift:hover { transform: translateY(-5px); border-color: var(--border); }
@@ -258,7 +284,6 @@ a.store-btn:active { transform: translateY(0); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .ring, .counter > div { animation: none; }
   .bar { background: color-mix(in srgb, var(--canvas) 82%, transparent); border-bottom-color: var(--hairline); }
 }
 

@@ -31,16 +31,18 @@ export function Logo({
 /**
  * Marco de teléfono.
  *
- * Sin barra de estado dibujada: en un móvil real la pinta el sistema encima, y
- * una falsa se ve doblada.
+ * Sin barra de estado dibujada, y ahora por el motivo contrario al de antes:
+ * las pantallas que van dentro son capturas y traen la de verdad. Una dibujada
+ * encima se vería doblada.
+ *
+ * El fondo es el de la app y no `transparent`: mientras la captura viaja, el
+ * hueco tiene el color que va a tener después, no el de la página.
  */
 export function Phone({
   children,
-  background = 'var(--screen)',
   className,
 }: {
   readonly children: React.ReactNode;
-  readonly background?: string;
   /** Para que quien lo coloca decida si flota, si hace paralaje o si no se mueve. */
   readonly className?: string;
 }) {
@@ -52,7 +54,7 @@ export function Phone({
         flex: 'none',
         borderRadius: 34,
         border: '8px solid var(--surface-high)',
-        background,
+        background: 'var(--screen)',
         overflow: 'hidden',
       }}
     >
