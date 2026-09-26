@@ -1,25 +1,32 @@
-Sinchi is a management app for gyms and martial-arts schools. The app's interface is in Spanish.
+Sinchi is a management app for gyms and martial-arts schools. The interface is in Spanish.
+
+ANSWERS TO YOUR 2.1(b) QUESTIONS (submission 40e77983)
+That submission was closed before we could reply, so our answers are here.
+
+Sinchi sells no digital content, and no feature is unlocked by any payment. Two different things are paid for, neither consumed in the app:
+
+1) A STUDENT'S GYM MEMBERSHIP. Bought by a person who trains at a specific gym. It buys the right to enter that physical location and train in person. Paid at the gym's counter in cash, Yape or bank transfer; staff record it by hand. In an upcoming version students will also be able to pay by card through Culqi, a Peruvian processor. The money goes to the gym. This is a service delivered outside the app, at a physical address, so per 3.1.3(e) it must not use In-App Purchase.
+
+2) SINCHI'S OWN SOFTWARE SUBSCRIPTION, paid by the gym as a BUSINESS for the right to use Sinchi to run its roster. It is sold only on our website, sinchi.fit, and is never sold, offered, advertised or linked to inside this app. It is not sold to consumers or for family use.
+
+What a student sees in the app is only the STATUS of a membership bought in person: their plan, sessions left this week, next payment date, whether they owe money, and a QR code the gym scans at the door.
+
+The only digital material is a small library of technique videos each gym uploads for its own students. These are not sold, not priced, and not why anyone joins a gym; they are an incidental extra from a coach.
+
+GUIDELINE 4.8
+This build (13) adds Sign in with Apple next to Sign in with Google.
 
 HOW TO SIGN IN
 1. Open the app and tap "Entrar" (Sign in).
-2. Type the demo credentials into the fields labelled "Correo" (email) and "Contrasena" (password).
-3. Please do NOT use the "Entrar con Google" button. The demo account works with email and password only.
+2. Type the demo credentials into "Correo" (email) and "Contrasena" (password).
+3. Please do NOT use "Entrar con Google" or "Sign in with Apple" - the demo account works with email and password only.
 
 WHAT THE DEMO ACCOUNT SHOWS
-The account owns a demo gym called "Sinchi Demo" with students, plans and payments already loaded.
-- Staff mode (the default view): student roster, door check-in by scanning a student's QR code, manual payment records, membership plans, class schedule and routine videos.
-- Member mode: tap the gear icon, then "Modo" > "Ver como alumno" to switch to the student view (membership card, personal QR code, class schedule, routines).
+It owns a demo gym, "Sinchi Demo", with students, plans and payments loaded.
+- Staff mode (default): student roster, door check-in by scanning a QR, manual payment records, plans, class schedule, routine videos.
+- Member mode: tap the gear icon, then "Modo" > "Ver como alumno" (membership card, personal QR, schedule, routines).
 
 CAMERA
-The camera is used only to scan students' QR codes at the door. If you prefer not to grant camera access, students can also be checked in manually from the roster.
-
-PAYMENTS
-There are no in-app purchases or subscriptions. Payments are recorded by hand by gym staff at the counter (cash, Yape or bank transfer); the app does not process any transaction.
-
-MESSAGES (new)
-Members can now write to their gym inside the app, and staff reply from an inbox. The demo account is both owner and member of "Sinchi Demo", so both sides can be tried with one login:
-1. Member mode (gear icon > "Modo" > "Ver como alumno"): open the "Mensajes" tab and write to "Sinchi Demo".
-2. Staff mode: open the "Mensajes" tab, open the conversation and reply.
-The reply shows up in the member's chat within a few seconds. The app does not link to any external messaging app.
+Used only to scan students' QR codes at the door. If you prefer not to grant access, students can be checked in manually from the roster.
 
 Support: soporte@sinchi.fit

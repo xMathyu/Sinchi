@@ -1,3 +1,14 @@
+NO SE LLEGÓ A MANDAR POR AQUÍ. Cancelar el envío rechazado para poder reenviar
+cierra su hilo del Resolution Center, y con él la caja de respuesta. La versión
+condensada de este texto vive ahora en `app-review-notes.txt`, que es el campo
+«App Review Information → Notes» de la ficha: el revisor lo lee siempre y viaja
+con el envío, así que acaba siendo mejor sitio que el hilo.
+
+Esto se conserva como el razonamiento largo, y porque si Apple vuelve a
+preguntar, la respuesta ya está escrita.
+
+════════════════════════════════════════════════════════════════════════════
+
 Hello, and thank you for the review.
 
 We have uploaded a new build (1.0.0, build 13) that adds Sign in with Apple to
