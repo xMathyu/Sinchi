@@ -4,7 +4,9 @@
  * Son cuatro numeros que hasta ahora solo existian en el seed y que deciden
  * plata de verdad todos los dias: la matricula, la clase suelta del que agota su
  * cupo, que hacer con ese alumno, y cuanto cuesta la clase de prueba de quien
- * viene a conocer el local.
+ * viene a conocer el local. Y un quinto que no es precio pero decide lo mismo:
+ * cuantos dias de atraso aguanta el gimnasio antes de cerrarle la puerta a
+ * alguien.
  *
  * Van juntos y no repartidos por la app porque se leen juntos: son la respuesta
  * a "¿cuanto cuesta entrar aqui?" que no cabe en un plan.
@@ -27,6 +29,7 @@ import {
   gymLinkDenialMessage,
   normalizeGymLink,
   GYM_LINK_KINDS,
+  GRACE_DAYS_MAX,
   PLAN_PRICE_MAX_CENTS,
   type GymLinkKind,
   type GymLinks,
@@ -44,7 +47,35 @@ export interface GymPricing {
   readonly trialClassEnabled: boolean;
   /** 0 = la primera clase es gratis, que es lo normal. */
   readonly trialClassPriceCents: number;
+  /**
+   * Cuantos dias despues de vencer la mensualidad sigue entrando el alumno.
+   *
+   * Solo lo cambiaba el panel de Sinchi, y es decision del dueno: el feedback de
+   * un gimnasio lo pidio con esas palabras. Se aplica al leer cada ficha, no al
+   * dia siguiente (ver `graceChangeImpact`).
+   */
+  readonly graceDays: number;
 }
+
+/**
+ * Lo que llega del formulario.
+ *
+ * `graceDays` es opcional porque la app instalada va por detras de la api: la
+ * que todavia no conoce el campo guarda los precios sin el, y eso no puede
+ * devolverle la gracia al valor por defecto. Sin el campo, se queda la que habia.
+ */
+export type GymPricingInput = Omit<GymPricing, 'graceDays'> & {
+  readonly graceDays?: number | undefined;
+};
+
+const PRICING_SELECTION = {
+  enrollmentFeeCents: schema.tenants.enrollmentFeeCents,
+  dropInPriceCents: schema.tenants.dropInPriceCents,
+  quotaOverflowPolicy: schema.tenants.quotaOverflowPolicy,
+  trialClassEnabled: schema.tenants.trialClassEnabled,
+  trialClassPriceCents: schema.tenants.trialClassPriceCents,
+  graceDays: schema.tenants.graceDays,
+};
 
 /**
  * Donde queda el local, que es lo primero que pregunta quien lo busca.
@@ -214,13 +245,7 @@ export class GymSettingsService {
   async read(tenantId: string): Promise<GymPricing> {
     return withTenant(this.db, tenantId, async (tx) => {
       const [row] = await tx
-        .select({
-          enrollmentFeeCents: schema.tenants.enrollmentFeeCents,
-          dropInPriceCents: schema.tenants.dropInPriceCents,
-          quotaOverflowPolicy: schema.tenants.quotaOverflowPolicy,
-          trialClassEnabled: schema.tenants.trialClassEnabled,
-          trialClassPriceCents: schema.tenants.trialClassPriceCents,
-        })
+        .select(PRICING_SELECTION)
         .from(schema.tenants)
         .where(eq(schema.tenants.id, tenantId))
         .limit(1);
@@ -230,7 +255,7 @@ export class GymSettingsService {
     });
   }
 
-  async write(tenantId: string, input: GymPricing): Promise<GymPricing> {
+  async write(tenantId: string, input: GymPricingInput): Promise<GymPricing> {
     this.assertValid(input);
 
     return withTenant(this.db, tenantId, async (tx) => {
@@ -242,22 +267,17 @@ export class GymSettingsService {
           quotaOverflowPolicy: input.quotaOverflowPolicy,
           trialClassEnabled: input.trialClassEnabled,
           trialClassPriceCents: input.trialClassPriceCents,
+          ...(input.graceDays === undefined ? {} : { graceDays: input.graceDays }),
         })
         .where(eq(schema.tenants.id, tenantId))
-        .returning({
-          enrollmentFeeCents: schema.tenants.enrollmentFeeCents,
-          dropInPriceCents: schema.tenants.dropInPriceCents,
-          quotaOverflowPolicy: schema.tenants.quotaOverflowPolicy,
-          trialClassEnabled: schema.tenants.trialClassEnabled,
-          trialClassPriceCents: schema.tenants.trialClassPriceCents,
-        });
+        .returning(PRICING_SELECTION);
 
       if (row === undefined) throw new NotFoundException('Ese gimnasio no existe.');
       return row;
     });
   }
 
-  private assertValid(input: GymPricing): void {
+  private assertValid(input: GymPricingInput): void {
     for (const [label, cents] of [
       ['La matrícula', input.enrollmentFeeCents],
       ['La clase suelta', input.dropInPriceCents],
@@ -284,6 +304,14 @@ export class GymSettingsService {
     if (input.quotaOverflowPolicy === 'offer_drop_in' && input.dropInPriceCents === null) {
       throw new BadRequestException(
         'Si dejas entrar pagando clase suelta, ponle precio: la puerta se lo va a pedir al mostrador.',
+      );
+    }
+
+    // El CHECK `tenants_grace_days_valid` diria lo mismo con un 500.
+    const grace = input.graceDays;
+    if (grace !== undefined && (!Number.isInteger(grace) || grace < 0 || grace > GRACE_DAYS_MAX)) {
+      throw new BadRequestException(
+        `Los días de gracia van de 0 a ${GRACE_DAYS_MAX}. 0 es cerrarle la puerta el mismo día que vence.`,
       );
     }
   }

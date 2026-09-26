@@ -455,12 +455,65 @@ suite('lo que el local cobra aparte', () => {
       quotaOverflowPolicy: 'offer_drop_in',
       trialClassEnabled: true,
       trialClassPriceCents: 0,
+      graceDays: 10,
     };
 
     await http.post('/v1/staff/pricing').set(auth(local.owner)).send(pricing).expect(201);
 
     const { body } = await http.get('/v1/staff/pricing').set(auth(local.owner)).expect(200);
     expect(body).toMatchObject(pricing);
+  });
+
+  it('la app que no conoce la gracia guarda sus precios sin borrarla', async () => {
+    const local = await newGym();
+    const precios = {
+      enrollmentFeeCents: 0,
+      dropInPriceCents: null,
+      quotaOverflowPolicy: 'block',
+      trialClassEnabled: true,
+      trialClassPriceCents: 0,
+    };
+    await http
+      .post('/v1/staff/pricing')
+      .set(auth(local.owner))
+      .send({ ...precios, graceDays: 12 })
+      .expect(201);
+
+    // Lo que manda una app instalada antes de este campo.
+    const { body } = await http
+      .post('/v1/staff/pricing')
+      .set(auth(local.owner))
+      .send({ ...precios, enrollmentFeeCents: 4_000 })
+      .expect(201);
+
+    expect(body.graceDays).toBe(12);
+    expect(body.enrollmentFeeCents).toBe(4_000);
+  });
+
+  it('la gracia va de 0 a 60, con el motivo en vez del 500 del CHECK', async () => {
+    const local = await newGym();
+    const precios = {
+      enrollmentFeeCents: 0,
+      dropInPriceCents: null,
+      quotaOverflowPolicy: 'block',
+      trialClassEnabled: true,
+      trialClassPriceCents: 0,
+    };
+
+    for (const graceDays of [61, -1, 2.5]) {
+      const { status, body } = await http
+        .post('/v1/staff/pricing')
+        .set(auth(local.owner))
+        .send({ ...precios, graceDays });
+      expect(status).toBe(400);
+      expect(String(body.message)).toContain('días de gracia');
+    }
+
+    await http
+      .post('/v1/staff/pricing')
+      .set(auth(local.owner))
+      .send({ ...precios, graceDays: 0 })
+      .expect(201);
   });
 
   it('no deja ofrecer clase suelta sin precio: el mostrador tendría que inventarlo', async () => {

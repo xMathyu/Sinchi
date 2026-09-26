@@ -119,6 +119,9 @@ const pricingSchema = z.object({
   quotaOverflowPolicy: z.enum(['block', 'offer_drop_in']),
   trialClassEnabled: z.boolean(),
   trialClassPriceCents: z.number().int(),
+  // Opcional: la app que todavia no lo conoce no puede borrarlo (`GymPricingInput`).
+  // Sin `.int()`: el rango y los enteros los dice el servicio, con su frase.
+  graceDays: z.number().optional(),
 });
 
 @StaffOnly()

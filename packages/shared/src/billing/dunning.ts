@@ -20,6 +20,14 @@ import type { SubscriptionStatus } from '../domain/types.js';
 export const RETRY_OFFSETS: readonly number[] = [0, 3, 7];
 export const MAX_ATTEMPTS = RETRY_OFFSETS.length;
 export const DEFAULT_GRACE_DAYS = 5;
+/**
+ * El tope de la gracia, el mismo del CHECK `tenants_grace_days_valid`.
+ *
+ * Dos meses sin pagar y entrenando ya no son gracia: es un alumno gratis que
+ * nadie decidió regalar. Vive aquí para que el campo de la app y la api digan
+ * el mismo número que la base.
+ */
+export const GRACE_DAYS_MAX = 60;
 
 /**
  * Como tratar un rechazo segun su causa.
@@ -210,6 +218,43 @@ export function evaluateDelinquency(input: DelinquencyInput): DelinquencyState {
     suspensionDate,
     canTrain: false,
   };
+}
+
+/** Cuántos alumnos cambian de lado de la puerta si la gracia pasa a otro número. */
+export interface GraceChangeImpact {
+  /** Hoy entran en gracia y con la nueva dejarían de entrar. */
+  readonly suspended: number;
+  /** Hoy están suspendidos y con la nueva volverían a entrar. */
+  readonly reactivated: number;
+}
+
+/**
+ * Lo que pasa en la puerta HOY si el dueño cambia sus días de gracia.
+ *
+ * Existe porque el cambio no espera al día siguiente: la gracia se aplica al
+ * leer cada ficha (`evaluateDelinquency`), así que bajarla de 10 a 3 deja fuera,
+ * en ese mismo instante, a quien lleva cinco días de atraso y ayer entraba sin
+ * problema. El dueño que lo cambia desde el sofá tiene que saberlo antes de que
+ * lo descubra ese alumno en el mostrador.
+ *
+ * Recibe el estado ya evaluado de cada ficha y no la ficha entera: la app de
+ * staff no tiene los cargos de cada alumno, solo el semáforo que calculó el
+ * servidor. Quien está al día (`active`) o canceló no cambia con la gracia.
+ */
+export function graceChangeImpact(
+  members: readonly { readonly status: SubscriptionStatus; readonly daysPastDue: number }[],
+  graceDays: number,
+): GraceChangeImpact {
+  let suspended = 0;
+  let reactivated = 0;
+  for (const member of members) {
+    // La misma frontera que `evaluateDelinquency`: el último día de gracia
+    // todavía se entra.
+    const inGrace = member.daysPastDue <= graceDays;
+    if (member.status === 'in_grace' && !inGrace) suspended += 1;
+    if (member.status === 'suspended' && inGrace) reactivated += 1;
+  }
+  return { suspended, reactivated };
 }
 
 export function canTrain(status: SubscriptionStatus): boolean {

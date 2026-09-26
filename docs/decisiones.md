@@ -1624,6 +1624,25 @@ siendo sus propias pantallas.
 Consecuencia pequeña: «Otros cobros» ya no cierra al guardar, porque cerrar se
 llevaría también las otras dos pestañas. Se queda y dice «Guardado».
 
+### Los días de gracia, también ahí
+
+`tenants.grace_days` existía desde la `0000` y solo lo cambiaba el panel de
+Sinchi, hasta que un gimnasio pidió «poner para configurar día de gracia». Va en
+«Otros cobros» porque es la misma decisión que la matrícula vista desde el otro
+lado: cuánto le aguanta el local a quien no pagó. Solo el dueño la cambia.
+
+Lo que no es obvio es que **el cambio se aplica en el acto**: la gracia se lee
+al evaluar cada ficha, no la aplica el cron de las 06:00. Bajarla de 10 a 3 deja
+fuera, en ese mismo instante, a quien lleva cinco días de atraso y ayer entraba.
+Por eso el campo dice, antes de guardar, cuántos alumnos quedan fuera o vuelven
+a entrar (`graceChangeImpact`), y al guardar la app vuelve a pedir el padrón:
+el semáforo que tenía en memoria lo calculó el servidor con la gracia anterior.
+
+En la api el campo es **opcional**: la app instalada va por detrás, y la que no
+lo conoce guarda los precios sin él. Si faltar significara «volver a 5», cada
+dueño con una app vieja que tocara la matrícula le devolvería la gracia al valor
+por defecto sin saberlo.
+
 ---
 
 ## 25. Las personas desde el panel: corregir, banear y cumplir las bajas

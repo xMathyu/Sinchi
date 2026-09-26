@@ -1039,6 +1039,14 @@ export interface GymPricing {
   readonly quotaOverflowPolicy: 'block' | 'offer_drop_in';
   readonly trialClassEnabled: boolean;
   readonly trialClassPriceCents: number;
+  /**
+   * Días que el alumno con la mensualidad vencida sigue entrando.
+   *
+   * Opcional en los dos sentidos: una api anterior no lo devuelve, y sin él la
+   * app guarda los precios sin tocar la gracia en vez de mandar un número
+   * inventado.
+   */
+  readonly graceDays?: number;
 }
 
 export const fetchPricing = (): Promise<GymPricing> => request('/staff/pricing');

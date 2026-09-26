@@ -5,11 +5,12 @@ import {
   canTrain,
   classifyPaymentError,
   evaluateDelinquency,
+  graceChangeImpact,
   paymentErrorMessage,
   planRetry,
   retrySchedule,
 } from './dunning.js';
-import { plainDate } from '../time/plain-date.js';
+import { addDays, plainDate } from '../time/plain-date.js';
 
 const FIRST_FAILURE = plainDate(2026, 8, 16);
 
@@ -161,5 +162,54 @@ describe('canTrain', () => {
     expect(canTrain('in_grace')).toBe(true);
     expect(canTrain('suspended')).toBe(false);
     expect(canTrain('canceled')).toBe(false);
+  });
+});
+
+describe('graceChangeImpact', () => {
+  const ficha = (status: 'active' | 'in_grace' | 'suspended' | 'canceled', daysPastDue: number) => ({
+    status,
+    daysPastDue,
+  });
+
+  it('bajar la gracia deja fuera a quien ya pasó el nuevo límite', () => {
+    const padron = [ficha('in_grace', 5), ficha('in_grace', 2), ficha('active', 0)];
+    expect(graceChangeImpact(padron, 3)).toEqual({ suspended: 1, reactivated: 0 });
+  });
+
+  it('subirla vuelve a abrirle la puerta al suspendido que queda dentro', () => {
+    const padron = [ficha('suspended', 8), ficha('suspended', 20)];
+    expect(graceChangeImpact(padron, 10)).toEqual({ suspended: 0, reactivated: 1 });
+  });
+
+  it('el último día de gracia todavía se entra, igual que en la puerta', () => {
+    expect(graceChangeImpact([ficha('in_grace', 3)], 3)).toEqual({ suspended: 0, reactivated: 0 });
+    expect(graceChangeImpact([ficha('suspended', 3)], 3)).toEqual({ suspended: 0, reactivated: 1 });
+  });
+
+  it('al día y cancelados no cambian con la gracia', () => {
+    expect(graceChangeImpact([ficha('active', 0), ficha('canceled', 40)], 0)).toEqual({
+      suspended: 0,
+      reactivated: 0,
+    });
+  });
+
+  it('cuenta lo mismo que evaluateDelinquency diría con la gracia nueva', () => {
+    // La frontera está escrita dos veces; esto es lo que impide que se separen.
+    const nextBillingDate = plainDate(2026, 8, 1);
+    for (let pastDue = 1; pastDue <= 15; pastDue += 1) {
+      const today = addDays(nextBillingDate, pastDue);
+      const antes = evaluateDelinquency({ nextBillingDate, today, graceDays: 7, periodPaid: false });
+      for (const nueva of [0, 3, 7, 12]) {
+        const despues = evaluateDelinquency({
+          nextBillingDate,
+          today,
+          graceDays: nueva,
+          periodPaid: false,
+        });
+        const impacto = graceChangeImpact([antes], nueva);
+        expect(impacto.suspended).toBe(antes.status === 'in_grace' && despues.status === 'suspended' ? 1 : 0);
+        expect(impacto.reactivated).toBe(antes.status === 'suspended' && despues.status === 'in_grace' ? 1 : 0);
+      }
+    }
   });
 });
