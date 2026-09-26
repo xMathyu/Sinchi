@@ -14,6 +14,37 @@ import { Injectable, Logger } from '@nestjs/common';
 import { loadEnv } from '../../config/env';
 import { inviteEmail } from './invite-email';
 
+/**
+ * El asunto del aviso de una reserva.
+ *
+ * Se lee entero en la notificación del móvil, que es donde de verdad se lee:
+ * qué es, quién y qué día, sin adornos. Lo primero es QUÉ ES porque es lo que
+ * decide qué hacer: una inscripción es un alumno que llega a pagar un mes, una
+ * prueba es alguien a quien convencer.
+ *
+ * Decía «Clase de prueba» para las tres. El texto de dentro sí distinguía, pero
+ * el dueño que leía «Clase de prueba: Ana viene el martes» en la notificación no
+ * abría el correo para descubrir que Ana venía a inscribirse, y la inscripción
+ * pasaba por una prueba más.
+ */
+export function bookingSubject(input: {
+  readonly kind: 'trial' | 'drop_in' | 'enrollment';
+  readonly personName: string;
+  readonly when: string;
+  readonly rescheduled?: boolean;
+}): string {
+  if (input.rescheduled === true) {
+    return `Cambio de hora: ${input.personName} ahora viene el ${input.when}`;
+  }
+  const what =
+    input.kind === 'enrollment'
+      ? 'Inscripción'
+      : input.kind === 'drop_in'
+        ? 'Clase suelta'
+        : 'Clase de prueba';
+  return `${what}: ${input.personName} viene el ${input.when}`;
+}
+
 export interface SendOutcome {
   readonly enviado: boolean;
   /** Por qué no se envió, cuando no se envió. */
@@ -220,11 +251,7 @@ export class MailService {
         body: JSON.stringify({
           from: env.MAIL_FROM,
           to: [input.recipient],
-          // El asunto se lee entero en la notificación del móvil, que es donde
-          // de verdad se lee: nombre y día, sin adornos.
-          subject: change
-            ? `Cambio de hora: ${input.personName} ahora viene el ${input.when}`
-            : `Clase de prueba: ${input.personName} viene el ${input.when}`,
+          subject: bookingSubject(input),
           text: text,
         }),
         signal: AbortSignal.timeout(10_000),
