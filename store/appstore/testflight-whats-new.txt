@@ -4,6 +4,7 @@ NOVEDADES DE ESTA VERSIÓN
 • Las inscripciones se ven: cuando alguien reserva su inscripción desde la app, la pestaña Reservas lleva un número, la Puerta te avisa con su nombre y el día, y en Reservas sale arriba de todo. El correo que te llega ahora dice «Inscripción» y no «Clase de prueba».
 • Clases por edades: al crear o editar una clase puedes poner desde qué edad y hasta qué edad es —por ejemplo, Judo kids de 3 a 7 y, a otra hora, de 8 a 13—. Sale en tu horario, en tu ficha del directorio y en el horario de tus alumnos.
 • Entrar con Apple, además de Google y de correo.
+• Un plan con nombre largo —«Judo Kids 4 años a 7 años»— ya no deja su precio cortado en la pantalla Plan.
 
 SI VIENES DE LA VERSIÓN ANTERIOR, ESTO YA ESTABA
 • El logo, la web y las redes de tu gimnasio.

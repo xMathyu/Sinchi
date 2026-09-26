@@ -1,3 +1,4 @@
 • Días de gracia: el dueño los decide en Clases y precios → «Otros cobros», y antes de guardar ve a quién deja fuera.
 • Cuando alguien reserva su inscripción desde la app, Reservas lleva un número y la Puerta te avisa con su nombre y el día.
 • Clases por edades: por ejemplo, Judo kids de 3 a 7 y de 8 a 13. Sale en tu horario y en tu ficha del directorio.
+• Un plan con nombre largo ya no deja su precio cortado en la pantalla Plan.
