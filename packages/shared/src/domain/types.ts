@@ -476,6 +476,13 @@ export interface ClassSchedule {
   readonly endTime: LocalTime;
   readonly capacity: number | null;
   readonly instructor: string | null;
+  /**
+   * Para qué edades es la clase: «Judo kids» de 3 a 7 y otro de 8 a 13. Los dos
+   * `null` = para todos. Se lee con `formatAgeRange`; no restringe quién reserva
+   * ni quién entra (migración 0028).
+   */
+  readonly minAge: number | null;
+  readonly maxAge: number | null;
 }
 
 /**

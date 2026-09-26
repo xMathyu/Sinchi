@@ -22,6 +22,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import {
   allWeekdays,
   checkScheduleDraft,
+  formatAgeRange,
   scheduleDenialMessage,
   weekdayInitial,
   weekdayName,
@@ -124,6 +125,13 @@ export default function ScheduleEditorScreen() {
   const [endTime, setEndTime] = useState('20:30');
   const [capacity, setCapacity] = useState('');
   const [instructor, setInstructor] = useState('');
+  /**
+   * Para qué edades es. Lo pidió un dojo: «judo kids de 3 a 7 y, en otro
+   * horario, judo kids de 8 a 13». Sin esto las dos clases se llamaban igual y
+   * solo la hora las distinguía, o la edad acababa escrita dentro del nombre.
+   */
+  const [minAge, setMinAge] = useState('');
+  const [maxAge, setMaxAge] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,10 +146,20 @@ export default function ScheduleEditorScreen() {
     setEndTime(schedule.endTime);
     setCapacity(schedule.capacity === null ? '' : String(schedule.capacity));
     setInstructor(schedule.instructor ?? '');
+    // `??` por la api anterior a la 0028, que no manda las edades.
+    setMinAge(schedule.minAge == null ? '' : String(schedule.minAge));
+    setMaxAge(schedule.maxAge == null ? '' : String(schedule.maxAge));
   }, [existente]);
 
   const trimmedCapacity = capacity.trim();
   const capacidad = trimmedCapacity.length === 0 ? null : Number(trimmedCapacity);
+  // Vacío es «sin ese extremo»; lo que no es un número entero lo rechaza el
+  // dominio con su frase, en vez de que esto lo convierta en otra edad.
+  const edad = (text: string): number | null =>
+    text.trim().length === 0 ? null : Number(text.trim());
+  const edadMinima = edad(minAge);
+  const edadMaxima = edad(maxAge);
+  const ageRange = formatAgeRange({ minAge: edadMinima, maxAge: edadMaxima });
 
   const draft = {
     name: name,
@@ -153,6 +171,8 @@ export default function ScheduleEditorScreen() {
     endTime: endTime,
     capacity: capacidad,
     instructor: instructor.trim().length === 0 ? null : instructor,
+    minAge: edadMinima,
+    maxAge: edadMaxima,
   };
   const denial = checkScheduleDraft(draft);
   const ready = denial === null && days.length > 0 && !saving;
@@ -174,7 +194,9 @@ export default function ScheduleEditorScreen() {
    * devuelve un motivo y no un booleano— asi que el mensaje puede ir debajo del
    * campo en vez de en un aviso al final que obliga a adivinar a que se refiere.
    */
-  const denialFor = (field: 'name' | 'hours' | 'capacity' | 'instructor'): string | undefined => {
+  const denialFor = (
+    field: 'name' | 'hours' | 'capacity' | 'instructor' | 'ages',
+  ): string | undefined => {
     if (!attempted || denial === null) return undefined;
     const suyo: Record<typeof field, boolean> = {
       name: denial === 'name_too_short' || denial === 'name_too_long',
@@ -184,6 +206,10 @@ export default function ScheduleEditorScreen() {
         denial === 'too_short',
       capacity: denial === 'capacity_not_integer' || denial === 'capacity_out_of_range',
       instructor: denial === 'instructor_too_long',
+      ages:
+        denial === 'age_not_integer' ||
+        denial === 'age_out_of_range' ||
+        denial === 'age_range_inverted',
     };
     return suyo[field] ? scheduleDenialMessage(denial) : undefined;
   };
@@ -200,6 +226,8 @@ export default function ScheduleEditorScreen() {
       endTime: endTime,
       capacity: capacidad,
       instructor: instructor.trim().length === 0 ? null : instructor.trim(),
+      minAge: edadMinima,
+      maxAge: edadMaxima,
       active: existente?.active ?? true,
     };
     try {
@@ -246,6 +274,43 @@ export default function ScheduleEditorScreen() {
             error={denialFor('name')}
           />
         </Card>
+      </Stack>
+
+      <Stack gap={10} style={{ marginTop: 20 }}>
+        <Eyebrow>Para qué edades</Eyebrow>
+        <Card radius={theme.radii.xl}>
+          <Row gap={12} align="flex-start">
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Desde"
+                value={minAge}
+                onChangeText={setMinAge}
+                placeholder="Años"
+                keyboardType="number-pad"
+                optional
+                error={denialFor('ages')}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Hasta"
+                value={maxAge}
+                onChangeText={setMaxAge}
+                placeholder="Años"
+                keyboardType="number-pad"
+                optional
+                error={denialFor('ages')}
+              />
+            </View>
+          </Row>
+        </Card>
+        {/* Lo que va a leer el padre en el directorio, ya escrito: es la forma de
+            ver que «desde 3» sin «hasta» no dice lo que el dueño quería. */}
+        <Text variant="micro" color={theme.colors.textFaint}>
+          {ageRange === null
+            ? 'Déjalo vacío si la clase es para todos. Sirve para las clases por edad: judo kids de 3 a 7, de 8 a 13.'
+            : `Sale en tu ficha como «${ageRange}». No impide que otro reserve: es para que cada uno elija bien.`}
+        </Text>
       </Stack>
 
       <Stack gap={10} style={{ marginTop: 20 }}>

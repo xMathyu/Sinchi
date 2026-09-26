@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkScheduleDraft,
+  formatAgeRange,
   isValidScheduleDraft,
   scheduleDenialMessage,
   scheduleRange,
   schedulesOverlap,
+  SCHEDULE_AGE_MAX,
   SCHEDULE_CAPACITY_MAX,
   SCHEDULE_MIN_MINUTES,
   SCHEDULE_NAME_MAX,
@@ -123,6 +125,52 @@ describe('profesor', () => {
   });
 });
 
+describe('edades', () => {
+  it('sin edades es para todos, como cada bloque antes de la 0028', () => {
+    expect(checkScheduleDraft(draft())).toBeNull();
+    expect(checkScheduleDraft(draft({ minAge: null, maxAge: null }))).toBeNull();
+  });
+
+  it('el caso que lo pidió: judo kids de 3 a 7 y de 8 a 13', () => {
+    expect(checkScheduleDraft(draft({ minAge: 3, maxAge: 7 }))).toBeNull();
+    expect(checkScheduleDraft(draft({ minAge: 8, maxAge: 13 }))).toBeNull();
+  });
+
+  it('cada extremo vale solo', () => {
+    expect(checkScheduleDraft(draft({ minAge: 16 }))).toBeNull();
+    expect(checkScheduleDraft(draft({ maxAge: 5 }))).toBeNull();
+  });
+
+  it('una sola edad es un rango de un año', () => {
+    expect(checkScheduleDraft(draft({ minAge: 5, maxAge: 5 }))).toBeNull();
+  });
+
+  it('rechaza el rango al revés', () => {
+    expect(checkScheduleDraft(draft({ minAge: 13, maxAge: 8 }))).toBe('age_range_inverted');
+  });
+
+  it('rechaza edades imposibles y medias', () => {
+    expect(checkScheduleDraft(draft({ minAge: -1 }))).toBe('age_out_of_range');
+    expect(checkScheduleDraft(draft({ maxAge: SCHEDULE_AGE_MAX + 1 }))).toBe('age_out_of_range');
+    expect(checkScheduleDraft(draft({ minAge: 3.5 }))).toBe('age_not_integer');
+  });
+});
+
+describe('formatAgeRange', () => {
+  it('se lee igual en todos los gimnasios', () => {
+    expect(formatAgeRange({ minAge: 3, maxAge: 7 })).toBe('3 a 7 años');
+    expect(formatAgeRange({ minAge: 16, maxAge: null })).toBe('desde 16 años');
+    expect(formatAgeRange({ minAge: null, maxAge: 5 })).toBe('hasta 5 años');
+    expect(formatAgeRange({ minAge: 5, maxAge: 5 })).toBe('5 años');
+    expect(formatAgeRange({ minAge: null, maxAge: 1 })).toBe('hasta 1 año');
+  });
+
+  it('para todos no dice nada, ni contra una api que no manda los campos', () => {
+    expect(formatAgeRange({ minAge: null, maxAge: null })).toBeNull();
+    expect(formatAgeRange({})).toBeNull();
+  });
+});
+
 describe('mensajes', () => {
   const denials: readonly ScheduleDenial[] = [
     'name_too_short',
@@ -134,6 +182,9 @@ describe('mensajes', () => {
     'capacity_not_integer',
     'capacity_out_of_range',
     'instructor_too_long',
+    'age_not_integer',
+    'age_out_of_range',
+    'age_range_inverted',
   ];
 
   it('cada motivo tiene su texto y ninguno se repite', () => {

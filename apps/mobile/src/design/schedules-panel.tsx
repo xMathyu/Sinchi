@@ -26,6 +26,7 @@ import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import {
   allWeekdays,
+  formatAgeRange,
   scheduleRange,
   weekdayName,
   type IsoWeekday,
@@ -220,6 +221,14 @@ function ScheduleRow({
               {scheduleRange(schedule)}
               {schedule.instructor === null ? '' : ` · ${schedule.instructor}`}
             </Text>
+            {/* En su propia línea y no al final de la de arriba: con día, hora y
+                profesor esa línea ya se corta, y la edad es justo lo que
+                distingue a las dos «Judo kids» del mismo martes. */}
+            {formatAgeRange(schedule) === null ? null : (
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                {formatAgeRange(schedule)}
+              </Text>
+            )}
             {/* Las dos cosas que hay que saber antes de tocarlo. El aviso de
                 solape no impide nada —dos tatamis dan dos clases a la vez— pero
                 enterarse al ver el horario publicado es tarde. */}

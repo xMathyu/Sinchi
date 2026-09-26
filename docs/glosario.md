@@ -19,6 +19,7 @@ español**. Nunca los dos idiomas en el mismo nombre.
 | método de pago | `PaymentMethod` |
 | cargo | `Charge` |
 | horario de clase | `ClassSchedule` |
+| para qué edades es la clase | `minAge`, `maxAge` / `formatAgeRange` |
 | asistencia | `Attendance` |
 | staff / recepción / dueño | `Staff`, `front_desk`, `owner` |
 | clase reservada desde el directorio (prueba, suelta o inscripción) | `ClassBooking` |
@@ -58,6 +59,7 @@ también paga el alumno CON plan que agota su cupo semanal — y ese precio vive
 | morosidad | `delinquency` / `evaluateDelinquency` |
 | días de mora | `daysPastDue` |
 | periodo de gracia | `graceDays`, `graceDaysLeft` |
+| a quién deja fuera o vuelve a dejar entrar cambiar la gracia | `graceChangeImpact` |
 | suspendida | `suspended` |
 | plan pendiente (downgrade) | `pendingPlanId` |
 | mensualidad | `ChargeType = 'renewal'` |
@@ -110,6 +112,7 @@ las apps instaladas (decisiones §13).
 | el cargo con el que se pagó | `chargeId` |
 | la ficha que salió de la inscripción | `membershipId` |
 | sin atender, sigue por venir | `PENDING_DAYS` |
+| inscripción que espera su ficha | `awaitsEnrollment` |
 
 ## Conceptos de la biblioteca
 

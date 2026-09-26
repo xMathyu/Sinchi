@@ -28,6 +28,12 @@ export interface ClassSlot {
   readonly scheduleId: ClassScheduleId;
   readonly name: string;
   readonly instructor: string | null;
+  /**
+   * Para qué edades es, copiado del bloque. Es lo que distingue el «Judo kids»
+   * de las 16:00 del de las 17:00 cuando se eligen por fecha y no por día.
+   */
+  readonly minAge: number | null;
+  readonly maxAge: number | null;
   readonly date: PlainDate;
   readonly startTime: LocalTime;
   readonly endTime: LocalTime;
@@ -88,6 +94,9 @@ export function upcomingClassSlots(input: UpcomingSlotsInput): readonly ClassSlo
         scheduleId: schedule.id,
         name: schedule.name,
         instructor: schedule.instructor,
+        // `??` por la api anterior a la 0028, que no los manda.
+        minAge: schedule.minAge ?? null,
+        maxAge: schedule.maxAge ?? null,
         date,
         startTime: schedule.startTime,
         endTime: schedule.endTime,

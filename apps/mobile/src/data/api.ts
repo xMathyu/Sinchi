@@ -982,6 +982,9 @@ export interface ScheduleInput {
   readonly endTime: string;
   readonly capacity: number | null;
   readonly instructor: string | null;
+  /** Para qué edades es. Los dos `null` = para todos (migración 0028). */
+  readonly minAge: number | null;
+  readonly maxAge: number | null;
   readonly active: boolean;
 }
 

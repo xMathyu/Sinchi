@@ -54,6 +54,13 @@ export interface ScheduleInput {
   readonly endTime: string;
   readonly capacity: number | null;
   readonly instructor: string | null;
+  /**
+   * Para qué edades es (0028). Van en pareja y opcionales: una app anterior no
+   * los manda, y editar desde ella la hora de «Judo kids» no puede borrarle el
+   * «3 a 7 años». Sin los dos, se queda lo que había; al crear, es para todos.
+   */
+  readonly minAge?: number | null | undefined;
+  readonly maxAge?: number | null | undefined;
   readonly active: boolean;
 }
 
@@ -299,6 +306,7 @@ export class SchedulesService {
       endTime: input.endTime,
       capacity: input.capacity,
       instructor: input.instructor,
+      ...this.ages(input),
     });
     if (denial !== null) throw new BadRequestException(scheduleDenialMessage(denial));
   }
@@ -315,7 +323,20 @@ export class SchedulesService {
         input.instructor === null || input.instructor.trim().length === 0
           ? null
           : input.instructor.trim(),
+      ...this.ages(input),
       active: input.active,
     };
+  }
+
+  /**
+   * Las dos edades, o nada.
+   *
+   * Como pareja y no una por una: el «de 13 a 8» solo se ve con las dos delante,
+   * y dejar que llegue media —la máxima nueva contra la mínima que había— es
+   * aceptar un rango que nadie escribió entero.
+   */
+  private ages(input: ScheduleInput): { minAge?: number | null; maxAge?: number | null } {
+    if (input.minAge === undefined || input.maxAge === undefined) return {};
+    return { minAge: input.minAge, maxAge: input.maxAge };
   }
 }

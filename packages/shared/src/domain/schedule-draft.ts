@@ -38,6 +38,14 @@ export const SCHEDULE_CAPACITY_MAX = 500;
  */
 export const SCHEDULE_MIN_MINUTES = 15;
 
+/**
+ * La edad más alta que se puede escribir: 99.
+ *
+ * Igual que el tope de aforo, es un cazador de tipeos y no una regla: nadie da
+ * una clase «hasta 130 años», y un 130 es un 13 con un cero de más.
+ */
+export const SCHEDULE_AGE_MAX = 99;
+
 export interface ScheduleDraft {
   readonly name: string;
   readonly weekday: number;
@@ -47,6 +55,13 @@ export interface ScheduleDraft {
   /** Aforo del bloque, o `null` cuando el local no lo limita. */
   readonly capacity: number | null;
   readonly instructor: string | null;
+  /**
+   * Para qué edades es. Cada extremo por su lado: «desde 16» no tiene máximo y
+   * «hasta 5» no tiene mínimo. Sin ninguno —o sin el campo, que es lo que manda
+   * una app anterior a la 0028—, la clase es para todos.
+   */
+  readonly minAge?: number | null;
+  readonly maxAge?: number | null;
 }
 
 export type ScheduleDenial =
@@ -58,7 +73,10 @@ export type ScheduleDenial =
   | 'too_short'
   | 'capacity_not_integer'
   | 'capacity_out_of_range'
-  | 'instructor_too_long';
+  | 'instructor_too_long'
+  | 'age_not_integer'
+  | 'age_out_of_range'
+  | 'age_range_inverted';
 
 /** Minutos desde medianoche, o `null` si la hora no tiene forma `HH:MM`. */
 function readTime(time: string): number | null {
@@ -97,6 +115,16 @@ export function checkScheduleDraft(draft: ScheduleDraft): ScheduleDenial | null 
     return 'instructor_too_long';
   }
 
+  const minAge = draft.minAge ?? null;
+  const maxAge = draft.maxAge ?? null;
+  for (const age of [minAge, maxAge]) {
+    if (age === null) continue;
+    if (!Number.isInteger(age)) return 'age_not_integer';
+    if (age < 0 || age > SCHEDULE_AGE_MAX) return 'age_out_of_range';
+  }
+  // «De 13 a 8 años» es casi siempre los dos campos al revés, no una clase.
+  if (minAge !== null && maxAge !== null && minAge > maxAge) return 'age_range_inverted';
+
   return null;
 }
 
@@ -123,7 +151,40 @@ export function scheduleDenialMessage(reason: ScheduleDenial): string {
       return `El aforo va de 1 a ${SCHEDULE_CAPACITY_MAX} personas. Déjalo vacío si no lo limitas.`;
     case 'instructor_too_long':
       return `El nombre del profesor no puede pasar de ${SCHEDULE_INSTRUCTOR_MAX} caracteres.`;
+    case 'age_not_integer':
+      return 'Las edades van en años enteros.';
+    case 'age_out_of_range':
+      return `Las edades van de 0 a ${SCHEDULE_AGE_MAX} años. Déjalas vacías si la clase es para todos.`;
+    case 'age_range_inverted':
+      return 'La edad mínima no puede ser mayor que la máxima. ¿Están al revés?';
   }
+}
+
+/**
+ * Para qué edades es, en palabras: «3 a 7 años», «desde 16 años», «hasta 5
+ * años». `null` si es para todos, que es lo que no hace falta decir.
+ *
+ * Vive aquí por lo mismo que `scheduleRange`: lo dicen la lista del dueño, la
+ * ficha del directorio y el horario del alumno, y en los tres tiene que leerse
+ * igual. Si cada pantalla lo armara, un gimnasio saldría «3-7», otro «de 3 a 7»
+ * y otro «3 a 7 años», y el padre que compara dos dojos no sabría si es lo mismo.
+ *
+ * Acepta `undefined` porque la app se actualiza sola y la api no: una anterior
+ * a la 0028 no manda los campos, y esa clase es para todos.
+ */
+export function formatAgeRange(schedule: {
+  readonly minAge?: number | null;
+  readonly maxAge?: number | null;
+}): string | null {
+  const min = schedule.minAge ?? null;
+  const max = schedule.maxAge ?? null;
+  if (min === null && max === null) return null;
+  const years = (n: number): string => (n === 1 ? 'año' : 'años');
+  if (min !== null && max !== null) {
+    return min === max ? `${min} ${years(min)}` : `${min} a ${max} años`;
+  }
+  if (min !== null) return `desde ${min} ${years(min)}`;
+  return `hasta ${max} ${years(max!)}`;
 }
 
 /**

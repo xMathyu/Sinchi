@@ -1249,6 +1249,9 @@ export const classSchedules = pgTable(
     endTime: text('end_time').notNull(),
     capacity: smallint('capacity'),
     instructor: text('instructor'),
+    /** Para qué edades es (0028). Los dos `null` = para todos. */
+    minAge: smallint('min_age'),
+    maxAge: smallint('max_age'),
     active: boolean('active').notNull().default(true),
   },
   (t) => [index('class_schedules_tenant_weekday_idx').on(t.tenantId, t.weekday)],

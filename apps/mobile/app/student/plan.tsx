@@ -11,6 +11,7 @@ import { Alert, Pressable, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   allWeekdays,
+  formatAgeRange,
   formatPENShort,
   isoWeekday,
   weekdayInitial,
@@ -511,6 +512,13 @@ function WeekAndSchedule({ entry }: { readonly entry: MembershipView }) {
                 <Row key={klass.id} gap={12}>
                   <Text variant="bodySmall" style={{ flex: 1 }}>
                     {klass.name}
+                    {/* El padre con dos hijos en dos «Judo kids» tiene que ver
+                        cuál es la de cada uno sin preguntar en el mostrador. */}
+                    {formatAgeRange(klass) === null ? null : (
+                      <Text variant="bodySmall" color={theme.colors.textTertiary}>
+                        {` · ${formatAgeRange(klass)}`}
+                      </Text>
+                    )}
                   </Text>
                   <Text variant="bodySmall" weight="semibold" color={theme.colors.textStrong}>
                     {klass.startTime} – {klass.endTime}

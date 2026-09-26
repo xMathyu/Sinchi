@@ -157,6 +157,8 @@ export function makeSchedule(
     endTime,
     capacity: 24,
     instructor: 'Prof. Ramos',
+    minAge: null,
+    maxAge: null,
     ...overrides,
   };
 }

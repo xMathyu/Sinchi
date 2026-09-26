@@ -388,6 +388,8 @@ export function buildDemoData(): DemoData {
       endTime: '20:30',
       capacity: 24,
       instructor: 'Prof. Ramos',
+      minAge: null,
+      maxAge: null,
     },
     {
       id: asId('sched-nova-mie'),
@@ -398,6 +400,8 @@ export function buildDemoData(): DemoData {
       endTime: '20:30',
       capacity: 24,
       instructor: 'Prof. Ramos',
+      minAge: null,
+      maxAge: null,
     },
     {
       id: asId('sched-nova-vie'),
@@ -408,6 +412,8 @@ export function buildDemoData(): DemoData {
       endTime: '20:30',
       capacity: 20,
       instructor: 'Prof. Ramos',
+      minAge: null,
+      maxAge: null,
     },
   ];
 

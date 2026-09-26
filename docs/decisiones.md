@@ -1643,6 +1643,29 @@ lo conoce guarda los precios sin él. Si faltar significara «volver a 5», cada
 dueño con una app vieja que tocara la matrícula le devolvería la gracia al valor
 por defecto sin saberlo.
 
+### Para qué edades es la clase
+
+Lo pidió un dojo: «hay judo kids de 3 a 7 años y después, en otro horario, judo
+kids de 8 a 13». Hasta la `0028` eran dos bloques con el mismo nombre que solo
+se distinguían por la hora, o por una edad escrita a mano dentro del nombre.
+
+Son **dos columnas opcionales** (`min_age`, `max_age`) y no un texto, porque el
+rango se lee en cuatro sitios —la lista del dueño, el editor, la ficha del
+directorio y el horario del alumno— y `formatAgeRange` lo escribe igual en
+todos: «3 a 7 años», «desde 16 años», «hasta 5 años». Con texto libre cada
+gimnasio lo escribiría a su manera, y el padre que compara dos dojos no sabría
+si «3-7» y «de 3 a 7» son lo mismo. Cada extremo va por su lado porque «adultos,
+desde 16» no tiene máximo.
+
+**No restringe nada.** Quien reserva la clase de un niño es casi siempre su
+padre, con su propia cuenta, y la puerta no sabe la edad de nadie. Pedir la
+fecha de nacimiento para poder hacer cumplir el rango sería un dato personal más
+—de un menor, además— a cambio de una regla que el sensei aplica mejor mirando.
+Es información para elegir bien.
+
+Igual que la gracia, en la api las edades son **opcionales y van en pareja**: la
+app que no las conoce edita la hora de «Judo kids» sin borrarle el «3 a 7 años».
+
 ---
 
 ## 25. Las personas desde el panel: corregir, banear y cumplir las bajas

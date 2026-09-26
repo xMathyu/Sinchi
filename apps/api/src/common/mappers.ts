@@ -185,6 +185,8 @@ export function toClassSchedule(row: ClassScheduleRow): ClassSchedule {
     endTime: row.endTime,
     capacity: row.capacity,
     instructor: row.instructor,
+    minAge: row.minAge,
+    maxAge: row.maxAge,
   };
 }
 

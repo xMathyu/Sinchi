@@ -669,6 +669,23 @@ describe('horarios', () => {
       /class_schedules_weekday_valid/,
     );
   });
+
+  it('las edades no quedan al revés ni fuera de rango, y cada una puede faltar', async () => {
+    const insert = (minAge: number | null, maxAge: number | null) =>
+      db.query(
+        `insert into class_schedules (tenant_id, name, weekday, start_time, end_time, min_age, max_age)
+         values ($1, 'Judo kids', 2, '16:00', '17:00', $2, $3) returning id`,
+        [TENANT, minAge, maxAge],
+      );
+
+    await expectRejection(() => insert(13, 8), /class_schedules_ages_valid/);
+    await expectRejection(() => insert(-1, null), /class_schedules_ages_valid/);
+    await expectRejection(() => insert(null, 130), /class_schedules_ages_valid/);
+
+    for (const [min, max] of [[3, 7], [16, null], [null, 5], [null, null]] as const) {
+      expect((await insert(min, max)).rows).toHaveLength(1);
+    }
+  });
 });
 
 describe('clase gratis', () => {

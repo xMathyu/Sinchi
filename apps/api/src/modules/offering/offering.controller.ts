@@ -69,6 +69,10 @@ const scheduleSchema = z.object({
   endTime: z.string().max(5),
   capacity: z.number().int().nullable().default(null),
   instructor: z.string().max(120).nullable().default(null),
+  // Opcionales y sin `.int()`: la app anterior a la 0028 no las manda y no puede
+  // borrarlas (`ScheduleInput`), y los enteros los dice `checkScheduleDraft`.
+  minAge: z.number().nullable().optional(),
+  maxAge: z.number().nullable().optional(),
   active: z.boolean().default(true),
 });
 

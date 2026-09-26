@@ -28,6 +28,7 @@ import {
   cents,
   checkPhoneNumber,
   eventBookingDenialMessage,
+  formatAgeRange,
   formatPEN,
   formatPENShort,
   formatPlainDate,
@@ -1518,9 +1519,11 @@ function ClassRow({
         >
           {klass.name}
         </Text>
-        {klass.instructor === null ? null : (
+        {/* La edad antes que el profesor: es lo que decide si esta clase le
+            sirve a quien mira —o a su hijo—, y el profesor solo la adorna. */}
+        {formatAgeRange(klass) === null && klass.instructor === null ? null : (
           <Text variant="micro" color={theme.colors.textFaint}>
-            {klass.instructor}
+            {[formatAgeRange(klass), klass.instructor].filter((x) => x !== null).join(' · ')}
           </Text>
         )}
       </Stack>
@@ -1547,7 +1550,9 @@ function ClassRow({
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={`${klass.name}, de ${klass.startTime} a ${klass.endTime}`}
+      accessibilityLabel={`${klass.name}${
+        formatAgeRange(klass) === null ? '' : `, ${formatAgeRange(klass)}`
+      }, de ${klass.startTime} a ${klass.endTime}`}
       onPress={onPress}
       style={({ pressed }) => ({
         backgroundColor: selected ? withAlpha(theme.semaphore.ok, 0.14) : 'transparent',

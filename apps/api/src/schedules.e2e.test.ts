@@ -400,6 +400,63 @@ suite('un gimnasio nuevo nace sin horario, y puede escribirlo', () => {
   });
 });
 
+suite('para qué edades es la clase', () => {
+  it('judo kids de 3 a 7 y de 8 a 13: salen en la ficha y en cada hora reservable', async () => {
+    const local = await newGym();
+    await publish(local, { name: 'Judo kids', startTime: '16:00', endTime: '17:00', minAge: 3, maxAge: 7 });
+    await publish(local, { name: 'Judo kids', startTime: '17:00', endTime: '18:00', minAge: 8, maxAge: 13 });
+
+    const record = await recordOf(local.slug);
+    const ages = record.schedules
+      .map((s: { startTime: string; minAge: number; maxAge: number }) => [s.startTime, s.minAge, s.maxAge])
+      .sort();
+    expect(ages).toEqual([
+      ['16:00', 3, 7],
+      ['17:00', 8, 13],
+    ]);
+    // La hora que se elige por fecha tiene que decir lo mismo que el bloque.
+    const slot = record.slots.find((s: { startTime: string }) => s.startTime === '17:00');
+    expect([slot.minAge, slot.maxAge]).toEqual([8, 13]);
+  });
+
+  it('sin edades es para todos, como antes', async () => {
+    const local = await newGym();
+    const created = await publish(local);
+    expect([created.minAge, created.maxAge]).toEqual([null, null]);
+  });
+
+  it('la app que no conoce las edades edita la hora sin borrarlas', async () => {
+    const local = await newGym();
+    const created = await publish(local, { minAge: 3, maxAge: 7 });
+
+    // Lo que manda una app anterior a la 0028: el bloque sin los dos campos.
+    const { body: edited } = await http
+      .post(`/v1/staff/schedules/${created.id}`)
+      .set(auth(local.owner))
+      .send(editedBlock({ startTime: '18:00', endTime: '19:00' }))
+      .expect(201);
+    expect([edited.minAge, edited.maxAge]).toEqual([3, 7]);
+
+    // La nueva sí puede volverla para todos, mandándolas vacías.
+    const { body: cleared } = await http
+      .post(`/v1/staff/schedules/${created.id}`)
+      .set(auth(local.owner))
+      .send(editedBlock({ minAge: null, maxAge: null }))
+      .expect(201);
+    expect([cleared.minAge, cleared.maxAge]).toEqual([null, null]);
+  });
+
+  it('rechaza el rango al revés con el motivo del dominio', async () => {
+    const local = await newGym();
+    const { body } = await http
+      .post('/v1/staff/schedules')
+      .set(auth(local.owner))
+      .send({ ...baseBlock, minAge: 13, maxAge: 8 })
+      .expect(400);
+    expect(body.message).toContain('al revés');
+  });
+});
+
 suite('lo que el horario no acepta', () => {
   it('rechaza la clase que termina antes de empezar, con su motivo', async () => {
     const local = await newGym();
