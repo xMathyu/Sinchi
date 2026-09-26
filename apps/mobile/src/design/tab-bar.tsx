@@ -130,10 +130,16 @@ export interface TabButtonProps {
   readonly onPress?: PressableProps['onPress'];
   readonly href?: string;
   /**
-   * Cuántas cosas esperan en esa pestaña. Hoy solo la usa Mensajes: sin push, la
-   * insignia es el único aviso de que el gimnasio —o un alumno— contestó.
+   * Cuántas cosas esperan en esa pestaña. Sin push, la insignia es el único
+   * aviso de que el gimnasio —o un alumno— contestó, o de que alguien reservó
+   * su inscripción.
    */
   readonly badge?: number;
+  /**
+   * Qué son esas cosas, para el lector de pantalla: «3 sin leer» en Mensajes,
+   * «1 por inscribir» en Reservas. Por defecto, «sin leer».
+   */
+  readonly badgeLabel?: string;
 }
 
 /**
@@ -141,7 +147,7 @@ export interface TabButtonProps {
  * envuelve, por eso va como `forwardRef`.
  */
 export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
-  { icon, label, isFocused, onPress, badge },
+  { icon, label, isFocused, onPress, badge, badgeLabel = 'sin leer' },
   ref,
 ) {
   const theme = useTheme();
@@ -153,7 +159,9 @@ export const TabButton = forwardRef<View, TabButtonProps>(function TabButton(
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused === true }}
-      accessibilityLabel={badge !== undefined && badge > 0 ? `${label}, ${badge} sin leer` : label}
+      accessibilityLabel={
+        badge !== undefined && badge > 0 ? `${label}, ${badge} ${badgeLabel}` : label
+      }
       style={styles.tab}
     >
       <View>

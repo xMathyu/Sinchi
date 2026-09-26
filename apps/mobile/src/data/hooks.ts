@@ -11,6 +11,7 @@ import { useFocusEffect } from 'expo-router';
 import type { ConversationStatus, ClassBooking, GymLinks } from '@sinchi/shared';
 import {
   TZ_LIMA,
+  awaitsEnrollment,
   encodeQrPayload,
   generateTotp,
   plainDateInZone,
@@ -1399,4 +1400,63 @@ export function useUnreadConversations(side: 'student' | 'staff'): number {
   }, [side]);
 
   return unread;
+}
+
+const enrollmentListeners = new Set<() => void>();
+
+/**
+ * Pide otra vez la insignia de Reservas.
+ *
+ * La llama quien acaba de hacer la ficha de una inscripción reservada: sin esto
+ * la insignia seguía en 1 hasta la siguiente vuelta del intervalo, apuntando a
+ * alguien que ya estaba inscrito.
+ */
+export function refreshEnrollmentBadge(): void {
+  for (const listener of enrollmentListeners) listener();
+}
+
+/**
+ * Cuántas inscripciones reservadas desde el directorio esperan su ficha.
+ *
+ * Es la insignia de la pestaña Reservas. Cuenta SOLO las inscripciones, no
+ * todas las reservas: una prueba se atiende el día que llega, pero la
+ * inscripción es alguien que ya decidió pagar y al que conviene escribirle
+ * antes —y era justo la que se perdía entre las pruebas—. Una insignia que
+ * contara todo estaría siempre encendida y dejaría de leerse.
+ *
+ * Mismo ritmo que la de mensajes: cada minuto, al volver a la app y cuando una
+ * pantalla avisa. Sin push es lo que la enciende sola.
+ */
+export function usePendingEnrollments(): number {
+  const [pending, setPending] = useState(0);
+
+  useEffect(() => {
+    if (getSessionState().status !== 'signed_in') return;
+    let cancelado = false;
+
+    const pedir = (): void => {
+      void fetchTrials()
+        .then((bookings) => {
+          if (!cancelado) setPending(bookings.filter(awaitsEnrollment).length);
+        })
+        // Sin red, la insignia se queda con lo último que supo.
+        .catch(() => {});
+    };
+
+    pedir();
+    enrollmentListeners.add(pedir);
+    const timer = setInterval(pedir, 60_000);
+    const vuelta = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') pedir();
+    });
+
+    return () => {
+      cancelado = true;
+      enrollmentListeners.delete(pedir);
+      clearInterval(timer);
+      vuelta.remove();
+    };
+  }, []);
+
+  return pending;
 }

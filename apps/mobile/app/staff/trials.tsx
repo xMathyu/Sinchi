@@ -8,7 +8,12 @@
  * martes sin que nadie lo espere.
  *
  * Se ordena por CUÁNDO VIENEN, no por cuándo reservaron: lo que el mostrador
- * pregunta al abrirla es "¿a quién espero hoy?".
+ * pregunta al abrirla es "¿a quién espero hoy?". Con una excepción arriba del
+ * todo: las inscripciones que esperan su ficha van primero, en su propia
+ * sección. Mezcladas por fecha se veían como una prueba más —solo las distinguía
+ * una etiqueta gris— y un gimnasio pidió, con esas palabras, que fuera «más
+ * intuitivo de ver». Es la reserva que trae un mes pagado y la que conviene
+ * confirmar antes de que llegue.
  *
  * Cada tarjeta dice lo que hay que COBRAR, y la acción para hacerlo está en la
  * misma tarjeta. Con la persona delante, el mostrador no puede ponerse a buscar
@@ -19,10 +24,11 @@
  * en algo accionable: quien no aparece se merece una llamada, y quien vino,
  * también.
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, Switch, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
+  awaitsEnrollment,
   cents,
   formatPEN,
   formatPENShort,
@@ -49,6 +55,7 @@ import { SectionLoader } from '../../src/design/loading';
 import { useTheme } from '../../src/design/theme';
 import { TabHeader } from '../../src/design/account-avatar';
 import {
+  refreshEnrollmentBadge,
   useGymBookings,
   useTrialClassEnabled,
   useStore,
@@ -72,6 +79,18 @@ export default function BookingsScreen() {
   } = useGymBookings(vista === 'pasadas');
 
   const vigentes = bookings.filter((booking) => booking.status !== 'canceled');
+  // Solo en «Por venir»: en el historial ya no queda nada que hacer con nadie.
+  const porInscribir = vista === 'proximas' ? vigentes.filter(awaitsEnrollment) : [];
+  const resto =
+    porInscribir.length === 0 ? vigentes : vigentes.filter((booking) => !awaitsEnrollment(booking));
+
+  // La insignia de la pestaña se pide aparte: al volver aquí —por ejemplo, de
+  // hacer la ficha de una inscripción— tiene que apagarse con la lista.
+  useFocusEffect(useCallback(() => refreshEnrollmentBadge(), []));
+  const onChange = useCallback(() => {
+    reload();
+    refreshEnrollmentBadge();
+  }, [reload]);
 
   return (
     <Screen scroll>
@@ -115,12 +134,34 @@ export default function BookingsScreen() {
         </View>
       ) : (
         <Stack gap={12} style={{ marginTop: 20 }}>
-          <Eyebrow>
-            {vigentes.length} {vigentes.length === 1 ? 'persona' : 'personas'}
-          </Eyebrow>
-          {vigentes.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} onChange={reload} />
-          ))}
+          {porInscribir.length > 0 ? (
+            <>
+              <Eyebrow color={theme.semaphore.ok}>
+                {porInscribir.length === 1
+                  ? '1 quiere inscribirse'
+                  : `${porInscribir.length} quieren inscribirse`}
+              </Eyebrow>
+              <Text variant="captionSmall" color={theme.colors.textSecondary}>
+                {porInscribir.length === 1
+                  ? 'Eligió plan desde la app y viene a pagar su primer mes. Escríbele para confirmar el día: la ficha se hace cuando llegue, con su documento.'
+                  : 'Eligieron plan desde la app y vienen a pagar su primer mes. Escríbeles para confirmar el día: la ficha se hace cuando lleguen, con su documento.'}
+              </Text>
+              {porInscribir.map((booking) => (
+                <BookingCard key={booking.id} booking={booking} onChange={onChange} />
+              ))}
+            </>
+          ) : null}
+          {resto.length > 0 ? (
+            <>
+              <Eyebrow style={porInscribir.length > 0 ? { marginTop: 12 } : undefined}>
+                {porInscribir.length > 0 ? 'Además, ' : ''}
+                {resto.length} {resto.length === 1 ? 'persona' : 'personas'}
+              </Eyebrow>
+              {resto.map((booking) => (
+                <BookingCard key={booking.id} booking={booking} onChange={onChange} />
+              ))}
+            </>
+          ) : null}
         </Stack>
       )}
     </Screen>
@@ -321,10 +362,16 @@ function BookingCard({
             </Text>
           </Stack>
           <Stack gap={5} style={{ alignItems: 'flex-end' }}>
+            {/* La inscripción en verde y las otras dos en gris: es la única que
+                trae un alumno nuevo, y en gris se leía como una prueba más. */}
             <Badge
               label={KIND_LABEL[kind]}
-              color={theme.colors.textSecondary}
-              background={theme.colors.surfaceHigh}
+              color={kind === 'enrollment' ? theme.semaphore.ok : theme.colors.textSecondary}
+              background={
+                kind === 'enrollment'
+                  ? withAlpha(theme.semaphore.ok, 0.14)
+                  : theme.colors.surfaceHigh
+              }
             />
             {booking.status === 'booked' ? null : (
               <Badge

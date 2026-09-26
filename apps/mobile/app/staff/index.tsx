@@ -13,7 +13,10 @@
  * perdió velocidad.
  *
  * Lo que ocupa ese sitio ahora son tres cifras del día y las dos formas de
- * marcar, como opciones y no como dos botones a lo ancho.
+ * marcar, como opciones y no como dos botones a lo ancho. Y, solo cuando hay
+ * alguna, las inscripciones que esperan su ficha: es la pantalla que más se
+ * abre, y la reserva de quien viene a pagar un mes no puede depender de que
+ * alguien se acuerde de mirar la pestaña de Reservas.
  *
  * Dos decisiones que se ven aquí:
  *  - la validación es LOCAL, contra el padrón en caché, funcione o no el wifi.
@@ -29,7 +32,7 @@ import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import QrCode from 'lucide-react-native/icons/qr-code';
 import UserRoundCheck from 'lucide-react-native/icons/user-round-check';
 import type { LucideIcon } from 'lucide-react-native';
-import { TZ_LIMA, isSameDay, plainDateInZone } from '@sinchi/shared';
+import { TZ_LIMA, awaitsEnrollment, isSameDay, plainDateInZone } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
 import { Card, Dot, Eyebrow, Row, Stack, Text } from '../../src/design/primitives';
 import { EmptyState } from '../../src/design/empty';
@@ -46,7 +49,7 @@ import {
   useToday,
 } from '../../src/data/hooks';
 import { setOnline } from '../../src/data/store';
-import { formatClock } from '../../src/lib/format';
+import { formatClock, formatWeekdayAndDay } from '../../src/lib/format';
 
 /** Cuántos marcados se guardan en la lista. Sobra para llenar cualquier pantalla
     y el resto se desplaza: recortar a un número fijo clipaba en las chicas. */
@@ -93,6 +96,8 @@ export default function DoorScreen() {
   );
 
   const inDebt = roster.filter((e) => e.view.receivable.amountCents > 0).length;
+
+  const porInscribir = useMemo(() => reservas.filter(awaitsEnrollment), [reservas]);
 
   return (
     <Screen background={theme.colors.screenScanner}>
@@ -174,6 +179,33 @@ export default function DoorScreen() {
         </Row>
       </Stack>
 
+      {porInscribir.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${porInscribirTitle(porInscribir)}. Abre Reservas.`}
+          onPress={() => switchTab('trials', {})}
+          style={({ pressed }) => ({ marginTop: 12, opacity: pressed ? 0.78 : 1 })}
+        >
+          <Card accent={theme.semaphore.ok} radius={theme.radii.xl}>
+            <Row gap={10}>
+              <Stack gap={3} style={styles.flexOne}>
+                <Text variant="bodySmall" weight="semibold" numberOfLines={1}>
+                  {porInscribirTitle(porInscribir)}
+                </Text>
+                <Text variant="captionSmall" color={theme.colors.textSecondary} numberOfLines={2}>
+                  {porInscribir.length === 1
+                    ? `Viene el ${formatWeekdayAndDay(porInscribir[0]!.date).toLowerCase()}${
+                        porInscribir[0]!.planName === null ? '' : ` · plan ${porInscribir[0]!.planName}`
+                      }. Escríbele para confirmar.`
+                    : 'Eligieron plan desde la app. Escríbeles para confirmar el día.'}
+                </Text>
+              </Stack>
+              <ChevronRight size={16} color={theme.colors.textTertiary} strokeWidth={2.4} />
+            </Row>
+          </Card>
+        </Pressable>
+      ) : null}
+
       <Stack gap={10} style={{ marginTop: 18 }}>
         <Eyebrow>Marcar entrada</Eyebrow>
         <Row gap={10} align="stretch">
@@ -249,6 +281,13 @@ export default function DoorScreen() {
       </View>
     </Screen>
   );
+}
+
+/** «Ana Quispe quiere inscribirse», o cuántas son cuando es más de una. */
+function porInscribirTitle(bookings: readonly { readonly fullName: string }[]): string {
+  return bookings.length === 1
+    ? `${bookings[0]!.fullName} quiere inscribirse`
+    : `${bookings.length} personas quieren inscribirse`;
 }
 
 /** Una cifra del día. Con `onPress` lleva a la pestaña que la explica. */
