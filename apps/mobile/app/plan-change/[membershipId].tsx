@@ -70,8 +70,8 @@ export default function PlanChangeScreen() {
       <Stack gap={8} style={{ marginTop: 20 }}>
         <Eyebrow>Plan actual</Eyebrow>
         <Card radius={theme.radii.lg}>
-          <Row>
-            <Text variant="heading" weight="semibold">
+          <Row align="flex-start" gap={12}>
+            <Text variant="heading" weight="semibold" style={{ flex: 1 }}>
               {entry.plan.name}
             </Text>
             <Text variant="heading" weight="semibold">
@@ -215,7 +215,7 @@ function PlanOption({
         radius={theme.radii.lg}
         borderColor={selected ? withAlpha(theme.semaphore.ok, 0.4) : theme.colors.hairline}
       >
-        <Row align="flex-start">
+        <Row align="flex-start" gap={12}>
           <Stack gap={4} style={{ flex: 1 }}>
             <Text variant="heading" weight="semibold">
               {plan.name}

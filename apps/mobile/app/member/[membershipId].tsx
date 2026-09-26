@@ -566,8 +566,8 @@ function Reactivar({
                 radius={theme.radii.lg}
                 borderColor={active ? theme.semaphore.ok : theme.colors.hairline}
               >
-                <Row>
-                  <Text variant="heading" weight="semibold">
+                <Row align="flex-start" gap={12}>
+                  <Text variant="heading" weight="semibold" style={{ flex: 1 }}>
                     {plan.name}
                   </Text>
                   <Text variant="heading" weight="semibold">

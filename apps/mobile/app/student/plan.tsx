@@ -73,8 +73,11 @@ export default function PlanScreen() {
 
       <Card radius={theme.radii.xxl} style={{ marginTop: 18 }}>
         <Stack gap={18}>
-          <Row align="flex-start">
-            <Stack gap={3}>
+          {/* El nombre lo escribe el dueño y llega a 60 letras: «Judo Kids 4 años
+              a 7 años» no cabía en una línea y, sin `flex: 1`, en vez de partirse
+              empujaba el precio fuera de la tarjeta. */}
+          <Row align="flex-start" gap={12}>
+            <Stack gap={3} style={{ flex: 1 }}>
               <Eyebrow>Plan actual</Eyebrow>
               <Text variant="displaySmall" weight="extrabold">
                 {entry.plan.name}
