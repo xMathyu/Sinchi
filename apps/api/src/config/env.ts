@@ -100,6 +100,16 @@ const schema = z.object({
   MAIL_FROM: z.string().default('Sinchi <onboarding@resend.dev>'),
 
   /**
+   * Token de acceso de Expo para mandar avisos al teléfono (migración 0029).
+   *
+   * Opcional: el servicio de push de Expo acepta envíos sin él mientras el
+   * proyecto no active «seguridad reforzada». Con ella activa, sin esto cada
+   * envío vuelve rechazado — y, como el correo, eso no tumba la reserva que lo
+   * provocó: el aviso es entrega, no la fuente.
+   */
+  EXPO_ACCESS_TOKEN: emptyMeansAbsent(z.string().min(20).optional()),
+
+  /**
    * De donde cuelgan las URLs que salen de aqui hacia fuera.
    *
    * El enlace de la invitacion y el logo del correo tienen que ser direcciones

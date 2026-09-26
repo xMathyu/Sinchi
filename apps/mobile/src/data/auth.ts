@@ -42,6 +42,7 @@ import {
 } from './session';
 import { forgetSecret, loadSecret, storeSecret } from './crypto';
 import { resetState } from './store';
+import { forgetPushDevice } from './push';
 
 /**
  * Una credencial de Firebase FRESCA, tenga ficha esta persona o no.
@@ -352,6 +353,9 @@ export async function acceptInvite(
  * QR.
  */
 export async function signOut(options: { readonly forgetTotpSecret: boolean }): Promise<void> {
+  // Antes de soltar la sesión: sin ella la api ya no deja quitar el teléfono, y
+  // seguiría recibiendo los avisos del local de quien acaba de salir.
+  await forgetPushDevice();
   await clearSession();
   if (options.forgetTotpSecret) await forgetSecret();
 }

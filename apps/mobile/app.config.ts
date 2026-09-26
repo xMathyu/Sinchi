@@ -3,9 +3,9 @@
  *
  * `app.json` sigue siendo la base y es donde se lee todo lo demás: dos archivos
  * de configuración es una molestia, y por eso aquí va lo MÍNIMO que no cabe
- * allá. Hoy es una sola cosa —la clave de Google Maps para Android— y la razón
- * de que no quepa es que `app.json` es JSON: no puede leer una variable de
- * entorno, y esta clave no se escribe en el repo.
+ * allá. Son dos cosas —la clave de Google Maps y el `google-services.json` de
+ * Android— y la razón de que no quepan es la misma: `app.json` es JSON, no puede
+ * leer una variable de entorno, y ninguna de las dos se escribe en el repo.
  *
  * SOBRE LA CLAVE. No es un secreto, en el mismo sentido exacto en que no lo es
  * la de Firebase (ver `src/data/firebase.ts`): se compila DENTRO del
@@ -31,10 +31,52 @@
  */
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
+/**
+ * EL `google-services.json` DE ANDROID, por lo mismo que la clave de mapas.
+ *
+ * Sin él Android no tiene FCM y Expo no le puede dar un token de avisos al
+ * teléfono (migración 0029). Lleva una clave `AIza…` y por eso no se versiona:
+ * en EAS va como variable de tipo ARCHIVO, `GOOGLE_SERVICES_JSON`, que EAS
+ * convierte en la ruta del archivo al compilar. Sin la variable la app compila y
+ * funciona; solo no le llegan avisos en Android, que es lo que había.
+ */
+const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
+
+/**
+ * LOS AVISOS AL TELÉFONO SE ENCIENDEN POR BUILD, con `SINCHI_PUSH=1`.
+ *
+ * El plugin de `expo-notifications` añade a iOS el entitlement `aps-environment`,
+ * y un binario con ese entitlement no firma con un perfil que no lo tenga:
+ * Apple lo exige en el App ID, y activar la capacidad invalida el perfil que ya
+ * existe —pasó con Entrar con Apple, y el build murió a los diez minutos—.
+ * Hasta que el App ID tenga Push, el perfil esté rehecho y EAS tenga la llave de
+ * APNs (y la de FCM para Android), cualquier build con el plugin fallaría.
+ *
+ * Así el código entra a `main` sin romper el próximo envío a la tienda: sin la
+ * variable, el binario sale como hasta ahora y la app no pide un permiso para
+ * avisos que todavía no llegarían (`extra.push`, que lee `src/data/push.ts`).
+ */
+const pushEnabled = process.env.SINCHI_PUSH === '1';
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...(config as ExpoConfig),
+  plugins: [
+    ...(config.plugins ?? []),
+    ...(pushEnabled
+      ? [
+          [
+            'expo-notifications',
+            { icon: './assets/notification-icon.png', color: '#2FD16D' },
+          ] as [string, Record<string, string>],
+        ]
+      : []),
+  ],
+  extra: { ...config.extra, push: pushEnabled },
   android: {
     ...config.android,
+    ...(googleServicesFile === undefined || googleServicesFile.length === 0
+      ? {}
+      : { googleServicesFile }),
     config: {
       ...config.android?.config,
       googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_KEY ?? '' },

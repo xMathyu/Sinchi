@@ -1711,6 +1711,22 @@ export const rejectGuestLinkRequest = (
   });
 
 /**
+ * Apunta este teléfono para recibir avisos (migración 0029).
+ *
+ * Con la sesión de quien lo usa: el teléfono queda a su nombre, y si era de otra
+ * persona —el mismo teléfono del mostrador, otro turno— pasa a esta.
+ */
+export const registerPushDeviceRequest = (
+  token: string,
+  platform: 'ios' | 'android',
+): Promise<{ readonly registered: true }> =>
+  request('/me/push-devices', { method: 'POST', body: { token, platform } });
+
+/** Lo quita al cerrar sesión, para que no le sigan llegando avisos de un local ajeno. */
+export const removePushDeviceRequest = (token: string): Promise<{ readonly removed: true }> =>
+  request('/me/push-devices/remove', { method: 'POST', body: { token } });
+
+/**
  * Quien viene a probar. La lista de posibles alumnos del local.
  *
  * Por defecto solo lo que falta: el mostrador la abre para saber a quien espera,

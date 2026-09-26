@@ -1866,3 +1866,64 @@ viva en la web y la app solo refleje el estado, la respuesta se sostiene.
 **Y el alumno nunca le paga a Sinchi.** Le paga a su gimnasio. Si algún día eso
 cambia, esta respuesta deja de ser cierta y hay que volver a hablar con Apple
 antes, no después.
+
+---
+
+## Avisos al teléfono (push): por Expo, a todo el staff, y encendidos por build
+
+Un gimnasio pidió «que llegue notificación y correo cuando un alumno se
+inscriba». El correo salía —con el asunto equivocado, «Clase de prueba» para
+todo, arreglado aparte— y el push no existía: §7, §8, §12 y la morosidad lo
+venían dejando pendiente. Esto es el canal, y su primer uso son las reservas
+desde el directorio. El chat y la morosidad son los siguientes; el canal ya
+está.
+
+**Por Expo y no por FCM directo**, aunque la api ya tiene `firebase-admin`. Con
+FCM serían dos canales —APNs para iOS, FCM para Android— y dos formatos de
+token; con Expo es una petición HTTP para los dos, y las llaves de Apple y de
+Google viven en EAS, donde ya están las de firma. El envío no puede tumbar lo
+que lo llama, igual que el correo: la reserva existe aunque Expo esté caído.
+
+**Una fila por teléfono, con el token de clave** (`push_devices`, 0029), fuera de
+`TENANT_SCOPED_TABLES` como la baja de cuenta: el teléfono es de la persona. El
+token es del aparato y no de quien lo usa, así que al cambiar de sesión en el
+mostrador pasa a quien entró. Con la clave en `(persona, token)` el teléfono
+quedaría a nombre de los dos, y quien terminó su turno seguiría recibiendo en su
+casa los avisos del local. Al cerrar sesión se quita —antes de soltar el token,
+porque después ya no hay sesión que lo pida—, y el que Expo da por
+desinstalado (`DeviceNotRegistered`) se borra al primer rechazo.
+
+**Va a todo el staff del local, no solo al dueño**, al revés que el correo. El
+correo es un resumen que se lee después; el aviso es para que alguien actúe
+—escribirle a quien reservó, prepararle sitio—, y eso lo hace quien está en el
+mostrador. El título es el mismo asunto del correo (`bookingSubject`) y el aviso
+abre Reservas.
+
+**El permiso se pide en el modo staff y después de cargar**, no al abrir la app:
+es donde hoy hay algo que avisar, y un permiso sobre una pantalla que todavía
+dice «Trayendo…» se lee como que la app pide antes de enseñar. Al alumno no se
+le interrumpe por avisos que todavía no existen.
+
+**Se enciende por build, con `SINCHI_PUSH=1`.** El plugin de
+`expo-notifications` añade el entitlement `aps-environment`, y un binario con él
+no firma con un perfil que no lo tenga: activar Push en el App ID invalida el
+perfil existente, y fue lo que tumbó el build de Entrar con Apple a los diez
+minutos. Sin la variable el binario sale como antes y la app no pide un permiso
+para avisos que no llegarían. Para encenderlo hacen falta, en este orden:
+
+1. la capacidad **Push Notifications** en el App ID `fit.sinchi.app`, y rehacer el
+   perfil de App Store (el procedimiento está en las notas de firma);
+2. una **llave de APNs** en EAS — se crea con la sesión de Apple, en
+   `eas credentials` → iOS → Push Notifications;
+3. en Android, la **llave de FCM V1** en EAS y el `google-services.json` como
+   variable de tipo archivo `GOOGLE_SERVICES_JSON` (ver `app.config.ts`);
+4. `SINCHI_PUSH=1` en el `env` del perfil `production` de `eas.json`, y un binario
+   nuevo. No hay `expo-updates`: el push llega con la versión siguiente, no antes.
+
+El módulo nativo se carga solo si el binario lo trae (`requireOptionalNativeModule`).
+Un `try` alrededor del `require` no alcanzó: Metro reporta el error del módulo como
+no capturado y pinta la pantalla roja igual en cualquier dev client anterior.
+
+**Lo que no hace todavía:** no lee los *receipts* de Expo (el segundo paso, que
+dice si APNs o FCM entregaron de verdad); con los *tickets* basta para limpiar los
+teléfonos muertos, que es lo que ensucia.

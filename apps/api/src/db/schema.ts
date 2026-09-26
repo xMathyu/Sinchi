@@ -1510,6 +1510,27 @@ export const classBookings = pgTable(
 
 
 /**
+ * Los teléfonos a los que se puede mandar un aviso (migración 0029).
+ *
+ * Fuera de `TENANT_SCOPED_TABLES`, igual que la baja: el teléfono es de la
+ * PERSONA. La clave es el token porque el token es del aparato: al cambiar de
+ * sesión en el mostrador pasa a quien entró, y no queda a nombre de los dos.
+ */
+export const pushDevices = pgTable(
+  'push_devices',
+  {
+    token: text('token').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    platform: text('platform').$type<'ios' | 'android'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('push_devices_user_idx').on(t.userId)],
+);
+
+/**
  * Baja de cuenta pedida por la propia persona.
  *
  * Google Play la exige para cualquier app con registro, y por dos caminos: uno

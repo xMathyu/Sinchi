@@ -65,6 +65,8 @@ import { toClassSchedule, toPlan, toClassBooking } from '../../common/mappers';
 import { Clock } from '../../common/clock';
 import { AccountLinkService } from '../../auth/account-link.service';
 import { MailService } from '../mail/mail.service';
+import { PushService } from '../push/push.service';
+import { bookingNotice } from '../push/booking-notice';
 import { SaasService } from '../saas/saas.service';
 
 /** Ficha del gimnasio en la lista. Lo justo para decidir si abrirlo. */
@@ -221,6 +223,7 @@ export class TrialsService {
     private readonly mail: MailService,
     private readonly accountLink: AccountLinkService,
     private readonly saas: SaasService,
+    private readonly push: PushService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -716,16 +719,47 @@ export class TrialsService {
   }
 
   /**
-   * Avisa al gimnasio, sin poder romper la reserva.
+   * Avisa al gimnasio por los dos canales a la vez, sin poder romper la reserva.
    *
-   * Va al dueno; si el local no tiene dueno registrado, a recepcion. El fallo se
-   * traga a proposito: la reserva ya existe y sale en la app del mostrador
-   * aunque el correo no salga nunca. `notified_at` deja ver cual si salio.
+   * En paralelo y no uno detrás del otro: cada uno espera hasta diez segundos a
+   * su proveedor, y quien acaba de reservar no tiene por qué esperar veinte a
+   * que Resend y Expo contesten por turnos. Ninguno de los dos lanza.
    */
   private async notify(
     gym: { readonly id: string; readonly name: string; readonly timezone: string },
     booking: ClassBookingView,
     rescheduled = false,
+  ): Promise<void> {
+    await Promise.all([
+      this.notifyByMail(gym, booking, rescheduled),
+      this.push.notifyTenantStaff(
+        gym.id,
+        bookingNotice({
+          bookingId: booking.id,
+          kind: booking.kind,
+          personName: booking.fullName,
+          klass: booking.className,
+          when: describeDate(booking.date),
+          time: booking.startTime,
+          priceCents: booking.priceCents,
+          planName: booking.planName,
+          rescheduled,
+        }),
+      ),
+    ]);
+  }
+
+  /**
+   * El correo al gimnasio.
+   *
+   * Va al dueno; si el local no tiene dueno registrado, a recepcion. El fallo se
+   * traga a proposito: la reserva ya existe y sale en la app del mostrador
+   * aunque el correo no salga nunca. `notified_at` deja ver cual si salio.
+   */
+  private async notifyByMail(
+    gym: { readonly id: string; readonly name: string; readonly timezone: string },
+    booking: ClassBookingView,
+    rescheduled: boolean,
   ): Promise<void> {
     try {
       const destinatarios = await withTenant(this.db, gym.id, async (tx) =>

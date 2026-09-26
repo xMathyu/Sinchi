@@ -688,6 +688,25 @@ describe('horarios', () => {
   });
 });
 
+describe('avisos al teléfono', () => {
+  it('solo guarda tokens con la forma de Expo, de una plataforma que existe', async () => {
+    const insert = (token: string, platform: string) =>
+      db.query(`insert into push_devices (token, user_id, platform) values ($1, $2, $3)`, [
+        token,
+        USER,
+        platform,
+      ]);
+
+    await expectRejection(() => insert('hola', 'ios'), /push_devices_token_shape/);
+    await expectRejection(
+      () => insert('ExponentPushToken[esquema-plataforma]', 'windows'),
+      /push_devices_platform_valid/,
+    );
+    await insert('ExponentPushToken[esquema-ok]', 'android');
+    await db.query(`delete from push_devices where token like 'ExponentPushToken[esquema-%'`);
+  });
+});
+
 describe('clase gratis', () => {
   /** Contexto de quien reservó sin tener ficha: lo abre su cuenta de Firebase. */
   const setTrialAccount = async (uid: string | null): Promise<void> => {

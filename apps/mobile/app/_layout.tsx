@@ -31,6 +31,8 @@ import { markWelcomeSeen, restoreWelcomeState } from '../src/data/welcome';
 import { hydrate, hydrateStaff } from '../src/data/hydrate';
 import { markHydrating, markHydrationDone, resetState } from '../src/data/store';
 import { SectionLoader } from '../src/design/loading';
+import { configurePush, registerPushDevice } from '../src/data/push';
+import { refreshEnrollmentBadge } from '../src/data/hooks';
 
 /**
  * El cliente HTTP toma sus credenciales de aqui.
@@ -92,6 +94,17 @@ export default function RootLayout() {
     // pedirlas en fila sumaria tres esperas donde cabe una.
     void restoreAppearance();
   }, []);
+
+  // Los avisos al teléfono: cómo se ven con la app abierta y qué abren al
+  // tocarlos. El de una reserva enciende la insignia de Reservas en el acto, sin
+  // esperar a la siguiente vuelta del intervalo.
+  useEffect(
+    () =>
+      configurePush((data) => {
+        if (data.url === '/staff/trials') refreshEnrollmentBadge();
+      }),
+    [],
+  );
 
   if (!fontsLoaded && fontError === null) {
     return <View style={styles.splash} />;
@@ -240,6 +253,12 @@ function DataLoader() {
     void carga
       .then(() => {
         if (!cancelado) markHydrationDone();
+        // Después de cargar y no antes: el permiso de iOS tapa la pantalla, y
+        // pedirlo sobre un padrón que todavía dice «Trayendo…» se lee como que
+        // la app pide algo antes de enseñar nada. Se pide en el modo staff, que
+        // es donde hoy hay algo que avisar; al alumno solo se le apunta si ya
+        // lo había dado (`registerPushDevice`).
+        if (!cancelado) void registerPushDevice({ ask: session.role !== 'student' });
       })
       .catch((error: unknown) => {
         // Sin conexion no se borra lo que ya habia: el alumno en la puerta del

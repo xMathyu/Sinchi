@@ -198,6 +198,9 @@ bandeja por el padrón y perder justo los mensajes que traen alumnos nuevos.
 | hasta dónde leyó cada lado | `personReadAt`, `gymReadAt` |
 | sin leer | `unread` / `countUnread` |
 | mensajes seguidos sin respuesta | `unansweredStreak` / `MAX_UNANSWERED` |
+| aviso al teléfono (push) | `PushService` / `PushNotice` |
+| el teléfono apuntado para avisos | `push_devices` / `registerPushDevice` |
+| el aviso de una reserva | `bookingNotice` |
 | toca esperar respuesta | `MessageDenial = 'awaiting_reply'` |
 | el gimnasio no recibe mensajes | `MessageDenial = 'gym_unavailable'` |
 | aviso por correo de la tanda | `gymNotifiedAt`, `personNotifiedAt` |

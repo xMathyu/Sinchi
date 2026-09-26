@@ -204,6 +204,13 @@
       "when": 1788566401119,
       "tag": "0028_edades_de_la_clase",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788566402119,
+      "tag": "0029_avisos_al_telefono",
+      "breakpoints": true
     }
   ]
 }

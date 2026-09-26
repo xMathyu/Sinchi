@@ -23,6 +23,8 @@ apps/web/next-env.d.ts
 .env
 .env.*
 !.env.example
+# Por lo mismo que los `.env`: lleva una clave `AIza…` (ver `apps/mobile/app.config.ts`).
+apps/mobile/google-services.json
 
 # Lienzos de diseño (/design). Son archivos de trabajo, no del producto: cada
 # .html empaquetado lleva el editor dentro y pesa ~2 MB, y lo que vale de verdad
