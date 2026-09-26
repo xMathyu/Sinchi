@@ -1793,6 +1793,15 @@ entrar a un local y entrenar: un servicio físico, consumido fuera de la app. La
 **3.1.3(e)** no es que lo permita, es que **prohíbe** cobrarlo por compra
 integrada. Culqi ahí es lo correcto y no hay nada que negociar.
 
+Y hay un detalle del montaje que es el mejor argumento de todos, así que va
+dicho a Apple con todas las letras: **cada gimnasio conecta SU PROPIA cuenta de
+comercio de Culqi**, que su dueño configura dentro de Sinchi, y el dinero cae
+directo a la cuenta bancaria de ese gimnasio. Sinchi no lo retiene, no lo enruta,
+no se queda una parte y **no es el comerciante**: es el software que anota que se
+pagó. Eso cierra de golpe la sospecha que un revisor tiene por defecto —que la
+app sea un intermediario cobrando por dentro— y no se sostiene con una promesa,
+se sostiene con quién está en la cuenta.
+
 **La cuota que el gimnasio le paga a Sinchi es la delicada**, y de ella salió un
 límite que hay que respetar al construirla:
 

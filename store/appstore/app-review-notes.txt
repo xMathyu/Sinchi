@@ -5,7 +5,7 @@ That submission was closed before we could reply, so our answers are here.
 
 Sinchi sells no digital content, and no feature is unlocked by any payment. Two different things are paid for, neither consumed in the app:
 
-1) A STUDENT'S GYM MEMBERSHIP. Bought by a person who trains at a specific gym. It buys the right to enter that physical location and train in person. Paid at the gym's counter in cash, Yape or bank transfer; staff record it by hand. In an upcoming version students will also be able to pay by card through Culqi, a Peruvian processor. The money goes to the gym. This is a service delivered outside the app, at a physical address, so per 3.1.3(e) it must not use In-App Purchase.
+1) A STUDENT'S GYM MEMBERSHIP. Bought by a person who trains at a specific gym. It buys the right to enter that physical location and train in person. Paid at the gym's counter in cash, Yape or bank transfer; staff record it by hand. In an upcoming version students will also be able to pay by card through Culqi, a Peruvian processor. Each gym connects ITS OWN Culqi merchant account, which the gym owner configures in Sinchi, and card payments settle directly into that gym's own bank account. Sinchi never holds, routes, or takes a share of that money, and is not the merchant of record: we are only the software that records the payment. This is a service delivered outside the app, at a physical address, so per 3.1.3(e) it must not use In-App Purchase.
 
 2) SINCHI'S OWN SOFTWARE SUBSCRIPTION, paid by the gym as a BUSINESS for the right to use Sinchi to run its roster. It is sold only on our website, sinchi.fit, and is never sold, offered, advertised or linked to inside this app. It is not sold to consumers or for family use.
 
