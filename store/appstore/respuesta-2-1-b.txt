@@ -1,67 +1,85 @@
 Hello, and thank you for the review.
 
-Sinchi does not sell, unlock, or provide access to any paid digital content,
-subscriptions, or features. The app is free, contains no In-App Purchases, and
-processes no payments of any kind. Below are answers to each question.
+We have uploaded a new build (1.0.0, build 13) that adds Sign in with Apple to
+address guideline 4.8. Below are the answers to your questions about our
+business model.
+
+In short: Sinchi sells no digital content. Two different things are paid for,
+and neither is consumed inside the app. One is in-person training at a physical
+gym. The other is a business software subscription that gym owners buy from us
+on our website.
 
 1. WHO ARE THE USERS THAT WILL USE THE PAID SUBSCRIPTIONS IN THE APP?
 
-There are no subscriptions sold or consumed in the app. The word "plan" or
-"membership" in Sinchi refers to a PHYSICAL GYM MEMBERSHIP: the right to walk
-into a specific gym or martial-arts school and train there in person.
+Two different things are called a "subscription" in our product, and they are
+paid by different people:
 
-Two kinds of people use the app, and neither buys anything through it:
-- Gym owners and front-desk staff, who use Sinchi to keep their student roster,
-  check students in at the door, and write down payments they received in cash
-  at the counter.
-- Students of those gyms, who use Sinchi to see the status of the membership
-  they already bought in person, and to show a QR code at the door.
+a) A STUDENT'S GYM MEMBERSHIP. The user is a person who trains at a specific
+   gym or martial-arts school. What the membership buys is the right to walk
+   into that physical location and train there in person.
+
+b) SINCHI'S OWN SOFTWARE SUBSCRIPTION. The customer is the gym as a business,
+   and what it buys is the right to use Sinchi to run its student roster. This
+   is sold to businesses, never to consumers.
 
 2. WHERE CAN USERS PURCHASE THE SUBSCRIPTIONS THAT CAN BE ACCESSED IN THE APP?
 
-Only in person, at the gym's front desk. In Peru these are paid in cash, by Yape
-(a local bank transfer app), or by bank transfer, directly to the gym. A staff
-member then records that payment by hand in Sinchi.
+a) Gym memberships are purchased at the gym, in person. Today they are paid in
+   cash, by Yape (a Peruvian bank-transfer app), or by bank transfer, and a
+   staff member records the payment by hand in Sinchi. In an upcoming version
+   we intend to also let students pay by card through Culqi, a Peruvian payment
+   processor. In every case the money goes to the gym, for in-person training at
+   the gym's physical location. Sinchi is not the seller of that service.
 
-There is no way to buy anything inside Sinchi, and no payment processor of any
-kind is integrated. Sinchi never touches the money: the gym receives it directly
-and Sinchi only stores a record that it was received.
+b) Sinchi's software subscription is purchased by gym owners on our website,
+   sinchi.fit, and billed through Culqi. It is not sold, offered, advertised, or
+   linked to anywhere inside the iOS app.
 
 3. WHAT SPECIFIC TYPES OF PREVIOUSLY PURCHASED SUBSCRIPTIONS CAN A USER ACCESS
    IN THE APP?
 
-None that are digital. What a student sees is the STATUS of a physical gym
-membership purchased in person:
+None that consist of digital content. A student sees the STATUS of the physical
+gym membership they purchased in person:
+
 - which plan they are on (for example, "2 sessions per week"),
 - how many sessions they have left this week,
 - the date of their next payment and whether they currently owe money,
 - a QR code that the gym scans to let them through the door.
 
-This is a record of a service consumed entirely outside the app, in a physical
-location. Per guideline 3.1.3(e), services consumed outside the app must not use
-In-App Purchase, which is why Sinchi does not.
+This is a record of a service that is delivered entirely outside the app, at a
+physical address. Per guideline 3.1.3(e), services consumed outside the app must
+use purchase methods other than In-App Purchase, which is why we do not use it.
 
 4. WHAT PAID CONTENT, SUBSCRIPTIONS, OR FEATURES ARE UNLOCKED WITHIN THE APP
    THAT DO NOT USE IN-APP PURCHASE?
 
-None. Every feature of the app is available for free to anyone who signs in.
+No digital content is sold, and none is unlocked by a payment made to us.
 
-The only content in the app is a small library of technique videos that each gym
-uploads for its own students (warm-ups, drills, technique reviews). These are not
-sold, separately or as part of anything: they are a free extra the gym publishes
-for people who already train there in person, in the same way a coach might send
-a video over a messaging app. Nothing in the app is placed behind a payment.
+The gym membership pays for physical access to a gym. The app's role is to show
+whether that membership is current and to open the door with a QR code.
+
+The only digital material in the app is a small library of technique videos that
+each gym uploads for its own students (warm-ups, drills, technique reviews).
+These are not sold, are not priced, and are not part of what a student is buying:
+they are an incidental extra a coach shares with people who already train at the
+gym in person, in the same way a coach might send a clip over a messaging app. No
+student joins a gym to obtain them, and no gym advertises them as a reason to
+pay.
+
+Every feature of the iOS app is available at no charge to anyone who signs in.
 
 5. ARE THE ENTERPRISE SERVICES IN YOUR APP SOLD TO SINGLE USERS, CONSUMERS, OR
    FOR FAMILY USE?
 
-Sinchi is a business tool for gym owners, used to run a physical business. It is
-currently offered to gyms free of charge, and there is no paid tier inside the
-app. It is not sold to consumers or for family use, and it is not sold through
-the app at all.
+They are sold to businesses. Our customers are the owners of gyms and
+martial-arts schools, who use Sinchi to operate a physical business: keeping a
+roster, checking students in at the door, and recording payments received at the
+counter. Sinchi is not sold to single consumers and not for family use.
 
-If it would help, we are happy to provide a short video of the full flow, or any
-other information you need.
+Students never pay Sinchi anything. They pay their gym, for in-person training.
+
+We are happy to provide a video walkthrough of the full flow, or any other
+information that would help.
 
 Thank you,
 Mathyu Cardozo

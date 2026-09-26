@@ -1780,3 +1780,38 @@ el modelo de negocio: Apple quería saber qué se cobra. La respuesta es que nad
 dentro de la app —las membresías son un servicio físico que se paga en el
 mostrador, y la 3.1.3(e) dice que eso NO puede ir por compra integrada—. El
 borrador que se le mandó está en `store/appstore/respuesta-2-1-b.txt`.
+
+## Culqi y la promesa que le hicimos a Apple
+
+Al contestar la **2.1(b)** del rechazo del 2026-09-25 hubo que decirle a Apple qué
+se cobra, y la respuesta tiene dos mitades que **no** se rigen por la misma regla.
+La respuesta literal quedó en `store/appstore/respuesta-2-1-b.txt`; esto es lo
+que obliga.
+
+**El alumno pagando su membresía con tarjeta es terreno firme.** Lo que compra es
+entrar a un local y entrenar: un servicio físico, consumido fuera de la app. La
+**3.1.3(e)** no es que lo permita, es que **prohíbe** cobrarlo por compra
+integrada. Culqi ahí es lo correcto y no hay nada que negociar.
+
+**La cuota que el gimnasio le paga a Sinchi es la delicada**, y de ella salió un
+límite que hay que respetar al construirla:
+
+> **La app de iOS no vende, no ofrece, no anuncia y no enlaza la suscripción de
+> Sinchi.** Se compra en `sinchi.fit`, y punto.
+
+Eso es lo que se le dijo a App Review palabra por palabra, y es lo que sostiene
+que sea un servicio B2B vendido a empresas y no contenido digital vendido a un
+consumidor dentro de la app. Un botón de «Suscríbete a Sinchi» en el panel del
+dueño, o hasta un texto que diga «contrata el plan Pro en nuestra web», convierte
+la respuesta en falsa y le da a Apple motivo para exigir compra integrada —con su
+30%— o para rechazar por haberlo declarado mal, que es peor porque queda en el
+historial.
+
+La quinta pregunta de Apple —«¿es un servicio empresarial vendido a usuarios
+sueltos, consumidores o familias?»— iba exactamente a esto. Se contestó lo que es
+verdad: se les vende a gimnasios, que son negocios. Mientras el alta de ese cobro
+viva en la web y la app solo refleje el estado, la respuesta se sostiene.
+
+**Y el alumno nunca le paga a Sinchi.** Le paga a su gimnasio. Si algún día eso
+cambia, esta respuesta deja de ser cierta y hay que volver a hablar con Apple
+antes, no después.
