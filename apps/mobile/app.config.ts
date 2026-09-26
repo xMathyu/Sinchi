@@ -30,6 +30,7 @@
  * eso es justo lo que hace fácil olvidarla al compilar para Android.
  */
 import type { ConfigContext, ExpoConfig } from 'expo/config';
+import { withEntitlementsPlist } from 'expo/config-plugins';
 
 /**
  * EL `google-services.json` DE ANDROID, por lo mismo que la clave de mapas.
@@ -55,10 +56,25 @@ const googleServicesFile = process.env.GOOGLE_SERVICES_JSON;
  * Así el código entra a `main` sin romper el próximo envío a la tienda: sin la
  * variable, el binario sale como hasta ahora y la app no pide un permiso para
  * avisos que todavía no llegarían (`extra.push`, que lee `src/data/push.ts`).
+ *
+ * NO BASTA CON NO LISTAR EL PLUGIN. `@expo/prebuild-config` aplica el de
+ * `expo-notifications` por su cuenta en cuanto el paquete está instalado
+ * (`versionedExpoSDKPackages`), y así murió el build 14: «Provisioning profile
+ * doesn't include the Push Notifications capability». Por eso, apagado, además
+ * se QUITA `aps-environment` de los entitlements. Funciona por el orden de los
+ * mods: cada uno corre su acción y después la del anterior, así que el que se
+ * registra aquí —antes que los plugins por defecto— corre el último y su
+ * borrado es el que queda. Comprobado con `expo config --type introspect`.
  */
 const pushEnabled = process.env.SINCHI_PUSH === '1';
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+const withoutPushEntitlement = (config: ExpoConfig): ExpoConfig =>
+  withEntitlementsPlist(config, (mod) => {
+    delete mod.modResults['aps-environment'];
+    return mod;
+  });
+
+const build = (config: ConfigContext['config']): ExpoConfig => ({
   ...(config as ExpoConfig),
   plugins: [
     ...(config.plugins ?? []),
@@ -83,3 +99,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
 });
+
+export default ({ config }: ConfigContext): ExpoConfig => {
+  const resolved = build(config);
+  return pushEnabled ? resolved : withoutPushEntitlement(resolved);
+};

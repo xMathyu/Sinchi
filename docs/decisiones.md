@@ -1909,7 +1909,14 @@ le interrumpe por avisos que todavía no existen.
 no firma con un perfil que no lo tenga: activar Push en el App ID invalida el
 perfil existente, y fue lo que tumbó el build de Entrar con Apple a los diez
 minutos. Sin la variable el binario sale como antes y la app no pide un permiso
-para avisos que no llegarían. Para encenderlo hacen falta, en este orden:
+para avisos que no llegarían.
+
+Ojo: **no listar el plugin no basta.** `@expo/prebuild-config` aplica el de
+`expo-notifications` por su cuenta en cuanto el paquete está instalado, y así
+murió el primer build con esto (el 14). Apagado, `app.config.ts` además quita
+`aps-environment` de los entitlements; se comprueba con
+`npx expo config --type introspect | grep aps-environment`, que tiene que dar
+nada sin la variable. Para encenderlo hacen falta, en este orden:
 
 1. la capacidad **Push Notifications** en el App ID `fit.sinchi.app`, y rehacer el
    perfil de App Store (el procedimiento está en las notas de firma);
