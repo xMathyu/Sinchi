@@ -1734,3 +1734,49 @@ Es la única cosa que sobrevive a una baja y dice algo de la persona: su correo 
 un motivo, en una fila de baneo. **La política publicada no lo menciona.** Es una
 excepción razonable —prevenir el abuso es un interés legítimo— pero es una
 excepción, y la página de `/eliminar-cuenta` debería decirlo.
+
+## Entrar con Apple, y por qué no era opcional
+
+La 1.0.0 volvió rechazada el 2026-09-25 por la **directriz 4.8**: una app que
+ofrece un login de terceros tiene que ofrecer además uno que limite los datos al
+nombre y el correo, que permita **esconder el correo**, y que no recoja el uso de
+la app para publicidad. Sinchi ofrecía Google y nada más.
+
+Se descartó la salida barata —quitar «Entrar con Google» y quedarse solo con
+correo y contraseña, que también cumple porque ya no habría login de terceros—:
+Google es como entra la mayoría, y cambiar una pantalla de acceso para esquivar
+una revisión es pagar con el producto una deuda que se salda con una tarde de
+trabajo.
+
+**El backend no cambió ni una línea**, y esa es la parte que conviene recordar:
+`signInWithGoogle` nunca verificó un token de Google, verifica un **ID token de
+Firebase** (`firebase.verify`), y a Firebase le da igual qué proveedor lo
+produjo. Añadir Apple fue habilitar el proveedor en Firebase y mandar el token
+por el mismo `accounts:signInWithIdp` con otro `providerId`. El nombre del método
+quedó mintiendo un poco; se renombra cuando haya un tercer proveedor y el patrón
+sea evidente.
+
+**El nonce es a dos tiempos y es la única trampa real.** A Apple se le manda el
+SHA-256 del nonce y a Firebase el nonce **en crudo**: Firebase rehace el hash y
+lo compara con el que viene firmado dentro del token de Apple. Mandar el mismo
+valor a los dos lados responde `MISSING_OR_INVALID_NONCE`.
+
+**Dos sitios hay que habilitar, no uno.** La capacidad *Sign in with Apple* va en
+el App ID (`fit.sinchi.app`) **y** en el binario (`ios.usesAppleSignIn`). Con una
+sola, el botón se dibuja y `signInAsync` falla con un error de autorización. La
+del App ID además exige elegir una configuración de consentimiento, o la api
+responde 409 «Please select at least one configuration».
+
+**El botón es el nativo de Apple**, no uno del sistema de diseño: su guía manda
+usar el suyo, y dibujar una manzana en un botón propio es motivo de rechazo. Solo
+se ajusta el radio, el alto y el color, que se invierte con el tema.
+
+Y el **nombre solo llega en la primera autorización**. Después viene vacío,
+porque quien ya autorizó no vuelve a ver la pantalla de consentimiento. Se guarda
+en el alta o se pierde: no hay forma de volver a pedírselo a Apple.
+
+El otro punto del rechazo, la **2.1(b)**, no era código sino una pregunta sobre
+el modelo de negocio: Apple quería saber qué se cobra. La respuesta es que nada
+dentro de la app —las membresías son un servicio físico que se paga en el
+mostrador, y la 3.1.3(e) dice que eso NO puede ir por compra integrada—. El
+borrador que se le mandó está en `store/appstore/respuesta-2-1-b.txt`.

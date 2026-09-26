@@ -24,6 +24,7 @@ import {
   switchToStudent,
 } from './api';
 import {
+  exchangeAppleToken,
   exchangeGoogleToken,
   refreshIdToken,
   signInWithEmail,
@@ -101,6 +102,41 @@ export async function completeGoogleSignIn(
 ): Promise<SignInOutcome> {
   try {
     return await exchangeForSinchiSession(await exchangeGoogleToken(googleIdToken), details);
+  } catch (error) {
+    return { kind: 'error', message: describe(error) };
+  }
+}
+
+/**
+ * Entra con Apple, que es el login que exige la directriz 4.8 al que ya ofrece
+ * Google.
+ *
+ * TODO EL FLUJO DE APPLE VIVE AQUÍ, al revés que el de Google: `signInAsync`
+ * abre una hoja nativa, no un navegador, así que no necesita hooks y no hay
+ * razón para partirlo entre la pantalla y esta capa.
+ *
+ * EL NOMBRE SOLO LLEGA LA PRIMERA VEZ. Apple lo manda en el `credential` de la
+ * primera autorización y nunca más: en los siguientes accesos `fullName` viene
+ * vacío, porque quien ya autorizó no vuelve a pasar por la pantalla de consentimiento.
+ * Por eso se guarda en el alta y no se pide después — si se perdiera aquí, no
+ * hay forma de recuperarlo de Apple, y habría que preguntárselo a la persona.
+ *
+ * Y EL CORREO PUEDE SER UN RELÉ (`…@privaterelay.appleid.com`) si la persona
+ * elige esconderlo, que es justo el derecho que la directriz protege. Es una
+ * dirección real y reenvía, así que sirve igual para vincular la cuenta; lo que
+ * no sirve es suponer que coincide con el correo que el gimnasio anotó en el
+ * mostrador. Esa vinculación la resuelve el código de invitación, como siempre.
+ */
+export async function completeAppleSignIn(
+  appleIdToken: string,
+  rawNonce: string,
+  details: SignUpDetails = {},
+): Promise<SignInOutcome> {
+  try {
+    return await exchangeForSinchiSession(
+      await exchangeAppleToken(appleIdToken, rawNonce),
+      details,
+    );
   } catch (error) {
     return { kind: 'error', message: describe(error) };
   }

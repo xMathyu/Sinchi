@@ -24,8 +24,10 @@
  * aquí, no dos pantallas más adentro.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import * as Google from 'expo-auth-session/providers/google';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
@@ -46,7 +48,7 @@ import {
 } from '../src/design/primitives';
 import { GoogleMark } from '../src/design/google-mark';
 import { useTheme } from '../src/design/theme';
-import { completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
+import { completeAppleSignIn, completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
 
 /** Los campos del formulario de correo, para marcarlos de uno en uno. */
@@ -56,6 +58,11 @@ export default function LoginScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [working, setWorking] = useState(false);
+  // Sign in with Apple no existe en Android y tampoco en un iOS anterior al 13,
+  // así que el botón se dibuja SOLO si el aparato lo tiene. Se pregunta en vez
+  // de suponerlo por la plataforma: en el simulador de iPad sin sesión de iCloud
+  // la hoja no abre, y es mejor no ofrecer un botón que no va a funcionar.
+  const [appleReady, setAppleReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -78,6 +85,17 @@ export default function LoginScreen() {
     iosClientId: googleClientIds.ios,
     androidClientId: googleClientIds.android,
   });
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    let cancelled = false;
+    void AppleAuthentication.isAvailableAsync().then((hay) => {
+      if (!cancelled) setAppleReady(hay);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (response === null) return;
@@ -119,6 +137,72 @@ export default function LoginScreen() {
       cancelled = true;
     };
   }, [response, router]);
+
+  /**
+   * Entrar con Apple.
+   *
+   * A diferencia de Google no hay `useEffect` esperando una respuesta: la hoja
+   * de Apple es nativa y `signInAsync` resuelve con el resultado, así que todo
+   * el flujo cabe en una función.
+   *
+   * EL NONCE VA HASHEADO A APPLE Y EN CRUDO A FIREBASE. Apple firma el hash
+   * dentro del token; Firebase rehace el hash del crudo y compara. Mandar el
+   * mismo valor a los dos lados es el error que devuelve
+   * `MISSING_OR_INVALID_NONCE` y cuesta una tarde.
+   */
+  const signInWithApple = (): void => {
+    setError(null);
+    setWorking(true);
+
+    void (async () => {
+      try {
+        const rawNonce = Crypto.randomUUID();
+        const hashedNonce = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          rawNonce,
+        );
+
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+          nonce: hashedNonce,
+        });
+
+        if (credential.identityToken === null) {
+          setWorking(false);
+          setError('Apple no devolvió un token válido.');
+          return;
+        }
+
+        // El nombre solo llega en la PRIMERA autorización; después viene vacío.
+        // Se manda ahora o se pierde para siempre.
+        const nombre = [credential.fullName?.givenName, credential.fullName?.familyName]
+          .filter((parte) => parte !== null && parte !== undefined && parte !== '')
+          .join(' ');
+
+        const outcome = await completeAppleSignIn(credential.identityToken, rawNonce, {
+          ...(nombre === '' ? {} : { fullName: nombre }),
+          phone,
+        });
+
+        setWorking(false);
+        if (outcome.kind === 'error') {
+          setError(outcome.message);
+          return;
+        }
+        if (outcome.kind === 'needs_link') router.replace('/student');
+      } catch (error) {
+        setWorking(false);
+        // Cancelar no es un error y no merece un mensaje en rojo, igual que en
+        // Google. Apple lo dice con este código.
+        const code = (error as { code?: string }).code;
+        if (code === 'ERR_REQUEST_CANCELED') return;
+        setError('No se pudo completar el acceso con Apple.');
+      }
+    })();
+  };
 
   const submitEmail = (): void => {
     setError(null);
@@ -219,6 +303,29 @@ export default function LoginScreen() {
     />
   );
 
+  /**
+   * El botón es el NATIVO de Apple, no uno del sistema de diseño.
+   *
+   * La guía de Apple manda usar el suyo —su marca, su texto, sus proporciones—
+   * y un botón propio con una manzana dibujada es motivo de rechazo. Lo que sí
+   * se ajusta es lo que la guía deja ajustar: el radio y el alto, para que quede
+   * a la par del de Google, y el color, que se invierte con el tema porque un
+   * botón negro sobre fondo negro no se ve.
+   */
+  const appleButton = appleReady ? (
+    <AppleAuthentication.AppleAuthenticationButton
+      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+      buttonStyle={
+        theme.scheme === 'dark'
+          ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+          : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+      }
+      cornerRadius={theme.radii.lg}
+      style={{ height: 52, width: '100%', opacity: working ? 0.6 : 1 }}
+      onPress={signInWithApple}
+    />
+  ) : null;
+
   if (creating) {
     return (
       <Screen scroll style={{ flexGrow: 1 }}>
@@ -317,6 +424,7 @@ export default function LoginScreen() {
             <Stack gap={14} style={{ marginTop: 18 }}>
               {separador}
               {googleButton}
+              {appleButton}
             </Stack>
           )}
 
@@ -427,6 +535,7 @@ export default function LoginScreen() {
           <Stack gap={14} style={{ marginTop: 6 }}>
             {separador}
             {googleButton}
+            {appleButton}
           </Stack>
         )}
 

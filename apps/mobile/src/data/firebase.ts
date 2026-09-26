@@ -96,7 +96,36 @@ export interface FirebaseSignIn {
  * ante *nuestro proyecto*, y es el único que la api sabe verificar. Sin este
  * paso, `/auth/google` rechazaría el token con 401 — el `aud` no coincidiría.
  */
-export async function exchangeGoogleToken(googleIdToken: string): Promise<FirebaseSignIn> {
+export function exchangeGoogleToken(googleIdToken: string): Promise<FirebaseSignIn> {
+  return exchangeIdpToken('google.com', googleIdToken);
+}
+
+/**
+ * Lo mismo con Apple, y existe porque Apple lo exige.
+ *
+ * La directriz 4.8 dice que una app que ofrece un login de terceros tiene que
+ * ofrecer además uno que no rastree y que permita esconder el correo. Sinchi
+ * ofrecía Google y nada más, y por eso la 1.0.0 volvió rechazada el 2026-09-25.
+ *
+ * EL NONCE ES LA ÚNICA DIFERENCIA REAL con Google, y es a dos tiempos: a Apple
+ * se le manda el SHA-256 del nonce, y a Firebase el nonce EN CRUDO. Firebase
+ * vuelve a hacer el hash y lo compara con el que viene firmado dentro del token
+ * de Apple; así un token robado no se puede reusar, porque solo vale para el
+ * nonce con el que se pidió. Mandarle a Firebase el hash en vez del crudo
+ * responde `MISSING_OR_INVALID_NONCE`, que es el error fácil de este flujo.
+ */
+export function exchangeAppleToken(
+  appleIdToken: string,
+  rawNonce: string,
+): Promise<FirebaseSignIn> {
+  return exchangeIdpToken('apple.com', appleIdToken, rawNonce);
+}
+
+async function exchangeIdpToken(
+  providerId: 'google.com' | 'apple.com',
+  idToken: string,
+  rawNonce?: string,
+): Promise<FirebaseSignIn> {
   if (!firebaseConfigured()) {
     throw new FirebaseAuthError(
       'Falta la configuración de Firebase en este build (ver .env.example).',
@@ -114,7 +143,11 @@ export async function exchangeGoogleToken(googleIdToken: string): Promise<Fireba
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        postBody: `id_token=${encodeURIComponent(googleIdToken)}&providerId=google.com`,
+        postBody: [
+          `id_token=${encodeURIComponent(idToken)}`,
+          `providerId=${providerId}`,
+          ...(rawNonce === undefined ? [] : [`nonce=${encodeURIComponent(rawNonce)}`]),
+        ].join('&'),
         // Identity Toolkit lo exige aunque no haya redirección real; con el flujo
         // nativo cualquier URI válida sirve.
         requestUri: `https://${firebaseConfig.authDomain}`,
@@ -123,7 +156,7 @@ export async function exchangeGoogleToken(googleIdToken: string): Promise<Fireba
       }),
     });
   } catch {
-    throw new FirebaseAuthError('No se pudo conectar con Google para verificar tu cuenta.', null);
+    throw new FirebaseAuthError('No se pudo conectar para verificar tu cuenta.', null);
   }
 
   const payload = (await response.json()) as SignInWithIdpResponse;
