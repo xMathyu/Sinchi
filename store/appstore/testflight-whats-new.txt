@@ -1,16 +1,17 @@
 NOVEDADES DE ESTA VERSIÓN
 
-• Tu gimnasio puede tener logo. Lo eliges al registrarlo o después, en el padrón → «Logo y redes». Sale en el directorio, en la ficha del gimnasio, en la billetera y el QR de tus alumnos y en tu puerta. Es opcional: sin logo se ven tus iniciales.
-• Tu web y tus redes: página web, Instagram, Facebook y TikTok, todas opcionales. Puedes escribir @tuusuario o pegar el enlace del perfil. Salen en tu ficha del directorio y cada una abre la suya.
-• Clases y precios: tus planes, tu horario y lo que cobras aparte (matrícula, clase suelta y clase de prueba) ahora están juntos, en una sola pantalla con pestañas. Al registrar un gimnasio la app te guía: primero tus planes y después tu horario.
+• Días de gracia: en Clases y precios → «Otros cobros», el dueño decide cuántos días sigue entrando un alumno con la mensualidad vencida. Antes de guardar, la app te dice cuántos alumnos quedarían fuera hoy o volverían a entrar.
+• Las inscripciones se ven: cuando alguien reserva su inscripción desde la app, la pestaña Reservas lleva un número, la Puerta te avisa con su nombre y el día, y en Reservas sale arriba de todo. El correo que te llega ahora dice «Inscripción» y no «Clase de prueba».
+• Clases por edades: al crear o editar una clase puedes poner desde qué edad y hasta qué edad es —por ejemplo, Judo kids de 3 a 7 y, a otra hora, de 8 a 13—. Sale en tu horario, en tu ficha del directorio y en el horario de tus alumnos.
+• Entrar con Apple, además de Google y de correo.
 
 SI VIENES DE LA VERSIÓN ANTERIOR, ESTO YA ESTABA
-• Registrar tu gimnasio desde Mi cuenta termina en tu padrón, sin hojas apiladas.
-• El panel web del dueño en sinchi.fit/panel.
+• El logo, la web y las redes de tu gimnasio.
+• Clases y precios: planes, horario y cobros aparte en una sola pantalla.
 
 QUÉ PROBAR
-• Registra un gimnasio (Mi cuenta → «¿Tienes un gimnasio?»). En el último paso elige un logo de tus fotos —prueba con una foto tomada con el celular y con un logo de fondo transparente— y abre «+ Agregar tu web y tus redes». Pega el enlace de tu Instagram tal como lo copia la app de Instagram.
-• Al terminar deberías caer en «Clases y precios», Paso 1 de 2. Escribe un plan, toca «Siguiente: tu horario», publica una clase y toca «Listo».
-• En el padrón → «Logo y redes»: cambia el logo, quítalo y guarda tus redes. Busca tu gimnasio en el directorio y toca cada red: tiene que abrir la tuya.
-• Si entrenas en un gimnasio que tiene logo, míralo en tu billetera y en tu QR.
-• Cuéntanos si alguna imagen sale cortada, borrosa o de lado.
+• Si tienes un gimnasio: en Clases y precios → «Otros cobros», cambia los días de gracia. Bájalos y mira el aviso antes de guardar.
+• En Horarios, crea dos clases con el mismo nombre y edades distintas. Después búscalas en tu ficha del directorio.
+• Desde otra cuenta, busca tu gimnasio en el directorio (Billetera → «¿Entrenas en otro gimnasio?»), toca «Inscribirme» y reserva. Con la cuenta del gimnasio, mira la Puerta y la pestaña Reservas.
+• Cierra sesión y entra con Apple.
+• Cuéntanos si algo sale cortado o no se entiende.
