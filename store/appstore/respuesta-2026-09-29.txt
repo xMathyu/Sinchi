@@ -1,7 +1,8 @@
 RESPUESTA AL RECHAZO DEL 2026-09-29 (envío 52fa17b5, build 13).
-Va en el Resolution Center de App Store Connect, en inglés. Antes de mandarla:
-- poner el número del build nuevo donde dice «build __»;
-- adjuntar el video grabado en el iPhone (la baja de una cuenta, de punta a punta).
+Va en el Resolution Center de App Store Connect, en inglés: se pega desde la
+línea de «Hello» hasta la firma, y se adjunta el video grabado en el iPhone
+(`sinchi-eliminar-cuenta-iphone.mp4`, el mismo que ya está en App Review
+Information desde el 2026-10-06).
 
 Lo que cambió respecto de las notas anteriores, y por qué: decían que la
 suscripción de Sinchi «nunca se vende, ofrece ni anuncia dentro de la app». No
@@ -12,7 +13,7 @@ uno. Aquí se dice como es y se defiende por la 3.1.3(c).
 
 Hello, and thank you for the detailed review.
 
-We have uploaded a new build (1.0.0, build __) with the account deletion fix.
+We have uploaded a new build (1.0.0, build 17) with the account deletion fix.
 Below are the changes and the information you asked for.
 
 GUIDELINE 5.1.1(v) - ACCOUNT DELETION
