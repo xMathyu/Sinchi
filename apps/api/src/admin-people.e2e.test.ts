@@ -70,6 +70,7 @@ let ownerToken = '';
 let ownerUserId = '';
 let ownerDocument = '';
 let planId = '';
+let gymSlug = '';
 
 /** Rosa: alumna vinculada, con app. */
 const rosa = {
@@ -153,6 +154,7 @@ beforeAll(async () => {
     })
     .expect(201);
   created.push(gym.body.tenantId as string);
+  gymSlug = gym.body.slug as string;
   ownerToken = gym.body.session.accessToken as string;
   ownerUserId = gym.body.session.userId as string;
 
@@ -591,5 +593,63 @@ suite('la baja no levanta un baneo', () => {
       .send({ idToken: declareIdentity(nuevoUid, curioso.email) });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('account_banned');
+  });
+});
+
+/**
+ * Lo que Apple pidió en la 5.1.1(v): quien crea su cuenta con Google o con Apple
+ * y todavía no está en ningún padrón tiene que poder borrarla desde la app.
+ */
+suite('la persona elimina su propia cuenta sin ficha', () => {
+  it('se va en el acto, con lo que dejó en los gimnasios y su usuario de Firebase', async () => {
+    const uid = `se-va-${runId}`;
+    uids.push(uid);
+    const idToken = declareIdentity(uid, `se.va.${runId}@ejemplo.pe`);
+
+    const entrada = await http.post('/v1/auth/google').send({ idToken }).expect(201);
+    expect(entrada.body.linked).toBe(false);
+
+    // Deja un rastro dentro de un gimnasio: le escribe preguntando.
+    await http
+      .post(`/v1/gyms/${gymSlug}/messages`)
+      .send({
+        idToken,
+        body: '¿Tienen clases para niños?',
+        fullName: `Se Va ${runId}`,
+        phone: nextPhone(),
+      })
+      .expect(201);
+    const antes = await http.get(`/v1/admin/accounts/${uid}`).set(auth(adminToken)).expect(200);
+    expect(antes.body.footprint.conversations).toBe(1);
+
+    const { body } = await http.post('/v1/account/delete').send({ idToken }).expect(201);
+
+    expect(body).toEqual({ deleted: true, firebase: 'deleted' });
+    expect(deletedFromFirebase).toContain(uid);
+    await http.get(`/v1/admin/accounts/${uid}`).set(auth(adminToken)).expect(404);
+    const { body: bandeja } = await http
+      .get('/v1/staff/conversations')
+      .set(auth(ownerToken))
+      .expect(200);
+    expect(JSON.stringify(bandeja)).not.toContain(`Se Va ${runId}`);
+  });
+
+  it('quien ya tiene ficha no se borra por aquí: su baja es la solicitud de 30 días', async () => {
+    // El dueño: su cuenta de Google abre su ficha. (Rosa no sirve aquí: el panel
+    // ya la eliminó más arriba.)
+    const ownerUid = `dueno-${runId}`;
+    const { body } = await http
+      .post('/v1/account/delete')
+      .send({ idToken: declareIdentity(ownerUid, `${ownerUid}@example.com`) })
+      .expect(409);
+    expect(String(body.message)).toContain('pide la baja desde Ajustes');
+    expect(deletedFromFirebase).not.toContain(ownerUid);
+  });
+
+  it('sin un token de Firebase válido no borra nada', async () => {
+    await http
+      .post('/v1/account/delete')
+      .send({ idToken: `nadie.${'x'.repeat(120)}` })
+      .expect(401);
   });
 });

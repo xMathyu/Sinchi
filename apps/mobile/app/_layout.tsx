@@ -177,6 +177,9 @@ function AppStack() {
           options={{ presentation: 'fullScreenModal', animation: 'fade' }}
         />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+        {/* Modal como Ajustes, desde donde se abre: una pantalla normal empujada
+            desde un modal queda DEBAJO de él y no se ve. */}
+        <Stack.Screen name="delete-account" options={{ presentation: 'modal' }} />
         {/* La oferta del gimnasio. Van como modal y no como pestaña porque no
             se consultan a diario: se entra a cambiar un precio y se sale. */}
         <Stack.Screen name="offering" options={{ presentation: 'modal' }} />
@@ -343,8 +346,21 @@ function DataLoader() {
  * gimnasio el alumno con sesion, la cuenta sin ficha que acaba de llegar al
  * directorio y —para que el boton no rebote en silencio— quien todavia no entro,
  * que ve ahi mismo la invitacion a hacerlo.
+ *
+ * `delete-account` faltaba en TODAS las listas, y por eso Apple rechazó la 1.0.0
+ * por la 5.1.1(v): el «Eliminar mi cuenta» de Ajustes rebotaba en silencio a las
+ * pestañas, para el alumno y para el staff, y al revisor le pareció que la app no
+ * ofrecía borrar la cuenta. Es de todos los que tienen cuenta —con ficha o sin
+ * ella— y va aquí y en la rama de `unlinked`.
  */
-const SHARED_ROUTES = new Set(['settings', 'explore', 'gym-signup', 'routines', 'chat']);
+const SHARED_ROUTES = new Set([
+  'settings',
+  'explore',
+  'gym-signup',
+  'routines',
+  'chat',
+  'delete-account',
+]);
 
 const ROUTES_OF: Readonly<Record<'staff' | 'student', ReadonlySet<string>>> = {
   staff: new Set([
@@ -510,6 +526,8 @@ function SessionRouter() {
       if (
         first !== 'student' &&
         first !== 'settings' &&
+        // Sin ficha también se elimina la cuenta, y en el acto (5.1.1(v)).
+        first !== 'delete-account' &&
         !enDirectorio &&
         !onGymSignUp &&
         !onChat

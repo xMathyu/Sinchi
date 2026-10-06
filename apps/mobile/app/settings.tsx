@@ -511,25 +511,28 @@ export default function SettingsScreen() {
               </Card>
             </Pressable>
 
-            {/* El camino de baja DENTRO de la app que exige Google Play. Va aquí
-                y no en un menú aparte porque es donde se busca: quien quiere
-                irse abre ajustes y mira debajo de «cerrar sesión». Discreto a
-                propósito —sin recuadro y en texto terciario— para no ofrecer la
-                baja a quien solo venía a cambiar el tema. */}
-            {/* Solo con sesión: la baja la pide `/me`, y la cuenta sin ficha
-                todavía no tiene cómo pedirla desde aquí. */}
-            {session.status === 'signed_in' ? (
+            {/* El camino de baja DENTRO de la app, que exigen Google Play y Apple
+                (5.1.1(v)). Va aquí porque es donde se busca: quien quiere irse
+                abre ajustes y mira debajo de «Cerrar sesión».
+
+                Era un texto terciario sin recuadro, para no ofrecerle la baja a
+                quien solo venía a cambiar el tema, y Apple rechazó la 1.0.0 sin
+                encontrarlo (además rebotaba: ver `SHARED_ROUTES`). Ahora es una
+                fila como las demás, sin rojo: el rojo es de «Cerrar sesión», y
+                dos filas rojas seguidas se leen como la misma.
+
+                También sin ficha: la cuenta recién creada con Google o con
+                Apple se borra en el acto (`delete-account`). */}
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push('/delete-account')}
-              hitSlop={8}
-              style={{ paddingVertical: 6, alignSelf: 'flex-start' }}
             >
-              <Text variant="captionSmall" color={theme.colors.textTertiary}>
-                Eliminar mi cuenta
-              </Text>
+              <Card radius={theme.radii.lg}>
+                <Text variant="bodySmall" weight="semibold" color={theme.colors.textSecondary}>
+                  Eliminar mi cuenta
+                </Text>
+              </Card>
             </Pressable>
-            ) : null}
           </Stack>
         )}
 

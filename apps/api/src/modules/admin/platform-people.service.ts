@@ -742,32 +742,7 @@ export class PlatformPeopleService {
     if (denial !== null) throw new ForbiddenException(personDeletionDenialMessage(denial));
 
     const counts = await withoutTenantIsolation(this.db, async (tx) => {
-      const tenants = await tx.select({ id: schema.tenants.id }).from(schema.tenants);
-      const total = { memberships: 0, chargesAnonymized: 0, bookings: 0, conversations: 0, eventRegistrations: 0 };
-
-      for (const tenant of tenants) {
-        await adoptTenant(tx, tenant.id);
-        const traces = await this.deleteTraces(tx, tenant.id, {
-          userId: null,
-          firebaseUid,
-          membershipIds: [],
-        });
-        total.bookings += traces.bookings;
-        total.conversations += traces.conversations;
-        total.eventRegistrations += traces.eventRegistrations;
-
-        // La solicitud de vínculo es del GIMNASIO —cuelga de su ficha— y se
-        // queda. Lo que se va es a qué cuenta iba dirigida.
-        await tx
-          .update(schema.linkRequests)
-          .set({ firebaseUid: null })
-          .where(
-            and(eq(schema.linkRequests.tenantId, tenant.id), eq(schema.linkRequests.firebaseUid, firebaseUid)),
-          );
-      }
-
-      await adoptTenant(tx, '');
-      await tx.delete(schema.accountClaims).where(eq(schema.accountClaims.firebaseUid, firebaseUid));
+      const total = await this.eraseAccountRows(tx, firebaseUid);
 
       await this.admins.record(tx, {
         adminId,
@@ -781,6 +756,84 @@ export class PlatformPeopleService {
 
     const firebase = await this.deleteFirebaseAccount(adminId, firebaseUid, firebaseUid);
     return { ...counts, firebase };
+  }
+
+  /**
+   * La persona elimina su propia cuenta SIN ficha, desde la app.
+   *
+   * Es lo que Apple pidió en la 5.1.1(v): quien crea su cuenta con Google o con
+   * Apple y todavía no está en ningún padrón podía crearla y no borrarla. La baja
+   * de quien sí tiene ficha es una SOLICITUD de 30 días (`AccountDeletionService`)
+   * porque su ficha y sus cobros viven en un gimnasio; esta es en el acto porque
+   * no hay nada de eso: lo que deja son sus reservas y sus conversaciones, que es
+   * exactamente lo que el panel ya borra con `removeAccount`, y por eso comparten
+   * `eraseAccountRows`.
+   *
+   * Sin confirmación tecleada ni registro de admin: la confirma ella en la app, y
+   * su prueba es el token de Firebase que la api acaba de verificar.
+   *
+   * Si ese uid ya abre una ficha, se niega con 409: esa persona tiene sesión de
+   * Sinchi, y su baja es la de 30 días.
+   */
+  async removeOwnAccount(firebaseUid: string): Promise<DeletionOutcome> {
+    const [linked] = await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.firebaseUid, firebaseUid))
+        .limit(1),
+    );
+    if (linked !== undefined) {
+      throw new ConflictException(
+        'Tu cuenta ya tiene ficha en un gimnasio: entra con ella y pide la baja desde Ajustes.',
+      );
+    }
+
+    // Sin `accountOrFail`: una cuenta que entró y nunca llegó a dejar sus datos
+    // no tiene `account_claims`, y aun así existe en Firebase y se puede borrar.
+    const counts = await withoutTenantIsolation(this.db, (tx) => this.eraseAccountRows(tx, firebaseUid));
+    const { outcome } = await this.firebase.deleteAccount(firebaseUid);
+    this.logger.warn(`Cuenta sin ficha eliminada por su dueña: ${firebaseUid} (Firebase: ${outcome})`);
+    return { ...counts, firebase: outcome };
+  }
+
+  /**
+   * Lo que una cuenta sin ficha dejó en la red, borrado en una transacción.
+   *
+   * Recorre los gimnasios porque sus reservas y sus conversaciones viven dentro
+   * de cada uno, bajo su RLS.
+   */
+  private async eraseAccountRows(
+    tx: Tx,
+    firebaseUid: string,
+  ): Promise<Omit<DeletionOutcome, 'firebase'>> {
+    const tenants = await tx.select({ id: schema.tenants.id }).from(schema.tenants);
+    const total = { memberships: 0, chargesAnonymized: 0, bookings: 0, conversations: 0, eventRegistrations: 0 };
+
+    for (const tenant of tenants) {
+      await adoptTenant(tx, tenant.id);
+      const traces = await this.deleteTraces(tx, tenant.id, {
+        userId: null,
+        firebaseUid,
+        membershipIds: [],
+      });
+      total.bookings += traces.bookings;
+      total.conversations += traces.conversations;
+      total.eventRegistrations += traces.eventRegistrations;
+
+      // La solicitud de vínculo es del GIMNASIO —cuelga de su ficha— y se
+      // queda. Lo que se va es a qué cuenta iba dirigida.
+      await tx
+        .update(schema.linkRequests)
+        .set({ firebaseUid: null })
+        .where(
+          and(eq(schema.linkRequests.tenantId, tenant.id), eq(schema.linkRequests.firebaseUid, firebaseUid)),
+        );
+    }
+
+    await adoptTenant(tx, '');
+    await tx.delete(schema.accountClaims).where(eq(schema.accountClaims.firebaseUid, firebaseUid));
+    return total;
   }
 
   // -------------------------------------------------------------------------

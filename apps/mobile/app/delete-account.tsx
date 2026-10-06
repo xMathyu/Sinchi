@@ -13,6 +13,13 @@
  *
  * La confirmacion es de dos pasos a proposito. No es friccion decorativa: es la
  * unica accion de la app que no se deshace sola.
+ *
+ * LA CUENTA SIN FICHA SE BORRA EN EL ACTO, y es otra pantalla dentro de esta.
+ * Apple rechazó la 1.0.0 por la 5.1.1(v): con Google o con Apple se CREABA una
+ * cuenta, y hasta que un gimnasio la inscribía no había forma de borrarla. Esa
+ * cuenta no tiene ficha ni cobros en ningún gimnasio —lo que deja son sus
+ * reservas y sus conversaciones—, así que no hay nada que esperar treinta días:
+ * se borra al confirmar y la pantalla lo dice antes de soltar la sesión.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
@@ -22,10 +29,14 @@ import { Screen } from '../src/design/screen';
 import { useTheme } from '../src/design/theme';
 import {
   cancelAccountDeletion,
+  deleteOwnAccount,
   fetchAccountDeletion,
   requestAccountDeletion,
   type DeletionRequestDto,
 } from '../src/data/api';
+import { signOut } from '../src/data/auth';
+import { useSession } from '../src/data/session-hooks';
+import { resetState } from '../src/data/store';
 
 const SE_BORRA = [
   'Tu nombre, documento, teléfono, correo y foto.',
@@ -34,7 +45,22 @@ const SE_BORRA = [
   'Tus reservas de clase de prueba y tus inscripciones a eventos.',
 ] as const;
 
+const SE_BORRA_SIN_FICHA = [
+  'Tu cuenta y la forma con la que entras (Google o Apple).',
+  'Tu nombre y tu celular.',
+  'Tus reservas de clases y lo que les escribiste a los gimnasios.',
+] as const;
+
 export default function DeleteAccountScreen() {
+  const session = useSession();
+  // Una sola ruta para las dos bajas: la de quien busca «Eliminar mi cuenta» en
+  // Ajustes no tiene por qué saber si ya tiene ficha o no.
+  if (session.status === 'unlinked') return <DeleteUnlinkedAccount idToken={session.idToken} />;
+  return <DeletionRequest />;
+}
+
+/** Quien tiene ficha: la solicitud de 30 días, que completa Sinchi. */
+function DeletionRequest() {
   const theme = useTheme();
   const [pendiente, setPendiente] = useState<DeletionRequestDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -245,4 +271,143 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'hace poco';
   return date.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
+}
+
+type UnlinkedStep = 'inicio' | 'confirmando' | 'borrando' | 'hecho';
+
+/**
+ * Quien todavía no tiene ficha: se borra en el acto.
+ *
+ * Termina en una pantalla que dice que se borró, y la sesión se suelta recién al
+ * tocar «Salir». Soltarla antes la mandaba directo al login, y quien acababa de
+ * borrar su cuenta no veía en ningún sitio que se hubiera borrado — que es justo
+ * lo que Apple pide ver de principio a fin.
+ */
+function DeleteUnlinkedAccount({ idToken }: { readonly idToken: string }) {
+  const theme = useTheme();
+  const [step, setStep] = useState<UnlinkedStep>('inicio');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const borrar = (): void => {
+    setStep('borrando');
+    setNotice(null);
+    deleteOwnAccount(idToken)
+      .then(() => setStep('hecho'))
+      .catch((causa: unknown) => {
+        setStep('confirmando');
+        setNotice(causa instanceof Error ? causa.message : 'No se pudo eliminar la cuenta.');
+      });
+  };
+
+  const salir = (): void => {
+    void signOut({ forgetTotpSecret: true }).then(() => {
+      resetState();
+      router.replace('/login');
+    });
+  };
+
+  return (
+    <Screen scroll>
+      <Row style={{ paddingTop: 8 }}>
+        <Text variant="titleSmall" weight="bold">
+          Eliminar mi cuenta
+        </Text>
+        {/* Sin «Cerrar» al terminar: la cuenta ya no existe, y volver a Ajustes
+            sería volver a una sesión de nadie. La salida es «Salir». */}
+        {step === 'hecho' ? null : (
+          <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={16}>
+            <Text variant="body" color={theme.colors.textSecondary}>
+              Cerrar
+            </Text>
+          </Pressable>
+        )}
+      </Row>
+
+      <Stack gap={16} style={{ paddingTop: 18 }}>
+        {step === 'hecho' ? (
+          <Card>
+            <Stack gap={12}>
+              <Text variant="bodySmall" weight="bold" color={theme.semaphore.ok}>
+                Tu cuenta se eliminó
+              </Text>
+              <Text variant="body" color={theme.colors.textSecondary}>
+                Borramos tu cuenta, tus datos y lo que dejaste en los gimnasios. Si algún día
+                quieres volver, puedes crear una cuenta nueva.
+              </Text>
+              <Button label="Salir" onPress={salir} />
+            </Stack>
+          </Card>
+        ) : step === 'inicio' ? (
+          <>
+            <Card>
+              <Stack gap={12}>
+                <Text variant="bodySmall" weight="bold">
+                  Qué se borra
+                </Text>
+                {SE_BORRA_SIN_FICHA.map((linea) => (
+                  <Row key={linea} style={{ alignItems: 'flex-start', gap: 10 }}>
+                    <View
+                      style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        marginTop: 8,
+                        backgroundColor: theme.colors.textTertiary,
+                      }}
+                    />
+                    <Text variant="body" color={theme.colors.textSecondary} style={{ flex: 1 }}>
+                      {linea}
+                    </Text>
+                  </Row>
+                ))}
+              </Stack>
+            </Card>
+            <Text variant="captionSmall" color={theme.colors.textTertiary}>
+              Es en el acto: todavía no estás en el padrón de ningún gimnasio, así que no hay nada
+              que esperar.
+            </Text>
+            <Button
+              label="Eliminar mi cuenta"
+              variant="accent"
+              accentColor={theme.semaphore.bad}
+              accentInk={theme.semaphoreInk.bad}
+              onPress={() => setStep('confirmando')}
+            />
+          </>
+        ) : (
+          <Card>
+            <Stack gap={14}>
+              <Text variant="bodySmall" weight="bold" color={theme.semaphore.bad}>
+                ¿Seguro?
+              </Text>
+              <Text variant="body" color={theme.colors.textSecondary}>
+                No se puede deshacer. Tus reservas se cancelan y los gimnasios dejan de ver tus
+                mensajes.
+              </Text>
+              <Button
+                label={step === 'borrando' ? 'Eliminando…' : 'Sí, elimina mi cuenta'}
+                variant="accent"
+                accentColor={theme.semaphore.bad}
+                accentInk={theme.semaphoreInk.bad}
+                disabled={step === 'borrando'}
+                onPress={borrar}
+              />
+              <Button
+                label="Mejor no"
+                variant="ghost"
+                disabled={step === 'borrando'}
+                onPress={() => setStep('inicio')}
+              />
+            </Stack>
+          </Card>
+        )}
+
+        {notice === null ? null : (
+          <Text variant="captionSmall" color={theme.semaphore.alert}>
+            {notice}
+          </Text>
+        )}
+      </Stack>
+    </Screen>
+  );
 }

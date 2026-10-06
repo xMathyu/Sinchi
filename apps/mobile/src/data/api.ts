@@ -1920,6 +1920,17 @@ export const fetchAccountDeletion = (): Promise<{ request: DeletionRequestDto | 
 export const cancelAccountDeletion = (): Promise<{ canceled: boolean }> =>
   request('/me/account/deletion-request', { method: 'DELETE' });
 
+/**
+ * Elimina en el acto la cuenta SIN ficha (la 5.1.1(v) de Apple).
+ *
+ * Firmada con el ID token de Firebase porque esa cuenta no tiene sesión de
+ * Sinchi. Quien tiene ficha no pasa por aquí: su baja es la solicitud de 30 días.
+ */
+export const deleteOwnAccount = (
+  idToken: string,
+): Promise<{ readonly deleted: true; readonly firebase: string }> =>
+  request('/account/delete', { method: 'POST', anonymous: true, body: { idToken } });
+
 // ---------------------------------------------------------------------------
 // Mensajes
 // ---------------------------------------------------------------------------

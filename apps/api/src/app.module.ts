@@ -25,6 +25,7 @@ import { RefreshSaasJob } from './jobs/refresh-saas.job';
 import { BillingService } from './modules/billing/billing.service';
 import { MailService } from './modules/mail/mail.service';
 import { PushController } from './modules/push/push.controller';
+import { OwnAccountController } from './modules/own-account.controller';
 import { ExpoPushClient, PushService } from './modules/push/push.service';
 import { BrandController } from './modules/brand.controller';
 import { CheckInService } from './modules/checkin/checkin.service';
@@ -71,6 +72,7 @@ import { PlatformPeopleService } from './modules/admin/platform-people.service';
     HealthController,
     StudentController,
     PushController,
+    OwnAccountController,
     StaffController,
     OfferingController,
     EventsController,
