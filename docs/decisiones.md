@@ -1934,3 +1934,33 @@ no capturado y pinta la pantalla roja igual en cualquier dev client anterior.
 **Lo que no hace todavía:** no lee los *receipts* de Expo (el segundo paso, que
 dice si APNs o FCM entregaron de verdad); con los *tickets* basta para limpiar los
 teléfonos muertos, que es lo que ensucia.
+
+---
+
+## El segundo rechazo de Apple: la baja que no abría, y el alta de gimnasios
+
+La 1.0.0 (build 13) volvió el 2026-09-29 con cuatro puntos. La respuesta entera
+está en `store/appstore/respuesta-2026-09-29.txt`.
+
+**5.1.1(v), la baja de cuenta, era un fallo nuestro y doble.** `delete-account`
+no estaba en ninguna lista del `SessionRouter`, así que «Eliminar mi cuenta»
+rebotaba en silencio a las pestañas con cualquier sesión —el revisor la tocó y
+no pasó nada—; y la cuenta recién creada con Google o con Apple, que todavía no
+está en ningún padrón, ni siquiera tenía el enlace. Esa cuenta ahora se borra en
+el acto (`POST /account/delete`): no tiene ficha ni cobros en ningún gimnasio,
+solo reservas y conversaciones, y es lo mismo que el panel ya borraba. La de
+quien tiene ficha sigue siendo la solicitud de 30 días, porque la caja del
+gimnasio no se puede borrar con ella.
+
+**3.1.1, el alta de gimnasios, se defiende y no se quita** (decisión de Mathyu,
+2026-10-05) por la 3.1.3(c), *Enterprise Services*: Sinchi se vende a
+organizaciones para su personal, no a consumidores. Con dos cosas dichas como
+son, porque las notas anteriores afirmaban lo contrario: **el alta de iOS sí
+enseña los planes de Sinchi con su precio** y deja elegir uno, y **el RUC es
+opcional**. Lo que sostiene la defensa es que nada se paga dentro de la app, que
+el cobro es a la empresa y por transferencia, y que hay un plan gratis hasta 10
+alumnos. Si Apple insiste, la salida ya está dicha en la respuesta: quitar el
+alta de iOS.
+
+**4.4, widgets: la app no tiene ninguno.** El IPA del build 13 no trae ninguna
+extensión (`unzip -l` sin un solo `.appex`). Se le pregunta a Apple qué vio.

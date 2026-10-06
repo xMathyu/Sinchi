@@ -1,0 +1,77 @@
+RESPUESTA AL RECHAZO DEL 2026-09-29 (envío 52fa17b5, build 13).
+Va en el Resolution Center de App Store Connect, en inglés. Antes de mandarla:
+- poner el número del build nuevo donde dice «build __»;
+- adjuntar el video grabado en el iPhone (la baja de una cuenta, de punta a punta).
+
+Lo que cambió respecto de las notas anteriores, y por qué: decían que la
+suscripción de Sinchi «nunca se vende, ofrece ni anuncia dentro de la app». No
+era cierto: el alta de gimnasio enseña los planes con su precio y deja elegir
+uno. Aquí se dice como es y se defiende por la 3.1.3(c).
+
+════════════════════════════════════════════════════════════════════════════
+
+Hello, and thank you for the detailed review.
+
+We have uploaded a new build (1.0.0, build __) with the account deletion fix.
+Below are the changes and the information you asked for.
+
+GUIDELINE 5.1.1(v) - ACCOUNT DELETION
+
+The app did offer account deletion, but a navigation bug made the option go
+back to the home screen instead of opening it, and accounts just created with
+Sign in with Apple or Google that do not belong to any gym yet did not show the
+option at all. Both are fixed in this build:
+
+- Where it is: tap the account icon at the top right to open "Mi cuenta" (My
+  account), then "Eliminar mi cuenta" (Delete my account), right below "Cerrar
+  sesion" (Sign out).
+- A newly created account is deleted immediately after a confirmation step,
+  together with its sign-in, and the app confirms "Tu cuenta se elimino" (Your
+  account has been deleted).
+- An account that is on a gym's roster, such as the demo account, is deleted
+  from the same option. The gym has to keep its records of the payments it
+  received for its accounting, so we complete that deletion within 30 days and
+  the app shows that it is in progress. No phone call, email or other
+  customer-service step is required.
+
+The screen recording you requested, captured on a physical device, is attached
+to this message and to the App Review Information.
+
+GUIDELINE 2.1(b) - ARE THE ENTERPRISE SERVICES SOLD TO SINGLE USERS,
+CONSUMERS, OR FOR FAMILY USE?
+
+No. Sinchi is sold only to organizations: gyms and martial-arts schools that use
+it to run their business (their student roster, checking students in at the
+door, and recording the payments they receive at the counter). It is not sold
+to single users, to consumers, or for family use. Students never pay Sinchi;
+they pay their gym for in-person training.
+
+GUIDELINE 3.1.1 - ACCOUNT REGISTRATION FOR BUSINESSES
+
+We respectfully ask you to review this point under guideline 3.1.3(c),
+Enterprise Services. The registration in the app creates an account for an
+organization, a gym, and for its staff, who use Sinchi to manage the gym's
+students:
+
+- It asks for the gym's business name, its street address and, optionally, its
+  RUC (the taxpayer number Peru issues to businesses).
+- The plan is chosen by the size of the gym's student roster. A gym with up to
+  10 students uses Sinchi free of charge. Larger gyms pay a monthly fee (S/ 149,
+  S/ 299 or S/ 499 depending on the number of students) that we bill to the
+  business outside the app; the business pays it by bank transfer. Nothing is
+  purchased inside the app, and the first month of a paid plan is free.
+- What the gym pays for is software to operate its physical business. It is not
+  digital content consumed by an individual.
+
+If you would still prefer that the registration of new gyms does not happen in
+the iOS app, please let us know and we will remove it.
+
+GUIDELINE 4.4 - WIDGETS
+
+Sinchi does not include any widgets or other app extensions. We checked the
+binary you reviewed (1.0.0, build 13): it contains no extensions. Could you tell
+us which screen or element was identified as a widget, so that we can look at
+it?
+
+Thank you,
+Mathyu Cardozo
