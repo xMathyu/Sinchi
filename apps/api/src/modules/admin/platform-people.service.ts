@@ -776,6 +776,24 @@ export class PlatformPeopleService {
    * Sinchi, y su baja es la de 30 días.
    */
   async removeOwnAccount(firebaseUid: string): Promise<DeletionOutcome> {
+    await this.assertWithoutIdentity(firebaseUid);
+
+    // Sin `accountOrFail`: una cuenta que entró y nunca llegó a dejar sus datos
+    // no tiene `account_claims`, y aun así existe en Firebase y se puede borrar.
+    const counts = await withoutTenantIsolation(this.db, (tx) => this.eraseAccountRows(tx, firebaseUid));
+    const { outcome } = await this.firebase.deleteAccount(firebaseUid);
+    this.logger.warn(`Cuenta sin ficha eliminada por su dueña: ${firebaseUid} (Firebase: ${outcome})`);
+    return { ...counts, firebase: outcome };
+  }
+
+  /**
+   * 409 si ese uid ya abre una ficha: su baja es la solicitud de 30 días.
+   *
+   * Pública para que la ruta lo compruebe ANTES de revocar su acceso de Apple:
+   * revocárselo a quien después no se puede borrar por aquí le cortaría el
+   * acceso sin haberle dado la baja.
+   */
+  async assertWithoutIdentity(firebaseUid: string): Promise<void> {
     const [linked] = await withoutTenantIsolation(this.db, (tx) =>
       tx
         .select({ id: schema.users.id })
@@ -788,13 +806,6 @@ export class PlatformPeopleService {
         'Tu cuenta ya tiene ficha en un gimnasio: entra con ella y pide la baja desde Ajustes.',
       );
     }
-
-    // Sin `accountOrFail`: una cuenta que entró y nunca llegó a dejar sus datos
-    // no tiene `account_claims`, y aun así existe en Firebase y se puede borrar.
-    const counts = await withoutTenantIsolation(this.db, (tx) => this.eraseAccountRows(tx, firebaseUid));
-    const { outcome } = await this.firebase.deleteAccount(firebaseUid);
-    this.logger.warn(`Cuenta sin ficha eliminada por su dueña: ${firebaseUid} (Firebase: ${outcome})`);
-    return { ...counts, firebase: outcome };
   }
 
   /**

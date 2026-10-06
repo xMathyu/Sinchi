@@ -10,6 +10,8 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post } from '@nest
 import { z } from 'zod';
 import { accessMessage, isDropInPlan } from '@sinchi/shared';
 import { CurrentSession } from '../auth/auth.guard';
+import { FirebaseVerifier } from '../auth/firebase';
+import { AppleRevocation } from '../auth/apple-revocation';
 import { AllowedWhenReadOnly } from './saas/saas.guard';
 import type { Session } from '../auth/session';
 import { parseWith } from '../common/zod.pipe';
@@ -65,7 +67,13 @@ const profileSchema = z.object({
   phone: z.string().max(40),
 });
 /** El motivo es opcional: obligar a explicarse para irse es un peaje. */
-const deletionSchema = z.object({ reason: z.string().max(500).optional() });
+const deletionSchema = z.object({
+  reason: z.string().max(500).optional(),
+  /** El código de una autorización de Apple recién hecha, si la cuenta es de Apple. */
+  appleAuthorizationCode: z.string().min(10).max(4096).optional(),
+  /** El teléfono no puede pedirlo (Android). */
+  appleUnavailable: z.boolean().optional(),
+});
 
 const linkDeviceSchema = z.object({
   /** `true` cuando el alumno perdió el celular: invalida los códigos viejos. */
@@ -86,6 +94,8 @@ export class StudentController {
     private readonly bajas: AccountDeletionService,
     private readonly messaging: MessagingService,
     private readonly requests: LinkRequestsService,
+    private readonly firebase: FirebaseVerifier,
+    private readonly apple: AppleRevocation,
   ) {}
 
   /** Identidad + billetera: es la primera pantalla de la app. */
@@ -452,7 +462,20 @@ export class StudentController {
     @CurrentSession() session: Session,
     @Body(parseWith(deletionSchema)) body: z.infer<typeof deletionSchema>,
   ) {
-    return { request: await this.bajas.request(session.sub, body.reason ?? null) };
+    /**
+     * Si su cuenta es de Apple, la revocación va AL PEDIR la baja y no al
+     * completarla. Quien la completa es el panel, dentro de 30 días, y para
+     * entonces no habría un código de Apple recién hecho que canjear —y guardar
+     * uno de cada persona para ese día es justo lo que `AppleRevocation` evita—.
+     * Si se arrepiente, vuelve a entrar con Apple y autoriza de nuevo.
+     */
+    const uid = await this.bajas.firebaseUidOf(session.sub);
+    const providers = uid === null ? null : await this.firebase.providersOf(uid);
+    const apple = await this.apple.settle({
+      isApple: providers?.includes('apple.com') === true,
+      consent: { authorizationCode: body.appleAuthorizationCode, unavailable: body.appleUnavailable },
+    });
+    return { request: await this.bajas.request(session.sub, body.reason ?? null), apple };
   }
 
   /** Se arrepiente. Treinta dias son muchos para no poder desdecirse. */

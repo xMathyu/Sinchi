@@ -34,7 +34,7 @@ import {
   requestAccountDeletion,
   type DeletionRequestDto,
 } from '../src/data/api';
-import { signOut } from '../src/data/auth';
+import { signOut, withAppleConsent } from '../src/data/auth';
 import { useSession } from '../src/data/session-hooks';
 import { resetState } from '../src/data/store';
 
@@ -84,7 +84,7 @@ function DeletionRequest() {
   const askForDeletion = () => {
     setTrabajando(true);
     setNotice(null);
-    requestAccountDeletion(denial)
+    withAppleConsent((apple) => requestAccountDeletion(denial, apple))
       .then(({ request }) => {
         setPendiente(request);
         setConfirmando(false);
@@ -291,7 +291,7 @@ function DeleteUnlinkedAccount({ idToken }: { readonly idToken: string }) {
   const borrar = (): void => {
     setStep('borrando');
     setNotice(null);
-    deleteOwnAccount(idToken)
+    withAppleConsent((apple) => deleteOwnAccount(idToken, apple))
       .then(() => setStep('hecho'))
       .catch((causa: unknown) => {
         setStep('confirmando');

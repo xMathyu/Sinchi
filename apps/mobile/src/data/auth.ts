@@ -15,13 +15,16 @@
  * del alumno que acaba de instalar la app, y lo resuelve la recepcionista.
  */
 import * as SecureStore from 'expo-secure-store';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { isValidPhoneNumber, normalizePhoneNumber } from '@sinchi/shared';
 import {
+  ApiError,
   claimInvite,
   linkDevice,
   signInWithGoogle,
   switchToStaff,
   switchToStudent,
+  type AppleConsentDto,
 } from './api';
 import {
   exchangeAppleToken,
@@ -462,3 +465,55 @@ function describe(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) return error.message;
   return 'Algo falló al iniciar sesión. Intenta de nuevo.';
 }
+
+// ---------------------------------------------------------------------------
+// Borrar una cuenta de Apple
+// ---------------------------------------------------------------------------
+
+/**
+ * Hace la baja, y si la api pide confirmar con Apple, lo pide y repite.
+ *
+ * Apple espera que borrar una cuenta creada con «Entrar con Apple» la desvincule
+ * también de su Apple ID, y eso exige un código de una autorización RECIÉN
+ * hecha (vale cinco minutos). La api no guarda tokens de Apple, así que cuando la
+ * cuenta es de Apple responde 409 `apple_authorization_required` antes de borrar
+ * nada; aquí se abre la hoja de Apple —la misma de entrar, sin pedir nombre ni
+ * correo— y se repite la baja con el código.
+ *
+ * Primero sin código y no al revés: casi nadie entra con Apple, y abrirle la
+ * hoja de Apple a quien entró con Google sería pedirle algo que no tiene.
+ *
+ * En Android no hay hoja de Apple: se repite diciendo que este teléfono no puede,
+ * y la cuenta se borra igual sin revocar. Si la persona cierra la hoja, la baja
+ * no sigue y se dice por qué.
+ */
+export async function withAppleConsent<T>(
+  call: (apple: AppleConsentDto) => Promise<T>,
+): Promise<T> {
+  try {
+    return await call({});
+  } catch (causa) {
+    const code =
+      causa instanceof ApiError ? (causa.body as { code?: unknown } | null)?.code : undefined;
+    if (code !== 'apple_authorization_required') throw causa;
+  }
+
+  const disponible = await AppleAuthentication.isAvailableAsync().catch(() => false);
+  if (!disponible) return call({ appleUnavailable: true });
+
+  let authorizationCode: string | null;
+  try {
+    ({ authorizationCode } = await AppleAuthentication.signInAsync({ requestedScopes: [] }));
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ERR_REQUEST_CANCELED') {
+      throw new Error('Tu cuenta es de Apple: para borrarla, confírmalo con Apple.');
+    }
+    throw error;
+  }
+  return call(
+    authorizationCode === null
+      ? { appleUnavailable: true }
+      : { appleAuthorizationCode: authorizationCode },
+  );
+}
+

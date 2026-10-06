@@ -110,6 +110,21 @@ const schema = z.object({
   EXPO_ACCESS_TOKEN: emptyMeansAbsent(z.string().min(20).optional()),
 
   /**
+   * La llave de «Sign in with Apple», para REVOCAR el acceso al borrar una
+   * cuenta creada con Apple (lo que Apple espera junto a la 5.1.1(v)).
+   *
+   * Se crea en el portal de desarrollador → Keys, con «Sign in with Apple» y el
+   * App ID `fit.sinchi.app` como principal. La privada es el `.p8` entero, en
+   * PEM; en Cloud Run va por referencia a Secret Manager. Sin las tres, la baja
+   * funciona igual y solo no revoca: es lo que había (ver `AppleRevocation`).
+   */
+  APPLE_TEAM_ID: emptyMeansAbsent(z.string().regex(/^[A-Z0-9]{10}$/).optional()),
+  APPLE_SIGNIN_KEY_ID: emptyMeansAbsent(z.string().regex(/^[A-Z0-9]{10}$/).optional()),
+  APPLE_SIGNIN_PRIVATE_KEY: emptyMeansAbsent(z.string().min(100).optional()),
+  /** A quién emitió Apple el código: en la app nativa, su bundle id. */
+  APPLE_CLIENT_ID: z.string().default('fit.sinchi.app'),
+
+  /**
    * De donde cuelgan las URLs que salen de aqui hacia fuera.
    *
    * El enlace de la invitacion y el logo del correo tienen que ser direcciones

@@ -6,6 +6,7 @@ import { AccountLinkService } from './account-link.service';
 import { InviteService } from './invite.service';
 import { FirebaseVerifier } from './firebase';
 import { AccountBans } from './account-bans';
+import { AppleRevocation } from './apple-revocation';
 import { loadEnv } from '../config/env';
 
 @Module({
@@ -20,7 +21,21 @@ import { loadEnv } from '../config/env';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AccountLinkService, InviteService, FirebaseVerifier, AccountBans],
-  exports: [AuthService, AccountLinkService, InviteService, FirebaseVerifier, AccountBans],
+  providers: [
+    AuthService,
+    AccountLinkService,
+    InviteService,
+    FirebaseVerifier,
+    AccountBans,
+    AppleRevocation,
+  ],
+  exports: [
+    AuthService,
+    AccountLinkService,
+    InviteService,
+    FirebaseVerifier,
+    AccountBans,
+    AppleRevocation,
+  ],
 })
 export class AuthModule {}

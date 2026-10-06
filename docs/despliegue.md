@@ -187,6 +187,22 @@ literales. Así rotarlos no exige reconstruir la imagen, y no aparecen en
 `secretmanager.secretAccessor` **solo sobre esos cuatro secretos**, no a nivel de
 proyecto.
 
+**La llave de «Sign in with Apple» es opcional y va igual.** Con ella, borrar una
+cuenta creada con Apple la desvincula también de su Apple ID (lo que Apple
+espera junto a la 5.1.1(v)); sin ella, la baja funciona y solo no revoca. Se
+crea en developer.apple.com → Keys, con «Sign in with Apple» y `fit.sinchi.app`
+como App ID principal, y el `.p8` se descarga UNA vez:
+
+```bash
+gcloud secrets create sinchi-apple-signin-key --project=sinchi-a95913 \
+  --data-file=AuthKey_<KEY_ID>.p8
+gcloud secrets add-iam-policy-binding sinchi-apple-signin-key --project=sinchi-a95913 \
+  --member="serviceAccount:<la de Cloud Run>" --role=roles/secretmanager.secretAccessor
+gcloud run services update sinchi-api --project=sinchi-a95913 --region=us-east4 \
+  --update-secrets=APPLE_SIGNIN_PRIVATE_KEY=sinchi-apple-signin-key:latest \
+  --update-env-vars=APPLE_TEAM_ID=5QGSG9RD22,APPLE_SIGNIN_KEY_ID=<KEY_ID>
+```
+
 ---
 
 ## Diagnóstico

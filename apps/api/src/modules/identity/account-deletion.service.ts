@@ -56,6 +56,23 @@ export class AccountDeletionService {
    * la segunda, y quien toca el boton dos veces porque la red tardo no merece
    * un error rojo por haber sido paciente.
    */
+  /**
+   * Con qué cuenta de Firebase entra esa persona, si entra con alguna.
+   *
+   * Lo pide la baja para saber si la cuenta es de Apple y hay que revocarla
+   * (`AppleRevocation`). `null` = nunca abrió la app: la inscribió el mostrador.
+   */
+  async firebaseUidOf(userId: string): Promise<string | null> {
+    const [row] = await withoutTenantIsolation(this.db, (tx) =>
+      tx
+        .select({ firebaseUid: schema.users.firebaseUid })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId))
+        .limit(1),
+    );
+    return row?.firebaseUid ?? null;
+  }
+
   async request(userId: string, reason: string | null): Promise<DeletionRequest> {
     const alreadyPending = await this.pendiente(userId);
     if (alreadyPending !== null) return alreadyPending;

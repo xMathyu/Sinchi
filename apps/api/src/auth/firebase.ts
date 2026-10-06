@@ -166,6 +166,26 @@ export class FirebaseVerifier {
    * qué pasó, y el panel lo enseña: si quedó `unavailable`, falta borrarlo a
    * mano en la consola de Firebase.
    */
+  /**
+   * Con qué entra esa cuenta: `apple.com`, `google.com`, `password`.
+   *
+   * La sesión de Sinchi no lo dice —es nuestra, no de Firebase— y la baja de
+   * quien ya tiene ficha necesita saber si su cuenta es de Apple para revocarla
+   * (`AppleRevocation`). `null` si Firebase no contesta: quien llama decide sin
+   * el dato, y no por eso se frena una baja.
+   */
+  async providersOf(uid: string): Promise<readonly string[] | null> {
+    try {
+      const user = await getAuth(this.getApp()).getUser(uid);
+      return user.providerData.map((provider) => provider.providerId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer con qué entra la cuenta ${uid}: ${error instanceof Error ? error.message : error}`,
+      );
+      return null;
+    }
+  }
+
   async deleteAccount(uid: string): Promise<{ readonly outcome: FirebaseDeletion; readonly detail?: string }> {
     try {
       await getAuth(this.getApp()).deleteUser(uid);

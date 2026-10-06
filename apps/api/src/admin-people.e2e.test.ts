@@ -27,6 +27,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { TZ_LIMA, formatPlainDate, plainDateInZone } from '@sinchi/shared';
 import { FirebaseVerifier, type VerifiedIdentity } from './auth/firebase';
 import { AccountBans } from './auth/account-bans';
+import { AppleRevocation, type AppleRevocationOutcome } from './auth/apple-revocation';
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL;
 const suite = DATABASE_URL === undefined ? describe.skip : describe;
@@ -40,16 +41,35 @@ const identities = new Map<string, VerifiedIdentity>();
 /** Los uid que el servicio intentó borrar de Firebase. */
 const deletedFromFirebase: string[] = [];
 
-function declareIdentity(uid: string, email: string): string {
+function declareIdentity(uid: string, email: string, provider = 'google.com'): string {
   const token = `${uid}.${'x'.repeat(120)}`;
   identities.set(token, {
     uid,
     email,
     emailVerified: true,
     displayName: uid,
-    provider: 'google.com',
+    provider,
   });
   return token;
+}
+
+/** Las cuentas que entran con Apple, para lo que Firebase diría de ellas. */
+const appleUids = new Set<string>();
+/** Los códigos de Apple que la api canjeó y revocó. */
+const revokedCodes: string[] = [];
+
+/**
+ * La revocación de verdad —decide cuándo pedir el código— con la llave puesta y
+ * sin hablar con Apple.
+ */
+class AppleWithKey extends AppleRevocation {
+  override get configured(): boolean {
+    return true;
+  }
+  override async revokeWithCode(code: string): Promise<AppleRevocationOutcome> {
+    revokedCodes.push(code);
+    return 'revoked';
+  }
 }
 
 const runId = randomInt(10_000_000, 89_000_000);
@@ -119,10 +139,14 @@ beforeAll(async () => {
           deletedFromFirebase.push(uid);
           return { outcome: 'deleted' as const };
         };
+        verifier.providersOf = async (uid: string) =>
+          appleUids.has(uid) ? ['apple.com'] : ['google.com'];
         return verifier;
       },
       inject: [AccountBans],
     })
+    .overrideProvider(AppleRevocation)
+    .useValue(new AppleWithKey())
     .compile();
 
   app = moduleRef.createNestApplication();
@@ -624,7 +648,8 @@ suite('la persona elimina su propia cuenta sin ficha', () => {
 
     const { body } = await http.post('/v1/account/delete').send({ idToken }).expect(201);
 
-    expect(body).toEqual({ deleted: true, firebase: 'deleted' });
+    // Entró con Google: no hay nada que revocar en Apple.
+    expect(body).toEqual({ deleted: true, firebase: 'deleted', apple: null });
     expect(deletedFromFirebase).toContain(uid);
     await http.get(`/v1/admin/accounts/${uid}`).set(auth(adminToken)).expect(404);
     const { body: bandeja } = await http
@@ -651,5 +676,72 @@ suite('la persona elimina su propia cuenta sin ficha', () => {
       .post('/v1/account/delete')
       .send({ idToken: `nadie.${'x'.repeat(120)}` })
       .expect(401);
+  });
+});
+
+/**
+ * La revocación de «Entrar con Apple» que Apple espera junto a la 5.1.1(v): borrar
+ * la cuenta tiene que desvincularla también de su Apple ID.
+ */
+suite('la cuenta creada con Apple se desvincula de Apple al borrarse', () => {
+  it('sin el código de Apple no borra nada y le pide confirmar con Apple', async () => {
+    const uid = `con-apple-${runId}`;
+    uids.push(uid);
+    appleUids.add(uid);
+    const idToken = declareIdentity(uid, `con.apple.${runId}@privaterelay.appleid.com`, 'apple.com');
+    await http.post('/v1/auth/google').send({ idToken }).expect(201);
+
+    const { body } = await http.post('/v1/account/delete').send({ idToken }).expect(409);
+    expect(body.code).toBe('apple_authorization_required');
+    // Sigue entera: el 409 va antes de borrar, que después no habría con qué pedirlo.
+    expect(deletedFromFirebase).not.toContain(uid);
+
+    const borrada = await http
+      .post('/v1/account/delete')
+      .send({ idToken, appleAuthorizationCode: `codigo-de-apple-${runId}` })
+      .expect(201);
+    expect(borrada.body).toEqual({ deleted: true, firebase: 'deleted', apple: 'revoked' });
+    expect(revokedCodes).toContain(`codigo-de-apple-${runId}`);
+    expect(deletedFromFirebase).toContain(uid);
+  });
+
+  it('desde un teléfono que no puede pedir el código, se borra igual y sin revocar', async () => {
+    const uid = `con-apple-android-${runId}`;
+    uids.push(uid);
+    appleUids.add(uid);
+    const idToken = declareIdentity(uid, `android.${runId}@privaterelay.appleid.com`, 'apple.com');
+    await http.post('/v1/auth/google').send({ idToken }).expect(201);
+
+    const { body } = await http
+      .post('/v1/account/delete')
+      .send({ idToken, appleUnavailable: true })
+      .expect(201);
+    expect(body.apple).toBe('skipped');
+    expect(deletedFromFirebase).toContain(uid);
+  });
+
+  it('quien tiene ficha y entra con Apple revoca al PEDIR la baja de 30 días', async () => {
+    const ownerUid = `dueno-${runId}`;
+    appleUids.add(ownerUid);
+
+    const { body } = await http
+      .post('/v1/me/account/deletion-request')
+      .set(auth(ownerToken))
+      .send({})
+      .expect(409);
+    expect(body.code).toBe('apple_authorization_required');
+
+    const pedida = await http
+      .post('/v1/me/account/deletion-request')
+      .set(auth(ownerToken))
+      .send({ appleAuthorizationCode: `codigo-del-dueno-${runId}` })
+      .expect(201);
+    expect(pedida.body.apple).toBe('revoked');
+    expect(pedida.body.request.status).toBe('pending');
+    expect(revokedCodes).toContain(`codigo-del-dueno-${runId}`);
+
+    // Se arrepiente: la solicitud se cancela y su gimnasio sigue como estaba.
+    await http.delete('/v1/me/account/deletion-request').set(auth(ownerToken)).expect(200);
+    appleUids.delete(ownerUid);
   });
 });

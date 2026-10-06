@@ -1907,10 +1907,26 @@ export interface DeletionRequestDto {
  * sus cobros son asientos contables suyos. El compromiso —y el plazo de 30
  * dias de la politica— empieza a correr al crearla.
  */
-export const requestAccountDeletion = (reason?: string): Promise<{ request: DeletionRequestDto }> =>
+/**
+ * Lo que la baja lleva de Apple cuando la cuenta es de Apple: el código de una
+ * autorización recién hecha, para que la api revoque el acceso, o que este
+ * teléfono no puede pedirlo. Ver `withAppleConsent`.
+ */
+export interface AppleConsentDto {
+  readonly appleAuthorizationCode?: string;
+  readonly appleUnavailable?: boolean;
+}
+
+export const requestAccountDeletion = (
+  reason?: string,
+  apple: AppleConsentDto = {},
+): Promise<{ request: DeletionRequestDto }> =>
   request('/me/account/deletion-request', {
     method: 'POST',
-    body: reason === undefined || reason.trim() === '' ? {} : { reason: reason.trim() },
+    body: {
+      ...(reason === undefined || reason.trim() === '' ? {} : { reason: reason.trim() }),
+      ...apple,
+    },
   });
 
 /** La pendiente, si la hay. La pantalla la pide al abrir. */
@@ -1928,8 +1944,9 @@ export const cancelAccountDeletion = (): Promise<{ canceled: boolean }> =>
  */
 export const deleteOwnAccount = (
   idToken: string,
+  apple: AppleConsentDto = {},
 ): Promise<{ readonly deleted: true; readonly firebase: string }> =>
-  request('/account/delete', { method: 'POST', anonymous: true, body: { idToken } });
+  request('/account/delete', { method: 'POST', anonymous: true, body: { idToken, ...apple } });
 
 // ---------------------------------------------------------------------------
 // Mensajes

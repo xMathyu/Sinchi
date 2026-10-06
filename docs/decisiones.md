@@ -1964,3 +1964,19 @@ alta de iOS.
 
 **4.4, widgets: la app no tiene ninguno.** El IPA del build 13 no trae ninguna
 extensión (`unzip -l` sin un solo `.appex`). Se le pregunta a Apple qué vio.
+
+**La revocación de «Entrar con Apple», sin guardar tokens de Apple.** Apple espera
+que borrar una cuenta creada con Apple la desvincule de su Apple ID, y borrar el
+usuario de Firebase no lo hace: hace falta su REST API (`/auth/revoke`) con un
+token de Apple. Lo corriente es canjear y guardar uno al entrar; aquí se pide en
+el momento de la baja. Si la cuenta es de Apple, la api responde 409
+`apple_authorization_required` ANTES de borrar nada, la app abre la hoja de
+Apple y repite con el código, y la api lo canjea y lo revoca en la misma
+petición (`AppleRevocation`). Así no queda en la base una credencial de Apple de
+cada persona que haya que proteger y borrar con ella.
+
+En la baja de 30 días la revocación va al PEDIRLA: quien la completa es el panel,
+semanas después, y para entonces no habría código fresco. Nada de esto frena una
+baja: sin la llave, con Apple caída o desde Android (no hay hoja de Apple), la
+cuenta se borra igual y la respuesta dice por qué no se revocó.
+
