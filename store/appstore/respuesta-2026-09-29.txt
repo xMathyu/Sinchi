@@ -1,4 +1,9 @@
 RESPUESTA AL RECHAZO DEL 2026-09-29 (envío 52fa17b5, build 13).
+
+NO SE LLEGÓ A MANDAR POR EL HILO: se reenvió el envío (build 17, 2026-10-06)
+antes de responder, y reenviar cierra la caja de respuesta del Resolution
+Center. Todo lo que dice este texto está en `app-review-notes.txt`, que viaja
+con el envío, y el video está adjunto en App Review Information.
 Va en el Resolution Center de App Store Connect, en inglés: se pega desde la
 línea de «Hello» hasta la firma, y se adjunta el video grabado en el iPhone
 (`sinchi-eliminar-cuenta-iphone.mp4`, el mismo que ya está en App Review
