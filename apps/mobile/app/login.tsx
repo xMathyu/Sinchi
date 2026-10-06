@@ -46,7 +46,7 @@ import {
   Text,
   Wordmark,
 } from '../src/design/primitives';
-import { GoogleMark } from '../src/design/google-mark';
+import { AppleSignInButton, GoogleSignInButton } from '../src/design/sign-in-buttons';
 import { useTheme } from '../src/design/theme';
 import { completeAppleSignIn, completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
@@ -290,10 +290,7 @@ export default function LoginScreen() {
   );
 
   const googleButton = (
-    <Button
-      label="Entrar con Google"
-      icon={<GoogleMark />}
-      variant="secondary"
+    <GoogleSignInButton
       disabled={request === null || working}
       onPress={() => {
         setError(null);
@@ -303,27 +300,8 @@ export default function LoginScreen() {
     />
   );
 
-  /**
-   * El botón es el NATIVO de Apple, no uno del sistema de diseño.
-   *
-   * La guía de Apple manda usar el suyo —su marca, su texto, sus proporciones—
-   * y un botón propio con una manzana dibujada es motivo de rechazo. Lo que sí
-   * se ajusta es lo que la guía deja ajustar: el radio y el alto, para que quede
-   * a la par del de Google, y el color, que se invierte con el tema porque un
-   * botón negro sobre fondo negro no se ve.
-   */
   const appleButton = appleReady ? (
-    <AppleAuthentication.AppleAuthenticationButton
-      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-      buttonStyle={
-        theme.scheme === 'dark'
-          ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-          : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-      }
-      cornerRadius={theme.radii.lg}
-      style={{ height: 52, width: '100%', opacity: working ? 0.6 : 1 }}
-      onPress={signInWithApple}
-    />
+    <AppleSignInButton disabled={working} onPress={signInWithApple} />
   ) : null;
 
   if (creating) {
