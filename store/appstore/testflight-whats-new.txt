@@ -5,6 +5,7 @@ NOVEDADES DE ESTA VERSIÓN
 • Clases por edades: al crear o editar una clase puedes poner desde qué edad y hasta qué edad es —por ejemplo, Judo kids de 3 a 7 y, a otra hora, de 8 a 13—. Sale en tu horario, en tu ficha del directorio y en el horario de tus alumnos.
 • Entrar con Apple, además de Google y de correo.
 • Un plan con nombre largo —«Judo Kids 4 años a 7 años»— ya no deja su precio cortado en la pantalla Plan.
+• «Eliminar mi cuenta» ya abre (antes te devolvía a la pantalla principal), y está en Mi cuenta, debajo de «Cerrar sesión». Si todavía no estás en ningún gimnasio, tu cuenta se borra en el acto; si entraste con Apple, también se desvincula de tu Apple ID.
 
 SI VIENES DE LA VERSIÓN ANTERIOR, ESTO YA ESTABA
 • El logo, la web y las redes de tu gimnasio.
@@ -15,4 +16,5 @@ QUÉ PROBAR
 • En Horarios, crea dos clases con el mismo nombre y edades distintas. Después búscalas en tu ficha del directorio.
 • Desde otra cuenta, busca tu gimnasio en el directorio (Billetera → «¿Entrenas en otro gimnasio?»), toca «Inscribirme» y reserva. Con la cuenta del gimnasio, mira la Puerta y la pestaña Reservas.
 • Cierra sesión y entra con Apple.
+• Con una cuenta de prueba que no esté en ningún gimnasio: Mi cuenta → «Eliminar mi cuenta», hasta el final. Si la creaste con Apple, te pide confirmar con Apple.
 • Cuéntanos si algo sale cortado o no se entiende.
