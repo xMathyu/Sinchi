@@ -187,7 +187,9 @@ literales. Así rotarlos no exige reconstruir la imagen, y no aparecen en
 `secretmanager.secretAccessor` **solo sobre esos cuatro secretos**, no a nivel de
 proyecto.
 
-**La llave de «Sign in with Apple» es opcional y va igual.** Con ella, borrar una
+**La llave de «Sign in with Apple» es opcional y va igual** —y está puesta desde
+el 2026-10-05: Key ID `5JRAA2A4GG`, secreto `sinchi-apple-signin-key`, revisión
+`sinchi-api-00081`—. Con ella, borrar una
 cuenta creada con Apple la desvincula también de su Apple ID (lo que Apple
 espera junto a la 5.1.1(v)); sin ella, la baja funciona y solo no revoca. Se
 crea en developer.apple.com → Keys, con «Sign in with Apple» y `fit.sinchi.app`
