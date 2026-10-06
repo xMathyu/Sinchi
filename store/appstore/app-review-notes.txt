@@ -21,7 +21,7 @@ The app has no widgets or other app extensions.
 HOW TO SIGN IN
 1. Open the app and tap "Entrar" (Sign in).
 2. Type the demo credentials into "Correo" (email) and "Contrasena" (password).
-3. Please do NOT use "Entrar con Google" or "Sign in with Apple": the demo account works with email and password only.
+3. Please do NOT use the Google or Apple buttons below: the demo account works with email and password only.
 
 WHAT THE DEMO ACCOUNT SHOWS
 It owns a demo gym, "Sinchi Demo", with students, plans and payments loaded.
