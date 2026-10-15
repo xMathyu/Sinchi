@@ -49,7 +49,7 @@ PARA EL GIMNASIO
 • Rutinas en video, públicas o solo para tus alumnos.
 
 CÓMO EMPIEZA
-Registras tu gimnasio, creas tus planes e inscribes a tus alumnos. Ellos entran con su correo y ven su membresía al instante.
+Con tu gimnasio en Sinchi, creas tus planes e inscribes a tus alumnos. Ellos entran con su correo y ven su membresía al instante.
 
 Los pagos se registran a mano en el mostrador: Sinchi no procesa cobros dentro de la app.
 
