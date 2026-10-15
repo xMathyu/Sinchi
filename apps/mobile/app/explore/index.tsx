@@ -27,7 +27,7 @@ import { useSession } from '../../src/data/session-hooks';
 import { cancelBooking } from '../../src/data/trials';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
-import { GYM_SIGNUP_IN_APP } from '../../src/lib/gym-signup-availability';
+import { GYM_SIGNUP_IN_APP } from '../../src/lib/app-store-rules';
 
 /** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
 const KIND_LABEL: Readonly<Record<BookingKind, string>> = {

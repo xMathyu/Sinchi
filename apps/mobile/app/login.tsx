@@ -50,7 +50,7 @@ import { AppleSignInButton, GoogleSignInButton } from '../src/design/sign-in-but
 import { useTheme } from '../src/design/theme';
 import { completeAppleSignIn, completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
-import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
 
 /** Los campos del formulario de correo, para marcarlos de uno en uno. */
 type LoginField = 'name' | 'email' | 'password' | 'phone';

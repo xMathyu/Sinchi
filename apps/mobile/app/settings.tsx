@@ -44,7 +44,7 @@ import { switchGym, switchMode, signOut } from '../src/data/auth';
 import { fetchMe, fetchModes, type AvailableModesDto } from '../src/data/api';
 import { saveMyDetails } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
-import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
 import { loadDemo, resetState, setRole } from '../src/data/store';
 
 /**

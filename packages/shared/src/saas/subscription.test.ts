@@ -5,6 +5,7 @@ import {
   evaluateSaas,
   freeUntilFrom,
   saasNotice,
+  saasStatusNotice,
   saasPrice,
   tierForMembers,
   type SaasInput,
@@ -230,5 +231,24 @@ describe('saasNotice', () => {
     expect(saasNotice(oneDayOverdue, saasPrice('up_to_60')).title).toBe(
       'Tu suscripción venció hace 1 día',
     );
+  });
+});
+
+describe('saasStatusNotice', () => {
+  it('no dice nada mientras no cambia lo que la app puede hacer', () => {
+    expect(saasStatusNotice(evaluateSaas(inFreeMonth()))).toBeNull();
+    expect(saasStatusNotice(evaluateSaas(inFreeMonth({ tier: 'free' })))).toBeNull();
+    expect(saasStatusNotice(evaluateSaas(inFreeMonth({ periodPaid: true })))).toBeNull();
+  });
+
+  it('avisa la gracia y el corte sin precio ni llamada a pagar', () => {
+    const grace = saasStatusNotice(evaluateSaas(inFreeMonth({ today: addDays(FREE_MONTH_ENDS, 1) })));
+    const cut = saasStatusNotice(evaluateSaas(inFreeMonth({ today: addDays(FREE_MONTH_ENDS, 60) })));
+
+    expect(grace?.tone).toBe('warn');
+    expect(cut?.title).toBe('Cuenta en solo lectura');
+    for (const notice of [grace, cut]) {
+      expect(`${notice?.title} ${notice?.detail}`).not.toMatch(/S\/|regulariza|pag(o|ar)\b/i);
+    }
   });
 });

@@ -304,3 +304,47 @@ export function saasNotice(state: SaasState, price: Cents): SaasNotice {
       };
   }
 }
+
+/**
+ * El aviso para una app que no puede vender la suscripción: la de iOS.
+ *
+ * La 3.1.1 no deja que una app de la App Store empuje a pagar fuera de ella un
+ * servicio digital, y Apple ya rechazó la 1.0.0 por el alta de gimnasios. Así
+ * que aquí no hay precio, ni cuenta atrás del mes gratis, ni «regulariza el
+ * pago»: solo lo que el dueño necesita para entender por qué la app hace o deja
+ * de hacer algo. Un `null` es no mostrar nada —el plan gratis, el mes gratis y
+ * la cuenta al día no le cambian nada a quien está en la puerta—.
+ *
+ * Es el mismo estado que `saasNotice` y no otra regla: solo cambia qué se
+ * puede decir de él en esa tienda.
+ */
+export function saasStatusNotice(state: SaasState): SaasNotice | null {
+  switch (state.status) {
+    case 'free':
+    case 'trialing':
+    case 'active':
+      return null;
+    case 'in_grace':
+      return {
+        tone: 'warn',
+        title: `Tu suscripción venció hace ${state.daysPastDue} ${
+          state.daysPastDue === 1 ? 'día' : 'días'
+        }`,
+        detail: 'Pasado el plazo de gracia, la cuenta queda en solo lectura.',
+      };
+    case 'read_only':
+      return {
+        tone: 'blocked',
+        title: 'Cuenta en solo lectura',
+        detail:
+          'La puerta sigue funcionando. Dar de alta alumnos y registrar pagos ' +
+          'está en pausa.',
+      };
+    case 'canceled':
+      return {
+        tone: 'blocked',
+        title: 'Suscripción cancelada',
+        detail: 'La puerta sigue funcionando y tus datos siguen aquí.',
+      };
+  }
+}

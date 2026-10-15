@@ -45,7 +45,14 @@ import {
   useSinchiSubscription,
 } from '../../src/data/hooks';
 import type { RosterEntry } from '../../src/data/store';
-import { describePromo, promoDenialMessage, type SaasNotice } from '@sinchi/shared';
+import { SAAS_SALES_IN_APP } from '../../src/lib/app-store-rules';
+import {
+  describePromo,
+  promoDenialMessage,
+  saasStatusNotice,
+  type SaasNotice,
+  type SaasState,
+} from '@sinchi/shared';
 
 export default function RosterScreen() {
   const theme = useTheme();
@@ -195,13 +202,20 @@ export default function RosterScreen() {
           uno que paga. Solo aparece mientras dice algo —el mes gratis corriendo,
           el vencimiento encima, el corte, o el plan gratis, que es lo que
           explica por qué no le están cobrando— y desaparece cuando la cuenta
-          está al día pagando, que no necesita decir nada. */}
-      {subscription !== null &&
-      (subscription.state.status === 'trialing' ||
+          está al día pagando, que no necesita decir nada.
+
+          En iOS no hay cuenta atrás ni precio ni canje: solo la gracia, el
+          corte y la cancelación, que explican por qué la app deja de hacer
+          algo. Ver `SAAS_SALES_IN_APP`. */}
+      {subscription === null ? null : SAAS_SALES_IN_APP ? (
+        subscription.state.status === 'trialing' ||
         subscription.state.status === 'free' ||
-        subscription.notice.tone !== 'info') ? (
-        <SubscriptionNotice notice={subscription.notice} onCanjeado={reloadSubscription} />
-      ) : null}
+        subscription.notice.tone !== 'info' ? (
+          <SubscriptionNotice notice={subscription.notice} onCanjeado={reloadSubscription} />
+        ) : null
+      ) : (
+        <StatusOnlyNotice state={subscription.state} />
+      )}
 
       {/* Solo lo ve el dueño. Va en el padrón y no en una pestaña propia porque
           es la misma pregunta mirada de lejos: cuánto entró, cuánto falta y
@@ -550,6 +564,28 @@ function Metrica({
  * pantalla escribiera el suyo, el dueño leería una cosa en el padrón y otra
  * distinta al chocar contra el corte.
  */
+/** El aviso de iOS: el mismo estado, sin nada que se lea como «paga». */
+function StatusOnlyNotice({ state }: { readonly state: SaasState }) {
+  const theme = useTheme();
+  const notice = saasStatusNotice(state);
+  if (notice === null) return null;
+
+  const color = notice.tone === 'blocked' ? theme.semaphore.bad : theme.semaphore.warn;
+
+  return (
+    <Card borderColor={withAlpha(color, 0.35)} style={{ paddingVertical: 12 }}>
+      <Stack gap={3}>
+        <Text variant="bodySmall" weight="semibold" color={color}>
+          {notice.title}
+        </Text>
+        <Text variant="captionSmall" color={theme.colors.textSecondary}>
+          {notice.detail}
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
 function SubscriptionNotice({
   notice,
   onCanjeado,

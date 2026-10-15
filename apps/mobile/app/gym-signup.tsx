@@ -76,7 +76,7 @@ import { useDebounced } from '../src/lib/debounce';
 import { GpsButton, MapPicker, type MapPoint } from '../src/design/map-picker';
 import { fetchPlaceDetail, suggestPlaces, type PlaceSuggestionDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
-import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
 
 const ESCALONES: readonly SaasTier[] = ['free', 'up_to_60', 'up_to_150', 'unlimited'];
 
