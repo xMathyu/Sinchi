@@ -4,6 +4,8 @@ Thank you for the clarification. As requested under Guideline 3.1.1, we have rem
 
 In the new build, nobody can register a gym or open an additional gym location from the iOS app: the option is gone from the sign-in screen, from "Mi cuenta" (My account) and from the gym directory, and the registration screen no longer opens from a link either. The only accounts that can still be created in the iOS app are personal ones, for students and staff of a gym that already uses Sinchi.
 
+We also removed from the iOS app everything about the price of Sinchi's subscription for gyms, including the field to enter promo codes. A gym owner now only sees whether the gym's account is active or paused.
+
 The demo account in App Review Information is unchanged and still owns the demo gym, so both the staff and the student sides can be reviewed with it.
 
 Best regards,

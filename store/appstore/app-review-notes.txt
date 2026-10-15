@@ -8,7 +8,7 @@ Nothing is purchased inside the app, and no digital content is sold.
 
 1) A STUDENT'S GYM MEMBERSHIP. Bought by a person who trains at a specific gym; it buys the right to enter that physical location and train in person. Paid at the gym's counter in cash, Yape or bank transfer, and recorded by the gym's staff. In an upcoming version students will also be able to pay by card through Culqi, a Peruvian processor, into the gym's OWN merchant account; Sinchi never holds that money and is not the merchant of record. This is a service delivered at a physical address, so per 3.1.3(e) it must not use In-App Purchase.
 
-2) SINCHI'S SOFTWARE SUBSCRIPTION, an enterprise service (3.1.3(c)) sold only to organizations: gyms and martial-arts schools, for their staff to run their student roster. It is not sold to single users, consumers, or for family use, and it cannot be bought or registered for in the iOS app.
+2) SINCHI'S SOFTWARE SUBSCRIPTION, an enterprise service (3.1.3(c)) sold only to organizations: gyms and martial-arts schools, for their staff to run their student roster. It is not sold to single users, consumers, or for family use, and it cannot be bought or registered for in the iOS app, which does not show its price or accept promo codes for it either. A gym owner only sees whether the gym's account is active or paused.
 
 What a student sees is only the STATUS of a membership bought in person: plan, sessions left this week, next payment date, any amount owed, and a QR code the gym scans at the door. The only digital material is a small library of technique videos each gym uploads for its own students; they are not sold or priced.
 
