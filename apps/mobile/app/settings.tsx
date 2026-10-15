@@ -44,6 +44,7 @@ import { switchGym, switchMode, signOut } from '../src/data/auth';
 import { fetchMe, fetchModes, type AvailableModesDto } from '../src/data/api';
 import { saveMyDetails } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
 import { loadDemo, resetState, setRole } from '../src/data/store';
 
 /**
@@ -347,8 +348,11 @@ export default function SettingsScreen() {
           la api: en el tope no se ofrece, se explica. Ofrecer aquí lo que el
           servidor responde con 409 es el defecto que este producto ya se
           conoce. Mientras `modes` es null no se pinta nada: un botón que
-          aparece y cambia de texto al segundo es peor que uno que tarda. */}
-      {nuevoGimnasio !== null && (
+          aparece y cambia de texto al segundo es peor que uno que tarda.
+
+          En iOS no se pinta, ni siquiera para abrir OTRO local: un segundo
+          gimnasio también es una organización nueva. Ver `GYM_SIGNUP_IN_APP`. */}
+      {GYM_SIGNUP_IN_APP && nuevoGimnasio !== null && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>{nuevoGimnasio.hasGyms ? 'Otro local' : 'Tu gimnasio'}</Eyebrow>
           <Pressable

@@ -27,6 +27,7 @@ import { useSession } from '../../src/data/session-hooks';
 import { cancelBooking } from '../../src/data/trials';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
+import { GYM_SIGNUP_IN_APP } from '../../src/lib/gym-signup-availability';
 
 /** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
 const KIND_LABEL: Readonly<Record<BookingKind, string>> = {
@@ -118,7 +119,7 @@ export default function ExploreScreen() {
         </Stack>
       )}
 
-      <OwnerInvitation />
+      {GYM_SIGNUP_IN_APP && <OwnerInvitation />}
     </Screen>
   );
 }
@@ -239,6 +240,8 @@ function UpcomingCard({
  * no había nada, así que se iba. Por eso ahora también está en Mi cuenta
  * (`app/settings.tsx`), y esta se queda: son dos momentos de dos personas
  * distintas, no una mudanza.
+ *
+ * En iOS no se muestra ninguna de las dos: ver `GYM_SIGNUP_IN_APP`.
  */
 function OwnerInvitation() {
   const theme = useTheme();

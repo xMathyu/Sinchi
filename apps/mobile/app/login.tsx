@@ -50,6 +50,7 @@ import { AppleSignInButton, GoogleSignInButton } from '../src/design/sign-in-but
 import { useTheme } from '../src/design/theme';
 import { completeAppleSignIn, completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
 
 /** Los campos del formulario de correo, para marcarlos de uno en uno. */
 type LoginField = 'name' | 'email' | 'password' | 'phone';
@@ -521,28 +522,31 @@ export default function LoginScreen() {
 
         {/* La puerta del dueño. Va abajo pero sin bajar la pantalla, y con la
             oferta escrita: es lo que convierte esta pantalla en algo que le
-            habla también a quien viene a comprar. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Registra tu gimnasio"
-          onPress={() => router.push('/gym-signup')}
-          style={{ marginTop: 'auto', paddingTop: 22 }}
-        >
-          <Card borderColor={withAlpha(theme.semaphore.ok, 0.28)} style={{ paddingVertical: 15 }}>
-            <Row gap={14}>
-              <Stack gap={5} style={{ flex: 1 }}>
-                <Eyebrow color={theme.semaphore.ok}>Para dueños de gimnasio</Eyebrow>
-                <Text variant="heading" weight="semibold">
-                  Registra tu gimnasio
-                </Text>
-                <Text variant="caption" color={theme.colors.textSecondary}>
-                  Gratis hasta 10 alumnos, y el primer mes de pago va por nuestra cuenta.
-                </Text>
-              </Stack>
-              <ChevronRight size={18} color={theme.colors.textTertiary} />
-            </Row>
-          </Card>
-        </Pressable>
+            habla también a quien viene a comprar. En iOS no está: ver
+            `GYM_SIGNUP_IN_APP`. */}
+        {GYM_SIGNUP_IN_APP && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Registra tu gimnasio"
+            onPress={() => router.push('/gym-signup')}
+            style={{ marginTop: 'auto', paddingTop: 22 }}
+          >
+            <Card borderColor={withAlpha(theme.semaphore.ok, 0.28)} style={{ paddingVertical: 15 }}>
+              <Row gap={14}>
+                <Stack gap={5} style={{ flex: 1 }}>
+                  <Eyebrow color={theme.semaphore.ok}>Para dueños de gimnasio</Eyebrow>
+                  <Text variant="heading" weight="semibold">
+                    Registra tu gimnasio
+                  </Text>
+                  <Text variant="caption" color={theme.colors.textSecondary}>
+                    Gratis hasta 10 alumnos, y el primer mes de pago va por nuestra cuenta.
+                  </Text>
+                </Stack>
+                <ChevronRight size={18} color={theme.colors.textTertiary} />
+              </Row>
+            </Card>
+          </Pressable>
+        )}
 
         {/* Solo en desarrollo. En un build de produccion `__DEV__` es false y
             este bloque no se renderiza. */}

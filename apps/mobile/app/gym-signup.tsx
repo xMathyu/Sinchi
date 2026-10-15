@@ -26,7 +26,7 @@
  */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import * as Google from 'expo-auth-session/providers/google';
 import CalendarDays from 'lucide-react-native/icons/calendar-days';
 import Check from 'lucide-react-native/icons/check';
@@ -76,6 +76,7 @@ import { useDebounced } from '../src/lib/debounce';
 import { GpsButton, MapPicker, type MapPoint } from '../src/design/map-picker';
 import { fetchPlaceDetail, suggestPlaces, type PlaceSuggestionDto } from '../src/data/api';
 import { useSession } from '../src/data/session-hooks';
+import { GYM_SIGNUP_IN_APP } from '../src/lib/gym-signup-availability';
 
 const ESCALONES: readonly SaasTier[] = ['free', 'up_to_60', 'up_to_150', 'unlimited'];
 
@@ -114,7 +115,18 @@ const ADDRESS_MIN = 10;
 /** Los de la cuenta, que es otro formulario y falla por otras razones. */
 type AccountField = 'ownerName' | 'email' | 'password' | 'phone';
 
-export default function GymSignUpScreen() {
+/**
+ * Esconder las tres puertas no basta: la ruta se abre también por enlace
+ * —sinchi.fit la puede mandar, y un deep link viejo sigue vivo—, así que en iOS
+ * la pantalla misma se niega. Es un componente aparte para no partir el orden
+ * de los hooks del formulario con un `return` temprano.
+ */
+export default function GymSignUpRoute() {
+  if (!GYM_SIGNUP_IN_APP) return <Redirect href="/" />;
+  return <GymSignUpScreen />;
+}
+
+function GymSignUpScreen() {
   const theme = useTheme();
   const session = useSession();
 
