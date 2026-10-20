@@ -72,14 +72,16 @@ export function Nav() {
               era otro sitio de la página al que bajar, y no lo es — es la puerta
               de quien YA es cliente. Sigue siendo un enlace y no un botón: el
               botón de esta barra tiene que seguir siendo el de ventas, que es a
-              lo que la página viene. */}
+              lo que la página viene — y la venta es el alta del gimnasio, que
+              vive aquí en la web y en ningún otro sitio (decisiones, «El alta
+              de gimnasios se muda a la web»). */}
           <div className="nav-utils">
             <ThemeToggle compact />
             <a href="/panel" className="nav-link">
               Entrar
             </a>
-            <a href="#contacto" className="btn-outline">
-              Hablar con ventas
+            <a href="/registrar" className="btn-outline">
+              Registra tu gimnasio
             </a>
           </div>
 
@@ -115,8 +117,8 @@ export function Nav() {
         <a href="/panel" className="btn-outline menu-btn" onClick={() => setOpen(false)}>
           Entrar a mi panel
         </a>
-        <a href="#contacto" className="btn-solid" onClick={() => setOpen(false)}>
-          Hablar con ventas
+        <a href="/registrar" className="btn-solid" onClick={() => setOpen(false)}>
+          Registra tu gimnasio
         </a>
       </div>
     </>

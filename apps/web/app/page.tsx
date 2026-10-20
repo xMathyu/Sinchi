@@ -40,10 +40,15 @@ const FEATURES = [
   },
 ];
 
+/**
+ * Los tres escalones de pago. El gratis —hasta 10 alumnos— no es una tarjeta
+ * más: se dice en el recuadro de arriba, porque es la condición de entrada y
+ * no una opción entre cuatro. `saasTier` es el que llega marcado al alta.
+ */
 const PLANS = [
-  { tier: 'Hasta 60 alumnos', price: '149', detail: 'Un local, un padrón, cobro en mostrador.', featured: false },
-  { tier: 'De 61 a 150', price: '299', detail: 'Ya no te caben en la cabeza los que deben. Reportes y cortes automáticos.', featured: true },
-  { tier: 'Más de 150 o multi-sede', price: '499', detail: 'Varios locales bajo la misma marca, cada uno con su padrón y su caja.', featured: false },
+  { saasTier: 'up_to_60', tier: 'Hasta 60 alumnos', price: '149', detail: 'Un local, un padrón, cobro en mostrador.', featured: false },
+  { saasTier: 'up_to_150', tier: 'De 61 a 150', price: '299', detail: 'Ya no te caben en la cabeza los que deben. Reportes y cortes automáticos.', featured: true },
+  { saasTier: 'unlimited', tier: 'Más de 150 o multi-sede', price: '499', detail: 'Varios locales bajo la misma marca, cada uno con su padrón y su caja.', featured: false },
 ] as const;
 
 export default function Landing() {
@@ -65,11 +70,18 @@ export default function Landing() {
               Sinchi lleva el padrón de tu gimnasio, marca la asistencia de cada clase y cobra
               las mensualidades. Tú lo ves en el mostrador — y tu alumno, en su teléfono.
             </p>
-            <StoreButtons />
+            {/* El alta es aquí, en la web, y no en la app: Apple no la deja
+                dentro (decisiones, «El alta de gimnasios se muda a la web»).
+                Los botones de tienda se quedan debajo porque la app sigue
+                siendo lo que el dueño y sus alumnos usan todos los días. */}
+            <a href="/registrar" className="btn-solid" style={{ alignSelf: 'flex-start' }}>
+              Registra tu gimnasio gratis
+            </a>
             <p className="body" style={{ margin: 0, fontSize: 13 }}>
-              <strong style={{ color: 'var(--ok)', fontWeight: 700 }}>Primer mes gratis.</strong>{' '}
-              Después, desde S/ 149 al mes por local · Yape, efectivo y transferencia
+              <strong style={{ color: 'var(--ok)', fontWeight: 700 }}>Hasta 10 alumnos, gratis para siempre.</strong>{' '}
+              Después, desde S/ 149 al mes por local, y el primer mes no lo pagas · Yape, efectivo y transferencia
             </p>
+            <StoreButtons />
           </div>
 
           {/* Un halo detrás de los teléfonos: sin él, dos rectángulos oscuros
@@ -201,6 +213,7 @@ export default function Landing() {
               <p className="body" style={{ margin: 0, maxWidth: 640 }}>
                 Monta tu padrón, marca la asistencia de un mes entero y cobra las mensualidades. Si
                 al final no te sirve, te vas sin haber pagado nada — y tus datos se van contigo.
+                Y si tienes 10 alumnos o menos, Sinchi es gratis para siempre.
               </p>
             </div>
           </div>
@@ -229,6 +242,13 @@ export default function Landing() {
                   El primer mes, gratis
                 </span>
                 <p className="body" style={{ margin: 0 }}>{plan.detail}</p>
+                <a
+                  href={`/registrar?plan=${plan.saasTier}`}
+                  className="btn-outline"
+                  style={{ marginTop: 'auto', alignSelf: 'flex-start' }}
+                >
+                  Empezar con este plan
+                </a>
               </div>
             ))}
           </div>
@@ -249,6 +269,9 @@ export default function Landing() {
               Monta tu padrón esta semana y tus alumnos lo ven desde el primer día.{' '}
               <strong style={{ color: 'var(--ok)', fontWeight: 600 }}>El primer mes es gratis.</strong>
             </p>
+            <a href="/registrar" className="btn-solid">
+              Registra tu gimnasio
+            </a>
             <StoreButtons />
           </div>
         </section>

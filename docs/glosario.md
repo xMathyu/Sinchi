@@ -217,7 +217,7 @@ mismo identificador es el bug que aparece leyendo un reporte tres meses después
 | mes gratis del gimnasio | `freeUntil` (fecha en que termina) |
 | escalón de precio | `SaasTier` (`free`, `up_to_60`, `up_to_150`, `unlimited`) |
 | plan gratis (hasta 10 alumnos) | `free` / `isFreeTier` |
-| alta de un gimnasio | `signUpGym` / `OnboardingService` |
+| alta de un gimnasio | `signUpGym` / `OnboardingService` en la api; `createGym` en la web (`apps/web/src/signup`), que es el único sitio donde se hace |
 | RUC | `taxId`, opcional (`null` si no lo tiene), validado con `checkRuc` cuando lo hay |
 | código de promoción | `PromoCode` / `saas_promo_codes` |
 | canje | `saas_redemptions` / `redeemPromo` |

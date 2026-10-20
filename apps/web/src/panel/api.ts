@@ -84,6 +84,29 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 }
 
 /**
+ * Una petición SIN sesión, para las rutas públicas que la crean.
+ *
+ * Aparte de `api()` a propósito, y no como un parámetro «anónimo» de aquella:
+ * que `api()` exija sesión es una garantía —por ahí no sale ninguna petición
+ * sin la cookie de quien la hace— y un parámetro para saltársela es un
+ * parámetro que alguien acaba pasando por costumbre. Las únicas rutas que se
+ * llaman sin sesión son las que la producen: `/auth/google` para entrar y
+ * `/gyms/signup` para dar de alta un local. Las dos llevan en el cuerpo un ID
+ * token de Firebase, que es lo que identifica a quien llama.
+ */
+export async function postPublic<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) throw await toError(response);
+  return (await response.json()) as T;
+}
+
+/**
  * El error de la api, con su frase.
  *
  * La api contesta `{ message }` en español y pensado para leerse —«Un celular de

@@ -34,22 +34,41 @@ const apiKey = (): string => process.env.FIREBASE_API_KEY ?? '';
 /** `true` cuando hay con que autenticar. El login lo dice en pantalla si no. */
 export const firebaseConfigured = (): boolean => apiKey().length > 0;
 
-interface SignInResponse {
+/**
+ * Quién acaba de autenticarse, según Identity Toolkit.
+ *
+ * El ID token es lo único que la api necesita. El correo y el nombre son para
+ * la pantalla del alta —«registrando como…», el nombre ya puesto en el
+ * formulario— y por eso son opcionales: con Google vienen los dos; con correo
+ * y contraseña, el nombre no existe todavía.
+ */
+export interface FirebaseIdentity {
+  readonly idToken: string;
+  readonly email: string | null;
+  readonly displayName: string | null;
+}
+
+interface ToolkitResponse {
   readonly idToken?: string;
+  readonly email?: string;
+  readonly displayName?: string;
   readonly error?: { readonly message?: string };
 }
 
 /**
- * Entra con correo y contraseña, y devuelve el ID token de Firebase.
+ * Una llamada a Identity Toolkit, con su respuesta leída.
  *
- * Solo `signIn`: aqui no se crean cuentas. El dueño de un gimnasio llega al
- * panel con la cuenta que ya tiene —la registramos nosotros al dar de alta el
- * local, en la reunion de venta, y es con la que su vinculo automatico por
- * `email_verified` funciona (`docs/autenticacion.md`)—. Un «crear cuenta» aqui
- * daria de alta a una persona sin gimnasio detras, que aterriza en un panel
- * vacio sin nada que hacer.
+ * Los cuatro endpoints que usa este sitio —entrar con contraseña, crear la
+ * cuenta, canjear Google— tienen la misma forma de petición y de respuesta;
+ * lo único que cambia entre ellos es cómo se lee el código de error, que
+ * habla de cosas distintas según la puerta. Por eso `humanize` viene de fuera.
  */
-export async function signInWithEmail(email: string, password: string): Promise<string> {
+async function identityToolkit(
+  endpoint: string,
+  body: Readonly<Record<string, unknown>>,
+  humanize: (code: string) => string,
+  unreachable: string,
+): Promise<FirebaseIdentity> {
   if (!firebaseConfigured()) {
     throw new FirebaseAuthError(
       'Falta configurar el acceso en este despliegue (ver .env.example).',
@@ -60,29 +79,74 @@ export async function signInWithEmail(email: string, password: string): Promise<
   let response: Response;
   try {
     response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey())}`,
+      `https://identitytoolkit.googleapis.com/v1/${endpoint}?key=${encodeURIComponent(apiKey())}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password,
-          returnSecureToken: true,
-        }),
+        body: JSON.stringify(body),
       },
     );
   } catch {
-    throw new FirebaseAuthError('No se pudo contactar al servicio de acceso.', null);
+    throw new FirebaseAuthError(unreachable, null);
   }
 
-  const payload = (await response.json()) as SignInResponse;
+  const payload = (await response.json()) as ToolkitResponse;
 
   if (!response.ok || typeof payload.idToken !== 'string') {
     const raw = payload.error?.message ?? 'ERROR_DESCONOCIDO';
     throw new FirebaseAuthError(humanize(raw), raw);
   }
 
-  return payload.idToken;
+  return {
+    idToken: payload.idToken,
+    email: payload.email ?? null,
+    displayName: payload.displayName ?? null,
+  };
+}
+
+/**
+ * Entra con correo y contraseña.
+ *
+ * El panel solo ENTRA: aquí no se crean cuentas. Crear una es cosa del alta
+ * (`/registrar`, `signUpWithEmail`), que es el único sitio donde una cuenta
+ * nueva tiene algo que hacer: un gimnasio detrás. Un «crear cuenta» en el
+ * login daría de alta a una persona sin local, que aterriza en un panel vacío.
+ */
+export function signInWithEmailIdentity(email: string, password: string): Promise<FirebaseIdentity> {
+  return identityToolkit(
+    'accounts:signInWithPassword',
+    { email: email.trim().toLowerCase(), password, returnSecureToken: true },
+    humanize,
+    'No se pudo contactar al servicio de acceso.',
+  );
+}
+
+/** Solo el token, que es lo que el login del panel necesita. */
+export async function signInWithEmail(email: string, password: string): Promise<string> {
+  return (await signInWithEmailIdentity(email, password)).idToken;
+}
+
+/**
+ * Crea la cuenta de correo y contraseña, y devuelve su identidad.
+ *
+ * Existe por el alta de gimnasios, que vive en la web: el dueño que no quiere
+ * entrar con Google necesita una cuenta propia, y el proveedor de correo es el
+ * único que se activa por api y funciona el mismo día (el de Google exige un
+ * cliente OAuth creado a mano en la consola). A la api de Sinchi le da igual
+ * cuál de los dos firme el alta: `/gyms/signup` verifica un ID token de
+ * Firebase y no mira de qué proveedor viene.
+ *
+ * `EMAIL_EXISTS` sale con su código y no solo con la frase, a propósito: quien
+ * lo recibe puede intentar ENTRAR con esa misma contraseña antes de decirle
+ * nada, que es lo que hace el alta.
+ */
+export function signUpWithEmail(email: string, password: string): Promise<FirebaseIdentity> {
+  return identityToolkit(
+    'accounts:signUp',
+    { email: email.trim().toLowerCase(), password, returnSecureToken: true },
+    humanizeSignUp,
+    'No se pudo contactar al servicio de acceso.',
+  );
 }
 
 /**
@@ -98,43 +162,25 @@ export async function signInWithEmail(email: string, password: string): Promise<
  * y todo lo que sigue pasan aquí. Al navegador nunca vuelve el token de Firebase
  * ni el de Sinchi: vuelve la cookie `httpOnly` y nada más.
  */
+export function exchangeGoogleIdentity(googleIdToken: string): Promise<FirebaseIdentity> {
+  return identityToolkit(
+    'accounts:signInWithIdp',
+    {
+      postBody: `id_token=${encodeURIComponent(googleIdToken)}&providerId=google.com`,
+      // Identity Toolkit lo exige aunque no haya redirección real. Va el
+      // dominio de auth del proyecto, igual que en la app.
+      requestUri: `https://${process.env.FIREBASE_AUTH_DOMAIN ?? 'localhost'}`,
+      returnSecureToken: true,
+      returnIdpCredential: true,
+    },
+    humanizeGoogle,
+    'No se pudo contactar a Google para verificar tu cuenta.',
+  );
+}
+
+/** Solo el token, que es lo que el login del panel necesita. */
 export async function exchangeGoogleToken(googleIdToken: string): Promise<string> {
-  if (!firebaseConfigured()) {
-    throw new FirebaseAuthError(
-      'Falta configurar el acceso en este despliegue (ver .env.example).',
-      'SIN_CONFIGURAR',
-    );
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(apiKey())}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          postBody: `id_token=${encodeURIComponent(googleIdToken)}&providerId=google.com`,
-          // Identity Toolkit lo exige aunque no haya redirección real. Va el
-          // dominio de auth del proyecto, igual que en la app.
-          requestUri: `https://${process.env.FIREBASE_AUTH_DOMAIN ?? 'localhost'}`,
-          returnSecureToken: true,
-          returnIdpCredential: true,
-        }),
-      },
-    );
-  } catch {
-    throw new FirebaseAuthError('No se pudo contactar a Google para verificar tu cuenta.', null);
-  }
-
-  const payload = (await response.json()) as SignInResponse;
-
-  if (!response.ok || typeof payload.idToken !== 'string') {
-    const raw = payload.error?.message ?? 'ERROR_DESCONOCIDO';
-    throw new FirebaseAuthError(humanizeGoogle(raw), raw);
-  }
-
-  return payload.idToken;
+  return (await exchangeGoogleIdentity(googleIdToken)).idToken;
 }
 
 /**
@@ -188,4 +234,22 @@ function humanize(code: string): string {
     return 'El acceso con correo no está habilitado en este proyecto.';
   }
   return 'No se pudo entrar. Intenta de nuevo.';
+}
+
+/**
+ * Lo mismo, para crear la cuenta.
+ *
+ * Aquí «ese correo ya existe» SÍ se dice: quien está creando una cuenta con su
+ * propio correo tiene que saber que ya la tiene, y la alternativa —fingir que
+ * se creó— lo deja con una contraseña que no es la suya.
+ */
+function humanizeSignUp(code: string): string {
+  if (code.startsWith('EMAIL_EXISTS')) return 'Ese correo ya tiene cuenta.';
+  if (code.startsWith('INVALID_EMAIL')) return 'Ese correo no parece válido.';
+  if (code.startsWith('WEAK_PASSWORD')) return 'La contraseña debe tener al menos 6 caracteres.';
+  if (code.startsWith('TOO_MANY_ATTEMPTS')) return 'Demasiados intentos. Espera unos minutos.';
+  if (code.startsWith('OPERATION_NOT_ALLOWED')) {
+    return 'El registro con correo no está habilitado en este proyecto.';
+  }
+  return 'No se pudo crear la cuenta. Intenta de nuevo.';
 }

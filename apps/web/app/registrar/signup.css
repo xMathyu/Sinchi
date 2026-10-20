@@ -1,0 +1,227 @@
+/*
+ * Lo propio del alta. Los campos, los botones y los avisos son de `panel.css`.
+ */
+
+.signup {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(440px, 560px);
+  background: var(--canvas);
+}
+
+.signup-aside {
+  box-sizing: border-box;
+  padding: clamp(28px, 4.5vw, 56px);
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  background: var(--screen);
+  border-right: 1px solid var(--hairline);
+}
+
+.signup-aside-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.signup-main {
+  box-sizing: border-box;
+  padding: clamp(28px, 4vw, 56px) clamp(20px, 3vw, 48px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.signup-card {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.signup-step {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ok);
+}
+
+.signup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.signup-section > h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.signup-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.signup-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+}
+
+.signup-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ok);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   El plan: cuatro tarjetas que son un grupo de radios.
+
+   El `input` cubre la tarjeta entera con opacidad cero y no `display: none`:
+   así se pulsa en cualquier punto, se tabula y se anuncia como lo que es. El
+   borde verde lo pone `:has(:checked)`, que es lo que hace que no haga falta
+   estado para pintar la elegida.
+   --------------------------------------------------------------------------- */
+
+.signup-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.signup-tier {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--canvas);
+  cursor: pointer;
+}
+
+.signup-tier input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.signup-tier:has(input:checked) {
+  border-color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
+
+.signup-tier:has(input:focus-visible) {
+  outline: 2px solid var(--ok);
+  outline-offset: 2px;
+}
+
+.signup-tier-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.signup-tier-price {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.signup-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------------------
+   La oferta
+   --------------------------------------------------------------------------- */
+
+.signup-promises {
+  list-style: none;
+  margin: 0;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(47, 209, 109, 0.3);
+  border-radius: var(--r-xl);
+}
+
+.signup-benefits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.signup-promises li,
+.signup-benefits li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+
+.signup-benefits strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.signup-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--ok);
+  flex: none;
+  margin-top: 7px;
+}
+
+/* ---------------------------------------------------------------------------
+   Una columna en el teléfono: la oferta arriba, el formulario debajo.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .signup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signup-aside {
+    gap: 24px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .signup-main {
+    justify-content: flex-start;
+  }
+
+  .signup-row,
+  .signup-tiers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -102,7 +102,7 @@ async function abrirSesion(getIdToken: () => Promise<string>): Promise<FormState
   if (!session.linked) {
     return {
       error:
-        'Esta cuenta todavía no está en ningún gimnasio. Si acabas de registrarte, abre la app de Sinchi para dar de alta tu local.',
+        'Esta cuenta todavía no está en ningún gimnasio. Si el tuyo todavía no está en Sinchi, regístralo en sinchi.fit/registrar.',
     };
   }
 

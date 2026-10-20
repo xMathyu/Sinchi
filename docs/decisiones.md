@@ -1980,3 +1980,59 @@ semanas después, y para entonces no habría código fresco. Nada de esto frena 
 baja: sin la llave, con Apple caída o desde Android (no hay hoja de Apple), la
 cuenta se borra igual y la respuesta dice por qué no se revocó.
 
+
+## El alta de gimnasios se muda a la web
+
+Decisión de Mathyu, 2026-10-19: **un gimnasio se da de alta en `sinchi.fit/registrar`
+y en ningún otro sitio.** La app ya no registra gimnasios en ninguna plataforma.
+
+**Lo que pasó antes.** Apple rechazó la 1.0.0 cuatro veces por la 3.1.1 con el
+mismo párrafo —«the app includes an account registration feature for businesses
+and organizations»— y nunca dijo qué pantalla veía. Se probó todo lo que cabía
+sin mover el alta: defenderla por la 3.1.3(c) (2026-10-05, ver la sección
+anterior), quitarla solo de iOS (2026-10-15, `GYM_SIGNUP_IN_APP`), quitar también
+el precio de Sinchi y el canje de códigos del padrón del dueño (el mismo día), y
+quitar el anuncio de la portada del login, que seguía diciendo «Tu gimnasio y tus
+alumnos» y «Cobro automático» encima de «Crea tu cuenta» (2026-10-19, build 19).
+Cada vuelta son cuatro o cinco días de cola, y mientras tanto un dueño que solo
+tiene iPhone no podía crear su gimnasio de ninguna manera: el alta de iOS era la
+única web que no existía.
+
+**Por qué a la web y no «solo en Android».** Dejarla en Android resolvía a Apple
+y nada más: seguía sin haber un sitio para el dueño con iPhone, y quedaban dos
+flujos de alta —uno por plataforma— que había que revisar por separado cada vez
+que cambiara un campo. Un gimnasio nace en un solo sitio, y ese sitio es el que
+no depende de ninguna tienda. La web además ya tenía la mitad del trabajo hecho:
+canjea Google y correo contra Identity Toolkit en el servidor, y guarda la sesión
+del dueño en una cookie `httpOnly` (§18).
+
+**Cómo es.** Dos pasos, los mismos que tenía la app y por la misma razón —primero
+se vende y después se pide—. El primero crea la cuenta de Firebase (Google, o
+correo y contraseña: `signUpWithEmail`, que si el correo ya existe intenta
+ENTRAR con esa contraseña antes de decir nada) y deja el ID token en una cookie
+`httpOnly` de cincuenta minutos (`src/signup/session.ts`): con él se firma el
+segundo paso, que es `POST /gyms/signup`, la misma ruta que usaba la app, sin
+cambios en la api. Las reglas del formulario son las de `@sinchi/shared`
+(`checkRuc`, `checkPhoneNumber`, `checkGymLink`), corridas en la Server Action
+antes de viajar, para que el motivo salga con la misma frase que daría el 400.
+Si la api acepta, la sesión de dueño que devuelve se escribe en la cookie del
+panel y el dueño aterriza en `/registrar/listo`.
+
+**Lo que la web no hace, a propósito.** Ni el pin del mapa ni el logo: los dos
+se ponen mejor desde la app con el local ya creado («Ubicación» y «Logo y
+redes»), y pedirlos en el alta alargaba el formulario para algo que no bloquea
+nada. Tampoco crea planes ni horario, porque el panel web no los edita: por eso
+`/registrar/listo` manda a la app con la lista en la mano —sin horario el local
+sale en el directorio como «0 clases por semana», y sin plan no se puede
+inscribir a nadie—. El día que el panel edite «Clases y precios», esa página
+cambia de destino.
+
+**Lo que queda en la app.** En Android, una tarjeta que abre
+`sinchi.fit/registrar` en el navegador, en los tres sitios donde estaba el alta
+(la portada del login, Mi cuenta y el final del directorio): Google Play no lo
+objeta y es una puerta real de venta. En iOS no hay tarjeta ni enlace
+(`GYM_SIGNUP_LINK_IN_APP`): la 3.1.1 prohíbe igual el botón que enlaza a comprar
+fuera, y además desmentiría lo que se le dijo a Apple en las notas. La pantalla
+`gym-signup` y su código del lado de la app (`registerGym`, `signUpGym`, el
+buscador de direcciones de Places y `useDebounced`) se borraron: el flujo entero
+vive en `apps/web/src/signup` y `apps/web/components/signup`.
