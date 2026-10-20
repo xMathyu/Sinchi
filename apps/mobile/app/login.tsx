@@ -23,7 +23,7 @@
  * comprar no encontraba dónde. La oferta —gratis hasta diez alumnos— se dice
  * aquí, no dos pantallas más adentro.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -54,6 +54,27 @@ import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
 
 /** Los campos del formulario de correo, para marcarlos de uno en uno. */
 type LoginField = 'name' | 'email' | 'password' | 'phone';
+
+/**
+ * Lo que dice la portada antes de pedir nada.
+ *
+ * En Android le habla también al dueño, porque abajo está la tarjeta con la que
+ * registra su gimnasio. En iOS esa tarjeta ya no existe (`GYM_SIGNUP_IN_APP`),
+ * y la frase sola resultó peor que inútil: Apple rechazó el build 18 por la
+ * 3.1.1 con el alta YA quitada, y lo que quedaba a la vista era «Tu gimnasio y
+ * tus alumnos» y «Cobro automático» justo encima de «Crea tu cuenta». Leído
+ * desde fuera, eso es dar de alta una empresa. En iOS la portada le habla a
+ * quien entra: el alumno y el personal de un gimnasio que ya usa Sinchi.
+ */
+const PITCH = GYM_SIGNUP_IN_APP
+  ? {
+      headline: 'Tu gimnasio y tus alumnos, en la misma app.',
+      points: ['Cobro automático', 'Puerta con QR', 'Padrón al día'],
+    }
+  : {
+      headline: 'Tu membresía, tu QR y tus clases, en una sola app.',
+      points: ['Puerta con QR', 'Reserva tus clases', 'Tu plan al día'],
+    };
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -436,21 +457,18 @@ export default function LoginScreen() {
         </Row>
 
         <Text variant="body" color={theme.colors.textStrong} style={{ marginTop: 12 }}>
-          Tu gimnasio y tus alumnos, en la misma app.
+          {PITCH.headline}
         </Text>
 
         <Row gap={8} justify="flex-start" style={{ marginTop: 14 }}>
-          <Text variant="micro" color={theme.colors.textFaint}>
-            Cobro automático
-          </Text>
-          <MapPoint />
-          <Text variant="micro" color={theme.colors.textFaint}>
-            Puerta con QR
-          </Text>
-          <MapPoint />
-          <Text variant="micro" color={theme.colors.textFaint}>
-            Padrón al día
-          </Text>
+          {PITCH.points.map((point, index) => (
+            <Fragment key={point}>
+              {index > 0 && <MapPoint />}
+              <Text variant="micro" color={theme.colors.textFaint}>
+                {point}
+              </Text>
+            </Fragment>
+          ))}
         </Row>
 
         {errorNotice === null ? null : <View style={{ marginTop: 20 }}>{errorNotice}</View>}
