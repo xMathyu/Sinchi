@@ -13,7 +13,7 @@ Nothing is purchased inside the app, and no digital content is sold.
 What a student sees is only the STATUS of a membership bought in person: plan, sessions left this week, next payment date, any amount owed, and a QR code the gym scans at the door. The only digital material is a small library of technique videos each gym uploads for its own students; they are not sold or priced.
 
 ACCOUNT REGISTRATION FOR BUSINESSES (3.1.1)
-Removed, as requested. The iOS app no longer lets anyone register a gym or open an additional location: the option is gone from the sign-in screen, from "Mi cuenta" (My account) and from the gym directory, and the registration screen cannot be opened by link either. The only accounts that can still be created in the iOS app are personal ones, for students and staff of a gym that already uses Sinchi.
+Removed, as requested. The iOS app no longer lets anyone register a gym or open an additional location: the option is gone from the sign-in screen, from "Mi cuenta" (My account) and from the gym directory, and the registration screen cannot be opened by link either. The sign-in screen no longer addresses gym owners: it describes the app to the person signing in (their membership, QR code and classes), and "Crea tu cuenta" (Create your account) creates a personal account for a student or a staff member of a gym that already uses Sinchi. Those are the only accounts the iOS app can create.
 
 WIDGETS (4.4)
 The app has no widgets or other app extensions.

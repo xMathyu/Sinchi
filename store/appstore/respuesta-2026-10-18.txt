@@ -1,0 +1,10 @@
+Hello,
+
+Thank you for taking another look. Build 18 no longer lets anyone register a gym or open a gym location from the iOS app, and the subscription price and the promo-code field were removed as well. After this review we found what we believe still read as a business registration: the sign-in screen itself. Its headline said "Tu gimnasio y tus alumnos, en la misma app" ("Your gym and your students, in the same app") next to "Cobro automático" ("automatic billing"), right above "Crea tu cuenta" ("Create your account"), so creating an account looked like registering a business.
+
+In build 19 the sign-in screen speaks only to the person signing in (their membership, QR code and classes), and "Crea tu cuenta" is a personal account for a student or a staff member of a gym that already uses Sinchi. Nothing in the iOS app registers an organization, shows a price for Sinchi's service, or links to a place where either can be done.
+
+If anything in build 19 still appears to you as business registration, could you please tell us which screen it is on? We will remove it right away.
+
+Best regards,
+Mathyu Cardozo
