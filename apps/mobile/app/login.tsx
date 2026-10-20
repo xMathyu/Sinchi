@@ -24,7 +24,7 @@
  * aquí, no dos pantallas más adentro.
  */
 import { Fragment, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
@@ -50,7 +50,7 @@ import { AppleSignInButton, GoogleSignInButton } from '../src/design/sign-in-but
 import { useTheme } from '../src/design/theme';
 import { completeAppleSignIn, completeEmailSignIn, completeGoogleSignIn } from '../src/data/auth';
 import { firebaseConfigured, googleAuthReady, googleClientIds } from '../src/data/firebase';
-import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
+import { GYM_SIGNUP_LINK_IN_APP, GYM_SIGNUP_URL } from '../src/lib/app-store-rules';
 
 /** Los campos del formulario de correo, para marcarlos de uno en uno. */
 type LoginField = 'name' | 'email' | 'password' | 'phone';
@@ -58,15 +58,16 @@ type LoginField = 'name' | 'email' | 'password' | 'phone';
 /**
  * Lo que dice la portada antes de pedir nada.
  *
- * En Android le habla también al dueño, porque abajo está la tarjeta con la que
- * registra su gimnasio. En iOS esa tarjeta ya no existe (`GYM_SIGNUP_IN_APP`),
+ * En Android le habla también al dueño, porque abajo está la tarjeta que lo
+ * manda a registrar su gimnasio en la web. En iOS esa tarjeta no existe
+ * (`GYM_SIGNUP_LINK_IN_APP`),
  * y la frase sola resultó peor que inútil: Apple rechazó el build 18 por la
  * 3.1.1 con el alta YA quitada, y lo que quedaba a la vista era «Tu gimnasio y
  * tus alumnos» y «Cobro automático» justo encima de «Crea tu cuenta». Leído
  * desde fuera, eso es dar de alta una empresa. En iOS la portada le habla a
  * quien entra: el alumno y el personal de un gimnasio que ya usa Sinchi.
  */
-const PITCH = GYM_SIGNUP_IN_APP
+const PITCH = GYM_SIGNUP_LINK_IN_APP
   ? {
       headline: 'Tu gimnasio y tus alumnos, en la misma app.',
       points: ['Cobro automático', 'Puerta con QR', 'Padrón al día'],
@@ -540,13 +541,14 @@ export default function LoginScreen() {
 
         {/* La puerta del dueño. Va abajo pero sin bajar la pantalla, y con la
             oferta escrita: es lo que convierte esta pantalla en algo que le
-            habla también a quien viene a comprar. En iOS no está: ver
-            `GYM_SIGNUP_IN_APP`. */}
-        {GYM_SIGNUP_IN_APP && (
+            habla también a quien viene a comprar. Abre el alta en la web —el
+            alta vive en sinchi.fit desde 2026-10-19— y en iOS no está: ver
+            `GYM_SIGNUP_LINK_IN_APP`. */}
+        {GYM_SIGNUP_LINK_IN_APP && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Registra tu gimnasio"
-            onPress={() => router.push('/gym-signup')}
+            accessibilityLabel="Registra tu gimnasio en sinchi.fit"
+            onPress={() => void Linking.openURL(GYM_SIGNUP_URL)}
             style={{ marginTop: 'auto', paddingTop: 22 }}
           >
             <Card borderColor={withAlpha(theme.semaphore.ok, 0.28)} style={{ paddingVertical: 15 }}>
@@ -557,7 +559,7 @@ export default function LoginScreen() {
                     Registra tu gimnasio
                   </Text>
                   <Text variant="caption" color={theme.colors.textSecondary}>
-                    Gratis hasta 10 alumnos, y el primer mes de pago va por nuestra cuenta.
+                    En sinchi.fit. Gratis hasta 10 alumnos, y el primer mes de pago va por nuestra cuenta.
                   </Text>
                 </Stack>
                 <ChevronRight size={18} color={theme.colors.textTertiary} />

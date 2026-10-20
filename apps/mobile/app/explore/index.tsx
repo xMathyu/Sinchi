@@ -11,7 +11,7 @@
  * primera pantalla. Lo único que exige cuenta es reservar, y para eso basta la
  * de Google.
  */
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Linking, Pressable, View } from 'react-native';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import { router, useRouter } from 'expo-router';
 import { cents, formatPENShort, type BookingKind } from '@sinchi/shared';
@@ -27,7 +27,7 @@ import { useSession } from '../../src/data/session-hooks';
 import { cancelBooking } from '../../src/data/trials';
 import type { ClassBookingDto, GymCardDto } from '../../src/data/api';
 import { formatWeekdayAndDay } from '../../src/lib/format';
-import { GYM_SIGNUP_IN_APP } from '../../src/lib/app-store-rules';
+import { GYM_SIGNUP_LINK_IN_APP, GYM_SIGNUP_URL } from '../../src/lib/app-store-rules';
 
 /** Qué reservó, en dos palabras: la tarjeta la lee fuera de la ficha del gimnasio. */
 const KIND_LABEL: Readonly<Record<BookingKind, string>> = {
@@ -119,7 +119,7 @@ export default function ExploreScreen() {
         </Stack>
       )}
 
-      {GYM_SIGNUP_IN_APP && <OwnerInvitation />}
+      {GYM_SIGNUP_LINK_IN_APP && <OwnerInvitation />}
     </Screen>
   );
 }
@@ -241,11 +241,11 @@ function UpcomingCard({
  * (`app/settings.tsx`), y esta se queda: son dos momentos de dos personas
  * distintas, no una mudanza.
  *
- * En iOS no se muestra ninguna de las dos: ver `GYM_SIGNUP_IN_APP`.
+ * Desde 2026-10-19 lleva a sinchi.fit/registrar: el alta vive en la web. Y en
+ * iOS no se muestra ninguna de las dos: ver `GYM_SIGNUP_LINK_IN_APP`.
  */
 function OwnerInvitation() {
   const theme = useTheme();
-  const router = useRouter();
 
   return (
     <Card
@@ -258,15 +258,15 @@ function OwnerInvitation() {
             ¿Tienes un gimnasio?
           </Text>
           <Text variant="captionSmall" color={theme.colors.textSecondary}>
-            Regístralo en Sinchi: el primer mes es gratis, y hasta 10 alumnos no
+            Regístralo en sinchi.fit: el primer mes es gratis, y hasta 10 alumnos no
             pagas nunca.
           </Text>
         </Stack>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Registrar mi gimnasio"
+          accessibilityLabel="Registrar mi gimnasio en sinchi.fit"
           hitSlop={10}
-          onPress={() => router.push('/gym-signup')}
+          onPress={() => void Linking.openURL(GYM_SIGNUP_URL)}
         >
           <Text variant="captionSmall" weight="semibold" color={theme.semaphore.ok}>
             Registrar mi gimnasio

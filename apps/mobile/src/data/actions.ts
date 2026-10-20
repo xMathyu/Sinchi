@@ -44,7 +44,6 @@ import {
   fetchSaasSubscription,
   fetchSummary,
   redeemPromoCode,
-  signUpGym,
   fetchStaffMember,
   fetchRoster,
   fetchStaffPlans,
@@ -113,12 +112,10 @@ import {
   type CheckInOutcomeDto,
   type RedeemPromoDto,
   type SaasSubscriptionDto,
-  type SignUpGymDto,
-  type SignUpGymInput,
   type SummaryDto,
 } from './api';
-import { currentFirebaseToken, getSessionState, saveSession } from './session';
-import { firebaseSigningToken, updateAccountDetails } from './auth';
+import { currentFirebaseToken, getSessionState } from './session';
+import { updateAccountDetails } from './auth';
 import {
   cancelSubscription as cancelSubscriptionLocal,
   changePlan as changePlanLocal,
@@ -542,44 +539,6 @@ export async function sinchiSubscription(): Promise<SaasSubscriptionDto | null> 
 
 /** Canjea un código de promoción. El rechazo viene en el resultado, no como error. */
 export const redeemCode = (code: string): Promise<RedeemPromoDto> => redeemPromoCode(code);
-
-/**
- * Da de alta un gimnasio y deja la sesión de dueño puesta.
- *
- * Guardar la sesión aquí y no en la pantalla es lo que hace que el alta termine
- * DENTRO del modo staff: el layout raíz enruta en cuanto ve la sesión.
- */
-export async function registerGym(
-  input: Omit<SignUpGymInput, 'idToken'>,
-): Promise<SignUpGymDto> {
-  /**
-   * Vale CUALQUIER credencial de Firebase de esta persona, no solo la de quien
-   * acaba de crear la cuenta.
-   *
-   * Usaba `currentFirebaseToken()`, que solo devuelve algo en `unlinked`, y eso
-   * cerraba la puerta a quien ya entrenaba en otro local: el dueno de un
-   * gimnasio tambien puede ser alumno, y ese caso llenaba el formulario entero
-   * para chocar con un 401 en el ultimo toque. La api nunca lo rechazo — su
-   * `resolveOwner` engancha la cuenta a la identidad que ya existe.
-   */
-  const idToken = await firebaseSigningToken();
-  if (idToken === null) {
-    throw new ApiError(
-      401,
-      'Entra con Google o con tu correo antes de registrar tu gimnasio.',
-    );
-  }
-
-  const signUp = await signUpGym({ ...input, idToken });
-  await saveSession({
-    accessToken: signUp.session.accessToken,
-    expiresInSeconds: signUp.session.expiresInSeconds,
-    role: signUp.session.role,
-    userId: signUp.session.userId,
-    tenantId: signUp.session.tenantId,
-  });
-  return signUp;
-}
 
 // ---------------------------------------------------------------------------
 // Refresco

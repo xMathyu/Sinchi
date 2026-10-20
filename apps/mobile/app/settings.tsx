@@ -13,7 +13,7 @@
  *    este es el único camino para recorrer el modo staff.
  */
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable } from 'react-native';
+import { ActivityIndicator, Linking, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import type { AppRole } from '@sinchi/shared';
 import { withAlpha } from '@sinchi/ui';
@@ -44,7 +44,7 @@ import { switchGym, switchMode, signOut } from '../src/data/auth';
 import { fetchMe, fetchModes, type AvailableModesDto } from '../src/data/api';
 import { saveMyDetails } from '../src/data/actions';
 import { useSession } from '../src/data/session-hooks';
-import { GYM_SIGNUP_IN_APP } from '../src/lib/app-store-rules';
+import { GYM_SIGNUP_LINK_IN_APP, GYM_SIGNUP_URL } from '../src/lib/app-store-rules';
 import { loadDemo, resetState, setRole } from '../src/data/store';
 
 /**
@@ -350,9 +350,15 @@ export default function SettingsScreen() {
           conoce. Mientras `modes` es null no se pinta nada: un botón que
           aparece y cambia de texto al segundo es peor que uno que tarda.
 
+          Desde que el alta vive en la web (2026-10-19) el botón abre
+          sinchi.fit/registrar en el navegador, y la regla del tope se sigue
+          mirando AQUÍ: mandarlo a una página que le va a decir que no es el
+          mismo botón mudo con otra forma.
+
           En iOS no se pinta, ni siquiera para abrir OTRO local: un segundo
-          gimnasio también es una organización nueva. Ver `GYM_SIGNUP_IN_APP`. */}
-      {GYM_SIGNUP_IN_APP && nuevoGimnasio !== null && (
+          gimnasio también es una organización nueva, y un enlace a comprar
+          fuera es justo lo que la 3.1.1 prohíbe. Ver `GYM_SIGNUP_LINK_IN_APP`. */}
+      {GYM_SIGNUP_LINK_IN_APP && nuevoGimnasio !== null && (
         <Stack gap={10} style={{ marginTop: 20 }}>
           <Eyebrow>{nuevoGimnasio.hasGyms ? 'Otro local' : 'Tu gimnasio'}</Eyebrow>
           <Pressable
@@ -365,7 +371,7 @@ export default function SettingsScreen() {
                 : 'No puedes abrir más locales'
             }
             disabled={!nuevoGimnasio.allowed}
-            onPress={() => router.push('/gym-signup')}
+            onPress={() => void Linking.openURL(GYM_SIGNUP_URL)}
             style={{ opacity: nuevoGimnasio.allowed ? 1 : 0.55 }}
           >
             <Card
@@ -383,8 +389,8 @@ export default function SettingsScreen() {
                     {nuevoGimnasio.reason !== null
                       ? nuevoGimnasio.reason.message
                       : nuevoGimnasio.hasGyms
-                        ? 'Cada local lleva su propio padrón, sus planes y su caja.'
-                        : 'Regístralo en Sinchi: el primer mes es gratis, y hasta 10 alumnos no pagas nunca.'}
+                        ? 'Se abre en sinchi.fit. Cada local lleva su propio padrón, sus planes y su caja.'
+                        : 'Regístralo en sinchi.fit: el primer mes es gratis, y hasta 10 alumnos no pagas nunca.'}
                   </Text>
                 </Stack>
                 {nuevoGimnasio.allowed && (

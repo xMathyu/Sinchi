@@ -1,23 +1,24 @@
 import { Platform } from 'react-native';
 
+/** Dónde se da de alta un gimnasio: en la web, desde cualquier plataforma. */
+export const GYM_SIGNUP_URL = 'https://sinchi.fit/registrar';
+
 /**
- * Si esta app puede dar de alta un gimnasio. En iOS, no.
+ * Si esta app puede MANDAR a registrar un gimnasio. En iOS, no.
  *
- * Apple rechazó la 1.0.0 dos veces por la 3.1.1 (2026-09-29 y 2026-10-07, build
- * 17): para App Review, registrar una empresa desde la app es abrirle la puerta
- * a una compra hecha fuera de ella —la suscripción de Sinchi—, y pidió quitarlo.
- * Se defendió por la 3.1.3(c), servicios para empresas, con la promesa escrita
- * en las notas de que si insistía se quitaba; insistió.
+ * El alta vivía en la app y Apple rechazó la 1.0.0 cuatro veces por la 3.1.1
+ * (del 2026-09-29 al 2026-10-18): para App Review, registrar una empresa desde
+ * la app es abrirle la puerta a una compra hecha fuera de ella. Se quitó de
+ * iOS, se defendió por la 3.1.3(c), se quitó también su anuncio en la portada
+ * del login… y al final el alta entera se mudó a la web para todo el mundo
+ * (decisiones, «El alta de gimnasios se muda a la web»). Lo que queda en la
+ * app es una TARJETA que abre `GYM_SIGNUP_URL` en el navegador.
  *
- * Por plataforma y no por versión ni por bandera de la api: lo que molesta es
- * la App Store, y Google Play no lo objeta. En Android el alta sigue entera.
- *
- * En iOS no se sustituye por un «regístralo en la web»: un texto que manda a
- * comprar fuera es justo lo que la 3.1.1 prohíbe, y además desmiente lo que se
- * le dijo a Apple. El dueño que ya existe entra y administra igual; lo que
- * desaparece es solo el nacimiento de una organización.
+ * Esa tarjeta tampoco puede estar en iOS: la 3.1.1 prohíbe igual el botón que
+ * enlaza a comprar fuera, y además desmentiría lo que se le dijo a Apple. En
+ * Android se queda: Google Play no lo objeta y es una puerta real de venta.
  */
-export const GYM_SIGNUP_IN_APP = Platform.OS !== 'ios';
+export const GYM_SIGNUP_LINK_IN_APP = Platform.OS !== 'ios';
 
 /**
  * Si esta app puede hablarle al dueño de la suscripción de Sinchi como algo que

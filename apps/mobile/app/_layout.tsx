@@ -330,11 +330,10 @@ function DataLoader() {
  * sesion de alumno. Es la unica pantalla del producto que atiende a alguien que
  * todavia no es de ningun gimnasio.
  *
- * `gym-signup` va con ella y por lo mismo: quien registra su gimnasio llega
- * desde el directorio o desde la tarjeta de dueno del login, y su cuenta puede
- * estar en cualquiera de esos tres estados —incluida ninguna. Una ruta que no
- * este en estas listas se redirige EN SILENCIO —sin error y sin pantalla— asi
- * que anadir una y olvidarse de esto es escribirla para nadie.
+ * Una ruta que no este en estas listas se redirige EN SILENCIO —sin error y
+ * sin pantalla— asi que anadir una y olvidarse de esto es escribirla para
+ * nadie. (El alta de un gimnasio, `gym-signup`, estuvo aqui hasta que se mudo
+ * a la web: decisiones, «El alta de gimnasios se muda a la web».)
  *
  * `routines` va con ellas por lo mismo, y es la primera pantalla del producto
  * que atiende a los TRES publicos a la vez: el dueno que la escribe, el alumno
@@ -356,7 +355,6 @@ function DataLoader() {
 const SHARED_ROUTES = new Set([
   'settings',
   'explore',
-  'gym-signup',
   'routines',
   'chat',
   'delete-account',
@@ -457,14 +455,6 @@ function SessionRouter() {
     // El directorio se mira sin cuenta: quien busca dojo todavia no tiene una, y
     // exigirsela para ver una lista es perderlo en la primera pantalla.
     const enDirectorio = first === 'explore';
-    /**
-     * El alta de un gimnasio sale del directorio, y quien la abre casi siempre
-     * es una cuenta RECIEN creada sin ficha en ningun padron — que es el estado
-     * `unlinked`, cuya rama devuelve a sus pestañas todo lo que no este en su
-     * lista. Sin esta excepcion el boton rebotaba sin mostrar nada, y el fallo
-     * era mudo: ni error, ni ruta desconocida, nada.
-     */
-    const onGymSignUp = first === 'gym-signup';
     // Escribirle a un gimnasio nace en el directorio, que se mira sin cuenta: la
     // pantalla del chat es la que invita a entrar, no este efecto el que rebota.
     const onChat = first === 'chat';
@@ -474,7 +464,7 @@ function SessionRouter() {
        * La bienvenida intercepta el ARRANQUE, y nada más.
        *
        * Quien llega por un enlace —una invitación, la ficha de un gimnasio del
-       * directorio, el alta de un local— viene a algo concreto, y meterle tres
+       * directorio— viene a algo concreto, y meterle tres
        * láminas por delante es perderlo en la puerta. Por eso la condición no
        * es «no la ha visto» sino «no la ha visto Y no venía a otra cosa».
        */
@@ -484,22 +474,11 @@ function SessionRouter() {
         return;
       }
 
-      /**
-       * El alta de un gimnasio tambien se abre SIN sesion, y no por comodidad.
-       *
-       * Su primera vista es la oferta —lo que Sinchi le hace a un gimnasio y
-       * cuanto cuesta— y esa pantalla existe justamente para quien todavia no
-       * tiene cuenta. Exigirsela antes de ensenarle nada es pedirle el correo a
-       * quien acaba de entrar a mirar el escaparate. La cuenta se crea DENTRO
-       * del flujo, en el paso siguiente, que es donde de verdad hace falta:
-       * `registerGym` firma el alta con la credencial de Firebase.
-       */
       if (
         !enLogin &&
         !enDev &&
         !onInvite &&
         !enDirectorio &&
-        !onGymSignUp &&
         !onChat &&
         !onWelcome
       ) {
@@ -529,7 +508,6 @@ function SessionRouter() {
         // Sin ficha también se elimina la cuenta, y en el acto (5.1.1(v)).
         first !== 'delete-account' &&
         !enDirectorio &&
-        !onGymSignUp &&
         !onChat
       ) {
         router.replace('/student');
